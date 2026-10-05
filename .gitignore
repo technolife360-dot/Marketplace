@@ -1,0 +1,8 @@
+.env
+*.sqlite3
+__pycache__/
+*.py[cod]
+node_modules/
+
+# Local OAuth client credentials
+client_secret_37796535330-borbonbs3tk06qv9arebcgki4thpesdh.apps.googleusercontent.com.json

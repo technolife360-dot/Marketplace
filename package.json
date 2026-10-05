@@ -1,0 +1,18 @@
+{
+  "name": "bozorgg-marketplace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Uzbek-first gaming marketplace with a Python standard-library backend",
+  "scripts": {
+    "build": "node --check static/locales.js && node --check static/app.js && python3 -m py_compile app.py payment_providers.py delivery_crypto.py seed.py scripts/backup_sqlite.py scripts/encrypt_delivery_payloads.py",
+    "start": "python3 app.py",
+    "dev": "python3 app.py",
+    "seed": "python3 seed.py",
+    "test": "python3 -m unittest discover -s tests -v",
+    "backup": "python3 scripts/backup_sqlite.py"
+  },
+  "engines": {
+    "node": ">=18",
+    "python": ">=3.11"
+  }
+}

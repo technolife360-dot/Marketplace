@@ -1,0 +1,1093 @@
+#!/usr/bin/env python3
+"""SentryLoot local marketplace server; standard library only."""
+from __future__ import annotations
+import hashlib, hmac, json, os, re, secrets, sqlite3, time, unicodedata
+from datetime import datetime, timedelta, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+from payment_providers import get_provider
+import email_service
+import identity_service
+import oauth_service
+
+ROOT = Path(__file__).resolve().parent
+# Small dotenv reader keeps the project dependency-free; real process variables take precedence.
+for _line in (ROOT / '.env').read_text().splitlines() if (ROOT / '.env').exists() else []:
+    _line=_line.strip()
+    if _line and not _line.startswith('#') and '=' in _line:
+        _key,_value=_line.split('=',1); os.environ.setdefault(_key.strip(),_value.strip().strip('\"').strip("'"))
+import delivery_crypto
+MODE = os.environ.get('MARKETPLACE_MODE', 'development').lower()
+DB_PATH = os.environ.get('DATABASE_PATH', str(ROOT / 'marketplace.sqlite3'))
+SESSION_SECRET = os.environ.get('SESSION_SECRET', '')
+if MODE == 'production' and (len(SESSION_SECRET) < 32 or SESSION_SECRET.startswith('replace-with')):
+    raise RuntimeError('Set SESSION_SECRET to a unique random value of at least 32 characters in production')
+if not SESSION_SECRET:
+    SESSION_SECRET = secrets.token_urlsafe(48)
+COOKIE_NAME = 'bozorgg_session'
+SESSION_DAYS = 7
+MAX_BODY = 64 * 1024
+
+class HttpError(Exception):
+    def __init__(self, status: int, message: str):
+        self.status, self.message = status, message
+
+def now_iso(): return datetime.now(timezone.utc).isoformat(timespec='seconds')
+def ident(): return secrets.token_urlsafe(12)
+def connect():
+    db = sqlite3.connect(DB_PATH, timeout=15, isolation_level=None)
+    db.row_factory = sqlite3.Row
+    db.execute('PRAGMA foreign_keys=ON')
+    db.execute('PRAGMA busy_timeout=15000')
+    return db
+
+def migrate():
+    db=connect()
+    try:
+        db.executescript((ROOT / 'migrations/001_initial.sql').read_text())
+        db.execute("""CREATE TABLE IF NOT EXISTS blog_posts (
+            id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, category_json TEXT NOT NULL,
+            title_json TEXT NOT NULL, summary_json TEXT NOT NULL, body_json TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published')),
+            author_id TEXT REFERENCES users(id), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, published_at TEXT
+        )""")
+        seed_blog_posts(db)
+        seller_columns={r['name'] for r in db.execute('PRAGMA table_info(seller_profiles)')}
+        if 'identity_status' not in seller_columns: db.execute("ALTER TABLE seller_profiles ADD COLUMN identity_status TEXT NOT NULL DEFAULT 'not_started'")
+        if 'identity_provider' not in seller_columns: db.execute("ALTER TABLE seller_profiles ADD COLUMN identity_provider TEXT NOT NULL DEFAULT ''")
+        if 'identity_reference' not in seller_columns: db.execute("ALTER TABLE seller_profiles ADD COLUMN identity_reference TEXT NOT NULL DEFAULT ''")
+        if 'identity_verified_at' not in seller_columns: db.execute('ALTER TABLE seller_profiles ADD COLUMN identity_verified_at TEXT')
+        if 'identity_consent_at' not in seller_columns: db.execute('ALTER TABLE seller_profiles ADD COLUMN identity_consent_at TEXT')
+        if 'identity_consent_version' not in seller_columns: db.execute("ALTER TABLE seller_profiles ADD COLUMN identity_consent_version TEXT NOT NULL DEFAULT ''")
+        if 'identity_last_event_at' not in seller_columns: db.execute('ALTER TABLE seller_profiles ADD COLUMN identity_last_event_at TEXT')
+        report_columns={r['name'] for r in db.execute('PRAGMA table_info(reports)')}
+        if 'evidence_url' not in report_columns: db.execute("ALTER TABLE reports ADD COLUMN evidence_url TEXT NOT NULL DEFAULT ''")
+        # Sellers from older local builds did not pass an approval workflow. Keep them
+        # closed until an administrator has reviewed and explicitly enabled the profile.
+        db.execute("UPDATE seller_profiles SET selling_enabled=0 WHERE verification_status!='verified' OR identity_status!='verified'")
+        db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE status='published' AND seller_id NOT IN (SELECT user_id FROM seller_profiles WHERE verification_status='verified' AND selling_enabled=1 AND identity_status='verified')")
+        db.execute("INSERT INTO listing_search(listing_search) VALUES('rebuild')")
+        db.execute("INSERT OR IGNORE INTO platform_config(key,value) VALUES('commission_bps','0')")
+        db.execute("INSERT OR IGNORE INTO platform_config(key,value) VALUES('completion_window_hours','72')")
+        db.execute("INSERT OR IGNORE INTO platform_config(key,value) VALUES('terms_version','draft-2026-10')")
+        games = [('valorant','Valorant'),('pubg-mobile','PUBG Mobile'),('dota-2','Dota 2'),('counter-strike-2','Counter-Strike 2'),('mobile-legends','Mobile Legends')]
+        categories = [('accounts','Gaming accounts','account'),('items','Items & skins','item'),('currency','In-game currency','currency'),('services','Coaching & services','service'),('codes','Gift cards & digital codes','code')]
+        for slug, name in games: db.execute('INSERT OR IGNORE INTO games(id,slug,name) VALUES(?,?,?)',(slug,slug,name))
+        for slug, name, typ in categories: db.execute('INSERT OR IGNORE INTO categories(id,slug,name,product_type) VALUES(?,?,?,?)',(slug,slug,name,typ))
+    finally:
+        db.close()
+
+def validate_blog_post(data):
+    result={}
+    for field,minimum,maximum in (('category',2,60),('title',5,140),('summary',10,500)):
+        values=data.get(field)
+        if not isinstance(values,list) or len(values)!=3: raise HttpError(400,f'{field} maydonida o‘zbek, rus va ingliz tilidagi 3 qiymat bo‘lishi kerak.')
+        result[field]=[clean_text(v,field,minimum,maximum) for v in values]
+    bodies=data.get('body')
+    if not isinstance(bodies,list) or len(bodies)!=3: raise HttpError(400,'Maqola matnida 3 til uchun paragraflar bo‘lishi kerak.')
+    result['body']=[]
+    for language in bodies:
+        if not isinstance(language,list) or not 1<=len(language)<=30: raise HttpError(400,'Har bir tilda 1–30 ta paragraf kiriting.')
+        result['body'].append([clean_text(p,'Paragraf',10,3000) for p in language])
+    return result
+
+def seed_blog_posts(db):
+    if db.execute('SELECT 1 FROM blog_posts LIMIT 1').fetchone(): return
+    posts=[
+      ('xavfsiz-xarid',
+       ['XAVFSIZ XARID','БЕЗОПАСНАЯ ПОКУПКА','SAFE BUYING'],
+       ['O‘yin hisobini sotib olishdan oldin tekshiriladigan 5 narsa','5 вещей, которые нужно проверить перед покупкой игрового аккаунта','5 things to check before buying a game account'],
+       ['E’lonni tekshirish, sotuvchi bilan xavfsiz yozishish va yetkazishni qabul qilish bo‘yicha qisqa ro‘yxat.','Короткий список: как проверить объявление, безопасно общаться и принять доставку.','A short checklist for reviewing a listing, messaging safely, and accepting delivery.'],
+       [['Platforma va hudud mosligini tekshiring.','Sotuvchidan faqat e’londagi ma’lumotlarni aniqlashtiring; parol yoki OTP so‘ramang.','To‘lovni platformadagi checkout orqali boshlang.','Yetkazilgan ma’lumotni tekshirib, keyin buyurtmani yakunlang.','Nizo bo‘lsa, muammoni buyurtma sahifasidan yuboring.'],['Проверьте платформу и регион.','Уточняйте сведения объявления; не просите пароль или OTP.','Оформляйте заказ через checkout платформы.','Проверьте доставку и только после этого завершайте заказ.','Откройте спор со страницы заказа, если возникла проблема.'],['Check platform and region compatibility.','Ask about listing details; never request a password or OTP.','Start checkout through the marketplace.','Inspect delivery before completing the order.','Open a dispute from the order page if something is wrong.']]),
+      ('sotuvchi-qollanma',
+       ['SOTUVCHI QO‘LLANMASI','РУКОВОДСТВО ПРОДАВЦА','SELLER GUIDE'],
+       ['Aniq va ishonchli e’lon yozish','Как создать понятное объявление','Writing a clear, trustworthy listing'],
+       ['Yaxshi sarlavha, to‘liq tavsif va yetkazish shartlari xaridorga to‘g‘ri qaror qilishga yordam beradi.','Хороший заголовок, полное описание и условия доставки помогают покупателю принять решение.','A clear title, complete description, and delivery terms help buyers make an informed decision.'],
+       [['Sarlavhada o‘yin, platforma va asosiy xususiyatni yozing.','Narxga nimalar kirishini va hudud cheklovlarini ko‘rsating.','Yetkazish muddatini real belgilang.','Boshqalarning shaxsiy ma’lumotlari yoki ruxsatsiz tasvirlarini joylamang.','Sotishdan oldin email, Sumsub va moderator tekshiruvi yakunlanishi kerak.'],['Укажите игру, платформу и особенности в заголовке.','Объясните, что входит в цену, и укажите ограничения региона.','Установите реальный срок доставки.','Не размещайте чужие персональные данные без разрешения.','Перед продажей нужны подтверждение почты, Sumsub и проверка модератора.'],['Put the game, platform, and key features in the title.','Explain what the price includes and list region restrictions.','Set a realistic delivery timeframe.','Do not post someone else’s personal data without permission.','Email, Sumsub, and moderator checks must finish before selling.']]),
+      ('aldovlardan-himoya',
+       ['HISOB XAVFSIZLIGI','ЗАЩИТА ОТ МОШЕННИЧЕСТВА','ACCOUNT SAFETY'],
+       ['Fishing va soxta yordam xabarlarini tanish','Как распознать фишинг и поддельную поддержку','Spotting phishing and fake support messages'],
+       ['Parol, OTP va tiklash havolalarini sotuvchiga yoki begona “yordamchi”ga bermang.','Не передавайте пароль, OTP и ссылки восстановления продавцу или неизвестной «поддержке».','Never give passwords, OTP codes, or reset links to a seller or an unsolicited support agent.'],
+       [['Parol va tiklash kodini hech kim bilan bo‘lishmang.','Shubhali havolaga kirmasdan domen nomini tekshiring.','To‘lovni platformadan tashqarida yuborish taklifiga rozi bo‘lmang.','Hisobni faqat rasmiy tiklash oqimi orqali qaytaring.'],['Не сообщайте пароль и коды восстановления.','Проверяйте домен до перехода по подозрительной ссылке.','Не соглашайтесь переводить деньги вне платформы.','Восстанавливайте доступ только официальным способом.'],['Do not share passwords or recovery codes.','Check the domain before opening a suspicious link.','Do not pay outside the marketplace when asked.','Use the official recovery flow to regain access.']])]
+    for slug,category,title,summary,body in posts:
+        db.execute("INSERT INTO blog_posts(id,slug,category_json,title_json,summary_json,body_json,status,published_at) VALUES(?,?,?,?,?,?,'published',CURRENT_TIMESTAMP)",(ident(),slug,*[json.dumps(x,ensure_ascii=False) for x in (category,title,summary,body)]))
+
+def rowdict(r): return dict(r) if r else None
+def create_token(): return secrets.token_urlsafe(32)
+def hash_token(raw): return hashlib.sha256(raw.encode()).hexdigest()
+def encode_session(raw):
+    signature=hmac.new(SESSION_SECRET.encode(),raw.encode(),hashlib.sha256).hexdigest()
+    return raw+'.'+signature
+def decode_session(value):
+    raw,sep,signature=value.rpartition('.')
+    if not sep or not raw: return None
+    expected=hmac.new(SESSION_SECRET.encode(),raw.encode(),hashlib.sha256).hexdigest()
+    return raw if hmac.compare_digest(signature,expected) else None
+def password_hash(password, salt=None):
+    salt = salt or secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 310_000)
+    return salt.hex() + '$' + digest.hex()
+def password_ok(password, stored):
+    try:
+        salt_hex, _ = stored.split('$',1)
+        return hmac.compare_digest(password_hash(password, bytes.fromhex(salt_hex)), stored)
+    except Exception: return False
+
+def session_create(db, uid):
+    token, csrf = create_token(), create_token()
+    db.execute('INSERT INTO sessions(token_hash,user_id,csrf,expires_at) VALUES(?,?,?,?)',(hash_token(token),uid,(csrf), (datetime.now(timezone.utc)+timedelta(days=SESSION_DAYS)).isoformat()))
+    return encode_session(token), csrf
+
+def audit(db, actor, action, kind, entity, data=None):
+    db.execute('INSERT INTO audit_logs(id,actor_id,action,entity_type,entity_id,details_json) VALUES(?,?,?,?,?,?)',
+               (ident(),actor,action,kind,str(entity),json.dumps(data or {},ensure_ascii=False)))
+def notify(db, uid, kind, title, body, href='/'):
+    if uid: db.execute('INSERT INTO notifications(id,user_id,kind,title,body,href) VALUES(?,?,?,?,?,?)',(ident(),uid,kind,title,body,href))
+def email_order_update(db, uid, reference, status, description):
+    if not uid or not email_service.is_configured(): return
+    user=db.execute('SELECT email,display_name,email_verified,suspended FROM users WHERE id=?',(uid,)).fetchone()
+    if not user or not user['email_verified'] or user['suspended']: return
+    try: email_service.send_order_update(user['email'],user['display_name'],reference,status,description)
+    except Exception as exc: print('transactional email delivery failed:',type(exc).__name__)
+def blog_post_view(row):
+    post=dict(row)
+    for key in ('category_json','title_json','summary_json','body_json'):
+        post[key[:-5]]=json.loads(post.pop(key))
+    return post
+def event(db, oid, actor, old, new, note=''):
+    db.execute('INSERT INTO order_events(id,order_id,actor_id,from_status,to_status,note) VALUES(?,?,?,?,?,?)',(ident(),oid,actor,old,new,note))
+def user_view(db, uid):
+    u = db.execute('SELECT id,email,display_name,country,language,currency,email_verified,suspended,created_at FROM users WHERE id=?',(uid,)).fetchone()
+    if not u: return None
+    out = dict(u)
+    # Admin status is an immutable role marker created by the local bootstrap command.
+    out['is_admin'] = db.execute('SELECT 1 FROM admin_accounts WHERE user_id=?',(uid,)).fetchone() is not None
+    out['seller'] = rowdict(db.execute('SELECT shop_name,bio,verification_status,selling_enabled,identity_status,identity_provider FROM seller_profiles WHERE user_id=?',(uid,)).fetchone())
+    return out
+
+def check_rate(db, bucket, subject, limit=10, period=300):
+    now = int(time.time()); start = now - now % period
+    r = db.execute('SELECT attempts FROM rate_limits WHERE bucket=? AND subject=? AND window_start=?',(bucket,subject,start)).fetchone()
+    if r and r['attempts'] >= limit: raise HttpError(429,'Urinishlar limiti tugadi. Birozdan keyin qayta urinib ko‘ring.')
+    db.execute('INSERT INTO rate_limits(bucket,subject,window_start,attempts) VALUES(?,?,?,1) ON CONFLICT(bucket,subject,window_start) DO UPDATE SET attempts=attempts+1',(bucket,subject,start))
+
+def is_admin(db, uid): return bool(db.execute('SELECT 1 FROM admin_accounts WHERE user_id=?',(uid,)).fetchone())
+def require_user(ctx):
+    if not ctx['uid']: raise HttpError(401,'Davom etish uchun tizimga kiring.')
+    if ctx['user'] and ctx['user']['suspended']: raise HttpError(403,'Hisobingiz vaqtincha cheklangan.')
+    return ctx['uid']
+def require_verified(ctx):
+    uid=require_user(ctx)
+    if not ctx['user']['email_verified']: raise HttpError(403,'Avval elektron pochtangizni tasdiqlang.')
+    return uid
+def require_admin(ctx):
+    uid=require_user(ctx)
+    if not is_admin(ctx['db'],uid): raise HttpError(403,'Administrator ruxsati kerak.')
+    return uid
+def seller_ok(db,uid):
+    p=db.execute('SELECT * FROM seller_profiles WHERE user_id=?',(uid,)).fetchone()
+    if not p: raise HttpError(403,'Avval sotuvchi profilini yarating.')
+    if p['identity_status']!='verified':
+        raise HttpError(403,'Sotishdan oldin tashqi KYC provayderida pasport va yuz tekshiruvi yakunlanishi kerak. Hujjatlarni bu saytga yuklamang.')
+    if p['verification_status']!='verified' or not p['selling_enabled']:
+        raise HttpError(403,'Sotuv boshlashdan oldin administrator sotuvchi profilingizni tekshirishi kerak.')
+    return p
+
+def settle_seller_escrow(db,oid):
+    """Move sandbox-held amounts into withdrawable seller balances after resolution."""
+    order=db.execute('SELECT currency FROM orders WHERE id=?',(oid,)).fetchone()
+    if not order: raise HttpError(404,'Buyurtma topilmadi.')
+    for item in db.execute('SELECT * FROM order_items WHERE order_id=?',(oid,)).fetchall():
+        net=item['unit_price_minor']*item['quantity']-item['commission_minor']
+        db.execute('INSERT INTO ledger_entries(id,order_id,user_id,entry_type,amount_minor,currency,description) VALUES(?,?,?,?,?,?,?)',(ident(),oid,item['seller_id'],'escrow_release',-net,order['currency'],'Buyurtma nizosi/yetkazishi hal qilindi'))
+        if net:
+            db.execute('INSERT INTO ledger_entries(id,order_id,user_id,entry_type,amount_minor,currency,description) VALUES(?,?,?,?,?,?,?)',(ident(),oid,item['seller_id'],'seller_earning',net,order['currency'],'Yetkazilgan buyurtma bo‘yicha sotuvchi daromadi'))
+        if item['commission_minor']:
+            db.execute('INSERT INTO ledger_entries(id,order_id,user_id,entry_type,amount_minor,currency,description) VALUES(?,?,?,?,?,?,?)',(ident(),oid,None,'escrow_fee_release',-item['commission_minor'],order['currency'],'Platforma komissiyasi escrow’dan chiqarildi'))
+            db.execute('INSERT INTO ledger_entries(id,order_id,user_id,entry_type,amount_minor,currency,description) VALUES(?,?,?,?,?,?,?)',(ident(),oid,None,'platform_commission',item['commission_minor'],order['currency'],'Platforma komissiyasi'))
+
+def refund_sandbox_escrow(db,oid,buyer_id):
+    """Record a simulated sandbox refund; it never represents a live cash transfer."""
+    order=db.execute('SELECT currency,total_minor FROM orders WHERE id=?',(oid,)).fetchone()
+    if not order: raise HttpError(404,'Buyurtma topilmadi.')
+    for item in db.execute('SELECT * FROM order_items WHERE order_id=?',(oid,)).fetchall():
+        net=item['unit_price_minor']*item['quantity']-item['commission_minor']
+        db.execute('INSERT INTO ledger_entries(id,order_id,user_id,entry_type,amount_minor,currency,description) VALUES(?,?,?,?,?,?,?)',(ident(),oid,item['seller_id'],'escrow_release',-net,order['currency'],'Sandbox nizosi: sotuvchi escrow’i bekor qilindi'))
+        if item['commission_minor']:
+            db.execute('INSERT INTO ledger_entries(id,order_id,user_id,entry_type,amount_minor,currency,description) VALUES(?,?,?,?,?,?,?)',(ident(),oid,None,'escrow_fee_release',-item['commission_minor'],order['currency'],'Sandbox nizosi: komissiya escrow’i bekor qilindi'))
+    db.execute('INSERT INTO ledger_entries(id,order_id,user_id,entry_type,amount_minor,currency,description) VALUES(?,?,?,?,?,?,?)',(ident(),oid,buyer_id,'buyer_refund',order['total_minor'],order['currency'],'Sandbox refund simulyatsiyasi; real pul o‘tkazilmagan'))
+def clean_text(value, field, min_len=1, max_len=5000):
+    if not isinstance(value,str): raise HttpError(400,f'{field}: matn talab qilinadi.')
+    value=unicodedata.normalize('NFC', value).strip()
+    if len(value)<min_len or len(value)>max_len: raise HttpError(400,f'{field}: uzunligi {min_len}–{max_len} belgi bo‘lishi kerak.')
+    return value
+def evidence_link(value):
+    value=clean_text(value or '','Dalil havolasi',0,1000)
+    if not value: return ''
+    parsed=urlparse(value)
+    if parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password:
+        raise HttpError(400,'Dalil havolasi HTTPS bo‘lishi va login/parol saqlamasligi kerak.')
+    return value
+def money(value):
+    if isinstance(value,bool) or not isinstance(value,int) or value<=0: raise HttpError(400,'Narx musbat butun son ko‘rinishida bo‘lishi kerak (UZS).')
+    return value
+def parse_json(body):
+    try: return json.loads(body or b'{}')
+    except Exception: raise HttpError(400,'JSON so‘rovi noto‘g‘ri.')
+
+def listing_detail(db, lid, viewer=None):
+    r=db.execute("""SELECT l.id,l.seller_id,l.game_id,l.category_id,l.title,l.description,l.product_type,l.price_minor,l.currency,l.platform,l.region,l.attributes_json,l.delivery_method,l.delivery_eta,l.requirements,l.stock,l.reserved,l.status,l.moderation_note,l.image_url,l.created_at,l.updated_at,g.name game_name,g.slug game_slug,c.name category_name,s.shop_name seller_name,s.verification_status,
+      (SELECT COUNT(*) FROM reviews rv WHERE rv.seller_id=l.seller_id) review_count,(SELECT AVG(rating) FROM reviews rv WHERE rv.seller_id=l.seller_id) seller_rating
+      FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id LEFT JOIN seller_profiles s ON s.user_id=l.seller_id WHERE l.id=?""",(lid,)).fetchone()
+    if not r: return None
+    out=dict(r); out['available']=max(0,out['stock']-out['reserved']); out['attributes']=json.loads(out.pop('attributes_json') or '{}'); out.pop('seller_id',None)
+    out['is_favorite']=bool(viewer and db.execute('SELECT 1 FROM favorites WHERE user_id=? AND listing_id=?',(viewer,lid)).fetchone())
+    return out
+
+def order_view(db, oid, uid, admin=False):
+    q=db.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
+    if not q: return None
+    order=dict(q)
+    items=db.execute('SELECT oi.*,l.game_id,l.category_id FROM order_items oi LEFT JOIN listings l ON l.id=oi.listing_id WHERE oi.order_id=?',(oid,)).fetchall()
+    is_buyer=order['buyer_id']==uid
+    if not admin and not is_buyer and not any(i['seller_id']==uid for i in items): raise HttpError(403,'Bu buyurtmaga ruxsatingiz yo‘q.')
+    if not admin and not is_buyer:
+        items=[i for i in items if i['seller_id']==uid]
+        order['buyer_id']=None
+        order['subtotal_minor']=sum(i['unit_price_minor']*i['quantity'] for i in items)
+        order['commission_minor']=sum(i['commission_minor'] for i in items)
+        order['total_minor']=order['subtotal_minor']
+    order['items']=[]
+    for item in items:
+        it=dict(item)
+        delivery=db.execute('SELECT id,submitted_at,buyer_accessed_at,protected_payload FROM deliveries WHERE order_item_id=?',(it['id'],)).fetchone()
+        if delivery and is_buyer and order['status'] in ('paid','awaiting_delivery','delivered','completed','disputed','under_review'):
+            delivered=dict(delivery)
+            try:
+                delivered['protected_payload']=delivery_crypto.decrypt_payload(delivered['protected_payload'],it['id'])
+            except delivery_crypto.DeliveryCryptoError as exc:
+                raise HttpError(503,'Yetkazish ma’lumoti xavfsiz ochilmadi. Encryption kaliti va eski ma’lumotlar migratsiyasini tekshiring.') from exc
+            it['delivery']=delivered
+        else:
+            it['delivery']={'submitted_at':delivery['submitted_at']} if delivery else None
+        it.pop('seller_id',None)
+        order['items'].append(it)
+    order['events']=[dict(x) for x in db.execute('SELECT to_status,note,created_at FROM order_events WHERE order_id=? ORDER BY created_at',(oid,)).fetchall()]
+    order['payment']=rowdict(db.execute('SELECT provider,status,amount_minor,currency,created_at FROM payments WHERE order_id=?',(oid,)).fetchone())
+    return order
+
+def checkout(db,uid,accept_terms=False):
+    if not accept_terms: raise HttpError(400,'Checkoutdan oldin savdo shartlarini qabul qiling.')
+    try: provider=get_provider(MODE,os.environ.get('PAYMENT_PROVIDER','disabled'))
+    except RuntimeError as e: raise HttpError(503,'Haqiqiy to‘lov provayderi hali sozlanmagan. Ishlab chiqarish checkout’i yopiq.')
+    db.execute('BEGIN IMMEDIATE')
+    try:
+        # release expired reservations so abandoned carts cannot lock stock forever
+        old=db.execute("SELECT o.id,oi.listing_id,oi.quantity FROM orders o JOIN order_items oi ON oi.order_id=o.id WHERE o.status='pending_payment' AND o.created_at < datetime('now','-30 minutes')").fetchall()
+        for x in old:
+            db.execute('UPDATE listings SET reserved=MAX(0,reserved-?) WHERE id=?',(x['quantity'],x['listing_id']))
+            db.execute("UPDATE orders SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=?",(x['id'],))
+            db.execute("UPDATE payments SET status='expired',updated_at=CURRENT_TIMESTAMP WHERE order_id=?",(x['id'],))
+            event(db,x['id'],None,'pending_payment','cancelled','To‘lov muddati tugadi')
+        cart=db.execute('SELECT c.listing_id,c.quantity,l.* FROM carts c JOIN listings l ON l.id=c.listing_id WHERE c.user_id=?',(uid,)).fetchall()
+        if not cart: raise HttpError(400,'Savatchangiz bo‘sh.')
+        currencies={x['currency'] for x in cart}
+        if len(currencies)!=1: raise HttpError(400,'Turli valyutadagi mahsulotlarni bitta buyurtmada xarid qilib bo‘lmaydi.')
+        currency=currencies.pop(); subtotal=0; lines=[]
+        for x in cart:
+            if x['seller_id']==uid: raise HttpError(400,'O‘zingizning e’loningizni xarid qila olmaysiz.')
+            if x['status']!='published': raise HttpError(409,'Savatchadagi e’lonlardan biri endi mavjud emas.')
+            if x['stock']-x['reserved']<x['quantity']: raise HttpError(409,'Mahsulot qoldig‘i yetarli emas.')
+            subtotal += x['price_minor']*x['quantity']; lines.append(x)
+        config=db.execute("SELECT value FROM platform_config WHERE key='commission_bps'").fetchone()
+        bps=int(config['value']) if config else 0
+        commission=(subtotal*bps)//10000
+        oid,reference,idem=ident(),'BG-'+secrets.token_hex(4).upper(),create_token()
+        intent=provider.create_intent(oid,subtotal+commission,currency,idem)
+        terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']
+        db.execute('INSERT INTO orders(id,reference,buyer_id,currency,subtotal_minor,commission_minor,commission_bps,total_minor,status,payment_mode,accepted_checkout_terms_version,accepted_checkout_terms_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(oid,reference,uid,currency,subtotal,commission,bps,subtotal+commission,'pending_payment',intent.provider,terms,now_iso()))
+        remainder=commission-sum((y['price_minor']*y['quantity']*bps)//10000 for y in lines)
+        for ix,x in enumerate(lines):
+            per_fee=(x['price_minor']*x['quantity']*bps)//10000
+            if ix < remainder: per_fee += 1
+            db.execute('UPDATE listings SET reserved=reserved+?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND stock-reserved>=?',(x['quantity'],x['listing_id'],x['quantity']))
+            if db.execute('SELECT changes()').fetchone()[0]!=1: raise HttpError(409,'Mahsulot qoldig‘i band qilindi. Savatchani yangilang.')
+            db.execute('INSERT INTO order_items(id,order_id,listing_id,seller_id,title,quantity,unit_price_minor,commission_minor,delivery_method) VALUES(?,?,?,?,?,?,?,?,?)',(ident(),oid,x['listing_id'],x['seller_id'],x['title'],x['quantity'],x['price_minor'],per_fee,x['delivery_method']))
+        db.execute('INSERT INTO payments(id,order_id,provider,amount_minor,currency,status,idempotency_key) VALUES(?,?,?,?,?,?,?)',(ident(),oid,intent.provider,intent.amount_minor,intent.currency,'pending',intent.idempotency_key))
+        db.execute('DELETE FROM carts WHERE user_id=?',(uid,)); event(db,oid,uid,None,'pending_payment','Sandbox to‘lov yaratildi')
+        db.execute('COMMIT'); return {'id':oid,'reference':reference,'status':'pending_payment','total_minor':subtotal+commission,'currency':currency,'mode':'sandbox'}
+    except Exception:
+        db.execute('ROLLBACK'); raise
+
+class Handler(BaseHTTPRequestHandler):
+    server_version='SentryLoot/0.1'
+    def log_message(self, fmt, *args):
+        # Keep access logs minimal; never print bodies or credential values.
+        print('%s - %s' % (self.address_string(), fmt % args))
+    def send_json(self, code, data, headers=None):
+        payload=json.dumps(data,ensure_ascii=False,separators=(',',':')).encode()
+        self.send_response(code); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.send_header('Pragma','no-cache'); self.send_header('Vary','Cookie'); self.secure_headers()
+        for k,v in (headers or {}).items():
+            for value in (v if isinstance(v,(list,tuple)) else [v]): self.send_header(k,value)
+        self.end_headers(); self.wfile.write(payload)
+    def secure_headers(self):
+        self.send_header('X-Content-Type-Options','nosniff'); self.send_header('X-Frame-Options','DENY'); self.send_header('Referrer-Policy','strict-origin-when-cross-origin'); self.send_header('Permissions-Policy','camera=(self "https://api.sumsub.com"), microphone=(self "https://api.sumsub.com"), geolocation=()'); self.send_header('Content-Security-Policy',"default-src 'self'; img-src 'self' data: https: blob:; script-src 'self' https://static.sumsub.com; style-src 'self' 'unsafe-inline' https://static.sumsub.com; font-src 'self' data: https://*.sumsub.com; style-src-attr 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self' https://*.sumsub.com wss://*.sumsub.com; frame-src https://*.sumsub.com; media-src 'self' blob: https://*.sumsub.com; worker-src 'self' blob:")
+    def body(self):
+        n=int(self.headers.get('Content-Length','0'))
+        if n>MAX_BODY: raise HttpError(413,'So‘rov hajmi cheklovdan oshdi.')
+        return self.rfile.read(n) if n else b'{}'
+    def cookie(self):
+        for part in self.headers.get('Cookie','').split(';'):
+            k,sep,v=part.strip().partition('=')
+            if sep and k==COOKIE_NAME: return v
+        return ''
+    def context(self, db):
+        uid=None; csrf=None
+        raw=decode_session(self.cookie())
+        if raw:
+            s=db.execute('SELECT user_id,csrf FROM sessions WHERE token_hash=? AND expires_at>?',(hash_token(raw),now_iso())).fetchone()
+            if s: uid,csrf=s['user_id'],s['csrf']
+        return {'db':db,'uid':uid,'csrf':csrf,'user':user_view(db,uid) if uid else None}
+    def set_session(self, token):
+        self._set_cookie=f'{COOKIE_NAME}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_DAYS*86400}' + ('; Secure' if MODE=='production' else '')
+    def dispatch(self):
+        parsed=urlparse(self.path); path=parsed.path.rstrip('/') or '/'; method=self.command
+        db=connect()
+        try:
+            ctx=self.context(db)
+            csrf_exempt=path in ('/api/webhooks/sumsub','/api/oauth/apple/callback')
+            if method in ('POST','PATCH','DELETE') and ctx['uid'] and not csrf_exempt:
+                if not hmac.compare_digest(self.headers.get('X-CSRF-Token',''),ctx['csrf'] or ''): raise HttpError(403,'Xavfsizlik tokeni noto‘g‘ri. Sahifani yangilang.')
+            raw_body=self.body() if method in ('POST','PATCH','PUT') and path.startswith('/api/') else b''
+            if raw_body and self.headers.get('Content-Type','').startswith('application/x-www-form-urlencoded') and path=='/api/oauth/apple/callback':
+                data={key: values[-1] for key,values in parse_qs(raw_body.decode('utf-8','replace')).items()}
+            else: data=parse_json(raw_body) if raw_body else {}
+            result=self.route(db,ctx,method,path,parse_qs(parsed.query),data,raw_body)
+            if isinstance(result,tuple) and len(result)==3: status,data,headers=result
+            elif isinstance(result,tuple) and len(result)==2: status,data=result; headers={}
+            else: status,data,headers=200,result,{}
+            if hasattr(self,'_set_cookie'): headers={**headers,'Set-Cookie':([self._set_cookie] if 'Set-Cookie' not in headers else [self._set_cookie,*headers['Set-Cookie']])}
+            self.send_json(status,data,headers)
+        except HttpError as e: self.send_json(e.status,{'error':e.message})
+        except sqlite3.IntegrityError as e: self.send_json(409,{'error':'Ma’lumotlar to‘qnashuvi yuz berdi. Kiritilgan qiymatlarni tekshiring.'})
+        except Exception as e:
+            print('request error:',type(e).__name__)
+            self.send_json(500,{'error':'Ichki xatolik yuz berdi.'})
+        finally: db.close()
+    def do_GET(self):
+        if not self.path.startswith('/api/'):
+            parsed=urlparse(self.path); f={'/':'index.html','/static/app.js':'app.js','/static/locales.js':'locales.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png'}.get(parsed.path)
+            if not f: self.send_error(404); return
+            data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
+            ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8'))))
+            self.send_response(200);self.send_header('Content-Type',ctype);self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control','no-store');self.secure_headers();self.end_headers();self.wfile.write(data);return
+        self.dispatch()
+    def do_POST(self): self.dispatch()
+    def do_PATCH(self): self.dispatch()
+    def do_DELETE(self): self.dispatch()
+    def route(self,db,ctx,method,path,qs,data,raw_body=b''):
+        uid=ctx['uid']
+        if path=='/healthz' and method=='GET': return {'ok':True}
+        if path=='/api/health' and method=='GET': return {'ok':True,'mode':MODE,'database':'sqlite','payments':'sandbox-only' if MODE=='development' else 'unconfigured','identity_verification':'sumsub' if identity_service.is_configured() else 'unconfigured'}
+        if path=='/api/me' and method=='GET': return {'user':ctx['user'],'csrf':ctx['csrf'],'mode':MODE}
+        if path=='/api/blog' and method=='GET':
+            return [blog_post_view(x) for x in db.execute("SELECT * FROM blog_posts WHERE status='published' ORDER BY published_at DESC,created_at DESC LIMIT 100")]
+        if path.startswith('/api/blog/') and method=='GET':
+            slug=path.rsplit('/',1)[-1]
+            row=db.execute("SELECT * FROM blog_posts WHERE slug=? AND status='published'",(slug,)).fetchone()
+            if not row: raise HttpError(404,'Maqola topilmadi.')
+            return blog_post_view(row)
+        if path=='/api/oauth/providers' and method=='GET': return {'google':bool(os.environ.get('GOOGLE_CLIENT_ID') and os.environ.get('GOOGLE_CLIENT_SECRET')),'apple':bool(os.environ.get('APPLE_SERVICE_ID') and os.environ.get('APPLE_TEAM_ID') and os.environ.get('APPLE_KEY_ID') and os.environ.get('APPLE_PRIVATE_KEY'))}
+        if path=='/api/oauth/start' and method=='POST':
+            provider=data.get('provider')
+            if provider not in ('google','apple'): raise HttpError(400,'Kirish provayderi noto‘g‘ri.')
+            if data.get('accept_terms') is not True: raise HttpError(400,'Davom etish uchun foydalanish shartlarini qabul qiling.')
+            if provider=='google':
+                client_id=os.environ.get('GOOGLE_CLIENT_ID','')
+                if not client_id or not os.environ.get('GOOGLE_CLIENT_SECRET'): raise HttpError(503,'Google Sign In hali sozlanmagan.')
+            else:
+                client_id=os.environ.get('APPLE_SERVICE_ID','')
+                if not all((client_id,os.environ.get('APPLE_TEAM_ID'),os.environ.get('APPLE_KEY_ID'),os.environ.get('APPLE_PRIVATE_KEY'))): raise HttpError(503,'Apple Sign In hali sozlanmagan.')
+            check_rate(db,'oauth_start_'+provider,self.client_address[0],8)
+            base=os.environ.get('PUBLIC_BASE_URL','http://localhost:8000').rstrip('/')
+            if MODE=='production' and not base.startswith('https://'): raise HttpError(503,'Ishlab chiqarishda PUBLIC_BASE_URL HTTPS bo‘lishi kerak.')
+            callback=base+'/api/oauth/'+provider+'/callback'
+            state,nonce=create_token(),create_token()
+            payload=f'{state}.{nonce}.{int(time.time())}'
+            signature=hmac.new(SESSION_SECRET.encode(),(provider+'.'+payload).encode(),hashlib.sha256).hexdigest()
+            secure='; Secure' if MODE=='production' else ''
+            same_site='None' if provider=='apple' else 'Lax'
+            self._set_cookie=f'bozorgg_oauth_{provider}={payload}.{signature}; Path=/api/oauth/{provider}/callback; HttpOnly; SameSite={same_site}; Max-Age=600'+secure
+            url=oauth_service.google_authorization_url(client_id,callback,state,nonce) if provider=='google' else oauth_service.apple_authorization_url(client_id,callback,state,nonce)
+            return {'authorization_url':url}
+        if path in ('/api/oauth/google/callback','/api/oauth/apple/callback') and method in ('GET','POST'):
+            provider='google' if path.endswith('/google/callback') else 'apple'
+            def cookie_value(name):
+                for part in self.headers.get('Cookie','').split(';'):
+                    key,sep,value=part.strip().partition('=')
+                    if sep and key==name: return value
+                return ''
+            payload=cookie_value('bozorgg_oauth_'+provider)
+            if payload:
+                parts=payload.rsplit('.',3)
+                saved_state,saved_nonce,saved_at,signature=parts if len(parts)==4 else ('','','','')
+            else: saved_state,saved_nonce,saved_at,signature='','','',''
+            signed_payload='.'.join((saved_state,saved_nonce,saved_at))
+            expected=hmac.new(SESSION_SECRET.encode(),(provider+'.'+signed_payload).encode(),hashlib.sha256).hexdigest() if payload else ''
+            supplied_state=data.get('state') if method=='POST' else qs.get('state',[''])[0]
+            code=data.get('code') if method=='POST' else qs.get('code',[''])[0]
+            if not payload or not hmac.compare_digest(signature,expected) or not hmac.compare_digest(str(supplied_state or ''),saved_state): raise HttpError(400,'Kirish so‘rovi muddati o‘tgan yoki noto‘g‘ri. Qayta urinib ko‘ring.')
+            try: created=int(saved_at)
+            except ValueError: created=0
+            if created<int(time.time())-600 or created>int(time.time())+30: raise HttpError(400,'Kirish so‘rovi muddati o‘tgan. Qayta urinib ko‘ring.')
+            if not code or len(str(code))>4096: raise HttpError(400,'Provayder avtorizatsiya kodi noto‘g‘ri.')
+            base=os.environ.get('PUBLIC_BASE_URL','http://localhost:8000').rstrip('/')
+            try: identity=oauth_service.exchange_code(provider,str(code),base+'/api/oauth/'+provider+'/callback',saved_nonce)
+            except Exception as exc:
+                print('oauth provider error:',provider,type(exc).__name__)
+                raise HttpError(401,'Google/Apple hisobini tasdiqlab bo‘lmadi. Qayta urinib ko‘ring.')
+            subject,email,name=identity['subject'],identity['email'],clean_text(identity['name'],'Ism',1,80)
+            linked=db.execute('SELECT u.id,u.suspended FROM oauth_identities i JOIN users u ON u.id=i.user_id WHERE i.provider=? AND i.subject=?',(provider,subject)).fetchone()
+            if linked:
+                if linked['suspended']: raise HttpError(403,'Hisobingiz vaqtincha cheklangan.')
+                user_id=linked['id']
+            else:
+                if db.execute('SELECT id FROM users WHERE email=?',(email,)).fetchone(): raise HttpError(409,'Bu emailda avvaldan hisob bor. Xavfsizlik sabab Google/Apple akkauntini avtomatik bog‘lamadik; hozirgi kirish usulingizdan foydalaning.')
+                terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']
+                user_id=ident()
+                db.execute('INSERT INTO users(id,email,password_hash,display_name,email_verified,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,1,?,?)',(user_id,email,password_hash(create_token()),name,terms,now_iso()))
+                db.execute('INSERT INTO oauth_identities(provider,subject,user_id) VALUES(?,?,?)',(provider,subject,user_id))
+            session_token,csrf=session_create(db,user_id); self.set_session(session_token)
+            secure='; Secure' if MODE=='production' else ''
+            clear=f'bozorgg_oauth_{provider}=; Path=/api/oauth/{provider}/callback; HttpOnly; SameSite={"None" if provider=="apple" else "Lax"}; Max-Age=0'+secure
+            return 302,{'ok':True},{'Location':'/#account','Set-Cookie':[clear]}
+        if path=='/api/webhooks/sumsub' and method=='POST':
+            digest=self.headers.get('X-Payload-Digest',''); algorithm=self.headers.get('X-Payload-Digest-Alg','')
+            if not identity_service.verify_webhook(raw_body,digest,algorithm): raise HttpError(401,'Webhook imzosi noto‘g‘ri.')
+            if not isinstance(data,dict): raise HttpError(400,'Webhook JSON obyekt bo‘lishi kerak.')
+            if data.get('testMode') is True: return {'ok':True,'ignored':'test event'}
+            if data.get('type')!='applicantReviewed': return {'ok':True,'ignored':'event type'}
+            external_id=data.get('externalUserId')
+            if not isinstance(external_id,str) or not external_id: raise HttpError(400,'Webhook applicant identifikatori yo‘q.')
+            try:
+                if isinstance(data.get('createdAtMs'),(int,float)):
+                    dt=datetime.fromtimestamp(data['createdAtMs']/1000,timezone.utc)
+                elif isinstance(data.get('createdAtMs'),str):
+                    dt=datetime.fromisoformat(data['createdAtMs'].replace('Z','+00:00'))
+                    if dt.tzinfo is None: dt=dt.replace(tzinfo=timezone.utc)
+                    dt=dt.astimezone(timezone.utc)
+                elif isinstance(data.get('createdAt'),str):
+                    dt=datetime.fromisoformat(data['createdAt'].replace('Z','+00:00'))
+                    if dt.tzinfo is None: dt=dt.replace(tzinfo=timezone.utc)
+                    dt=dt.astimezone(timezone.utc)
+                else: dt=datetime.now(timezone.utc)
+                event_time=dt.isoformat(timespec='milliseconds')
+            except (ValueError,OverflowError,OSError): raise HttpError(400,'Webhook vaqti noto‘g‘ri.')
+            profile=db.execute("SELECT * FROM seller_profiles WHERE identity_reference=? AND identity_provider='sumsub'",(external_id,)).fetchone()
+            if not profile: return {'ok':True,'ignored':'unknown applicant'}
+            if profile['identity_last_event_at'] and event_time<=profile['identity_last_event_at']: return {'ok':True,'ignored':'stale event'}
+            review=data.get('reviewResult') if isinstance(data.get('reviewResult'),dict) else {}
+            answer=review.get('reviewAnswer'); review_status=data.get('reviewStatus')
+            identity_status='verified' if review_status=='completed' and answer=='GREEN' else ('rejected' if review_status=='completed' and answer=='RED' else 'pending')
+            db.execute('UPDATE seller_profiles SET identity_status=?,identity_verified_at=?,identity_last_event_at=? WHERE user_id=?',(identity_status,event_time if identity_status=='verified' else None,event_time,profile['user_id']))
+            if identity_status!='verified':
+                db.execute('UPDATE seller_profiles SET selling_enabled=0 WHERE user_id=?',(profile['user_id'],))
+                db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE seller_id=? AND status='published'",(profile['user_id'],))
+            message={'verified':'Sumsub tekshiruvi yakunlandi. Administrator sotuvchi profilingizni ko‘rib chiqadi.','rejected':'Sumsub shaxsni tekshirishni tasdiqlamadi. Sotish hozircha yopiq.','pending':'Sumsub tekshiruvi ko‘rib chiqilmoqda.'}[identity_status]
+            notify(db,profile['user_id'],'identity_review','Shaxsni tekshirish holati yangilandi',message,'/seller')
+            audit(db,None,'sumsub_identity_'+identity_status,'seller',profile['user_id'],{'provider':'sumsub','event_at':event_time})
+            return {'ok':True}
+        if path=='/api/register' and method=='POST':
+            if data.get('accept_terms') is not True: raise HttpError(400,'Ro‘yxatdan o‘tish uchun foydalanish shartlarini qabul qiling.')
+            if not email_service.is_configured() and MODE!='development': raise HttpError(503,'Ro‘yxatdan o‘tish uchun xavfsiz email yuborish xizmati konfiguratsiyasi kerak.')
+            check_rate(db,'register',self.client_address[0],5)
+            email=clean_text(data.get('email'),'Email',3,254).lower(); name=clean_text(data.get('name'),'Ism',2,80); password=data.get('password','')
+            if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email) or len(password)<10 or len(password)>256: raise HttpError(400,'To‘g‘ri email va kamida 10 belgili parol kiriting.')
+            if email in (os.environ.get('SEED_ADMIN_EMAIL','').lower(),): raise HttpError(409,'Bu email administratorda ishlatiladi.')
+            user=ident(); terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']; db.execute('INSERT INTO users(id,email,password_hash,display_name,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?)',(user,email,password_hash(password),name,terms,now_iso()))
+            raw=create_token(); db.execute('INSERT INTO email_tokens(token_hash,user_id,purpose,expires_at) VALUES(?,?,?,?)',(hash_token(raw),user,'verify',(datetime.now(timezone.utc)+timedelta(hours=24)).isoformat()))
+            if email_service.is_configured():
+                try: email_service.send_action_email(email,name,'verify',raw)
+                except Exception: raise HttpError(503,'Hisob yaratildi, ammo tasdiqlash xati yuborilmadi. Birozdan so‘ng yangi xat so‘rang.')
+                return 201,{'message':'Hisob yaratildi. Emailingizga tasdiqlash havolasini yubordik.'}
+            return 201,{'message':'Hisob yaratildi. Email provider sozlanmaganligi sabab development tokeni ko‘rsatilmoqda.','verification_token':raw}
+        if path=='/api/verification/resend' and method=='POST':
+            if not email_service.is_configured() and MODE!='development': raise HttpError(503,'Email yuborish xizmati hozircha sozlanmagan.')
+            check_rate(db,'verification_resend_ip',self.client_address[0],4)
+            email=clean_text(data.get('email'),'Email',3,254).lower()
+            check_rate(db,'verification_resend_email',email,3,3600)
+            row=db.execute('SELECT id,display_name FROM users WHERE email=? AND email_verified=0 AND suspended=0',(email,)).fetchone()
+            raw=None
+            if row:
+                db.execute("UPDATE email_tokens SET consumed_at=CURRENT_TIMESTAMP WHERE user_id=? AND purpose='verify' AND consumed_at IS NULL",(row['id'],))
+                raw=create_token(); db.execute('INSERT INTO email_tokens(token_hash,user_id,purpose,expires_at) VALUES(?,?,?,?)',(hash_token(raw),row['id'],'verify',(datetime.now(timezone.utc)+timedelta(hours=24)).isoformat()))
+                if email_service.is_configured():
+                    try: email_service.send_action_email(email,row['display_name'],'verify',raw)
+                    except Exception: raise HttpError(503,'Tasdiqlash xati yuborilmadi. Keyinroq qayta urinib ko‘ring.')
+            result={'message':'Agar bu email tasdiqlanmagan hisobga tegishli bo‘lsa, yangi havola yuborildi.'}
+            if MODE=='development' and not email_service.is_configured() and raw: result['verification_token']=raw
+            return result
+        if path=='/api/verify' and method=='POST':
+            token=clean_text(data.get('token'),'Token',20,200); tok=db.execute("SELECT * FROM email_tokens WHERE token_hash=? AND purpose='verify' AND consumed_at IS NULL AND expires_at>?",(hash_token(token),now_iso())).fetchone()
+            if not tok: raise HttpError(400,'Tasdiqlash havolasi noto‘g‘ri yoki muddati o‘tgan.')
+            db.execute("UPDATE email_tokens SET consumed_at=CURRENT_TIMESTAMP WHERE user_id=? AND purpose='verify' AND consumed_at IS NULL",(tok['user_id'],)); db.execute('UPDATE users SET email_verified=1 WHERE id=?',(tok['user_id'],)); raw,csrf=session_create(db,tok['user_id']); self.set_session(raw)
+            return {'user':user_view(db,tok['user_id']),'csrf':csrf}
+        if path=='/api/password-reset' and method=='POST':
+            if not email_service.is_configured() and MODE!='development': raise HttpError(503,'Parolni tiklash uchun xavfsiz email yuborish xizmati konfiguratsiyasi kerak.')
+            check_rate(db,'password_reset',self.client_address[0],5)
+            email=clean_text(data.get('email'),'Email',3,254).lower(); row=db.execute('SELECT id,display_name FROM users WHERE email=?',(email,)).fetchone(); raw=None
+            if row:
+                db.execute("UPDATE email_tokens SET consumed_at=CURRENT_TIMESTAMP WHERE user_id=? AND purpose='password_reset' AND consumed_at IS NULL",(row['id'],))
+                raw=create_token(); db.execute('INSERT INTO email_tokens(token_hash,user_id,purpose,expires_at) VALUES(?,?,?,?)',(hash_token(raw),row['id'],'password_reset',(datetime.now(timezone.utc)+timedelta(minutes=30)).isoformat()))
+                if email_service.is_configured():
+                    try: email_service.send_action_email(email,row['display_name'],'password_reset',raw)
+                    except Exception: raise HttpError(503,'Tiklash xati yuborilmadi. Keyinroq qayta urinib ko‘ring.')
+            result={'message':'Agar email ro‘yxatdan o‘tgan bo‘lsa, tiklash havolasi yuborildi.'}
+            if MODE=='development' and not email_service.is_configured(): result['reset_token']=raw
+            return result
+        if path=='/api/password-reset/confirm' and method=='POST':
+            check_rate(db,'password_reset_confirm',self.client_address[0],8)
+            token=clean_text(data.get('token'),'Token',20,200); password=data.get('password','')
+            if not isinstance(password,str) or len(password)<10 or len(password)>256: raise HttpError(400,'Yangi parol kamida 10 belgidan iborat bo‘lsin.')
+            tok=db.execute("SELECT * FROM email_tokens WHERE token_hash=? AND purpose='password_reset' AND consumed_at IS NULL AND expires_at>?",(hash_token(token),now_iso())).fetchone()
+            if not tok: raise HttpError(400,'Tiklash tokeni noto‘g‘ri yoki muddati o‘tgan.')
+            db.execute('UPDATE users SET password_hash=? WHERE id=?',(password_hash(password),tok['user_id'])); db.execute("UPDATE email_tokens SET consumed_at=CURRENT_TIMESTAMP WHERE user_id=? AND purpose='password_reset' AND consumed_at IS NULL",(tok['user_id'],)); db.execute('DELETE FROM sessions WHERE user_id=?',(tok['user_id'],)); return {'message':'Parol yangilandi. Qayta tizimga kiring.'}
+        if path=='/api/login' and method=='POST':
+            check_rate(db,'login',self.client_address[0],8)
+            email=clean_text(data.get('email'),'Email',3,254).lower(); row=db.execute('SELECT * FROM users WHERE email=?',(email,)).fetchone()
+            if not row or not password_ok(str(data.get('password','')),row['password_hash']): raise HttpError(401,'Email yoki parol noto‘g‘ri.')
+            if row['suspended']: raise HttpError(403,'Hisobingiz vaqtincha cheklangan.')
+            if not row['email_verified']: raise HttpError(403,'Email tasdiqlanmagan. Ro‘yxatdan o‘tishda olingan havoladan foydalaning.')
+            raw,csrf=session_create(db,row['id']); self.set_session(raw); return {'user':user_view(db,row['id']),'csrf':csrf}
+        if path=='/api/logout' and method=='POST':
+            if uid:
+                session_token=decode_session(self.cookie())
+                if session_token: db.execute('DELETE FROM sessions WHERE token_hash=?',(hash_token(session_token),))
+            self._set_cookie=f'{COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0' + ('; Secure' if MODE=='production' else '')
+            return {'ok':True}
+        if path=='/api/games' and method=='GET': return [dict(x) for x in db.execute('SELECT id,slug,name FROM games WHERE active=1 ORDER BY name')]
+        if path=='/api/categories' and method=='GET': return [dict(x) for x in db.execute('SELECT id,slug,name,product_type FROM categories WHERE active=1 ORDER BY name')]
+        if path=='/api/listings' and method=='GET':
+            where=["l.status='published'"]; args=[]
+            for key,col in [('game','g.slug'),('category','c.slug'),('type','l.product_type'),('region','l.region')]:
+                val=qs.get(key,[''])[0]
+                if val: where.append(f'{col}=?'); args.append(val)
+            search=qs.get('q',[''])[0].strip()
+            if search:
+                phrase='\"'+search.replace('\"','\"\"')+'\"'
+                where.append('(l.rowid IN (SELECT rowid FROM listing_search WHERE listing_search MATCH ?) OR g.name LIKE ? OR s.shop_name LIKE ?)'); args += [phrase,f'%{search}%',f'%{search}%']
+            low=qs.get('min',[''])[0]; high=qs.get('max',[''])[0]
+            try:
+                if low: where.append('l.price_minor>=?'); args.append(max(0,int(low)))
+                if high: where.append('l.price_minor<=?'); args.append(max(0,int(high)))
+            except ValueError: raise HttpError(400,'Narx filtri butun son bo‘lishi kerak.')
+            sort=qs.get('sort',['newest'])[0]; order={'newest':'l.created_at DESC','price_asc':'l.price_minor ASC','price_desc':'l.price_minor DESC','popular':'(SELECT COUNT(*) FROM order_items oi WHERE oi.listing_id=l.id) DESC,l.created_at DESC'}.get(sort,'l.created_at DESC')
+            try: page=max(1,min(10000,int(qs.get('page',['1'])[0])))
+            except ValueError: page=1
+            limit=24
+            rows=db.execute(f"SELECT l.id,l.title,l.description,l.product_type,l.price_minor,l.currency,l.platform,l.region,l.delivery_eta,l.stock,l.reserved,l.image_url,l.created_at,g.name game_name,g.slug game_slug,c.name category_name,s.shop_name seller_name FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id JOIN seller_profiles s ON s.user_id=l.seller_id WHERE {' AND '.join(where)} AND l.stock>l.reserved ORDER BY {order} LIMIT ? OFFSET ?",(*args,limit,(page-1)*limit)).fetchall()
+            return {'items':[dict(x) for x in rows],'page':page,'page_size':limit,'has_more':len(rows)==limit}
+        if path.startswith('/api/listings/') and method=='GET':
+            lid=path.split('/')[-1]; item=listing_detail(db,lid,uid)
+            if not item or (item['status']!='published' and item['seller_id']!=uid and not (uid and is_admin(db,uid))): raise HttpError(404,'E’lon topilmadi.')
+            item['related']=[dict(x) for x in db.execute('SELECT id,title,price_minor,currency FROM listings WHERE game_id=? AND status=\'published\' AND id<>? ORDER BY created_at DESC LIMIT 4',(item['game_id'],lid))]
+            return item
+        if path=='/api/cart' and method=='GET':
+            require_user(ctx)
+            items=[]
+            for x in db.execute('SELECT c.listing_id,c.quantity FROM carts c WHERE c.user_id=?',(uid,)):
+                v=listing_detail(db,x['listing_id'],uid)
+                if v and v['status']=='published': v['quantity']=x['quantity']; items.append(v)
+            return {'items':items,'subtotal_minor':sum(x['price_minor']*x['quantity'] for x in items)}
+        if path=='/api/orders' and method=='GET':
+            require_user(ctx)
+            rows=db.execute('SELECT DISTINCT o.* FROM orders o LEFT JOIN order_items i ON i.order_id=o.id WHERE o.buyer_id=? OR i.seller_id=? ORDER BY o.created_at DESC',(uid,uid)).fetchall()
+            return [order_view(db,x['id'],uid) for x in rows]
+        if path.startswith('/api/orders/') and method=='GET':
+            require_user(ctx); oid=path.split('/')[-1]; out=order_view(db,oid,uid,is_admin(db,uid))
+            if not out: raise HttpError(404,'Buyurtma topilmadi.')
+            return out
+        if path=='/api/seller/listings' and method=='GET':
+            require_user(ctx); seller_ok(db,uid)
+            return [listing_detail(db,x['id'],uid) for x in db.execute('SELECT id FROM listings WHERE seller_id=? ORDER BY updated_at DESC',(uid,))]
+        if path=='/api/seller/summary' and method=='GET':
+            require_user(ctx); seller_ok(db,uid)
+            earnings=db.execute("SELECT COALESCE(SUM(amount_minor),0) amount_minor FROM ledger_entries WHERE user_id=? AND entry_type IN ('seller_earning','refund_adjustment')",(uid,)).fetchone()['amount_minor']
+            paid_out=-db.execute("SELECT COALESCE(SUM(amount_minor),0) amount_minor FROM ledger_entries WHERE user_id=? AND entry_type='payout'",(uid,)).fetchone()['amount_minor']
+            held=db.execute("SELECT COALESCE(SUM(amount_minor),0) amount_minor FROM ledger_entries WHERE user_id=? AND entry_type IN ('escrow_hold','escrow_release')",(uid,)).fetchone()['amount_minor']
+            pending_payout=db.execute("SELECT COALESCE(SUM(amount_minor),0) amount_minor FROM payout_requests WHERE seller_id=? AND status IN ('pending','approved')",(uid,)).fetchone()['amount_minor']
+            wallet_balance=earnings-paid_out
+            return {'listings':[dict(x) for x in db.execute('SELECT status,COUNT(*) count FROM listings WHERE seller_id=? GROUP BY status',(uid,)).fetchall()],'orders':[dict(x) for x in db.execute('SELECT o.status,COUNT(DISTINCT o.id) count FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.seller_id=? GROUP BY o.status',(uid,)).fetchall()],'earnings':earnings,'wallet':{'currency':'UZS','held_minor':held,'available_minor':max(0,wallet_balance-pending_payout),'pending_payout_minor':pending_payout,'paid_out_minor':paid_out,'automated_withdrawals_enabled':False}}
+        if path=='/api/requests' and method=='GET':
+            own=qs.get('mine',['0'])[0]=='1'
+            if own: require_user(ctx)
+            where="r.status='open' AND (r.expires_at IS NULL OR r.expires_at>CURRENT_TIMESTAMP)"; args=[uid or '']
+            if own: where+=' AND r.requester_id=?';args.append(uid)
+            rows=db.execute(f"SELECT r.id,r.game_id,r.category_id,r.title,r.description,r.budget_minor,r.currency,r.expires_at,r.status,r.created_at,CASE WHEN r.requester_id=? THEN 1 ELSE 0 END is_own,'Xaridor' requester,g.name game_name,c.name category_name FROM product_requests r JOIN games g ON g.id=r.game_id LEFT JOIN categories c ON c.id=r.category_id WHERE {where} ORDER BY r.created_at DESC LIMIT 100",args).fetchall()
+            return [dict(x) for x in rows]
+        m=re.fullmatch(r'/api/requests/([^/]+)/responses',path)
+        if m and method=='GET':
+            require_user(ctx); req=db.execute('SELECT requester_id FROM product_requests WHERE id=?',(m.group(1),)).fetchone()
+            if not req: raise HttpError(404,'So‘rov topilmadi.')
+            rows=db.execute('SELECT rr.id,rr.seller_id,rr.message,rr.listing_id,rr.created_at,COALESCE(sp.shop_name,u.display_name) seller_name FROM request_responses rr JOIN users u ON u.id=rr.seller_id LEFT JOIN seller_profiles sp ON sp.user_id=rr.seller_id WHERE rr.request_id=? ORDER BY rr.created_at',(m.group(1),)).fetchall()
+            if uid!=req['requester_id'] and not is_admin(db,uid):
+                rows=[x for x in rows if x['seller_id']==uid]
+                if not rows: raise HttpError(403,'Bu so‘rov javoblarini ko‘rish huquqingiz yo‘q.')
+            return [dict(x) for x in rows]
+        if path=='/api/conversations' and method=='GET':
+            require_user(ctx)
+            rows=db.execute('SELECT c.*,l.title listing_title, CASE WHEN c.buyer_id=? THEN su.display_name ELSE bu.display_name END other_name,(SELECT body FROM messages m WHERE m.conversation_id=c.id ORDER BY created_at DESC LIMIT 1) last_message,(SELECT COUNT(*) FROM messages m WHERE m.conversation_id=c.id AND m.sender_id<>? AND m.read_at IS NULL) unread FROM conversations c LEFT JOIN listings l ON l.id=c.listing_id JOIN users su ON su.id=c.seller_id JOIN users bu ON bu.id=c.buyer_id WHERE c.buyer_id=? OR c.seller_id=? ORDER BY c.created_at DESC',(uid,uid,uid,uid)).fetchall()
+            return [dict(x) for x in rows]
+        if path.startswith('/api/conversations/') and method=='GET':
+            require_user(ctx); cid=path.split('/')[-1]; conv=db.execute('SELECT * FROM conversations WHERE id=?',(cid,)).fetchone()
+            if not conv or uid not in (conv['buyer_id'],conv['seller_id']) and not is_admin(db,uid): raise HttpError(404,'Suhbat topilmadi.')
+            db.execute('UPDATE messages SET read_at=CURRENT_TIMESTAMP WHERE conversation_id=? AND sender_id<>?',(cid,uid))
+            return {'conversation':dict(conv),'messages':[dict(x) for x in db.execute('SELECT id,sender_id,body,created_at,read_at FROM messages WHERE conversation_id=? ORDER BY created_at LIMIT 200',(cid,))]}
+        m=re.fullmatch(r'/api/notifications/([^/]+)/read',path)
+        if m and method=='POST':
+            require_user(ctx); db.execute('UPDATE notifications SET read_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=?',(m.group(1),uid)); return {'ok':True}
+        if path=='/api/notifications/read-all' and method=='POST':
+            require_user(ctx); db.execute('UPDATE notifications SET read_at=CURRENT_TIMESTAMP WHERE user_id=? AND read_at IS NULL',(uid,)); return {'ok':True}
+        if path=='/api/notifications' and method=='GET':
+            require_user(ctx); return [dict(x) for x in db.execute('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 50',(uid,))]
+        if path=='/api/favorites' and method=='GET':
+            require_user(ctx); return [listing_detail(db,x['listing_id'],uid) for x in db.execute('SELECT listing_id FROM favorites WHERE user_id=? ORDER BY created_at DESC',(uid,))]
+        if path=='/api/admin/overview' and method=='GET':
+            require_admin(ctx)
+            return {
+                'pending_listings':db.execute("SELECT COUNT(*) n FROM listings WHERE status='pending_review'").fetchone()['n'],
+                'open_reports':db.execute("SELECT COUNT(*) n FROM reports WHERE status='open' AND reason!='order_dispute'").fetchone()['n'],
+                'open_disputes':db.execute("SELECT COUNT(*) n FROM reports WHERE reason='order_dispute' AND status IN ('open','reviewing')").fetchone()['n'],
+                'pending_payouts':db.execute("SELECT COUNT(*) n FROM payout_requests WHERE status IN ('pending','approved')").fetchone()['n'],
+                'pending_sellers':db.execute("SELECT COUNT(*) n FROM seller_profiles WHERE verification_status!='verified' OR selling_enabled=0").fetchone()['n'],
+                'active_listings':db.execute("SELECT COUNT(*) n FROM listings WHERE status='published'").fetchone()['n'],
+                'today_orders':db.execute("SELECT COUNT(*) n FROM orders WHERE date(created_at)=date('now')").fetchone()['n'],
+                'completed_orders':db.execute("SELECT COUNT(*) n FROM orders WHERE status='completed'").fetchone()['n'],
+                'sandbox_volume_minor':db.execute("SELECT COALESCE(SUM(amount_minor),0) n FROM payments WHERE provider='sandbox' AND status='succeeded'").fetchone()['n'],
+                'daily_orders':[dict(x) for x in db.execute("SELECT date(created_at) day,COUNT(*) count FROM orders WHERE date(created_at)>=date('now','-6 day') GROUP BY date(created_at) ORDER BY day").fetchall()],
+                'orders':[dict(x) for x in db.execute('SELECT status,COUNT(*) n FROM orders GROUP BY status').fetchall()],
+                'users':db.execute('SELECT COUNT(*) n FROM users').fetchone()['n'],
+                'mode':MODE,
+                'config':{r['key']:r['value'] for r in db.execute('SELECT key,value FROM platform_config')}
+            }
+        if path=='/api/admin/blog' and method=='GET':
+            require_admin(ctx)
+            return [blog_post_view(x) for x in db.execute('SELECT * FROM blog_posts ORDER BY updated_at DESC LIMIT 200')]
+        if path=='/api/admin/listings' and method=='GET':
+            require_admin(ctx); return [listing_detail(db,x['id']) for x in db.execute("SELECT id FROM listings WHERE status IN ('pending_review','rejected') ORDER BY created_at")]
+        if path=='/api/admin/reports' and method=='GET':
+            require_admin(ctx); return [dict(x) for x in db.execute('SELECT r.*,u.email reporter_email FROM reports r JOIN users u ON u.id=r.reporter_id ORDER BY CASE status WHEN \'open\' THEN 0 ELSE 1 END,created_at DESC LIMIT 100')]
+        if path=='/api/admin/sellers' and method=='GET':
+            require_admin(ctx); return [dict(x) for x in db.execute("SELECT s.user_id,s.shop_name,s.bio,s.verification_status,s.selling_enabled,s.identity_status,s.identity_provider,s.identity_verified_at,s.created_at,u.email,u.display_name FROM seller_profiles s JOIN users u ON u.id=s.user_id WHERE s.verification_status!='verified' OR s.selling_enabled=0 OR s.identity_status!='verified' ORDER BY CASE s.identity_status WHEN 'verified' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,s.created_at DESC LIMIT 100")]
+        if path=='/api/admin/disputes' and method=='GET':
+            require_admin(ctx); return [dict(x) for x in db.execute("SELECT r.id report_id,r.details,r.status report_status,r.resolution,r.created_at,o.id order_id,o.reference,o.status order_status,o.total_minor,o.currency,o.buyer_id,b.email buyer_email,p.provider payment_provider,p.status payment_status,GROUP_CONCAT(DISTINCT su.email) seller_emails FROM reports r JOIN orders o ON o.id=r.order_id JOIN users b ON b.id=o.buyer_id LEFT JOIN payments p ON p.order_id=o.id LEFT JOIN order_items i ON i.order_id=o.id LEFT JOIN users su ON su.id=i.seller_id WHERE r.reason='order_dispute' AND r.status IN ('open','reviewing') GROUP BY r.id ORDER BY r.created_at LIMIT 100")]
+        if path=='/api/admin/deletions' and method=='GET':
+            require_admin(ctx); return [dict(x) for x in db.execute('SELECT d.*,u.email,u.display_name FROM account_deletion_requests d JOIN users u ON u.id=d.user_id ORDER BY d.created_at DESC LIMIT 100')]
+        if path=='/api/admin/payouts' and method=='GET':
+            require_admin(ctx); return [dict(x) for x in db.execute('SELECT p.*,u.email,u.display_name FROM payout_requests p JOIN users u ON u.id=p.seller_id ORDER BY created_at DESC LIMIT 100')]
+
+        # Write workflows below.
+        if path=='/api/account/deletion-request' and method=='POST':
+            require_verified(ctx); reason=clean_text(data.get('reason',''),'Sabab',0,1000)
+            existing=db.execute("SELECT id,status FROM account_deletion_requests WHERE user_id=? AND status IN ('pending','reviewing') ORDER BY created_at DESC LIMIT 1",(uid,)).fetchone()
+            if existing: return {'id':existing['id'],'status':existing['status']}
+            rid=ident(); db.execute('INSERT INTO account_deletion_requests(id,user_id,reason) VALUES(?,?,?)',(rid,uid,reason)); audit(db,uid,'account_deletion_request','user',uid); return 201,{'id':rid,'status':'pending'}
+        if path=='/api/profile' and method=='POST':
+            require_user(ctx)
+            fields={}
+            if 'display_name' in data: fields['display_name']=clean_text(data['display_name'],'Ism',2,80)
+            if 'language' in data:
+                if data['language'] not in ('uz','ru','en'): raise HttpError(400,'Til tanlovi noto‘g‘ri.')
+                fields['language']=data['language']
+            if 'currency' in data:
+                if data['currency'] not in ('UZS','USD','KZT','KGS'): raise HttpError(400,'Valyuta tanlovi noto‘g‘ri.')
+                fields['currency']=data['currency']
+            if fields: db.execute('UPDATE users SET '+', '.join(f'{k}=?' for k in fields)+' WHERE id=?',(*fields.values(),uid))
+            return {'user':user_view(db,uid)}
+        if path=='/api/seller/identity-token' and method=='POST':
+            require_verified(ctx)
+            if data.get('consent') is not True: raise HttpError(400,'Sumsub’ga ma’lumot yuborish uchun rozilikni belgilang.')
+            if not identity_service.is_configured(): raise HttpError(503,'Sumsub hali ulanmagan. Administrator API token, maxfiy kalit, tekshiruv darajasi va webhook sozlamalarini ulashi kerak.')
+            check_rate(db,'sumsub_token',uid,5,3600)
+            user=db.execute('SELECT email FROM users WHERE id=? AND email_verified=1 AND suspended=0',(uid,)).fetchone()
+            profile=db.execute('SELECT * FROM seller_profiles WHERE user_id=?',(uid,)).fetchone()
+            if not user or not profile: raise HttpError(409,'Avval emailni tasdiqlab, sotuvchi profilini yarating.')
+            if profile['identity_status']=='verified': raise HttpError(409,'Shaxs Sumsub orqali tasdiqlangan.')
+            reference=profile['identity_reference'] or ('bg-'+secrets.token_hex(20))
+            consent_version='kyc-consent-v1'
+            db.execute("UPDATE seller_profiles SET identity_reference=?,identity_provider='sumsub',identity_status='pending',identity_consent_at=?,identity_consent_version=? WHERE user_id=?",(reference,now_iso(),consent_version,uid))
+            try: token=identity_service.create_sdk_token(reference,user['email'])
+            except identity_service.IdentityProviderError as exc: raise HttpError(503,str(exc))
+            audit(db,uid,'sumsub_identity_started','seller',uid,{'provider':'sumsub','consent_version':consent_version})
+            return {'token':token,'status':profile['identity_status'] if profile['identity_status']=='verified' else 'pending'}
+        if path=='/api/seller' and method=='POST':
+            require_verified(ctx); name=clean_text(data.get('shop_name'),'Do‘kon nomi',2,80); bio=clean_text(data.get('bio',''),'Tavsif',0,1000)
+            db.execute("INSERT INTO seller_profiles(user_id,shop_name,bio,verification_status,selling_enabled) VALUES(?,?,?,'pending',0) ON CONFLICT(user_id) DO UPDATE SET shop_name=excluded.shop_name,bio=excluded.bio",(uid,name,bio))
+            audit(db,uid,'seller_onboard','seller',uid); profile=rowdict(db.execute('SELECT shop_name,bio,verification_status,selling_enabled,identity_status,identity_provider FROM seller_profiles WHERE user_id=?',(uid,)).fetchone())
+            if profile['verification_status']=='pending':
+                for admin in db.execute('SELECT user_id FROM admin_accounts').fetchall(): notify(db,admin['user_id'],'seller_review','Sotuvchi tasdig‘i kutilmoqda',f'{name} do‘koni tekshiruvga yuborildi.','/admin')
+            return {'seller':profile}
+        if path=='/api/listings' and method=='POST':
+            require_verified(ctx); seller_ok(db,uid); check_rate(db,'listing_create',uid,30,3600)
+            game=clean_text(data.get('game_id'),'O‘yin',1,80); cat=clean_text(data.get('category_id'),'Kategoriya',1,80)
+            if not db.execute('SELECT 1 FROM games WHERE id=? AND active=1',(game,)).fetchone() or not db.execute('SELECT 1 FROM categories WHERE id=? AND active=1',(cat,)).fetchone(): raise HttpError(400,'O‘yin yoki kategoriya topilmadi.')
+            title=clean_text(data.get('title'),'Sarlavha',5,120); desc=clean_text(data.get('description'),'Tavsif',20,5000); price=money(data.get('price_minor'))
+            stock=data.get('stock',1)
+            if not isinstance(stock,int) or stock<0 or stock>10000: raise HttpError(400,'Qoldiq miqdori noto‘g‘ri.')
+            typ=db.execute('SELECT product_type FROM categories WHERE id=?',(cat,)).fetchone()['product_type']
+            attributes=data.get('attributes',{})
+            if not isinstance(attributes,dict) or len(attributes)>30: raise HttpError(400,'Atributlar noto‘g‘ri.')
+            image_url=clean_text(data.get('image_url',''),'Rasm URL',0,500)
+            if image_url and not image_url.startswith(('https://','http://')): raise HttpError(400,'Rasm havolasi http yoki https bilan boshlanishi kerak.')
+            if data.get('delivery_method','manual') not in ('manual','protected_text','file','code','service'): raise HttpError(400,'Yetkazish turi noto‘g‘ri.')
+            lid=ident(); db.execute('INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,platform,region,attributes_json,delivery_method,delivery_eta,requirements,stock,image_url,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                (lid,uid,game,cat,title,desc,typ,price,clean_text(data.get('platform',''),'Platforma',0,60),clean_text(data.get('region',''),'Hudud',0,60),json.dumps(attributes,ensure_ascii=False),data.get('delivery_method','manual'),clean_text(data.get('delivery_eta','24 hours'),'Yetkazish muddati',2,60),clean_text(data.get('requirements',''),'Shartlar',0,1000),stock,image_url,'draft'))
+            return 201,listing_detail(db,lid,uid)
+        m=re.fullmatch(r'/api/listings/([^/]+)/state',path)
+        if m and method=='POST':
+            require_verified(ctx); seller_ok(db,uid); lid=m.group(1); l=db.execute('SELECT * FROM listings WHERE id=? AND seller_id=?',(lid,uid)).fetchone()
+            if not l: raise HttpError(404,'E’lon topilmadi.')
+            action=data.get('action')
+            if action=='pause' and l['status']=='published': target='paused'
+            elif action=='reopen' and l['status']=='paused': target='pending_review'
+            elif action=='archive' and l['status'] in ('draft','rejected','paused'): target='archived'
+            else: raise HttpError(409,'Ushbu holatda bu amalni bajarib bo‘lmaydi.')
+            db.execute('UPDATE listings SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(target,lid)); audit(db,uid,'listing_'+action,'listing',lid); return {'status':target}
+        m=re.fullmatch(r'/api/listings/([^/]+)/submit',path)
+        if m and method=='POST':
+            require_verified(ctx); seller_ok(db,uid); lid=m.group(1); l=db.execute('SELECT * FROM listings WHERE id=? AND seller_id=?',(lid,uid)).fetchone()
+            if not l: raise HttpError(404,'E’lon topilmadi.')
+            if l['status'] not in ('draft','rejected','paused'): raise HttpError(409,'Bu e’lon hozir moderatsiyaga yuborilmaydi.')
+            db.execute("UPDATE listings SET status='pending_review',moderation_note='',updated_at=CURRENT_TIMESTAMP WHERE id=?",(lid,)); notify(db,next(iter([r['user_id'] for r in db.execute('SELECT user_id FROM admin_accounts LIMIT 20')]),None),'moderation','Yangi e’lon','Tekshirish uchun yangi e’lon yuborildi.','/admin'); return {'status':'pending_review'}
+        m=re.fullmatch(r'/api/listings/([^/]+)',path)
+        if m and method=='PATCH':
+            require_verified(ctx); seller_ok(db,uid); lid=m.group(1); l=db.execute('SELECT * FROM listings WHERE id=? AND seller_id=?',(lid,uid)).fetchone()
+            if not l: raise HttpError(404,'E’lon topilmadi.')
+            allowed={'title','description','price_minor','platform','region','delivery_eta','requirements','stock','image_url','attributes'}
+            fields={k:data[k] for k in data if k in allowed};
+            if 'title' in fields: fields['title']=clean_text(fields['title'],'Sarlavha',5,120)
+            if 'description' in fields: fields['description']=clean_text(fields['description'],'Tavsif',20,5000)
+            if 'price_minor' in fields: fields['price_minor']=money(fields['price_minor'])
+            if 'stock' in fields and (not isinstance(fields['stock'],int) or fields['stock']<l['reserved'] or fields['stock']>10000): raise HttpError(400,'Qoldiq 0–10000 bo‘lishi va band mahsulotlardan kam bo‘lmasligi kerak.')
+            for key,label,minimum,maximum in (('platform','Platforma',0,60),('region','Hudud',0,60),('delivery_eta','Yetkazish muddati',2,60),('requirements','Talablar',0,1000)):
+                if key in fields: fields[key]=clean_text(fields[key],label,minimum,maximum)
+            if 'image_url' in fields:
+                fields['image_url']=clean_text(fields['image_url'],'Rasm URL',0,500)
+                if fields['image_url'] and not fields['image_url'].startswith(('https://','http://')): raise HttpError(400,'Rasm havolasi http yoki https bilan boshlanishi kerak.')
+            if 'attributes' in fields and (not isinstance(fields['attributes'],dict) or len(fields['attributes'])>30): raise HttpError(400,'Atributlar noto‘g‘ri.')
+            next_status='pending_review' if fields and l['status']=='published' or fields.get('stock',l['stock'])>0 and l['status']=='sold_out' else None
+            if 'attributes' in fields: fields['attributes_json']=json.dumps(fields.pop('attributes'),ensure_ascii=False)
+            if fields:
+                assignments=[f'{k}=?' for k in fields]; values=list(fields.values())
+                if next_status: assignments.extend(['status=?',"moderation_note=''"]); values.append(next_status)
+                assignments.append('updated_at=CURRENT_TIMESTAMP')
+                db.execute(f'UPDATE listings SET {", ".join(assignments)} WHERE id=?',(*values,lid)); audit(db,uid,'listing_edit','listing',lid,{'fields':sorted(fields),'status':next_status or l['status']})
+                if l['status']=='published':
+                    for admin in db.execute('SELECT user_id FROM admin_accounts').fetchall(): notify(db,admin['user_id'],'moderation','Tahrirlangan e’lon tekshiruvi',f'{l["title"]} o‘zgartirildi va vaqtincha yashirildi.','/admin')
+            return listing_detail(db,lid,uid)
+        m=re.fullmatch(r'/api/favorites/([^/]+)',path)
+        if m and method=='POST':
+            require_user(ctx); lid=m.group(1)
+            if not db.execute("SELECT 1 FROM listings WHERE id=? AND status='published'",(lid,)).fetchone(): raise HttpError(404,'E’lon topilmadi.')
+            db.execute('INSERT OR IGNORE INTO favorites(user_id,listing_id) VALUES(?,?)',(uid,lid)); return {'saved':True}
+        if m and method=='DELETE': require_user(ctx); db.execute('DELETE FROM favorites WHERE user_id=? AND listing_id=?',(uid,m.group(1))); return {'saved':False}
+        if path=='/api/cart' and method=='POST':
+            require_user(ctx); lid=clean_text(data.get('listing_id'),'E’lon',1,100); qty=data.get('quantity',1)
+            if not isinstance(qty,int) or qty<1 or qty>100: raise HttpError(400,'Miqdor 1–100 orasida bo‘lishi kerak.')
+            l=db.execute("SELECT * FROM listings WHERE id=? AND status='published'",(lid,)).fetchone()
+            if not l: raise HttpError(404,'E’lon topilmadi.')
+            if l['seller_id']==uid: raise HttpError(400,'O‘zingizning e’loningizni savatchaga qo‘sha olmaysiz.')
+            existing=db.execute('SELECT quantity FROM carts WHERE user_id=? AND listing_id=?',(uid,lid)).fetchone(); qty+=existing['quantity'] if existing else 0
+            if qty>l['stock']-l['reserved']: raise HttpError(409,'Mavjud qoldiqdan ko‘p miqdor tanlandi.')
+            db.execute('INSERT INTO carts(user_id,listing_id,quantity) VALUES(?,?,?) ON CONFLICT(user_id,listing_id) DO UPDATE SET quantity=excluded.quantity,updated_at=CURRENT_TIMESTAMP',(uid,lid,qty)); return {'ok':True,'quantity':qty}
+        m=re.fullmatch(r'/api/cart/([^/]+)',path)
+        if m and method=='DELETE': require_user(ctx); db.execute('DELETE FROM carts WHERE user_id=? AND listing_id=?',(uid,m.group(1))); return {'ok':True}
+        if path=='/api/checkout' and method=='POST':
+            require_verified(ctx); return 201,checkout(db,uid,data.get('accept_terms') is True)
+        m=re.fullmatch(r'/api/orders/([^/]+)/sandbox-complete',path)
+        if m and method=='POST':
+            require_verified(ctx)
+            if MODE!='development': raise HttpError(403,'Sandbox to‘lov faqat development rejimida ishlaydi.')
+            oid=m.group(1); db.execute('BEGIN IMMEDIATE')
+            try:
+                o=db.execute('SELECT * FROM orders WHERE id=? AND buyer_id=?',(oid,uid)).fetchone()
+                if not o: raise HttpError(404,'Buyurtma topilmadi.')
+                if o['status']=='paid': db.execute('COMMIT'); return {'status':'paid','idempotent':True}
+                if o['status']!='pending_payment': raise HttpError(409,'Buyurtma to‘lovga tayyor emas.')
+                p=db.execute("SELECT * FROM payments WHERE order_id=? AND provider='sandbox'",(oid,)).fetchone()
+                if not p or p['status']!='pending': raise HttpError(409,'Sandbox to‘lov topilmadi.')
+                db.execute("UPDATE payments SET status='succeeded',provider_reference=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'",('sandbox-'+secrets.token_hex(6),p['id']))
+                db.execute("UPDATE orders SET status='paid',updated_at=CURRENT_TIMESTAMP WHERE id=?",(oid,)); event(db,oid,uid,'pending_payment','paid','Development sandbox payment verified on server')
+                for it in db.execute('SELECT * FROM order_items WHERE order_id=?',(oid,)).fetchall():
+                    db.execute("UPDATE listings SET stock=stock-?,reserved=reserved-?,status=CASE WHEN stock-?<=0 THEN 'sold_out' ELSE status END,updated_at=CURRENT_TIMESTAMP WHERE id=?",(it['quantity'],it['quantity'],it['quantity'],it['listing_id']))
+                    earn=it['unit_price_minor']*it['quantity']-it['commission_minor']
+                    db.execute('INSERT INTO ledger_entries(id,order_id,user_id,entry_type,amount_minor,currency,description) VALUES(?,?,?,?,?,?,?)',(ident(),oid,it['seller_id'],'escrow_hold',earn,o['currency'],'Sandbox mablag‘i; buyurtma tugamaguncha yechib olinmaydi'))
+                    if it['commission_minor']: db.execute('INSERT INTO ledger_entries(id,order_id,user_id,entry_type,amount_minor,currency,description) VALUES(?,?,?,?,?,?,?)',(ident(),oid,None,'escrow_fee_hold',it['commission_minor'],o['currency'],'Sandbox komissiyasi; buyurtma hal bo‘lguncha ushlab turiladi'))
+                    notify(db,it['seller_id'],'order','Yangi buyurtma',f'{o["reference"]} bo‘yicha to‘lov tasdiqlandi.','/orders')
+                db.execute('COMMIT')
+                for seller in db.execute('SELECT DISTINCT seller_id FROM order_items WHERE order_id=?',(oid,)).fetchall(): email_order_update(db,seller['seller_id'],o['reference'],'paid','Buyurtma to‘lovi tasdiqlandi. Buyurtmani boshqarish uchun hisobingizga kiring.')
+                return {'status':'paid','mode':'sandbox'}
+            except Exception: db.execute('ROLLBACK'); raise
+        m=re.fullmatch(r'/api/orders/([^/]+)/deliver',path)
+        if m and method=='POST':
+            require_verified(ctx); oid=m.group(1); o=db.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
+            if not o: raise HttpError(404,'Buyurtma topilmadi.')
+            if o['status'] not in ('paid','awaiting_delivery'): raise HttpError(409,'Buyurtma yetkazishga tayyor emas.')
+            iid=clean_text(data.get('item_id'),'Buyurtma mahsuloti',1,100); it=db.execute('SELECT * FROM order_items WHERE id=? AND order_id=? AND seller_id=?',(iid,oid,uid)).fetchone()
+            if not it: raise HttpError(403,'Bu mahsulotni yetkazish huquqingiz yo‘q.')
+            payload=clean_text(data.get('delivery'),'Yetkazish ma’lumoti',2,5000)
+            try: encrypted_payload=delivery_crypto.encrypt_payload(payload,iid)
+            except delivery_crypto.DeliveryCryptoError as exc: raise HttpError(503,'Maxfiy yetkazish ma’lumotini saqlash uchun DELIVERY_ENCRYPTION_KEY va cryptography paketi sozlanishi kerak.') from exc
+            db.execute('INSERT INTO deliveries(id,order_item_id,seller_id,protected_payload) VALUES(?,?,?,?) ON CONFLICT(order_item_id) DO UPDATE SET protected_payload=excluded.protected_payload,submitted_at=CURRENT_TIMESTAMP',(ident(),iid,uid,encrypted_payload))
+            old=o['status']; db.execute("UPDATE orders SET status='awaiting_delivery',updated_at=CURRENT_TIMESTAMP WHERE id=?",(oid,)); event(db,oid,uid,old,'awaiting_delivery','Sotuvchi mahsulotni yubordi'); notify(db,o['buyer_id'],'delivery','Mahsulot yetkazildi','Buyurtmangizdagi mahsulotga kirishingiz mumkin.','/orders'); email_order_update(db,o['buyer_id'],o['reference'],'awaiting_delivery','Sotuvchi buyurtmani yetkazdi. Hisobingizga kirib xavfsiz buyurtma sahifasini tekshiring.'); return {'status':'awaiting_delivery'}
+        m=re.fullmatch(r'/api/orders/([^/]+)/complete',path)
+        if m and method=='POST':
+            require_verified(ctx); oid=m.group(1); db.execute('BEGIN IMMEDIATE')
+            try:
+                o=db.execute('SELECT * FROM orders WHERE id=? AND buyer_id=?',(oid,uid)).fetchone()
+                if not o: raise HttpError(404,'Buyurtma topilmadi.')
+                if o['status'] not in ('awaiting_delivery','delivered'): raise HttpError(409,'Bu holatda buyurtmani yakunlab bo‘lmaydi.')
+                count=db.execute('SELECT COUNT(*) n FROM order_items i LEFT JOIN deliveries d ON d.order_item_id=i.id WHERE i.order_id=? AND d.id IS NULL',(oid,)).fetchone()['n']
+                if count: raise HttpError(409,'Barcha mahsulotlar yetkazilmagan.')
+                db.execute("UPDATE orders SET status='completed',updated_at=CURRENT_TIMESTAMP WHERE id=?",(oid,)); event(db,oid,uid,o['status'],'completed','Xaridor buyurtmani yakunladi'); settle_seller_escrow(db,oid)
+                sellers=db.execute('SELECT DISTINCT seller_id FROM order_items WHERE order_id=?',(oid,)).fetchall()
+                for seller in sellers: notify(db,seller['seller_id'],'order_complete','Buyurtma yakunlandi','Xaridor buyurtmani yakunladi. Mablag‘ sotuvchi balansiga qo‘shildi.','/seller')
+                db.execute('COMMIT')
+                for seller in sellers: email_order_update(db,seller['seller_id'],o['reference'],'completed','Xaridor buyurtmani yakunladi.')
+                return {'status':'completed'}
+            except Exception:
+                db.execute('ROLLBACK'); raise
+        m=re.fullmatch(r'/api/orders/([^/]+)/dispute',path)
+        if m and method=='POST':
+            require_verified(ctx); oid=m.group(1); why=clean_text(data.get('details'),'Nizo tafsiloti',10,3000); evidence=evidence_link(data.get('evidence_url')); db.execute('BEGIN IMMEDIATE')
+            try:
+                o=db.execute('SELECT * FROM orders WHERE id=? AND buyer_id=?',(oid,uid)).fetchone()
+                if not o: raise HttpError(404,'Buyurtma topilmadi.')
+                if o['status'] not in ('paid','awaiting_delivery','delivered'): raise HttpError(409,'Ushbu holatda nizoni ochib bo‘lmaydi.')
+                changed=db.execute("UPDATE orders SET status='disputed',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status IN ('paid','awaiting_delivery','delivered')",(oid,))
+                if changed.rowcount!=1: raise HttpError(409,'Buyurtma holati o‘zgargan; sahifani yangilang.')
+                event(db,oid,uid,o['status'],'disputed',why); db.execute('INSERT INTO reports(id,reporter_id,order_id,reason,details,evidence_url) VALUES(?,?,?,?,?,?)',(ident(),uid,oid,'order_dispute',why,evidence))
+                for seller in db.execute('SELECT DISTINCT seller_id FROM order_items WHERE order_id=?',(oid,)).fetchall(): notify(db,seller['seller_id'],'dispute','Buyurtma bo‘yicha nizo ochildi',f'{o["reference"]}: moderator ko‘rib chiqadi.','/orders')
+                for admin in db.execute('SELECT user_id FROM admin_accounts').fetchall(): notify(db,admin['user_id'],'dispute','Yangi buyurtma nizosi',f'{o["reference"]} buyurtmasi ko‘rib chiqilishi kerak.','/admin')
+                db.execute('COMMIT'); return {'status':'disputed'}
+            except Exception:
+                db.execute('ROLLBACK'); raise
+        if path=='/api/requests' and method=='POST':
+            require_verified(ctx); check_rate(db,'product_request',uid,5,3600); title=clean_text(data.get('title'),'Sarlavha',5,120); desc=clean_text(data.get('description'),'Tavsif',10,3000); game=clean_text(data.get('game_id'),'O‘yin',1,80)
+            if not db.execute('SELECT 1 FROM games WHERE id=?',(game,)).fetchone(): raise HttpError(400,'O‘yin topilmadi.')
+            budget=data.get('budget_minor');
+            if budget is not None: budget=money(budget)
+            rid=ident(); db.execute('INSERT INTO product_requests(id,requester_id,game_id,category_id,title,description,budget_minor,expires_at) VALUES(?,?,?,?,?,?,?,datetime(\'now\',\'+30 days\'))',(rid,uid,game,data.get('category_id') or None,title,desc,budget)); return 201,{'id':rid,'status':'open'}
+        m=re.fullmatch(r'/api/requests/([^/]+)/respond',path)
+        if m and method=='POST':
+            require_verified(ctx); seller_ok(db,uid); check_rate(db,'request_response',uid,20,3600); rid=m.group(1); req=db.execute("SELECT * FROM product_requests WHERE id=? AND status='open' AND requester_id<>?",(rid,uid)).fetchone()
+            if not req: raise HttpError(404,'Ochiq so‘rov topilmadi.')
+            msg=clean_text(data.get('message'),'Javob',2,2000); db.execute('INSERT INTO request_responses(id,request_id,seller_id,message,listing_id) VALUES(?,?,?,?,?)',(ident(),rid,uid,msg,data.get('listing_id') or None)); notify(db,req['requester_id'],'request','So‘rovingizga javob','Sotuvchi mahsulot so‘rovingizga javob berdi.','/requests'); return {'ok':True}
+        if path=='/api/conversations' and method=='POST':
+            require_verified(ctx)
+            if data.get('request_id'):
+                rid=clean_text(data.get('request_id'),'So‘rov',1,100); seller=clean_text(data.get('seller_id'),'Sotuvchi',1,100)
+                req=db.execute("SELECT * FROM product_requests WHERE id=? AND status='open'",(rid,)).fetchone()
+                if not req or req['requester_id']!=uid or not db.execute('SELECT 1 FROM request_responses WHERE request_id=? AND seller_id=?',(rid,seller)).fetchone(): raise HttpError(403,'Bu so‘rov javobi bilan suhbat boshlay olmaysiz.')
+                conv=db.execute('SELECT id FROM conversations WHERE buyer_id=? AND seller_id=? AND listing_id IS NULL AND order_id IS NULL ORDER BY created_at DESC LIMIT 1',(uid,seller)).fetchone()
+                if not conv:
+                    cid=ident();db.execute('INSERT INTO conversations(id,buyer_id,seller_id) VALUES(?,?,?)',(cid,uid,seller));conv={'id':cid}
+                return {'id':conv['id']}
+            lid=clean_text(data.get('listing_id'),'E’lon',1,100); l=db.execute("SELECT * FROM listings WHERE id=? AND status='published'",(lid,)).fetchone()
+            if not l or l['seller_id']==uid: raise HttpError(404,'E’lon topilmadi.')
+            cid=ident(); db.execute('INSERT OR IGNORE INTO conversations(id,buyer_id,seller_id,listing_id) VALUES(?,?,?,?)',(cid,uid,l['seller_id'],lid)); conv=db.execute('SELECT * FROM conversations WHERE buyer_id=? AND seller_id=? AND listing_id=?',(uid,l['seller_id'],lid)).fetchone(); return {'id':conv['id']}
+        m=re.fullmatch(r'/api/conversations/([^/]+)/messages',path)
+        if m and method=='POST':
+            require_verified(ctx); check_rate(db,'message',uid,40,3600); conv=db.execute('SELECT * FROM conversations WHERE id=?',(m.group(1),)).fetchone()
+            if not conv or uid not in (conv['buyer_id'],conv['seller_id']): raise HttpError(404,'Suhbat topilmadi.')
+            body=clean_text(data.get('body'),'Xabar',1,2000); mid=ident(); db.execute('INSERT INTO messages(id,conversation_id,sender_id,body) VALUES(?,?,?,?)',(mid,conv['id'],uid,body)); notify(db,conv['seller_id'] if uid==conv['buyer_id'] else conv['buyer_id'],'message','Yangi xabar',body[:160],'/messages'); return {'id':mid}
+        if path=='/api/reports' and method=='POST':
+            require_user(ctx); check_rate(db,'report',uid,10,3600); reason=clean_text(data.get('reason'),'Sabab',3,100); details=clean_text(data.get('details'),'Tafsilot',10,3000); evidence=evidence_link(data.get('evidence_url')); lid=data.get('listing_id'); oid=data.get('order_id')
+            if not lid and not oid: raise HttpError(400,'E’lon yoki buyurtmani ko‘rsating.')
+            if lid and not db.execute('SELECT 1 FROM listings WHERE id=?',(lid,)).fetchone(): raise HttpError(404,'E’lon topilmadi.')
+            if oid:
+                order=db.execute('SELECT buyer_id FROM orders WHERE id=?',(oid,)).fetchone()
+                if not order or (uid!=order['buyer_id'] and not db.execute('SELECT 1 FROM order_items WHERE order_id=? AND seller_id=?',(oid,uid)).fetchone()): raise HttpError(404,'Buyurtma topilmadi.')
+            rid=ident(); db.execute('INSERT INTO reports(id,reporter_id,listing_id,order_id,reason,details,evidence_url) VALUES(?,?,?,?,?,?,?)',(rid,uid,lid,oid,reason,details,evidence))
+            for admin in db.execute('SELECT user_id FROM admin_accounts').fetchall(): notify(db,admin['user_id'],'report','Yangi shikoyat',reason+' · '+details[:120],'/admin')
+            return 201,{'id':rid,'status':'open'}
+        if path=='/api/reviews/mine' and method=='GET':
+            require_user(ctx)
+            return [dict(x) for x in db.execute('''SELECT r.id,r.rating,r.body,r.created_at,
+                l.id listing_id,l.title listing_title,sp.shop_name seller_name,o.reference order_reference
+                FROM reviews r JOIN order_items i ON i.id=r.order_item_id
+                JOIN orders o ON o.id=i.order_id JOIN listings l ON l.id=i.listing_id
+                JOIN seller_profiles sp ON sp.user_id=r.seller_id
+                WHERE r.reviewer_id=? ORDER BY r.created_at DESC LIMIT 100''',(uid,)).fetchall()]
+        if path=='/api/reviews' and method=='POST':
+            require_verified(ctx); iid=clean_text(data.get('item_id'),'Buyurtma mahsuloti',1,100); rating=data.get('rating'); body=clean_text(data.get('body'),'Sharh',5,1500)
+            if not isinstance(rating,int) or rating<1 or rating>5: raise HttpError(400,'Baho 1 dan 5 gacha bo‘lsin.')
+            it=db.execute("SELECT i.*,o.status,o.buyer_id FROM order_items i JOIN orders o ON o.id=i.order_id WHERE i.id=?",(iid,)).fetchone()
+            if not it or it['buyer_id']!=uid or it['status']!='completed': raise HttpError(403,'Sharh faqat tugallangan xarid uchun mumkin.')
+            rid=ident(); db.execute('INSERT INTO reviews(id,order_item_id,reviewer_id,seller_id,rating,body) VALUES(?,?,?,?,?,?)',(rid,iid,uid,it['seller_id'],rating,body)); return 201,{'id':rid}
+        if path=='/api/payouts' and method=='GET':
+            require_user(ctx); seller_ok(db,uid); return [dict(x) for x in db.execute('SELECT id,amount_minor,currency,status,note,created_at,updated_at FROM payout_requests WHERE seller_id=? ORDER BY created_at DESC LIMIT 50',(uid,))]
+        if path=='/api/payouts' and method=='POST':
+            require_verified(ctx); seller_ok(db,uid); amount=money(data.get('amount_minor')); cur=clean_text(data.get('currency','UZS'),'Valyuta',3,3)
+            if cur!='UZS': raise HttpError(400,'Hozircha sotuvchi hisob-kitobi faqat UZS valyutasida ishlaydi.')
+            db.execute('BEGIN IMMEDIATE')
+            try:
+                balance=db.execute("SELECT COALESCE(SUM(amount_minor),0) n FROM ledger_entries WHERE user_id=? AND entry_type IN ('seller_earning','payout')",(uid,)).fetchone()['n']
+                pending=db.execute("SELECT COALESCE(SUM(amount_minor),0) n FROM payout_requests WHERE seller_id=? AND status IN ('pending','approved')",(uid,)).fetchone()['n']
+                if amount>balance-pending: raise HttpError(400,'So‘ralgan summa mavjud balansdan oshib ketdi.')
+                pid=ident(); db.execute('INSERT INTO payout_requests(id,seller_id,amount_minor,currency) VALUES(?,?,?,?)',(pid,uid,amount,cur)); audit(db,uid,'payout_request','payout',pid); db.execute('COMMIT'); return 201,{'id':pid,'status':'pending','note':'To‘lov tashqi provayder yoqilmaguncha bajarilmaydi.'}
+            except Exception: db.execute('ROLLBACK'); raise
+        m=re.fullmatch(r'/api/admin/listings/([^/]+)',path)
+        if m and method=='POST':
+            aid=require_admin(ctx); lid=m.group(1); action=data.get('action'); note=clean_text(data.get('note',''),'Izoh',0,1000)
+            if action not in ('approve','reject','pause'): raise HttpError(400,'Moderatsiya amali noto‘g‘ri.')
+            status={'approve':'published','reject':'rejected','pause':'paused'}[action]; l=db.execute("SELECT * FROM listings WHERE id=? AND status IN ('pending_review','published')",(lid,)).fetchone()
+            if not l: raise HttpError(404,'Tekshiriladigan e’lon topilmadi.')
+            db.execute('UPDATE listings SET status=?,moderation_note=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(status,note,lid)); audit(db,aid,'listing_'+action,'listing',lid,{'note':note}); notify(db,l['seller_id'],'moderation','Moderatsiya natijasi',f'E’loningiz holati: {status}. {note}','/seller'); return {'status':status}
+        m=re.fullmatch(r'/api/admin/sellers/([^/]+)',path)
+        if m and method=='POST':
+            aid=require_admin(ctx); target=m.group(1); action=data.get('action'); note=clean_text(data.get('note'),'Tekshiruv izohi',5,1000)
+            if action not in ('approve','reject'): raise HttpError(400,'Sotuvchi uchun tasdiqlash yoki rad etishni tanlang.')
+            profile=db.execute('SELECT s.*,u.email_verified FROM seller_profiles s JOIN users u ON u.id=s.user_id WHERE s.user_id=?',(target,)).fetchone()
+            if not profile: raise HttpError(404,'Sotuvchi profili topilmadi.')
+            if action=='approve' and not profile['email_verified']: raise HttpError(409,'Sotuvchini tasdiqlashdan oldin emaili tasdiqlangan bo‘lishi kerak.')
+            if action=='approve' and profile['identity_status']!='verified': raise HttpError(409,'Sotuvchini tasdiqlashdan oldin Sumsub shaxsni tekshirish GREEN holatida yakunlanishi kerak.')
+            if profile['verification_status']=='verified' and profile['selling_enabled'] and action=='approve': raise HttpError(409,'Sotuvchi allaqachon tasdiqlangan va faol.')
+            status='verified' if action=='approve' else 'rejected'; enabled=1 if action=='approve' else 0
+            db.execute('UPDATE seller_profiles SET verification_status=?,selling_enabled=? WHERE user_id=?',(status,enabled,target))
+            if not enabled: db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE seller_id=? AND status='published'",(target,))
+            audit(db,aid,'seller_'+action,'seller',target,{'note':note}); notify(db,target,'seller_review','Sotuvchi tekshiruvi yakunlandi',('Profilingiz tasdiqlandi. Endi e’lon joylashingiz mumkin. ' if enabled else 'Profil tasdiqlanmadi. Izoh: ')+note,'/seller')
+            return {'verification_status':status,'selling_enabled':bool(enabled)}
+        m=re.fullmatch(r'/api/admin/disputes/([^/]+)',path)
+        if m and method=='POST':
+            aid=require_admin(ctx); oid=m.group(1); action=data.get('action'); note=clean_text(data.get('note'),'Moderator qarori',5,1500)
+            if action not in ('request_info','release_seller','refund_buyer'): raise HttpError(400,'Nizo bo‘yicha amal noto‘g‘ri.')
+            report=db.execute("SELECT * FROM reports WHERE order_id=? AND reason='order_dispute' AND status IN ('open','reviewing') ORDER BY created_at DESC LIMIT 1",(oid,)).fetchone()
+            order=db.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
+            if not report or not order or order['status']!='disputed': raise HttpError(404,'Ochiq nizoli buyurtma topilmadi.')
+            sellers=[x['seller_id'] for x in db.execute('SELECT DISTINCT seller_id FROM order_items WHERE order_id=?',(oid,)).fetchall()]
+            if action=='request_info':
+                db.execute("UPDATE reports SET status='reviewing',resolution=? WHERE id=?",(note,report['id'])); audit(db,aid,'dispute_request_info','order',oid,{'note':note})
+                notify(db,report['reporter_id'],'dispute_update','Nizongiz ko‘rib chiqilmoqda',note,'/order/'+oid)
+                for seller in sellers: notify(db,seller,'dispute_update','Nizo bo‘yicha qo‘shimcha ma’lumot',note,'/order/'+oid)
+                return {'status':'reviewing','funds_moved':False}
+            payment=db.execute('SELECT * FROM payments WHERE order_id=?',(oid,)).fetchone()
+            if MODE!='development' or not payment or payment['provider']!='sandbox' or payment['status']!='succeeded':
+                raise HttpError(503,'Haqiqiy nizoni yakunlash uchun provayderning tasdiqlangan refund/escrow adapteri kerak. Hech qanday mablag‘ o‘zgartirilmadi.')
+            db.execute('BEGIN IMMEDIATE')
+            try:
+                if action=='release_seller':
+                    changed=db.execute("UPDATE orders SET status='completed',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='disputed'",(oid,))
+                    if changed.rowcount!=1: raise HttpError(409,'Nizo allaqachon yakunlangan.')
+                    event(db,oid,aid,'disputed','completed',note); settle_seller_escrow(db,oid)
+                    result='completed'; buyer_title='Nizo yakunlandi'; buyer_body='Moderator dalillarni ko‘rib, buyurtmani yakunladi. Bu sandbox hisob-kitobi.'; seller_title='Nizo yakunlandi'; seller_body='Buyurtma sandbox sotuvchi balansiga o‘tkazildi. Haqiqiy pul o‘tkazilmagan.'
+                else:
+                    changed=db.execute("UPDATE orders SET status='refunded',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='disputed'",(oid,))
+                    if changed.rowcount!=1: raise HttpError(409,'Nizo allaqachon yakunlangan.')
+                    refund_sandbox_escrow(db,oid,order['buyer_id']); db.execute("UPDATE payments SET status='sandbox_refunded',updated_at=CURRENT_TIMESTAMP WHERE order_id=?",(oid,)); event(db,oid,aid,'disputed','refunded',note)
+                    result='refunded'; buyer_title='Sandbox qaytarimi qayd etildi'; buyer_body='Sinov buyurtmasi bekor qilindi. Bu haqiqiy pul qaytarimi emas.'; seller_title='Nizo yakunlandi'; seller_body='Sinov buyurtmasi qaytarim bilan yopildi; haqiqiy pul ko‘chirilmagan.'
+                db.execute("UPDATE reports SET status='resolved',resolution=? WHERE id=?",(note,report['id'])); audit(db,aid,'dispute_'+action,'order',oid,{'note':note,'payment_mode':'sandbox'})
+                notify(db,order['buyer_id'],'dispute_update',buyer_title,buyer_body,'/order/'+oid)
+                for seller in sellers: notify(db,seller,'dispute_update',seller_title,seller_body,'/order/'+oid)
+                db.execute('COMMIT')
+                email_order_update(db,order['buyer_id'],order['reference'],result,'Buyurtma bo‘yicha nizo ko‘rib chiqildi. Batafsil ma’lumotni hisobingizdan tekshiring.')
+                for seller in sellers: email_order_update(db,seller,order['reference'],result,'Buyurtma bo‘yicha nizo ko‘rib chiqildi. Batafsil ma’lumotni hisobingizdan tekshiring.')
+                return {'status':result,'funds_moved':False,'sandbox_only':True}
+            except Exception:
+                db.execute('ROLLBACK'); raise
+        if path=='/api/admin/config' and method=='POST':
+            aid=require_admin(ctx); bps=data.get('commission_bps')
+            if not isinstance(bps,int) or bps<0 or bps>3000: raise HttpError(400,'Komissiya 0–3000 bps bo‘lishi kerak.')
+            db.execute("INSERT INTO platform_config(key,value) VALUES('commission_bps',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP",(str(bps),)); audit(db,aid,'config_update','platform_config','commission_bps',{'commission_bps':bps}); return {'commission_bps':bps}
+        if path=='/api/admin/blog' and method=='POST':
+            aid=require_admin(ctx)
+            slug=clean_text(data.get('slug'),'Slug',3,80).lower()
+            if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',slug): raise HttpError(400,'Slug faqat kichik lotin harflari, raqam va tirelardan iborat bo‘lsin.')
+            post=validate_blog_post(data)
+            status=data.get('status','draft')
+            if status not in ('draft','published'): raise HttpError(400,'Maqola holati noto‘g‘ri.')
+            pid=ident(); published=now_iso() if status=='published' else None
+            db.execute('INSERT INTO blog_posts(id,slug,category_json,title_json,summary_json,body_json,status,author_id,published_at) VALUES(?,?,?,?,?,?,?,?,?)',(pid,slug,*[json.dumps(post[k],ensure_ascii=False) for k in ('category','title','summary','body')],status,aid,published))
+            audit(db,aid,'blog_create','blog_post',pid,{'slug':slug,'status':status})
+            return 201,{'id':pid,'slug':slug,'status':status}
+        m=re.fullmatch(r'/api/admin/blog/([^/]+)',path)
+        if m and method=='POST':
+            aid=require_admin(ctx); pid=m.group(1)
+            current=db.execute('SELECT * FROM blog_posts WHERE id=?',(pid,)).fetchone()
+            if not current: raise HttpError(404,'Maqola topilmadi.')
+            slug=clean_text(data.get('slug'),'Slug',3,80).lower()
+            if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',slug): raise HttpError(400,'Slug faqat kichik lotin harflari, raqam va tirelardan iborat bo‘lsin.')
+            post=validate_blog_post(data); status=data.get('status')
+            if status not in ('draft','published'): raise HttpError(400,'Maqola holati noto‘g‘ri.')
+            published=current['published_at'] or now_iso() if status=='published' else None
+            db.execute('UPDATE blog_posts SET slug=?,category_json=?,title_json=?,summary_json=?,body_json=?,status=?,published_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(slug,*[json.dumps(post[k],ensure_ascii=False) for k in ('category','title','summary','body')],status,published,pid))
+            audit(db,aid,'blog_update','blog_post',pid,{'slug':slug,'status':status})
+            return {'id':pid,'slug':slug,'status':status}
+        m=re.fullmatch(r'/api/admin/reports/([^/]+)',path)
+        if m and method=='POST':
+            aid=require_admin(ctx); status=data.get('status'); resolution=clean_text(data.get('resolution',''),'Qaror',0,1500)
+            if status not in ('reviewing','resolved','dismissed'): raise HttpError(400,'Holat noto‘g‘ri.')
+            report=db.execute('SELECT reason,order_id FROM reports WHERE id=?',(m.group(1),)).fetchone()
+            if report and report['reason']=='order_dispute' and status in ('resolved','dismissed'):
+                raise HttpError(400,'Buyurtma nizosini maxsus nizo bo‘limidan yakunlang.')
+            db.execute('UPDATE reports SET status=?,resolution=? WHERE id=?',(status,resolution,m.group(1))); audit(db,aid,'report_update','report',m.group(1),{'status':status}); return {'status':status}
+        m=re.fullmatch(r'/api/admin/payouts/([^/]+)',path)
+        if m and method=='POST':
+            aid=require_admin(ctx); action=data.get('action'); note=clean_text(data.get('note',''),'Izoh',0,1000)
+            if action not in ('approve','reject','mark_paid'): raise HttpError(400,'Payout amali noto‘g‘ri.')
+            if action=='mark_paid': note=clean_text(data.get('external_reference'),'Tashqi o‘tkazma ID',3,120)
+            db.execute('BEGIN IMMEDIATE')
+            try:
+                p=db.execute('SELECT * FROM payout_requests WHERE id=?',(m.group(1),)).fetchone()
+                if not p: raise HttpError(404,'Payout so‘rovi topilmadi.')
+                allowed={'approve':'pending','reject':'pending','mark_paid':'approved'}
+                if p['status']!=allowed[action]: raise HttpError(409,'Payout so‘rovi oldingi holatini tugatmagan yoki allaqachon ko‘rilgan.')
+                status={'approve':'approved','reject':'rejected','mark_paid':'paid'}[action]
+                if action=='mark_paid': db.execute('INSERT INTO ledger_entries(id,user_id,entry_type,amount_minor,currency,description) VALUES(?,?,?,?,?,?)',(ident(),p['seller_id'],'payout',-p['amount_minor'],p['currency'],'Tashqi o‘tkazma tasdiq raqami: '+note))
+                db.execute('UPDATE payout_requests SET status=?,admin_id=?,note=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(status,aid,note,p['id'])); audit(db,aid,'payout_'+action,'payout',p['id'],{'note':note}); notify(db,p['seller_id'],'payout','Payout so‘rovi yangilandi',('Tashqi o‘tkazma tasdiqlandi. ID: '+note) if action=='mark_paid' else ('So‘rov ma’qullandi; pulni tashqi provayder orqali o‘tkazing.' if action=='approve' else 'Payout so‘rovi rad etildi. '+note),'/seller')
+                db.execute('COMMIT'); return {'status':status,'funds_transferred':False,'external_transfer_required':action=='approve'}
+            except Exception:
+                db.execute('ROLLBACK'); raise
+        if path=='/api/admin/users' and method=='GET':
+            require_admin(ctx); q=qs.get('q',[''])[0].strip(); return [dict(x) for x in db.execute('SELECT id,email,display_name,email_verified,suspended,created_at FROM users WHERE email LIKE ? OR display_name LIKE ? ORDER BY created_at DESC LIMIT 100',(f'%{q}%',f'%{q}%'))]
+        m=re.fullmatch(r'/api/admin/deletions/([^/]+)',path)
+        if m and method=='POST':
+            aid=require_admin(ctx); action=data.get('action')
+            if action not in ('reviewing','dismissed','resolved'): raise HttpError(400,'O‘chirish so‘rovi amali noto‘g‘ri.')
+            db.execute('UPDATE account_deletion_requests SET status=?,reviewed_by=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=?',(action,aid,m.group(1))); audit(db,aid,'deletion_'+action,'deletion_request',m.group(1)); return {'status':action}
+        m=re.fullmatch(r'/api/admin/users/([^/]+)',path)
+        if m and method=='POST':
+            aid=require_admin(ctx); target=m.group(1); action=data.get('action'); reason=clean_text(data.get('reason'),'Sabab',5,500)
+            if target==aid: raise HttpError(400,'O‘z hisobingizni bu yerdan cheklay olmaysiz.')
+            if action not in ('suspend','restore'): raise HttpError(400,'Foydalanuvchi amali noto‘g‘ri.')
+            db.execute('UPDATE users SET suspended=? WHERE id=?',(1 if action=='suspend' else 0,target)); db.execute('DELETE FROM sessions WHERE user_id=?',(target,)) if action=='suspend' else None
+            if action=='suspend':
+                db.execute('UPDATE seller_profiles SET selling_enabled=0 WHERE user_id=?',(target,)); db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE seller_id=? AND status='published'",(target,))
+            audit(db,aid,'user_'+action,'user',target,{'reason':reason}); notify(db,target,'account','Hisob holati o‘zgardi',('Hisobingiz vaqtincha cheklangan. Sabab: ' if action=='suspend' else 'Hisobingiz qayta yoqildi. ')+reason,'/account'); return {'status':action}
+        if path=='/api/admin/orders' and method=='GET':
+            require_admin(ctx); return [dict(x) for x in db.execute('SELECT o.*,u.email buyer_email FROM orders o JOIN users u ON u.id=o.buyer_id ORDER BY o.created_at DESC LIMIT 100')]
+        if path.startswith('/api/') and method not in ('GET','POST','PATCH','DELETE'): raise HttpError(405,'Usul qo‘llab-quvvatlanmaydi.')
+        raise HttpError(404,'API manzili topilmadi.')
+
+class Server(ThreadingHTTPServer):
+    daemon_threads=True
+
+def main():
+    migrate()
+    if MODE=='production':
+        if not delivery_crypto.crypto_is_available():
+            raise RuntimeError('Install requirements.txt before starting production.')
+        if not delivery_crypto.key_is_configured():
+            raise RuntimeError('Set DELIVERY_ENCRYPTION_KEY before starting production.')
+        db=connect()
+        try:
+            legacy=db.execute("SELECT COUNT(*) n FROM deliveries WHERE protected_payload NOT LIKE 'enc:v1:%'").fetchone()['n']
+        finally: db.close()
+        if legacy:
+            raise RuntimeError('Encrypt existing delivery records with scripts/encrypt_delivery_payloads.py before starting production.')
+    host=os.environ.get('HOST','127.0.0.1'); port=int(os.environ.get('PORT','8000'))
+    print(f'SentryLoot {MODE} server: http://{host}:{port}')
+    Server((host,port),Handler).serve_forever()
+if __name__=='__main__': main()
