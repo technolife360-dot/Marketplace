@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SentryLoot local marketplace server; standard library only."""
+"""SentryLoot marketplace server with SQLite and Supabase PostgreSQL backends."""
 from __future__ import annotations
 import hashlib, hmac, json, os, re, secrets, sqlite3, time, unicodedata
 from datetime import datetime, timedelta, timezone
@@ -20,6 +20,15 @@ for _line in (ROOT / '.env').read_text().splitlines() if (ROOT / '.env').exists(
 import delivery_crypto
 MODE = os.environ.get('MARKETPLACE_MODE', 'development').lower()
 DB_PATH = os.environ.get('DATABASE_PATH', str(ROOT / 'marketplace.sqlite3'))
+DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:
+    psycopg = None
+    dict_row = None
+
+DB_INTEGRITY_ERRORS = (sqlite3.IntegrityError,) + ((psycopg.IntegrityError,) if psycopg else ())
 SESSION_SECRET = os.environ.get('SESSION_SECRET', '')
 if MODE == 'production' and (len(SESSION_SECRET) < 32 or SESSION_SECRET.startswith('replace-with')):
     raise RuntimeError('Set SESSION_SECRET to a unique random value of at least 32 characters in production')
@@ -35,7 +44,43 @@ class HttpError(Exception):
 
 def now_iso(): return datetime.now(timezone.utc).isoformat(timespec='seconds')
 def ident(): return secrets.token_urlsafe(12)
+
+def postgres_placeholders(sql):
+    """Convert SQLite qmark placeholders while leaving quoted question marks alone."""
+    out=[]; quote=None; i=0
+    while i < len(sql):
+        ch=sql[i]
+        if quote:
+            out.append(ch)
+            if ch == quote:
+                if i + 1 < len(sql) and sql[i + 1] == quote:
+                    out.append(sql[i + 1]); i += 1
+                else: quote=None
+        elif ch in ("'", '"'):
+            quote=ch; out.append(ch)
+        elif ch == '?': out.append('%s')
+        else: out.append(ch)
+        i += 1
+    return ''.join(out)
+
+class PostgresConnection:
+    """Small DB-API compatibility wrapper for the app's SQLite-style execute calls."""
+    def __init__(self, connection): self.connection=connection
+    def execute(self, sql, params=()):
+        sql=sql.strip()
+        if sql.upper() == 'BEGIN IMMEDIATE': sql='BEGIN'
+        ignore=bool(re.match(r'^INSERT\s+OR\s+IGNORE\s+INTO\s+',sql,re.I))
+        if ignore: sql=re.sub(r'^INSERT\s+OR\s+IGNORE\s+INTO\s+', 'INSERT INTO ', sql, count=1, flags=re.I)
+        sql=postgres_placeholders(sql)
+        if ignore: sql += ' ON CONFLICT DO NOTHING'
+        return self.connection.execute(sql, params or ())
+    def close(self): self.connection.close()
+
 def connect():
+    if DATABASE_URL:
+        if psycopg is None:
+            raise RuntimeError('DATABASE_URL is set, but psycopg is missing. Install requirements.txt first.')
+        return PostgresConnection(psycopg.connect(DATABASE_URL, connect_timeout=15, autocommit=True, row_factory=dict_row))
     db = sqlite3.connect(DB_PATH, timeout=15, isolation_level=None)
     db.row_factory = sqlite3.Row
     db.execute('PRAGMA foreign_keys=ON')
@@ -45,6 +90,20 @@ def connect():
 def migrate():
     db=connect()
     try:
+        if DATABASE_URL:
+            required=('account_deletion_requests','admin_accounts','audit_logs','blog_posts','carts','categories','conversations','deliveries','email_tokens','favorites','games','ledger_entries','listings','messages','notifications','oauth_identities','order_events','order_items','orders','payments','payout_requests','platform_config','product_requests','rate_limits','reports','request_responses','reviews','seller_profiles','sessions','users')
+            missing=[table for table in required if not db.execute('SELECT to_regclass(?) AS name',(f'public.{table}',)).fetchone()['name']]
+            if missing:
+                raise RuntimeError('Supabase sxemasi topilmadi. Avval supabase/migrations/20261005000000_marketplace_schema.sql migratsiyasini qo‘llang. Yetishmayotgan jadvallar: '+', '.join(missing))
+            seed_blog_posts(db)
+            db.execute("UPDATE seller_profiles SET selling_enabled=0 WHERE verification_status!='verified' OR identity_status!='verified'")
+            db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE status='published' AND seller_id NOT IN (SELECT user_id FROM seller_profiles WHERE verification_status='verified' AND selling_enabled=1 AND identity_status='verified')")
+            db.execute("INSERT INTO platform_config(key,value) VALUES('commission_bps','0'),('completion_window_hours','72'),('terms_version','draft-2026-10') ON CONFLICT(key) DO NOTHING")
+            games=[('valorant','Valorant'),('pubg-mobile','PUBG Mobile'),('dota-2','Dota 2'),('counter-strike-2','Counter-Strike 2'),('mobile-legends','Mobile Legends')]
+            categories=[('accounts','Gaming accounts','account'),('items','Items & skins','item'),('currency','In-game currency','currency'),('services','Coaching & services','service'),('codes','Gift cards & digital codes','code')]
+            for slug,name in games: db.execute('INSERT INTO games(id,slug,name) VALUES(?,?,?) ON CONFLICT(id) DO NOTHING',(slug,slug,name))
+            for slug,name,typ in categories: db.execute('INSERT INTO categories(id,slug,name,product_type) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING',(slug,slug,name,typ))
+            return
         db.executescript((ROOT / 'migrations/001_initial.sql').read_text())
         db.execute("""CREATE TABLE IF NOT EXISTS blog_posts (
             id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, category_json TEXT NOT NULL,
@@ -285,9 +344,10 @@ def checkout(db,uid,accept_terms=False):
     db.execute('BEGIN IMMEDIATE')
     try:
         # release expired reservations so abandoned carts cannot lock stock forever
-        old=db.execute("SELECT o.id,oi.listing_id,oi.quantity FROM orders o JOIN order_items oi ON oi.order_id=o.id WHERE o.status='pending_payment' AND o.created_at < datetime('now','-30 minutes')").fetchall()
+        expired_order_filter="o.created_at::timestamptz < CURRENT_TIMESTAMP - INTERVAL '30 minutes'" if DATABASE_URL else "o.created_at < datetime('now','-30 minutes')"
+        old=db.execute(f"SELECT o.id,oi.listing_id,oi.quantity FROM orders o JOIN order_items oi ON oi.order_id=o.id WHERE o.status='pending_payment' AND {expired_order_filter}").fetchall()
         for x in old:
-            db.execute('UPDATE listings SET reserved=MAX(0,reserved-?) WHERE id=?',(x['quantity'],x['listing_id']))
+            db.execute('UPDATE listings SET reserved=CASE WHEN reserved>? THEN reserved-? ELSE 0 END WHERE id=?',(x['quantity'],x['quantity'],x['listing_id']))
             db.execute("UPDATE orders SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=?",(x['id'],))
             db.execute("UPDATE payments SET status='expired',updated_at=CURRENT_TIMESTAMP WHERE order_id=?",(x['id'],))
             event(db,x['id'],None,'pending_payment','cancelled','To‘lov muddati tugadi')
@@ -312,8 +372,8 @@ def checkout(db,uid,accept_terms=False):
         for ix,x in enumerate(lines):
             per_fee=(x['price_minor']*x['quantity']*bps)//10000
             if ix < remainder: per_fee += 1
-            db.execute('UPDATE listings SET reserved=reserved+?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND stock-reserved>=?',(x['quantity'],x['listing_id'],x['quantity']))
-            if db.execute('SELECT changes()').fetchone()[0]!=1: raise HttpError(409,'Mahsulot qoldig‘i band qilindi. Savatchani yangilang.')
+            reservation=db.execute('UPDATE listings SET reserved=reserved+?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND stock-reserved>=?',(x['quantity'],x['listing_id'],x['quantity']))
+            if reservation.rowcount!=1: raise HttpError(409,'Mahsulot qoldig‘i band qilindi. Savatchani yangilang.')
             db.execute('INSERT INTO order_items(id,order_id,listing_id,seller_id,title,quantity,unit_price_minor,commission_minor,delivery_method) VALUES(?,?,?,?,?,?,?,?,?)',(ident(),oid,x['listing_id'],x['seller_id'],x['title'],x['quantity'],x['price_minor'],per_fee,x['delivery_method']))
         db.execute('INSERT INTO payments(id,order_id,provider,amount_minor,currency,status,idempotency_key) VALUES(?,?,?,?,?,?,?)',(ident(),oid,intent.provider,intent.amount_minor,intent.currency,'pending',intent.idempotency_key))
         db.execute('DELETE FROM carts WHERE user_id=?',(uid,)); event(db,oid,uid,None,'pending_payment','Sandbox to‘lov yaratildi')
@@ -371,7 +431,7 @@ class Handler(BaseHTTPRequestHandler):
             if hasattr(self,'_set_cookie'): headers={**headers,'Set-Cookie':([self._set_cookie] if 'Set-Cookie' not in headers else [self._set_cookie,*headers['Set-Cookie']])}
             self.send_json(status,data,headers)
         except HttpError as e: self.send_json(e.status,{'error':e.message})
-        except sqlite3.IntegrityError as e: self.send_json(409,{'error':'Ma’lumotlar to‘qnashuvi yuz berdi. Kiritilgan qiymatlarni tekshiring.'})
+        except DB_INTEGRITY_ERRORS as e: self.send_json(409,{'error':'Ma’lumotlar to‘qnashuvi yuz berdi. Kiritilgan qiymatlarni tekshiring.'})
         except Exception as e:
             print('request error:',type(e).__name__)
             self.send_json(500,{'error':'Ichki xatolik yuz berdi.'})
@@ -390,7 +450,7 @@ class Handler(BaseHTTPRequestHandler):
     def route(self,db,ctx,method,path,qs,data,raw_body=b''):
         uid=ctx['uid']
         if path=='/healthz' and method=='GET': return {'ok':True}
-        if path=='/api/health' and method=='GET': return {'ok':True,'mode':MODE,'database':'sqlite','payments':'sandbox-only' if MODE=='development' else 'unconfigured','identity_verification':'sumsub' if identity_service.is_configured() else 'unconfigured'}
+        if path=='/api/health' and method=='GET': return {'ok':True,'mode':MODE,'database':'supabase-postgres' if DATABASE_URL else 'sqlite','payments':'sandbox-only' if MODE=='development' else 'unconfigured','identity_verification':'sumsub' if identity_service.is_configured() else 'unconfigured'}
         if path=='/api/me' and method=='GET': return {'user':ctx['user'],'csrf':ctx['csrf'],'mode':MODE}
         if path=='/api/blog' and method=='GET':
             return [blog_post_view(x) for x in db.execute("SELECT * FROM blog_posts WHERE status='published' ORDER BY published_at DESC,created_at DESC LIMIT 100")]
@@ -577,7 +637,10 @@ class Handler(BaseHTTPRequestHandler):
             search=qs.get('q',[''])[0].strip()
             if search:
                 phrase='\"'+search.replace('\"','\"\"')+'\"'
-                where.append('(l.rowid IN (SELECT rowid FROM listing_search WHERE listing_search MATCH ?) OR g.name LIKE ? OR s.shop_name LIKE ?)'); args += [phrase,f'%{search}%',f'%{search}%']
+                if DATABASE_URL:
+                    where.append("(l.search_vector @@ plainto_tsquery('simple', ?) OR g.name LIKE ? OR s.shop_name LIKE ?)"); args += [search,f'%{search}%',f'%{search}%']
+                else:
+                    where.append('(l.rowid IN (SELECT rowid FROM listing_search WHERE listing_search MATCH ?) OR g.name LIKE ? OR s.shop_name LIKE ?)'); args += [phrase,f'%{search}%',f'%{search}%']
             low=qs.get('min',[''])[0]; high=qs.get('max',[''])[0]
             try:
                 if low: where.append('l.price_minor>=?'); args.append(max(0,int(low)))
@@ -663,10 +726,10 @@ class Handler(BaseHTTPRequestHandler):
                 'pending_payouts':db.execute("SELECT COUNT(*) n FROM payout_requests WHERE status IN ('pending','approved')").fetchone()['n'],
                 'pending_sellers':db.execute("SELECT COUNT(*) n FROM seller_profiles WHERE verification_status!='verified' OR selling_enabled=0").fetchone()['n'],
                 'active_listings':db.execute("SELECT COUNT(*) n FROM listings WHERE status='published'").fetchone()['n'],
-                'today_orders':db.execute("SELECT COUNT(*) n FROM orders WHERE date(created_at)=date('now')").fetchone()['n'],
+                'today_orders':db.execute("SELECT COUNT(*) n FROM orders WHERE created_at::date=CURRENT_DATE" if DATABASE_URL else "SELECT COUNT(*) n FROM orders WHERE date(created_at)=date('now')").fetchone()['n'],
                 'completed_orders':db.execute("SELECT COUNT(*) n FROM orders WHERE status='completed'").fetchone()['n'],
                 'sandbox_volume_minor':db.execute("SELECT COALESCE(SUM(amount_minor),0) n FROM payments WHERE provider='sandbox' AND status='succeeded'").fetchone()['n'],
-                'daily_orders':[dict(x) for x in db.execute("SELECT date(created_at) day,COUNT(*) count FROM orders WHERE date(created_at)>=date('now','-6 day') GROUP BY date(created_at) ORDER BY day").fetchall()],
+                'daily_orders':[dict(x) for x in db.execute("SELECT created_at::date::text day,COUNT(*) count FROM orders WHERE created_at::date>=CURRENT_DATE-6 GROUP BY created_at::date ORDER BY day" if DATABASE_URL else "SELECT date(created_at) day,COUNT(*) count FROM orders WHERE date(created_at)>=date('now','-6 day') GROUP BY date(created_at) ORDER BY day").fetchall()],
                 'orders':[dict(x) for x in db.execute('SELECT status,COUNT(*) n FROM orders GROUP BY status').fetchall()],
                 'users':db.execute('SELECT COUNT(*) n FROM users').fetchone()['n'],
                 'mode':MODE,
@@ -682,7 +745,12 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/admin/sellers' and method=='GET':
             require_admin(ctx); return [dict(x) for x in db.execute("SELECT s.user_id,s.shop_name,s.bio,s.verification_status,s.selling_enabled,s.identity_status,s.identity_provider,s.identity_verified_at,s.created_at,u.email,u.display_name FROM seller_profiles s JOIN users u ON u.id=s.user_id WHERE s.verification_status!='verified' OR s.selling_enabled=0 OR s.identity_status!='verified' ORDER BY CASE s.identity_status WHEN 'verified' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,s.created_at DESC LIMIT 100")]
         if path=='/api/admin/disputes' and method=='GET':
-            require_admin(ctx); return [dict(x) for x in db.execute("SELECT r.id report_id,r.details,r.status report_status,r.resolution,r.created_at,o.id order_id,o.reference,o.status order_status,o.total_minor,o.currency,o.buyer_id,b.email buyer_email,p.provider payment_provider,p.status payment_status,GROUP_CONCAT(DISTINCT su.email) seller_emails FROM reports r JOIN orders o ON o.id=r.order_id JOIN users b ON b.id=o.buyer_id LEFT JOIN payments p ON p.order_id=o.id LEFT JOIN order_items i ON i.order_id=o.id LEFT JOIN users su ON su.id=i.seller_id WHERE r.reason='order_dispute' AND r.status IN ('open','reviewing') GROUP BY r.id ORDER BY r.created_at LIMIT 100")]
+            require_admin(ctx)
+            if DATABASE_URL:
+                report_sql="SELECT r.id report_id,r.details,r.status report_status,r.resolution,r.created_at,o.id order_id,o.reference,o.status order_status,o.total_minor,o.currency,o.buyer_id,b.email buyer_email,p.provider payment_provider,p.status payment_status,sellers.seller_emails FROM reports r JOIN orders o ON o.id=r.order_id JOIN users b ON b.id=o.buyer_id LEFT JOIN payments p ON p.order_id=o.id LEFT JOIN LATERAL (SELECT string_agg(DISTINCT su.email, ', ') seller_emails FROM order_items i JOIN users su ON su.id=i.seller_id WHERE i.order_id=o.id) sellers ON TRUE WHERE r.reason='order_dispute' AND r.status IN ('open','reviewing') ORDER BY r.created_at LIMIT 100"
+            else:
+                report_sql="SELECT r.id report_id,r.details,r.status report_status,r.resolution,r.created_at,o.id order_id,o.reference,o.status order_status,o.total_minor,o.currency,o.buyer_id,b.email buyer_email,p.provider payment_provider,p.status payment_status,GROUP_CONCAT(DISTINCT su.email) seller_emails FROM reports r JOIN orders o ON o.id=r.order_id JOIN users b ON b.id=o.buyer_id LEFT JOIN payments p ON p.order_id=o.id LEFT JOIN order_items i ON i.order_id=o.id LEFT JOIN users su ON su.id=i.seller_id WHERE r.reason='order_dispute' AND r.status IN ('open','reviewing') GROUP BY r.id ORDER BY r.created_at LIMIT 100"
+            return [dict(x) for x in db.execute(report_sql)]
         if path=='/api/admin/deletions' and method=='GET':
             require_admin(ctx); return [dict(x) for x in db.execute('SELECT d.*,u.email,u.display_name FROM account_deletion_requests d JOIN users u ON u.id=d.user_id ORDER BY d.created_at DESC LIMIT 100')]
         if path=='/api/admin/payouts' and method=='GET':
@@ -879,7 +947,8 @@ class Handler(BaseHTTPRequestHandler):
             if not db.execute('SELECT 1 FROM games WHERE id=?',(game,)).fetchone(): raise HttpError(400,'O‘yin topilmadi.')
             budget=data.get('budget_minor');
             if budget is not None: budget=money(budget)
-            rid=ident(); db.execute('INSERT INTO product_requests(id,requester_id,game_id,category_id,title,description,budget_minor,expires_at) VALUES(?,?,?,?,?,?,?,datetime(\'now\',\'+30 days\'))',(rid,uid,game,data.get('category_id') or None,title,desc,budget)); return 201,{'id':rid,'status':'open'}
+            expires_sql="(CURRENT_TIMESTAMP + INTERVAL '30 days')::text" if DATABASE_URL else "datetime('now','+30 days')"
+            rid=ident(); db.execute(f"INSERT INTO product_requests(id,requester_id,game_id,category_id,title,description,budget_minor,expires_at) VALUES(?,?,?,?,?,?,?,{expires_sql})",(rid,uid,game,data.get('category_id') or None,title,desc,budget)); return 201,{'id':rid,'status':'open'}
         m=re.fullmatch(r'/api/requests/([^/]+)/respond',path)
         if m and method=='POST':
             require_verified(ctx); seller_ok(db,uid); check_rate(db,'request_response',uid,20,3600); rid=m.group(1); req=db.execute("SELECT * FROM product_requests WHERE id=? AND status='open' AND requester_id<>?",(rid,uid)).fetchone()

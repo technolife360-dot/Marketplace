@@ -1,6 +1,6 @@
 # SentryLoot — gaming marketplace foundation
 
-A runnable, Uzbek-first marketplace built with Python, SQLite, and vanilla JavaScript. Python dependencies are pinned in `requirements.txt`; install them before running the app. SQLite is suitable for local development and a single-instance evaluation; production deployment should move persistence to managed PostgreSQL and add a configured email and payment provider.
+A runnable, Uzbek-first marketplace built with Python, SQLite or Supabase PostgreSQL, and vanilla JavaScript. SQLite remains the default for local development. Set `DATABASE_URL` to use the server-side Supabase PostgreSQL connection; keep this credential private and out of browser code.
 
 ## Run locally
 
@@ -16,6 +16,10 @@ MARKETPLACE_MODE=development python3 app.py
 ```
 
 Open http://127.0.0.1:8000. Development verification tokens and sandbox payment completion are shown only in development mode. For a separate database set `DATABASE_PATH=/path/to/file.sqlite3`.
+
+## Supabase PostgreSQL
+
+The application uses Supabase only when `DATABASE_URL` is set in the server environment. Apply `supabase/migrations/20261005000000_marketplace_schema.sql` once in the Supabase SQL Editor (or your migration runner) before starting the server. The server checks for the required tables and seeds reference rows on startup. Install dependencies with `python3 -m pip install -r requirements.txt`; Psycopg 3 connects to PostgreSQL and uses dictionary rows for the existing API code. Keep `DATABASE_URL` on the backend in `.env` or a deployment secret manager; never expose it in browser code or commit it. If unset, the app continues to use the local SQLite database.
 
 The app has no Node package dependencies; `package.json` provides optional npm aliases for environments that expect npm commands. `npm install` needs no third-party packages, `npm run build` checks the frontend and Python syntax, and `npm start` runs the Python server.
 
@@ -44,7 +48,7 @@ python3 seed.py                # apply migration and seed reference data
 python3 -m unittest discover -s tests -v
 ```
 
-The server applies `migrations/001_initial.sql` on startup. Development mode may be set with `MARKETPLACE_MODE=development`. Use `MARKETPLACE_MODE=production` only behind HTTPS and after setting `SESSION_SECRET` to a random secret. Production checkout is intentionally blocked until a real verified payment adapter is configured; browser redirects alone never mark payments successful.
+With SQLite selected, the server applies `migrations/001_initial.sql` on startup. With Supabase selected, apply the PostgreSQL migration described above before starting the server. Development mode may be set with `MARKETPLACE_MODE=development`. Use `MARKETPLACE_MODE=production` only behind HTTPS and after setting `SESSION_SECRET` to a random secret. Production checkout is intentionally blocked until a real verified payment adapter is configured; browser redirects alone never mark payments successful.
 
 ## Configuration and external services
 
@@ -70,7 +74,7 @@ Policy copy is a launch checklist, not legal advice. Obtain jurisdiction-specifi
 
 Implemented locally: registration/login, Google and Apple ID OAuth sign-in boundaries, SMTP email verification, password-reset links and order-status messages (development-token fallback only outside production), signed expiring sessions with CSRF, Sumsub WebSDK token and signed-webhook integration points, email/KYC/admin seller gating, seller review queue, seller wallet balance breakdown and guarded payout requests, private “my reviews” history for completed purchases, searchable help center, multilingual blog with admin-only draft/edit/publish workflows, homepage messaging access, editable/hideable seller listings, FTS-backed paginated listing search, favorites/cart, inventory reservations, sandbox escrow ledger, delivery visibility controls, dispute evidence and sandbox-only moderator resolution, notifications, reports, account deletion requests, admin moderation/user/report/order tools, and Uzbek-first responsive pages with language/currency preferences (listing prices and sandbox checkout remain UZS; there is no exchange conversion).
 
-Not launch-complete: production OAuth client/service IDs, provider credentials and HTTPS callback-domain registration, PostgreSQL and a production HTTP server, SMTP credentials and sender-domain verification, Sumsub account credentials and a public trusted domain, a production verification level and signed SHA256 webhook, compliant identity consent/retention and privacy notices, real payment/webhook/refund adapters, automatic payout transfers and split settlement, encryption-key management and migration of any legacy delivery rows, private uploads and malware scanning, tax/coupon support, live dispute/refund settlement, configurable category attributes, complete RU/EN translations, public SEO/sitemap, broader browser/E2E security review, hosted deployment and production monitoring, and jurisdiction-specific legal/tax review. Do not set this build up for public sales until these items are completed.
+Not launch-complete: a production HTTP server, production OAuth client/service IDs and HTTPS callback-domain registration, SMTP credentials and sender-domain verification, Sumsub account credentials and a public trusted domain, a production verification level and signed SHA256 webhook, compliant identity consent/retention and privacy notices, real payment/webhook/refund adapters, automatic payout transfers and split settlement, encryption-key management and migration of any legacy delivery rows, private uploads and malware scanning, tax/coupon support, live dispute/refund settlement, configurable category attributes, complete RU/EN translations, public SEO/sitemap, broader browser/E2E security review, hosted deployment and production monitoring, and jurisdiction-specific legal/tax review. Do not set this build up for public sales until these items are completed.
 
 ## Deployment
 
