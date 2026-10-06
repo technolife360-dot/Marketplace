@@ -339,6 +339,8 @@ body.profile-menu-open { overflow: hidden; }
 .listing-photo-count { grid-column: 1 / -1; color: var(--muted); font-size: 10px; }
 .listing-image-fields input[type="file"] { min-height: 52px; padding: 8px; border-style: dashed; background: color-mix(in srgb, var(--paper) 70%, transparent); cursor: pointer; }
 .listing-image-fields input[type="file"]::file-selector-button { min-height: 34px; margin-right: 11px; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
+.listing-photo-label { display: inline-flex; align-items: center; gap: 8px; }
+.listing-photo-label .icon { width: 17px; height: 17px; color: var(--accent-strong); }
 .listing-image-extra-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; padding: 12px 0 4px; }
 .extra-listing-images { padding: 11px 13px; border: 1px solid var(--line); border-radius: 11px; }
 .extra-listing-images summary { color: var(--accent-strong); font-size: 11px; font-weight: 700; cursor: pointer; }
