@@ -11,12 +11,14 @@ import app
 class MarketplaceFlows(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
-        self.old_path,self.old_mode=app.DB_PATH,app.MODE
+        self.old_path,self.old_mode,self.old_database_url=app.DB_PATH,app.MODE,app.DATABASE_URL
         self.old_delivery_key=os.environ.get('DELIVERY_ENCRYPTION_KEY')
         self.old_email_env={k:os.environ.get(k) for k in ('EMAIL_PROVIDER','RESEND_API_KEY','EMAIL_API_KEY','EMAIL_FROM')}
         os.environ['EMAIL_PROVIDER']='disabled'
         os.environ['DELIVERY_ENCRYPTION_KEY']=base64.urlsafe_b64encode(b'0123456789abcdef0123456789abcdef').decode('ascii')
-        app.DB_PATH=str(Path(self.tmp.name)/'test.sqlite3'); app.MODE='development'; app.migrate()
+        # Marketplace tests own an isolated SQLite database. Never let developer
+        # .env or CI secrets redirect them to a live Supabase instance.
+        app.DATABASE_URL=''; app.DB_PATH=str(Path(self.tmp.name)/'test.sqlite3'); app.MODE='development'; app.migrate()
         self.db=app.connect()
         self.admin=app.ident(); self.seller=app.ident(); self.buyer=app.ident(); self.other=app.ident()
         for uid,email in ((self.admin,'admin@test.invalid'),(self.seller,'seller@test.invalid'),(self.buyer,'buyer@test.invalid'),(self.other,'other@test.invalid')):
@@ -28,7 +30,7 @@ class MarketplaceFlows(unittest.TestCase):
         self.db.execute("INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,stock,status) VALUES(?,?,?,?,?,?,?,?,?, 'published')",(self.listing,self.seller,'valorant','accounts','Valorant account lvl 50','A test listing with enough descriptive text.','account',50000,1))
         self.handler=app.Handler.__new__(app.Handler); self.handler.client_address=('127.0.0.1',12345)
     def tearDown(self):
-        self.db.close();app.DB_PATH,app.MODE=self.old_path,self.old_mode
+        self.db.close();app.DB_PATH,app.MODE,app.DATABASE_URL=self.old_path,self.old_mode,self.old_database_url
         if self.old_delivery_key is None: os.environ.pop('DELIVERY_ENCRYPTION_KEY',None)
         else: os.environ['DELIVERY_ENCRYPTION_KEY']=self.old_delivery_key
         for key,value in self.old_email_env.items():
