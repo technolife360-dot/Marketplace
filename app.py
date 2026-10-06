@@ -20,6 +20,8 @@ import identity_service
 import oauth_service
 from asia_markets import ASIA_COUNTRIES, ASIA_COUNTRY_CURRENCIES, ASIA_CURRENCIES
 
+SUPPORTED_LANGUAGES = frozenset({'en', 'uz', 'ru', 'zh', 'ja', 'ko', 'id', 'ms', 'th', 'vi', 'hi', 'ar', 'tr', 'kk', 'bn'})
+
 ROOT = Path(__file__).resolve().parent
 # Small dotenv reader keeps the project dependency-free; real process variables take precedence.
 for _line in (ROOT / '.env').read_text().splitlines() if (ROOT / '.env').exists() else []:
@@ -646,7 +648,7 @@ class Handler(BaseHTTPRequestHandler):
                 if db.execute('SELECT id FROM users WHERE email=?',(email,)).fetchone(): raise HttpError(409,'Bu emailda avvaldan hisob bor. Xavfsizlik sabab Google/Apple akkauntini avtomatik bog‘lamadik; hozirgi kirish usulingizdan foydalaning.')
                 terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']
                 user_id=ident()
-                db.execute('INSERT INTO users(id,email,password_hash,display_name,country,currency,email_verified,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,1,?,?)',(user_id,email,password_hash(create_token()),name,oauth_country,ASIA_COUNTRY_CURRENCIES[oauth_country],terms,now_iso()))
+                db.execute('INSERT INTO users(id,email,password_hash,display_name,country,language,currency,email_verified,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,1,?,?)',(user_id,email,password_hash(create_token()),name,oauth_country,'en',ASIA_COUNTRY_CURRENCIES[oauth_country],terms,now_iso()))
                 db.execute('INSERT INTO oauth_identities(provider,subject,user_id) VALUES(?,?,?)',(provider,subject,user_id))
             session_token,csrf=session_create(db,user_id); self.set_session(session_token)
             secure='; Secure' if MODE=='production' else ''
@@ -690,7 +692,7 @@ class Handler(BaseHTTPRequestHandler):
             country=data.get('country','UZ')
             if not isinstance(country,str) or country not in ASIA_COUNTRIES: raise HttpError(400,'Osiyo mamlakatini tanlang.')
             currency=ASIA_COUNTRY_CURRENCIES[country]
-            user=ident(); terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']; db.execute('INSERT INTO users(id,email,password_hash,display_name,country,currency,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,?)',(user,email,password_hash(password),name,country,currency,terms,now_iso()))
+            user=ident(); terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']; db.execute('INSERT INTO users(id,email,password_hash,display_name,country,language,currency,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,?,?)',(user,email,password_hash(password),name,country,'en',currency,terms,now_iso()))
             raw=create_token(); db.execute('INSERT INTO email_tokens(token_hash,user_id,purpose,expires_at) VALUES(?,?,?,?)',(hash_token(raw),user,'verify',(datetime.now(timezone.utc)+timedelta(hours=24)).isoformat()))
             if email_service.is_configured():
                 try: email_service.send_action_email(email,name,'verify',raw)
@@ -895,7 +897,7 @@ class Handler(BaseHTTPRequestHandler):
             fields={}
             if 'display_name' in data: fields['display_name']=clean_text(data['display_name'],'Ism',2,80)
             if 'language' in data:
-                if data['language'] not in ('uz','ru','en'): raise HttpError(400,'Til tanlovi noto‘g‘ri.')
+                if data['language'] not in SUPPORTED_LANGUAGES: raise HttpError(400,'Til tanlovi noto‘g‘ri.')
                 fields['language']=data['language']
             if 'country' in data:
                 if not isinstance(data['country'],str) or data['country'] not in ASIA_COUNTRIES: raise HttpError(400,'Osiyo mamlakatini tanlang.')

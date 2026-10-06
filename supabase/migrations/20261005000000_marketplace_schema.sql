@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   password_hash TEXT NOT NULL,
   display_name TEXT NOT NULL,
   country TEXT NOT NULL DEFAULT 'UZ',
-  language TEXT NOT NULL DEFAULT 'uz',
+  language TEXT NOT NULL DEFAULT 'en',
   currency TEXT NOT NULL DEFAULT 'UZS',
   email_verified SMALLINT NOT NULL DEFAULT 0 CHECK (email_verified IN (0, 1)),
   suspended SMALLINT NOT NULL DEFAULT 0 CHECK (suspended IN (0, 1)),
