@@ -377,7 +377,9 @@ body.profile-menu-open { overflow: hidden; }
 .linked-account-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); font-size: 10px; }
 .linked-account-badge .provider-mark { width: 19px; height: 19px; font-size: 11px; border-radius: 6px; }
 .linked-account-badge .provider-glyph svg { width: 13px; height: 13px; }
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.listing-form .form-grid > .field { min-width: 0; }
+.listing-form .form-grid > .field > label { display: flex; min-height: 2.6em; align-items: flex-end; line-height: 1.3; }
 .field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 15px; }
 .field label { color: #374d7a; font-size: 12px; font-weight: 700; }
 .field input, .field textarea, .field select { width: 100%; min-height: 43px; padding: 10px 12px; border: 1px solid #d8dfed; border-radius: 12px; outline: 0; background: #f1f4f9; color: var(--ink); font-size: 13px; transition: border-color .18s ease, box-shadow .18s ease, background .18s ease; }
@@ -510,6 +512,7 @@ body.profile-menu-open { overflow: hidden; }
   .detail-cover { min-height: 230px; }
   .detail-cover strong { font-size: 26px; }
   .form-grid { grid-template-columns: 1fr; gap: 0; }
+  .listing-form .form-grid > .field > label { min-height: 0; }
   .stats { grid-template-columns: 1fr 1fr; gap: 9px; }
   .stat { padding: 14px; }
   .stat b { font-size: 20px; }
