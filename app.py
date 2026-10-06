@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """SentryLoot marketplace server with SQLite and Supabase PostgreSQL backends."""
 from __future__ import annotations
-import hashlib, hmac, json, os, re, secrets, sqlite3, time, unicodedata
+import hashlib, hmac, ipaddress, json, os, re, secrets, sqlite3, time, unicodedata
 import io
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -11,6 +11,9 @@ from pathlib import Path
 from queue import Empty, LifoQueue
 from threading import Lock
 from urllib.parse import parse_qs, urlparse
+from urllib.parse import quote as urlquote
+from urllib.request import Request as UrlRequest, urlopen as urlopen_request
+from urllib.error import HTTPError as UrlHTTPError, URLError as UrlURLError
 from payment_providers import get_provider
 import email_service
 import identity_service
@@ -26,6 +29,9 @@ import delivery_crypto
 MODE = os.environ.get('MARKETPLACE_MODE', 'development').lower()
 DB_PATH = os.environ.get('DATABASE_PATH', str(ROOT / 'marketplace.sqlite3'))
 DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '').strip().rstrip('/')
+SUPABASE_SERVICE_ROLE_KEY = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '').strip()
+SUPABASE_LISTING_IMAGES_BUCKET = os.environ.get('SUPABASE_LISTING_IMAGES_BUCKET', 'listing-images').strip()
 try:
     import psycopg
     from psycopg.rows import dict_row
@@ -44,6 +50,7 @@ if not SESSION_SECRET:
 COOKIE_NAME = 'bozorgg_session'
 SESSION_DAYS = 7
 MAX_BODY = 64 * 1024
+MAX_IMAGE_BODY = 5 * 1024 * 1024
 
 class HttpError(Exception):
     def __init__(self, status: int, message: str):
@@ -362,8 +369,42 @@ def evidence_link(value):
         raise HttpError(400,'Dalil havolasi HTTPS bo‘lishi va login/parol saqlamasligi kerak.')
     return value
 def money(value):
-    if isinstance(value,bool) or not isinstance(value,int) or value<=0: raise HttpError(400,'Narx musbat butun son ko‘rinishida bo‘lishi kerak (UZS).')
+    if isinstance(value,bool) or not isinstance(value,int) or value<=0 or value>1_000_000_000_000: raise HttpError(400,'Narx musbat va ruxsat etilgan chegaradagi butun son bo‘lishi kerak (UZS).')
     return value
+LINKED_ACCOUNT_PROVIDERS={'google','facebook','apple','steam','playstation','xbox','other'}
+def resolve_game_id(db, value):
+    name=clean_text(value,'O‘yin nomi',2,80)
+    existing=db.execute('SELECT id FROM games WHERE lower(name)=lower(?) OR lower(id)=lower(?) ORDER BY active DESC,id LIMIT 1',(name,name)).fetchone()
+    if existing: return existing['id']
+    slug='custom-'+hashlib.sha256(name.casefold().encode('utf-8')).hexdigest()[:24]
+    db.execute('INSERT OR IGNORE INTO games(id,slug,name,active) VALUES(?,?,?,0)',(slug,slug,name))
+    row=db.execute('SELECT id FROM games WHERE slug=?',(slug,)).fetchone()
+    if not row: raise HttpError(409,'Bu o‘yin nomini saqlab bo‘lmadi. Boshqa nom kiriting.')
+    return row['id']
+def listing_image_urls(value):
+    if value is None: return []
+    if not isinstance(value,list) or len(value)>6: raise HttpError(400,'Ko‘pi bilan 6 ta rasm qo‘shish mumkin.')
+    urls=[]
+    for item in value:
+        url=clean_text(item,'Rasm manzili',1,500)
+        try:
+            parsed=urlparse(url)
+            host=(parsed.hostname or '').rstrip('.').lower()
+            parsed.port
+        except ValueError:
+            raise HttpError(400,'Rasm manzili to‘g‘ri URL bo‘lishi kerak.')
+        if parsed.scheme!='https' or '.' not in host or re.fullmatch(r'[0-9.]+',host) or parsed.username or parsed.password or host in ('localhost','localhost.localdomain') or host.endswith(('.local','.internal','.test')):
+            raise HttpError(400,'Rasm manzili xavfsiz HTTPS havola bo‘lishi kerak.')
+        try:
+            if ipaddress.ip_address(host).is_global is False: raise HttpError(400,'Mahalliy yoki xususiy tarmoqdagi rasm manzili mumkin emas.')
+        except ValueError: pass
+        if url not in urls: urls.append(url)
+    return urls
+def linked_account_providers(value):
+    if value is None: return []
+    if not isinstance(value,list) or len(value)>len(LINKED_ACCOUNT_PROVIDERS) or any(not isinstance(x,str) or x not in LINKED_ACCOUNT_PROVIDERS for x in value):
+        raise HttpError(400,'Bog‘langan hisob turi noto‘g‘ri.')
+    return sorted(set(value))
 def parse_json(body):
     try: return json.loads(body or b'{}')
     except Exception: raise HttpError(400,'JSON so‘rovi noto‘g‘ri.')
@@ -477,9 +518,9 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers(); self.wfile.write(payload)
     def secure_headers(self):
         self.send_header('X-Content-Type-Options','nosniff'); self.send_header('X-Frame-Options','DENY'); self.send_header('Referrer-Policy','strict-origin-when-cross-origin'); self.send_header('Permissions-Policy','camera=(self "https://verify.didit.me"), microphone=(self "https://verify.didit.me"), geolocation=()'); self.send_header('Content-Security-Policy',"default-src 'self'; img-src 'self' data: https: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; style-src-attr 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self'; frame-src 'self'; media-src 'self' blob:; worker-src 'self' blob:")
-    def body(self):
+    def body(self, limit=MAX_BODY):
         n=int(self.headers.get('Content-Length','0'))
-        if n>MAX_BODY: raise HttpError(413,'So‘rov hajmi cheklovdan oshdi.')
+        if n>limit: raise HttpError(413,'So‘rov hajmi cheklovdan oshdi.')
         return self.rfile.read(n) if n else b'{}'
     def cookie(self):
         for part in self.headers.get('Cookie','').split(';'):
@@ -503,8 +544,9 @@ class Handler(BaseHTTPRequestHandler):
             csrf_exempt=path in ('/api/webhooks/didit','/api/oauth/apple/callback')
             if method in ('POST','PATCH','DELETE') and ctx['uid'] and not csrf_exempt:
                 if not hmac.compare_digest(self.headers.get('X-CSRF-Token',''),ctx['csrf'] or ''): raise HttpError(403,'Xavfsizlik tokeni noto‘g‘ri. Sahifani yangilang.')
-            raw_body=self.body() if method in ('POST','PATCH','PUT') and path.startswith('/api/') else b''
-            if raw_body and self.headers.get('Content-Type','').startswith('application/x-www-form-urlencoded') and path=='/api/oauth/apple/callback':
+            raw_body=self.body(MAX_IMAGE_BODY) if method=='POST' and path=='/api/listing-images' else self.body() if method in ('POST','PATCH','PUT') and path.startswith('/api/') else b''
+            if path=='/api/listing-images' and method=='POST': data={}
+            elif raw_body and self.headers.get('Content-Type','').startswith('application/x-www-form-urlencoded') and path=='/api/oauth/apple/callback':
                 data={key: values[-1] for key,values in parse_qs(raw_body.decode('utf-8','replace')).items()}
             else: data=parse_json(raw_body) if raw_body else {}
             result=self.route(db,ctx,method,path,parse_qs(parsed.query),data,raw_body)
@@ -875,21 +917,67 @@ class Handler(BaseHTTPRequestHandler):
             if profile['verification_status']=='pending':
                 for admin in db.execute('SELECT user_id FROM admin_accounts').fetchall(): notify(db,admin['user_id'],'seller_review','Sotuvchi tasdig‘i kutilmoqda',f'{name} do‘koni tekshiruvga yuborildi.','/admin')
             return {'seller':profile}
+        if path=='/api/listing-images' and method=='POST':
+            require_verified(ctx); seller_ok(db,uid); check_rate(db,'listing_image_upload',uid,30,3600)
+            if not SUPABASE_URL.startswith('https://') or not SUPABASE_SERVICE_ROLE_KEY or not re.fullmatch(r'[a-z0-9_-]{1,100}',SUPABASE_LISTING_IMAGES_BUCKET):
+                raise HttpError(503,'Rasm yuklash serverda sozlanmagan. Supabase Storage sozlamalari kerak.')
+            if not raw_body or len(raw_body)>MAX_IMAGE_BODY: raise HttpError(413,'Rasm 5 MB dan kichik bo‘lishi kerak.')
+            mime=self.headers.get('Content-Type','').split(';',1)[0].strip().lower()
+            image_formats={'image/jpeg':'JPEG','image/png':'PNG','image/webp':'WEBP'}
+            if mime not in image_formats: raise HttpError(415,'Faqat JPG, PNG yoki WebP rasm yuklash mumkin.')
+            try:
+                import warnings
+                from PIL import Image, ImageOps
+                Image.MAX_IMAGE_PIXELS=25_000_000
+                with warnings.catch_warnings():
+                    warnings.simplefilter('error',Image.DecompressionBombWarning)
+                    image=Image.open(io.BytesIO(raw_body))
+                    if image.format!=image_formats[mime] or getattr(image,'is_animated',False): raise HttpError(415,'Rasm formati fayl mazmuniga mos emas yoki animatsiyali rasm qo‘llanmaydi.')
+                    if image.width*image.height>25_000_000: raise HttpError(413,'Rasm o‘lchami juda katta.')
+                    image.load()
+                    image=ImageOps.exif_transpose(image).convert('RGB')
+                    image.thumbnail((1600,1600),Image.Resampling.LANCZOS)
+                    optimized=io.BytesIO(); image.save(optimized,format='WEBP',quality=82,method=5)
+                    image_bytes=optimized.getvalue()
+            except HttpError: raise
+            except ImportError: raise HttpError(503,'Serverda rasmni xavfsiz qayta ishlash kutubxonasi yo‘q.')
+            except Image.DecompressionBombError: raise HttpError(413,'Rasm o‘lchami juda katta.')
+            except Exception: raise HttpError(400,'Rasm fayli yaroqsiz yoki buzilgan.')
+            object_path=f"{hashlib.sha256(str(uid).encode()).hexdigest()[:20]}/{secrets.token_hex(20)}.webp"
+            bucket_path=urlquote(SUPABASE_LISTING_IMAGES_BUCKET,safe='')+'/'+urlquote(object_path,safe='/')
+            storage_request=UrlRequest(f'{SUPABASE_URL}/storage/v1/object/{bucket_path}',data=image_bytes,method='POST',headers={'Authorization':f'Bearer {SUPABASE_SERVICE_ROLE_KEY}','apikey':SUPABASE_SERVICE_ROLE_KEY,'Content-Type':'image/webp','Cache-Control':'public, max-age=31536000, immutable','x-upsert':'false'})
+            try:
+                with urlopen_request(storage_request,timeout=15) as response:
+                    if response.status not in (200,201): raise HttpError(502,'Rasm storage xizmatiga yuklanmadi.')
+            except UrlHTTPError: raise HttpError(502,'Rasm storage xizmatiga yuklanmadi.')
+            except UrlURLError: raise HttpError(503,'Rasm storage xizmatiga ulanish vaqtincha ishlamayapti.')
+            public_url=f'{SUPABASE_URL}/storage/v1/object/public/{bucket_path}'
+            return 201,{'url':public_url,'content_type':'image/webp','size':len(image_bytes)}
         if path=='/api/listings' and method=='POST':
             require_verified(ctx); seller_ok(db,uid); check_rate(db,'listing_create',uid,30,3600)
-            game=clean_text(data.get('game_id'),'O‘yin',1,80); cat=clean_text(data.get('category_id'),'Kategoriya',1,80)
-            if not db.execute('SELECT 1 FROM games WHERE id=? AND active=1',(game,)).fetchone() or not db.execute('SELECT 1 FROM categories WHERE id=? AND active=1',(cat,)).fetchone(): raise HttpError(400,'O‘yin yoki kategoriya topilmadi.')
+            submit_for_review=data.get('submit_for_review',False)
+            if not isinstance(submit_for_review,bool): raise HttpError(400,'Tekshiruvga yuborish belgisi noto‘g‘ri.')
+            game_name=clean_text(data.get('game_name') if data.get('game_name') is not None else data.get('game_id'),'O‘yin nomi',2,80); cat=clean_text(data.get('category_id'),'Kategoriya',1,80)
+            if not db.execute('SELECT 1 FROM categories WHERE id=? AND active=1',(cat,)).fetchone(): raise HttpError(400,'Kategoriya topilmadi.')
             title=clean_text(data.get('title'),'Sarlavha',5,120); desc=clean_text(data.get('description'),'Tavsif',20,5000); price=money(data.get('price_minor'))
             stock=data.get('stock',1)
             if not isinstance(stock,int) or stock<0 or stock>10000: raise HttpError(400,'Qoldiq miqdori noto‘g‘ri.')
             typ=db.execute('SELECT product_type FROM categories WHERE id=?',(cat,)).fetchone()['product_type']
             attributes=data.get('attributes',{})
             if not isinstance(attributes,dict) or len(attributes)>30: raise HttpError(400,'Atributlar noto‘g‘ri.')
-            image_url=clean_text(data.get('image_url',''),'Rasm URL',0,500)
-            if image_url and not image_url.startswith(('https://','http://')): raise HttpError(400,'Rasm havolasi http yoki https bilan boshlanishi kerak.')
+            images=listing_image_urls(data.get('images',[data.get('image_url')]) if 'images' not in data and data.get('image_url') else data.get('images',[]))
+            providers=linked_account_providers(data.get('linked_accounts',attributes.get('linked_accounts',[])))
+            attributes={**attributes,'images':images,'linked_accounts':providers}
+            image_url=images[0] if images else ''
             if data.get('delivery_method','manual') not in ('manual','protected_text','file','code','service'): raise HttpError(400,'Yetkazish turi noto‘g‘ri.')
+            platform=clean_text(data.get('platform',''),'Platforma',0,60); region=clean_text(data.get('region',''),'Hudud',0,60)
+            delivery_eta=clean_text(data.get('delivery_eta','24 hours'),'Yetkazish muddati',2,60); requirements=clean_text(data.get('requirements',''),'Shartlar',0,1000)
+            game=resolve_game_id(db,game_name)
             lid=ident(); db.execute('INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,platform,region,attributes_json,delivery_method,delivery_eta,requirements,stock,image_url,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                (lid,uid,game,cat,title,desc,typ,price,clean_text(data.get('platform',''),'Platforma',0,60),clean_text(data.get('region',''),'Hudud',0,60),json.dumps(attributes,ensure_ascii=False),data.get('delivery_method','manual'),clean_text(data.get('delivery_eta','24 hours'),'Yetkazish muddati',2,60),clean_text(data.get('requirements',''),'Shartlar',0,1000),stock,image_url,'draft'))
+                (lid,uid,game,cat,title,desc,typ,price,platform,region,json.dumps(attributes,ensure_ascii=False),data.get('delivery_method','manual'),delivery_eta,requirements,stock,image_url,'pending_review' if submit_for_review else 'draft'))
+            if submit_for_review:
+                admin=db.execute('SELECT user_id FROM admin_accounts LIMIT 1').fetchone()
+                if admin: notify(db,admin['user_id'],'moderation','Yangi e’lon','Tekshirish uchun yangi e’lon yuborildi.','/admin')
             return 201,listing_detail(db,lid,uid)
         m=re.fullmatch(r'/api/listings/([^/]+)/state',path)
         if m and method=='POST':
@@ -911,8 +999,9 @@ class Handler(BaseHTTPRequestHandler):
         if m and method=='PATCH':
             require_verified(ctx); seller_ok(db,uid); lid=m.group(1); l=db.execute('SELECT * FROM listings WHERE id=? AND seller_id=?',(lid,uid)).fetchone()
             if not l: raise HttpError(404,'E’lon topilmadi.')
-            allowed={'title','description','price_minor','platform','region','delivery_eta','requirements','stock','image_url','attributes'}
+            allowed={'title','description','price_minor','platform','region','delivery_eta','requirements','stock','image_url','attributes','game_name','images','linked_accounts'}
             fields={k:data[k] for k in data if k in allowed};
+            if 'game_name' in fields: fields['game_name']=clean_text(fields['game_name'],'O‘yin nomi',2,80)
             if 'title' in fields: fields['title']=clean_text(fields['title'],'Sarlavha',5,120)
             if 'description' in fields: fields['description']=clean_text(fields['description'],'Tavsif',20,5000)
             if 'price_minor' in fields: fields['price_minor']=money(fields['price_minor'])
@@ -920,9 +1009,19 @@ class Handler(BaseHTTPRequestHandler):
             for key,label,minimum,maximum in (('platform','Platforma',0,60),('region','Hudud',0,60),('delivery_eta','Yetkazish muddati',2,60),('requirements','Talablar',0,1000)):
                 if key in fields: fields[key]=clean_text(fields[key],label,minimum,maximum)
             if 'image_url' in fields:
-                fields['image_url']=clean_text(fields['image_url'],'Rasm URL',0,500)
-                if fields['image_url'] and not fields['image_url'].startswith(('https://','http://')): raise HttpError(400,'Rasm havolasi http yoki https bilan boshlanishi kerak.')
-            if 'attributes' in fields and (not isinstance(fields['attributes'],dict) or len(fields['attributes'])>30): raise HttpError(400,'Atributlar noto‘g‘ri.')
+                legacy_image=clean_text(fields.pop('image_url'),'Rasm manzili',0,500)
+                fields['image_url']=listing_image_urls([legacy_image])[0] if legacy_image else ''
+            attrs=json.loads(l['attributes_json'] or '{}')
+            if not isinstance(attrs,dict): attrs={}
+            if 'image_url' in data and 'images' not in data: attrs['images']=[fields['image_url']] if fields.get('image_url') else []
+            if 'attributes' in fields:
+                if not isinstance(fields['attributes'],dict) or len(fields['attributes'])>30: raise HttpError(400,'Atributlar noto‘g‘ri.')
+                attrs.update(fields.pop('attributes'))
+            if 'images' in fields:
+                images=listing_image_urls(fields.pop('images')); attrs['images']=images; fields['image_url']=images[0] if images else ''
+            if 'linked_accounts' in fields: attrs['linked_accounts']=linked_account_providers(fields.pop('linked_accounts'))
+            if 'attributes' in data or 'images' in data or 'linked_accounts' in data or 'image_url' in data: fields['attributes_json']=json.dumps(attrs,ensure_ascii=False)
+            if 'game_name' in fields: fields['game_id']=resolve_game_id(db,fields.pop('game_name'))
             next_status='pending_review' if fields and l['status']=='published' or fields.get('stock',l['stock'])>0 and l['status']=='sold_out' else None
             if 'attributes' in fields: fields['attributes_json']=json.dumps(fields.pop('attributes'),ensure_ascii=False)
             if fields:
@@ -1239,7 +1338,8 @@ class _VercelRequest(Handler):
         if environ.get('CONTENT_LENGTH'):
             self.headers['Content-Length']=environ['CONTENT_LENGTH']
         self.client_address=(environ.get('REMOTE_ADDR','0.0.0.0'),0)
-        body=environ.get('wsgi.input',io.BytesIO()).read(MAX_BODY+1)
+        body_limit=MAX_IMAGE_BODY if path.rstrip('/')=='/api/listing-images' and self.command=='POST' else MAX_BODY
+        body=environ.get('wsgi.input',io.BytesIO()).read(body_limit+1)
         self.rfile=io.BytesIO(body)
         self.wfile=io.BytesIO()
         self._status=200
