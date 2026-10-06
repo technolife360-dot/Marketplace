@@ -978,6 +978,12 @@ body.profile-menu-open { overflow: hidden; }
 .auth-label-row .text-link { color:#9aaccc;font-size:11px }
 .auth-card .field { gap:8px;margin-bottom:16px }
 .auth-card .field input { min-height:48px;padding-inline:14px;border-radius:12px;background:rgba(241 244 249 / 3%) }
+.auth-password-control { position:relative }
+.auth-card .auth-password-control input { padding-right:52px }
+.password-visibility-toggle { position:absolute;top:50%;right:8px;width:36px;height:36px;display:grid;place-items:center;padding:0;border:0;border-radius:9px;background:transparent;color:#8fa3c7;transform:translateY(-50%);cursor:pointer }
+.password-visibility-toggle:hover { background:rgba(202,210,224,9%);color:#e3eaf7 }
+.password-visibility-toggle:focus-visible { outline:2px solid #a3b5d3;outline-offset:1px }
+.password-visibility-toggle .icon { width:18px;height:18px }
 .auth-card .field input:focus { background:rgba(241 244 249 / 5%) }
 .auth-registration-terms { margin:0 0 16px }
 .auth-registration-terms .help { display:block;margin:8px 0 0 27px }
