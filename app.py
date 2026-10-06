@@ -2,9 +2,14 @@
 """SentryLoot marketplace server with SQLite and Supabase PostgreSQL backends."""
 from __future__ import annotations
 import hashlib, hmac, json, os, re, secrets, sqlite3, time, unicodedata
+import io
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http import HTTPStatus
+from email.message import Message
 from pathlib import Path
+from queue import Empty, LifoQueue
+from threading import Lock
 from urllib.parse import parse_qs, urlparse
 from payment_providers import get_provider
 import email_service
@@ -29,6 +34,8 @@ except ImportError:
     dict_row = None
 
 DB_INTEGRITY_ERRORS = (sqlite3.IntegrityError,) + ((psycopg.IntegrityError,) if psycopg else ())
+_postgres_pool = None
+_postgres_pool_lock = Lock()
 SESSION_SECRET = os.environ.get('SESSION_SECRET', '')
 if MODE == 'production' and (len(SESSION_SECRET) < 32 or SESSION_SECRET.startswith('replace-with')):
     raise RuntimeError('Set SESSION_SECRET to a unique random value of at least 32 characters in production')
@@ -63,9 +70,63 @@ def postgres_placeholders(sql):
         i += 1
     return ''.join(out)
 
+class PostgresConnectionPool:
+    """Small thread-safe pool to avoid a new Supabase connection per HTTP request."""
+    def __init__(self, max_size=8):
+        self.max_size=max_size
+        self.idle=LifoQueue(maxsize=max_size)
+        self.lock=Lock()
+        self.total=0
+
+    def _new_connection(self):
+        return psycopg.connect(DATABASE_URL, connect_timeout=15, autocommit=True, row_factory=dict_row)
+
+    def getconn(self):
+        while True:
+            try:
+                conn=self.idle.get_nowait()
+            except Empty:
+                with self.lock:
+                    create=self.total < self.max_size
+                    if create: self.total+=1
+                if create:
+                    try: return self._new_connection()
+                    except Exception:
+                        with self.lock: self.total-=1
+                        raise
+                try: conn=self.idle.get(timeout=15)
+                except Empty: raise TimeoutError('Database connection pool is busy.')
+            if conn.closed:
+                self._discard(conn)
+                continue
+            return conn
+
+    def _discard(self, conn):
+        try: conn.close()
+        finally:
+            with self.lock: self.total=max(0,self.total-1)
+
+    def putconn(self, conn):
+        if conn.closed:
+            self._discard(conn)
+            return
+        try:
+            if conn.info.transaction_status != psycopg.pq.TransactionStatus.IDLE:
+                conn.rollback()
+            self.idle.put_nowait(conn)
+        except Exception:
+            self._discard(conn)
+
+    def close(self):
+        while True:
+            try: conn=self.idle.get_nowait()
+            except Empty: return
+            self._discard(conn)
+
+
 class PostgresConnection:
     """Small DB-API compatibility wrapper for the app's SQLite-style execute calls."""
-    def __init__(self, connection): self.connection=connection
+    def __init__(self, connection, pool=None): self.connection=connection; self.pool=pool
     def execute(self, sql, params=()):
         sql=sql.strip()
         if sql.upper() == 'BEGIN IMMEDIATE': sql='BEGIN'
@@ -74,13 +135,21 @@ class PostgresConnection:
         sql=postgres_placeholders(sql)
         if ignore: sql += ' ON CONFLICT DO NOTHING'
         return self.connection.execute(sql, params or ())
-    def close(self): self.connection.close()
+    def close(self):
+        if self.connection is None: return
+        conn,self.connection=self.connection,None
+        if self.pool: self.pool.putconn(conn)
+        else: conn.close()
 
 def connect():
     if DATABASE_URL:
         if psycopg is None:
             raise RuntimeError('DATABASE_URL is set, but psycopg is missing. Install requirements.txt first.')
-        return PostgresConnection(psycopg.connect(DATABASE_URL, connect_timeout=15, autocommit=True, row_factory=dict_row))
+        global _postgres_pool
+        if _postgres_pool is None:
+            with _postgres_pool_lock:
+                if _postgres_pool is None: _postgres_pool=PostgresConnectionPool(max_size=8)
+        return PostgresConnection(_postgres_pool.getconn(),_postgres_pool)
     db = sqlite3.connect(DB_PATH, timeout=15, isolation_level=None)
     db.row_factory = sqlite3.Row
     db.execute('PRAGMA foreign_keys=ON')
@@ -230,7 +299,10 @@ def check_rate(db, bucket, subject, limit=10, period=300):
     now = int(time.time()); start = now - now % period
     r = db.execute('SELECT attempts FROM rate_limits WHERE bucket=? AND subject=? AND window_start=?',(bucket,subject,start)).fetchone()
     if r and r['attempts'] >= limit: raise HttpError(429,'Urinishlar limiti tugadi. Birozdan keyin qayta urinib ko‘ring.')
-    db.execute('INSERT INTO rate_limits(bucket,subject,window_start,attempts) VALUES(?,?,?,1) ON CONFLICT(bucket,subject,window_start) DO UPDATE SET attempts=attempts+1',(bucket,subject,start))
+    if isinstance(db, PostgresConnection):
+        db.execute('INSERT INTO rate_limits AS current_rate(bucket,subject,window_start,attempts) VALUES(?,?,?,1) ON CONFLICT(bucket,subject,window_start) DO UPDATE SET attempts=current_rate.attempts+1',(bucket,subject,start))
+    else:
+        db.execute('INSERT INTO rate_limits(bucket,subject,window_start,attempts) VALUES(?,?,?,1) ON CONFLICT(bucket,subject,window_start) DO UPDATE SET attempts=attempts+1',(bucket,subject,start))
 
 def is_admin(db, uid): return bool(db.execute('SELECT 1 FROM admin_accounts WHERE user_id=?',(uid,)).fetchone())
 def require_user(ctx):
@@ -383,6 +455,17 @@ def checkout(db,uid,accept_terms=False):
 
 class Handler(BaseHTTPRequestHandler):
     server_version='SentryLoot/0.1'
+    def oauth_base_url(self):
+        if MODE == 'production':
+            base=os.environ.get('PUBLIC_BASE_URL','').rstrip('/')
+            if not base.startswith('https://'): raise HttpError(503,'Ishlab chiqarishda PUBLIC_BASE_URL HTTPS bo‘lishi kerak.')
+            return base
+        # In development the browser may use either localhost or 127.0.0.1.
+        # Use the request host so the OAuth state cookie and callback share a host.
+        host=self.headers.get('Host','localhost:8000').lower()
+        if not re.fullmatch(r'(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?',host):
+            raise HttpError(400,'Local OAuth host noto‘g‘ri.')
+        return 'http://'+host
     def log_message(self, fmt, *args):
         # Keep access logs minimal; never print bodies or credential values.
         print('%s - %s' % (self.address_string(), fmt % args))
@@ -471,8 +554,7 @@ class Handler(BaseHTTPRequestHandler):
                 client_id=os.environ.get('APPLE_SERVICE_ID','')
                 if not all((client_id,os.environ.get('APPLE_TEAM_ID'),os.environ.get('APPLE_KEY_ID'),os.environ.get('APPLE_PRIVATE_KEY'))): raise HttpError(503,'Apple Sign In hali sozlanmagan.')
             check_rate(db,'oauth_start_'+provider,self.client_address[0],8)
-            base=os.environ.get('PUBLIC_BASE_URL','http://localhost:8000').rstrip('/')
-            if MODE=='production' and not base.startswith('https://'): raise HttpError(503,'Ishlab chiqarishda PUBLIC_BASE_URL HTTPS bo‘lishi kerak.')
+            base=self.oauth_base_url()
             callback=base+'/api/oauth/'+provider+'/callback'
             state,nonce=create_token(),create_token()
             payload=f'{state}.{nonce}.{int(time.time())}'
@@ -503,7 +585,7 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError: created=0
             if created<int(time.time())-600 or created>int(time.time())+30: raise HttpError(400,'Kirish so‘rovi muddati o‘tgan. Qayta urinib ko‘ring.')
             if not code or len(str(code))>4096: raise HttpError(400,'Provayder avtorizatsiya kodi noto‘g‘ri.')
-            base=os.environ.get('PUBLIC_BASE_URL','http://localhost:8000').rstrip('/')
+            base=self.oauth_base_url()
             try: identity=oauth_service.exchange_code(provider,str(code),base+'/api/oauth/'+provider+'/callback',saved_nonce)
             except Exception as exc:
                 print('oauth provider error:',provider,type(exc).__name__)
@@ -686,7 +768,8 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/requests' and method=='GET':
             own=qs.get('mine',['0'])[0]=='1'
             if own: require_user(ctx)
-            where="r.status='open' AND (r.expires_at IS NULL OR r.expires_at>CURRENT_TIMESTAMP)"; args=[uid or '']
+            expiry_filter='(r.expires_at IS NULL OR r.expires_at::timestamptz>CURRENT_TIMESTAMP)' if DATABASE_URL else '(r.expires_at IS NULL OR r.expires_at>CURRENT_TIMESTAMP)'
+            where=f"r.status='open' AND {expiry_filter}"; args=[uid or '']
             if own: where+=' AND r.requester_id=?';args.append(uid)
             rows=db.execute(f"SELECT r.id,r.game_id,r.category_id,r.title,r.description,r.budget_minor,r.currency,r.expires_at,r.status,r.created_at,CASE WHEN r.requester_id=? THEN 1 ELSE 0 END is_own,'Xaridor' requester,g.name game_name,c.name category_name FROM product_requests r JOIN games g ON g.id=r.game_id LEFT JOIN categories c ON c.id=r.category_id WHERE {where} ORDER BY r.created_at DESC LIMIT 100",args).fetchall()
             return [dict(x) for x in rows]
@@ -728,8 +811,8 @@ class Handler(BaseHTTPRequestHandler):
                 'active_listings':db.execute("SELECT COUNT(*) n FROM listings WHERE status='published'").fetchone()['n'],
                 'today_orders':db.execute("SELECT COUNT(*) n FROM orders WHERE created_at::date=CURRENT_DATE" if DATABASE_URL else "SELECT COUNT(*) n FROM orders WHERE date(created_at)=date('now')").fetchone()['n'],
                 'completed_orders':db.execute("SELECT COUNT(*) n FROM orders WHERE status='completed'").fetchone()['n'],
-                'sandbox_volume_minor':db.execute("SELECT COALESCE(SUM(amount_minor),0) n FROM payments WHERE provider='sandbox' AND status='succeeded'").fetchone()['n'],
-                'daily_orders':[dict(x) for x in db.execute("SELECT created_at::date::text day,COUNT(*) count FROM orders WHERE created_at::date>=CURRENT_DATE-6 GROUP BY created_at::date ORDER BY day" if DATABASE_URL else "SELECT date(created_at) day,COUNT(*) count FROM orders WHERE date(created_at)>=date('now','-6 day') GROUP BY date(created_at) ORDER BY day").fetchall()],
+                'sandbox_volume_minor':int(db.execute("SELECT COALESCE(SUM(amount_minor),0) n FROM payments WHERE provider='sandbox' AND status='succeeded'").fetchone()['n']),
+                'daily_orders':[dict(x) for x in db.execute("SELECT to_char(created_at::date,'YYYY-MM-DD') AS day,COUNT(*) AS count FROM orders WHERE created_at>=CURRENT_DATE-INTERVAL '6 days' GROUP BY created_at::date ORDER BY created_at::date" if DATABASE_URL else "SELECT date(created_at) AS day,COUNT(*) AS count FROM orders WHERE date(created_at)>=date('now','-6 day') GROUP BY date(created_at) ORDER BY date(created_at)").fetchall()],
                 'orders':[dict(x) for x in db.execute('SELECT status,COUNT(*) n FROM orders GROUP BY status').fetchall()],
                 'users':db.execute('SELECT COUNT(*) n FROM users').fetchone()['n'],
                 'mode':MODE,
@@ -741,7 +824,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/admin/listings' and method=='GET':
             require_admin(ctx); return [listing_detail(db,x['id']) for x in db.execute("SELECT id FROM listings WHERE status IN ('pending_review','rejected') ORDER BY created_at")]
         if path=='/api/admin/reports' and method=='GET':
-            require_admin(ctx); return [dict(x) for x in db.execute('SELECT r.*,u.email reporter_email FROM reports r JOIN users u ON u.id=r.reporter_id ORDER BY CASE status WHEN \'open\' THEN 0 ELSE 1 END,created_at DESC LIMIT 100')]
+            require_admin(ctx); return [dict(x) for x in db.execute('SELECT r.*,u.email reporter_email FROM reports r JOIN users u ON u.id=r.reporter_id ORDER BY CASE r.status WHEN \'open\' THEN 0 ELSE 1 END,r.created_at DESC LIMIT 100')]
         if path=='/api/admin/sellers' and method=='GET':
             require_admin(ctx); return [dict(x) for x in db.execute("SELECT s.user_id,s.shop_name,s.bio,s.verification_status,s.selling_enabled,s.identity_status,s.identity_provider,s.identity_verified_at,s.created_at,u.email,u.display_name FROM seller_profiles s JOIN users u ON u.id=s.user_id WHERE s.verification_status!='verified' OR s.selling_enabled=0 OR s.identity_status!='verified' ORDER BY CASE s.identity_status WHEN 'verified' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,s.created_at DESC LIMIT 100")]
         if path=='/api/admin/disputes' and method=='GET':
@@ -754,7 +837,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/admin/deletions' and method=='GET':
             require_admin(ctx); return [dict(x) for x in db.execute('SELECT d.*,u.email,u.display_name FROM account_deletion_requests d JOIN users u ON u.id=d.user_id ORDER BY d.created_at DESC LIMIT 100')]
         if path=='/api/admin/payouts' and method=='GET':
-            require_admin(ctx); return [dict(x) for x in db.execute('SELECT p.*,u.email,u.display_name FROM payout_requests p JOIN users u ON u.id=p.seller_id ORDER BY created_at DESC LIMIT 100')]
+            require_admin(ctx); return [dict(x) for x in db.execute('SELECT p.*,u.email,u.display_name FROM payout_requests p JOIN users u ON u.id=p.seller_id ORDER BY p.created_at DESC LIMIT 100')]
 
         # Write workflows below.
         if path=='/api/account/deletion-request' and method=='POST':
@@ -1142,6 +1225,74 @@ class Handler(BaseHTTPRequestHandler):
 
 class Server(ThreadingHTTPServer):
     daemon_threads=True
+
+
+class _VercelRequest(Handler):
+    """Adapt one Vercel WSGI request to the existing HTTP request handler."""
+    def __init__(self, environ):
+        self.command=environ.get('REQUEST_METHOD','GET').upper()
+        path=environ.get('PATH_INFO','/') or '/'
+        query=environ.get('QUERY_STRING','')
+        self.path=path+('?' + query if query else '')
+        self.headers=Message()
+        for key,value in environ.items():
+            if key.startswith('HTTP_'):
+                name=key[5:].replace('_','-').title()
+                self.headers[name]=value
+        if environ.get('CONTENT_TYPE'):
+            self.headers['Content-Type']=environ['CONTENT_TYPE']
+        if environ.get('CONTENT_LENGTH'):
+            self.headers['Content-Length']=environ['CONTENT_LENGTH']
+        self.client_address=(environ.get('REMOTE_ADDR','0.0.0.0'),0)
+        body=environ.get('wsgi.input',io.BytesIO()).read(MAX_BODY+1)
+        self.rfile=io.BytesIO(body)
+        self.wfile=io.BytesIO()
+        self._status=200
+        self._response_headers=[]
+
+    def send_response(self, code, message=None):
+        self._status=code
+
+    def send_header(self, key, value):
+        self._response_headers.append((key,str(value)))
+
+    def end_headers(self):
+        pass
+
+    def send_error(self, code, message=None, explain=None):
+        phrase=message or HTTPStatus(code).phrase
+        payload=(f'<!doctype html><meta charset="utf-8"><title>{code} {phrase}</title>'
+                 f'<h1>{code} {phrase}</h1>').encode('utf-8')
+        self.send_response(code)
+        self.send_header('Content-Type','text/html; charset=utf-8')
+        self.send_header('Content-Length',str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+
+class VercelWSGIApplication:
+    """Run the existing routes as a WSGI app for Vercel's Python runtime."""
+    def __call__(self, environ, start_response):
+        request=_VercelRequest(environ)
+        method=request.command
+        if method=='HEAD':
+            request.do_GET()
+        elif method in ('GET','POST','PATCH','DELETE'):
+            getattr(request,'do_'+method)()
+        else:
+            request.send_json(405,{'error':'Usul qo‘llab-quvvatlanmaydi.'})
+        try:
+            phrase=HTTPStatus(request._status).phrase
+        except ValueError:
+            phrase='Unknown Status'
+        start_response(f'{request._status} {phrase}',request._response_headers)
+        body=request.wfile.getvalue()
+        return [b'' if method=='HEAD' else body]
+
+
+# Vercel detects this WSGI application and invokes it per request. The local
+# ThreadingHTTPServer remains the entry point when this file is run directly.
+app=VercelWSGIApplication()
 
 def main():
     migrate()
