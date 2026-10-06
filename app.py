@@ -563,7 +563,7 @@ class Handler(BaseHTTPRequestHandler):
         finally: db.close()
     def do_GET(self):
         if not self.path.startswith('/api/'):
-            parsed=urlparse(self.path); f={'/':'index.html','/static/app.js':'app.js','/static/locales.js':'locales.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png'}.get(parsed.path)
+            parsed=urlparse(self.path); f={'/':'index.html','/static/app.js':'app.js','/static/locales.js':'locales.js','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png'}.get(parsed.path)
             if not f: self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8'))))
