@@ -29,7 +29,7 @@ window.BOZOR_COPY={
   'Yordam va xavfsizlik':['Помощь и безопасность','Help and safety'],
   'Yordam markazi':['Центр помощи','Help center'],
   'Blog':['Блог','Blog'],
-  '© 2026 SentryLoot · Hozirda sinov muhiti':['© 2026 SentryLoot · Сейчас тестовая версия','© 2026 SentryLoot · Preview environment'],
+  '© 2026 SentryLoot. Barcha huquqlar himoyalangan.':['© 2026 SentryLoot. Все права защищены.','© 2026 SentryLoot. All rights reserved.'],
   'O‘yinchilar uchun mahalliy bozor':['Локальный маркетплейс для игроков','A local marketplace for gamers'],
   'O‘yin ichidagi qiymat,':['Ценность в игре,','In-game value,'],
   'bir joyda.':['в одном месте.','all in one place.'],
