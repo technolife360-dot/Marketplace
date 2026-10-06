@@ -817,8 +817,6 @@ body.profile-menu-open { overflow: hidden; }
 .identity-privacy { margin-top:20px;padding-top:16px;border-top:1px solid rgba(180 194 222 / 9%);color:#96a9d0 }
 .identity-privacy summary { color:#c8d2e7;font-size:12px;font-weight:650;cursor:pointer }
 .identity-privacy p { margin:11px 0 0;font-size:12px;line-height:1.75 }
-.sumsub-mount { min-height:530px;margin-top:18px;overflow:hidden;border:1px solid rgba(186, 196, 212, 18%);border-radius:18px;background:#f1f4f9 }
-.sumsub-mount[hidden] { display:none!important }
 .auth-page { max-width:none;min-height:72vh;display:grid;place-items:center;padding:46px 24px 68px }
 .auth-shell { width:min(100%,1000px);min-height:590px;display:grid;grid-template-columns:.94fr 1.06fr;overflow:hidden;border:1px solid rgba(202, 210, 224, 12%);border-radius:28px;background:linear-gradient(145deg,#0e141f,#0b0f18);box-shadow:0 30px 90px rgba(2 3 5 / 34%) }
 .auth-showcase { position:relative;isolation:isolate;min-width:0;overflow:hidden;display:flex;flex-direction:column;padding:30px 34px 24px;background:radial-gradient(ellipse at 50% 42%,rgba(83, 107, 149, 18%),transparent 48%),linear-gradient(150deg,#191f28,#0e131e 64%,#0b101a) }
@@ -919,7 +917,6 @@ button:disabled { opacity:.48;cursor:not-allowed;filter:saturate(.55) }
  .identity-steps { grid-template-columns:1fr }
  .identity-step { min-height:0;padding:13px }
  .home-messages-link { min-height:43px;padding-inline:13px }
- .sumsub-mount { min-height:500px }
 }
 .profile-wallet-card { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 14px; border: 1px solid rgba(170, 187, 218, 18%); border-radius: 14px; background: linear-gradient(110deg, rgba(170, 187, 218, 11%), rgba(241 244 249 / 3%)); }
 .profile-wallet-card:hover { border-color: rgba(170, 187, 218, 35%); background: rgba(170, 187, 218, 13%); }
@@ -1623,4 +1620,3 @@ body:not(.home-page) .identity-consent { color: #e2d3f0; }
 body:not(.home-page) .identity-consent-panel>p { color: #a890bd; }
 body:not(.home-page) .identity-privacy { border-color: rgba(197,145,255,14%); color: #bba4d0; }
 body:not(.home-page) .identity-privacy summary { color: #e0c9f4; }
-body:not(.home-page) .sumsub-mount { border-color: rgba(197,145,255,18%); background: #10051b; }

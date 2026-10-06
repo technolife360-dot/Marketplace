@@ -1,4 +1,4 @@
-"""Minimal Sumsub WebSDK token and webhook boundary; identity media stays with Sumsub."""
+"""Didit hosted identity verification and signed webhook boundary."""
 from __future__ import annotations
 
 from urllib.parse import urlsplit
@@ -16,13 +16,9 @@ class IdentityProviderError(Exception):
 
 
 def is_configured() -> bool:
-    required = (
-        os.environ.get('IDENTITY_PROVIDER', 'disabled').strip().lower() == 'sumsub'
-        and bool(os.environ.get('SUMSUB_APP_TOKEN', '').strip())
-        and bool(os.environ.get('SUMSUB_SECRET_KEY', ''))
-        and bool(os.environ.get('SUMSUB_LEVEL_NAME', '').strip())
-        and bool(os.environ.get('SUMSUB_WEBHOOK_SECRET', ''))
-    )
+    required = all(os.environ.get(name, '').strip() for name in (
+        'DIDIT_API_KEY', 'DIDIT_WORKFLOW_ID', 'DIDIT_WEBHOOK_SECRET',
+    ))
     if not required:
         return False
     if os.environ.get('MARKETPLACE_MODE', 'development').strip().lower() != 'production':
@@ -32,71 +28,82 @@ def is_configured() -> bool:
 
 
 def _api_host() -> str:
-    value = os.environ.get('SUMSUB_API_BASE_URL', 'https://api.sumsub.com').strip().rstrip('/')
+    value = os.environ.get('DIDIT_API_BASE_URL', 'https://verification.didit.me').strip().rstrip('/')
     parsed = urlsplit(value)
-    host = (parsed.hostname or '').lower()
-    if (
-        parsed.scheme != 'https'
-        or not host.endswith('.sumsub.com')
-        or not host.startswith('api.')
-        or parsed.username or parsed.password
-        or parsed.port not in (None, 443)
-        or parsed.path or parsed.query or parsed.fragment
-    ):
-        raise IdentityProviderError('Sumsub API manzili ruxsat etilmagan.')
-    return host
+    if (parsed.scheme != 'https' or parsed.hostname != 'verification.didit.me'
+            or parsed.username or parsed.password or parsed.port not in (None, 443)
+            or parsed.path or parsed.query or parsed.fragment):
+        raise IdentityProviderError('Didit API manzili ruxsat etilmagan.')
+    return parsed.hostname
 
 
-def create_sdk_token(external_user_id: str, email: str) -> str:
+def create_verification_session(user_reference: str) -> dict[str, str]:
     if not is_configured():
-        raise IdentityProviderError('Sumsub ulanishi konfiguratsiya qilinmagan.')
+        raise IdentityProviderError('Didit ulanishi konfiguratsiya qilinmagan.')
     host = _api_host()
-    path = '/resources/accessTokens/sdk'
+    callback = os.environ.get('PUBLIC_BASE_URL', 'http://localhost:8000').strip().rstrip('/') + '/#seller'
     body = json.dumps({
-        'userId': external_user_id,
-        'levelName': os.environ['SUMSUB_LEVEL_NAME'].strip(),
-        'ttlInSecs': 600,
-        'applicantIdentifiers': {'email': email},
-    }, separators=(',', ':')).encode('utf-8')
-    timestamp = str(int(time.time()))
-    signature = hmac.new(
-        os.environ['SUMSUB_SECRET_KEY'].encode('utf-8'),
-        timestamp.encode('ascii') + b'POST' + path.encode('ascii') + body,
-        hashlib.sha256,
-    ).hexdigest()
+        'workflow_id': os.environ['DIDIT_WORKFLOW_ID'].strip(),
+        'callback': callback,
+        'vendor_data': user_reference,
+        'language': 'uz',
+        'expected_details': {'expected_document_types': ['P', 'ID']},
+    }, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
     headers = {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'X-App-Token': os.environ['SUMSUB_APP_TOKEN'].strip(),
-        'X-App-Access-Ts': timestamp,
-        'X-App-Access-Sig': signature,
+        'x-api-key': os.environ['DIDIT_API_KEY'].strip(),
+        'User-Agent': 'SentryLoot/1.0',
     }
     connection = http.client.HTTPSConnection(host, 443, timeout=12, context=ssl.create_default_context())
     try:
-        connection.request('POST', path, body=body, headers=headers)
+        connection.request('POST', '/v3/session/', body=body, headers=headers)
         response = connection.getresponse()
-        response_body = response.read(16_384)
+        response_body = response.read(32_768)
         if response.status < 200 or response.status >= 300:
-            raise IdentityProviderError('Sumsub token berishni rad etdi.')
+            # Never include upstream bodies: they can expose provider details.
+            raise IdentityProviderError('Didit sessiya yaratishni rad etdi. API kaliti, workflow ID va bepul limitni tekshiring.')
         result = json.loads(response_body.decode('utf-8'))
-        token = result.get('token')
-        if not isinstance(token, str) or not token or len(token) > 1024:
-            raise IdentityProviderError('Sumsub token javobi noto‘g‘ri.')
-        return token
+        session_id, verify_url = result.get('session_id'), result.get('url')
+        parsed_url = urlsplit(verify_url if isinstance(verify_url, str) else '')
+        if (not isinstance(session_id, str) or not session_id or len(session_id) > 100
+                or parsed_url.scheme != 'https' or parsed_url.hostname != 'verify.didit.me'
+                or parsed_url.username or parsed_url.password):
+            raise IdentityProviderError('Didit sessiya javobi noto‘g‘ri.')
+        return {'session_id': session_id, 'url': verify_url}
     except (OSError, ValueError, json.JSONDecodeError) as exc:
-        raise IdentityProviderError('Sumsub xizmatiga hozir ulanib bo‘lmadi.') from exc
+        raise IdentityProviderError('Didit xizmatiga hozir ulanib bo‘lmadi.') from exc
     finally:
         connection.close()
 
 
-def verify_webhook(raw_body: bytes, digest: str, digest_alg: str) -> bool:
-    secret = os.environ.get('SUMSUB_WEBHOOK_SECRET', '')
-    algorithms = {
-        'HMAC_SHA256_HEX': hashlib.sha256,
-        'HMAC_SHA512_HEX': hashlib.sha512,
-    }
-    algorithm = algorithms.get(digest_alg.upper())
-    if not secret or not digest or algorithm is None:
-        return False
-    expected = hmac.new(secret.encode('utf-8'), raw_body, algorithm).hexdigest()
-    return hmac.compare_digest(expected, digest.lower())
+def _shorten_floats(value):
+    if isinstance(value, dict):
+        return {key: _shorten_floats(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_shorten_floats(item) for item in value]
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
+def verify_webhook(raw_body: bytes, signature: str, timestamp_header: str) -> dict | None:
+    """Verify Didit's V3 canonical-JSON signature and timestamp before returning data."""
+    secret = os.environ.get('DIDIT_WEBHOOK_SECRET', '')
+    if not secret or not signature or not timestamp_header:
+        return None
+    try:
+        payload = json.loads(raw_body.decode('utf-8'))
+        timestamp = payload.get('timestamp') if isinstance(payload, dict) else None
+        header_timestamp = int(timestamp_header)
+        if isinstance(timestamp, bool) or not isinstance(timestamp, (int, float)) or int(timestamp) != header_timestamp:
+            return None
+        if abs(int(time.time()) - header_timestamp) > 300:
+            return None
+        canonical = json.dumps(_shorten_floats(payload), sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False)
+        expected = hmac.new(secret.encode('utf-8'), canonical.encode('utf-8'), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, signature.lower()):
+            return None
+        return payload
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError, OverflowError):
+        return None

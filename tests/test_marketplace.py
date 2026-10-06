@@ -22,7 +22,7 @@ class MarketplaceFlows(unittest.TestCase):
         for uid,email in ((self.admin,'admin@test.invalid'),(self.seller,'seller@test.invalid'),(self.buyer,'buyer@test.invalid'),(self.other,'other@test.invalid')):
             self.db.execute('INSERT INTO users(id,email,password_hash,display_name,email_verified) VALUES(?,?,?,?,1)',(uid,email,app.password_hash('unique-test-password'),'Test '+email.split('@')[0]))
         self.db.execute('INSERT INTO admin_accounts(user_id) VALUES(?)',(self.admin,))
-        self.db.execute("INSERT INTO seller_profiles(user_id,shop_name,verification_status,selling_enabled,identity_status) VALUES(?,?,'verified',1,'verified')",(self.seller,'Seller Shop'))
+        self.db.execute("INSERT INTO seller_profiles(user_id,shop_name,verification_status,selling_enabled,identity_status,identity_provider) VALUES(?,?,'verified',1,'verified','didit')",(self.seller,'Seller Shop'))
         self.db.execute("UPDATE platform_config SET value='1000' WHERE key='commission_bps'")
         self.listing=app.ident()
         self.db.execute("INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,stock,status) VALUES(?,?,?,?,?,?,?,?,?, 'published')",(self.listing,self.seller,'valorant','accounts','Valorant account lvl 50','A test listing with enough descriptive text.','account',50000,1))

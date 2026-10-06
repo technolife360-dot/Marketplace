@@ -72,14 +72,14 @@ def postgres_placeholders(sql):
 
 class PostgresConnectionPool:
     """Small thread-safe pool to avoid a new Supabase connection per HTTP request."""
-    def __init__(self, max_size=8):
+    def __init__(self, max_size=1):
         self.max_size=max_size
         self.idle=LifoQueue(maxsize=max_size)
         self.lock=Lock()
         self.total=0
 
     def _new_connection(self):
-        return psycopg.connect(DATABASE_URL, connect_timeout=15, autocommit=True, row_factory=dict_row)
+        return psycopg.connect(DATABASE_URL, connect_timeout=15, autocommit=True, row_factory=dict_row, prepare_threshold=None)
 
     def getconn(self):
         while True:
@@ -148,7 +148,7 @@ def connect():
         global _postgres_pool
         if _postgres_pool is None:
             with _postgres_pool_lock:
-                if _postgres_pool is None: _postgres_pool=PostgresConnectionPool(max_size=8)
+                if _postgres_pool is None: _postgres_pool=PostgresConnectionPool(max_size=1)
         return PostgresConnection(_postgres_pool.getconn(),_postgres_pool)
     db = sqlite3.connect(DB_PATH, timeout=15, isolation_level=None)
     db.row_factory = sqlite3.Row
@@ -165,8 +165,8 @@ def migrate():
             if missing:
                 raise RuntimeError('Supabase sxemasi topilmadi. Avval supabase/migrations/20261005000000_marketplace_schema.sql migratsiyasini qo‘llang. Yetishmayotgan jadvallar: '+', '.join(missing))
             seed_blog_posts(db)
-            db.execute("UPDATE seller_profiles SET selling_enabled=0 WHERE verification_status!='verified' OR identity_status!='verified'")
-            db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE status='published' AND seller_id NOT IN (SELECT user_id FROM seller_profiles WHERE verification_status='verified' AND selling_enabled=1 AND identity_status='verified')")
+            db.execute("UPDATE seller_profiles SET selling_enabled=0 WHERE verification_status!='verified' OR identity_status!='verified' OR identity_provider!='didit'")
+            db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE status='published' AND seller_id NOT IN (SELECT user_id FROM seller_profiles WHERE verification_status='verified' AND selling_enabled=1 AND identity_status='verified' AND identity_provider='didit')")
             db.execute("INSERT INTO platform_config(key,value) VALUES('commission_bps','0'),('completion_window_hours','72'),('terms_version','draft-2026-10') ON CONFLICT(key) DO NOTHING")
             games=[('valorant','Valorant'),('pubg-mobile','PUBG Mobile'),('dota-2','Dota 2'),('counter-strike-2','Counter-Strike 2'),('mobile-legends','Mobile Legends')]
             categories=[('accounts','Gaming accounts','account'),('items','Items & skins','item'),('currency','In-game currency','currency'),('services','Coaching & services','service'),('codes','Gift cards & digital codes','code')]
@@ -194,8 +194,8 @@ def migrate():
         if 'evidence_url' not in report_columns: db.execute("ALTER TABLE reports ADD COLUMN evidence_url TEXT NOT NULL DEFAULT ''")
         # Sellers from older local builds did not pass an approval workflow. Keep them
         # closed until an administrator has reviewed and explicitly enabled the profile.
-        db.execute("UPDATE seller_profiles SET selling_enabled=0 WHERE verification_status!='verified' OR identity_status!='verified'")
-        db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE status='published' AND seller_id NOT IN (SELECT user_id FROM seller_profiles WHERE verification_status='verified' AND selling_enabled=1 AND identity_status='verified')")
+        db.execute("UPDATE seller_profiles SET selling_enabled=0 WHERE verification_status!='verified' OR identity_status!='verified' OR identity_provider!='didit'")
+        db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE status='published' AND seller_id NOT IN (SELECT user_id FROM seller_profiles WHERE verification_status='verified' AND selling_enabled=1 AND identity_status='verified' AND identity_provider='didit')")
         db.execute("INSERT INTO listing_search(listing_search) VALUES('rebuild')")
         db.execute("INSERT OR IGNORE INTO platform_config(key,value) VALUES('commission_bps','0')")
         db.execute("INSERT OR IGNORE INTO platform_config(key,value) VALUES('completion_window_hours','72')")
@@ -233,7 +233,7 @@ def seed_blog_posts(db):
        ['SOTUVCHI QO‘LLANMASI','РУКОВОДСТВО ПРОДАВЦА','SELLER GUIDE'],
        ['Aniq va ishonchli e’lon yozish','Как создать понятное объявление','Writing a clear, trustworthy listing'],
        ['Yaxshi sarlavha, to‘liq tavsif va yetkazish shartlari xaridorga to‘g‘ri qaror qilishga yordam beradi.','Хороший заголовок, полное описание и условия доставки помогают покупателю принять решение.','A clear title, complete description, and delivery terms help buyers make an informed decision.'],
-       [['Sarlavhada o‘yin, platforma va asosiy xususiyatni yozing.','Narxga nimalar kirishini va hudud cheklovlarini ko‘rsating.','Yetkazish muddatini real belgilang.','Boshqalarning shaxsiy ma’lumotlari yoki ruxsatsiz tasvirlarini joylamang.','Sotishdan oldin email, Sumsub va moderator tekshiruvi yakunlanishi kerak.'],['Укажите игру, платформу и особенности в заголовке.','Объясните, что входит в цену, и укажите ограничения региона.','Установите реальный срок доставки.','Не размещайте чужие персональные данные без разрешения.','Перед продажей нужны подтверждение почты, Sumsub и проверка модератора.'],['Put the game, platform, and key features in the title.','Explain what the price includes and list region restrictions.','Set a realistic delivery timeframe.','Do not post someone else’s personal data without permission.','Email, Sumsub, and moderator checks must finish before selling.']]),
+       [['Sarlavhada o‘yin, platforma va asosiy xususiyatni yozing.','Narxga nimalar kirishini va hudud cheklovlarini ko‘rsating.','Yetkazish muddatini real belgilang.','Boshqalarning shaxsiy ma’lumotlari yoki ruxsatsiz tasvirlarini joylamang.','Sotishdan oldin email, Didit va moderator tekshiruvi yakunlanishi kerak.'],['Укажите игру, платформу и особенности в заголовке.','Объясните, что входит в цену, и укажите ограничения региона.','Установите реальный срок доставки.','Не размещайте чужие персональные данные без разрешения.','Перед продажей нужны подтверждение почты, Didit и проверка модератора.'],['Put the game, platform, and key features in the title.','Explain what the price includes and list region restrictions.','Set a realistic delivery timeframe.','Do not post someone else’s personal data without permission.','Email, Didit, and moderator checks must finish before selling.']]),
       ('aldovlardan-himoya',
        ['HISOB XAVFSIZLIGI','ЗАЩИТА ОТ МОШЕННИЧЕСТВА','ACCOUNT SAFETY'],
        ['Fishing va soxta yordam xabarlarini tanish','Как распознать фишинг и поддельную поддержку','Spotting phishing and fake support messages'],
@@ -292,7 +292,7 @@ def user_view(db, uid):
     out = dict(u)
     # Admin status is an immutable role marker created by the local bootstrap command.
     out['is_admin'] = db.execute('SELECT 1 FROM admin_accounts WHERE user_id=?',(uid,)).fetchone() is not None
-    out['seller'] = rowdict(db.execute('SELECT shop_name,bio,verification_status,selling_enabled,identity_status,identity_provider FROM seller_profiles WHERE user_id=?',(uid,)).fetchone())
+    out['seller'] = rowdict(db.execute("SELECT shop_name,bio,verification_status,selling_enabled,CASE WHEN identity_provider='didit' THEN identity_status ELSE 'not_started' END AS identity_status,identity_provider FROM seller_profiles WHERE user_id=?",(uid,)).fetchone())
     return out
 
 def check_rate(db, bucket, subject, limit=10, period=300):
@@ -320,7 +320,7 @@ def require_admin(ctx):
 def seller_ok(db,uid):
     p=db.execute('SELECT * FROM seller_profiles WHERE user_id=?',(uid,)).fetchone()
     if not p: raise HttpError(403,'Avval sotuvchi profilini yarating.')
-    if p['identity_status']!='verified':
+    if p['identity_status']!='verified' or p['identity_provider']!='didit':
         raise HttpError(403,'Sotishdan oldin tashqi KYC provayderida pasport va yuz tekshiruvi yakunlanishi kerak. Hujjatlarni bu saytga yuklamang.')
     if p['verification_status']!='verified' or not p['selling_enabled']:
         raise HttpError(403,'Sotuv boshlashdan oldin administrator sotuvchi profilingizni tekshirishi kerak.')
@@ -476,7 +476,7 @@ class Handler(BaseHTTPRequestHandler):
             for value in (v if isinstance(v,(list,tuple)) else [v]): self.send_header(k,value)
         self.end_headers(); self.wfile.write(payload)
     def secure_headers(self):
-        self.send_header('X-Content-Type-Options','nosniff'); self.send_header('X-Frame-Options','DENY'); self.send_header('Referrer-Policy','strict-origin-when-cross-origin'); self.send_header('Permissions-Policy','camera=(self "https://api.sumsub.com"), microphone=(self "https://api.sumsub.com"), geolocation=()'); self.send_header('Content-Security-Policy',"default-src 'self'; img-src 'self' data: https: blob:; script-src 'self' https://static.sumsub.com; style-src 'self' 'unsafe-inline' https://static.sumsub.com; font-src 'self' data: https://*.sumsub.com; style-src-attr 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self' https://*.sumsub.com wss://*.sumsub.com; frame-src https://*.sumsub.com; media-src 'self' blob: https://*.sumsub.com; worker-src 'self' blob:")
+        self.send_header('X-Content-Type-Options','nosniff'); self.send_header('X-Frame-Options','DENY'); self.send_header('Referrer-Policy','strict-origin-when-cross-origin'); self.send_header('Permissions-Policy','camera=(self "https://verify.didit.me"), microphone=(self "https://verify.didit.me"), geolocation=()'); self.send_header('Content-Security-Policy',"default-src 'self'; img-src 'self' data: https: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; style-src-attr 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self'; frame-src 'self'; media-src 'self' blob:; worker-src 'self' blob:")
     def body(self):
         n=int(self.headers.get('Content-Length','0'))
         if n>MAX_BODY: raise HttpError(413,'So‘rov hajmi cheklovdan oshdi.')
@@ -500,7 +500,7 @@ class Handler(BaseHTTPRequestHandler):
         db=connect()
         try:
             ctx=self.context(db)
-            csrf_exempt=path in ('/api/webhooks/sumsub','/api/oauth/apple/callback')
+            csrf_exempt=path in ('/api/webhooks/didit','/api/oauth/apple/callback')
             if method in ('POST','PATCH','DELETE') and ctx['uid'] and not csrf_exempt:
                 if not hmac.compare_digest(self.headers.get('X-CSRF-Token',''),ctx['csrf'] or ''): raise HttpError(403,'Xavfsizlik tokeni noto‘g‘ri. Sahifani yangilang.')
             raw_body=self.body() if method in ('POST','PATCH','PUT') and path.startswith('/api/') else b''
@@ -533,7 +533,7 @@ class Handler(BaseHTTPRequestHandler):
     def route(self,db,ctx,method,path,qs,data,raw_body=b''):
         uid=ctx['uid']
         if path=='/healthz' and method=='GET': return {'ok':True}
-        if path=='/api/health' and method=='GET': return {'ok':True,'mode':MODE,'database':'supabase-postgres' if DATABASE_URL else 'sqlite','payments':'sandbox-only' if MODE=='development' else 'unconfigured','identity_verification':'sumsub' if identity_service.is_configured() else 'unconfigured'}
+        if path=='/api/health' and method=='GET': return {'ok':True,'mode':MODE,'database':'supabase-postgres' if DATABASE_URL else 'sqlite','payments':'sandbox-only' if MODE=='development' else 'unconfigured','identity_verification':'didit' if identity_service.is_configured() else 'unconfigured'}
         if path=='/api/me' and method=='GET': return {'user':ctx['user'],'csrf':ctx['csrf'],'mode':MODE}
         if path=='/api/blog' and method=='GET':
             return [blog_post_view(x) for x in db.execute("SELECT * FROM blog_posts WHERE status='published' ORDER BY published_at DESC,created_at DESC LIMIT 100")]
@@ -605,41 +605,33 @@ class Handler(BaseHTTPRequestHandler):
             secure='; Secure' if MODE=='production' else ''
             clear=f'bozorgg_oauth_{provider}=; Path=/api/oauth/{provider}/callback; HttpOnly; SameSite={"None" if provider=="apple" else "Lax"}; Max-Age=0'+secure
             return 302,{'ok':True},{'Location':'/#account','Set-Cookie':[clear]}
-        if path=='/api/webhooks/sumsub' and method=='POST':
-            digest=self.headers.get('X-Payload-Digest',''); algorithm=self.headers.get('X-Payload-Digest-Alg','')
-            if not identity_service.verify_webhook(raw_body,digest,algorithm): raise HttpError(401,'Webhook imzosi noto‘g‘ri.')
-            if not isinstance(data,dict): raise HttpError(400,'Webhook JSON obyekt bo‘lishi kerak.')
-            if data.get('testMode') is True: return {'ok':True,'ignored':'test event'}
-            if data.get('type')!='applicantReviewed': return {'ok':True,'ignored':'event type'}
-            external_id=data.get('externalUserId')
-            if not isinstance(external_id,str) or not external_id: raise HttpError(400,'Webhook applicant identifikatori yo‘q.')
+        if path=='/api/webhooks/didit' and method=='POST':
+            payload=identity_service.verify_webhook(raw_body,self.headers.get('X-Signature-V2',''),self.headers.get('X-Timestamp',''))
+            if payload is None: raise HttpError(401,'Didit webhook imzosi yoki vaqti noto‘g‘ri.')
+            if payload.get('webhook_type')!='status.updated': return {'ok':True,'ignored':'event type'}
+            if MODE=='production' and payload.get('environment')!='live': return {'ok':True,'ignored':'non-live event'}
+            session_id=payload.get('session_id')
+            if not isinstance(session_id,str) or not session_id: raise HttpError(400,'Didit sessiya identifikatori yo‘q.')
             try:
-                if isinstance(data.get('createdAtMs'),(int,float)):
-                    dt=datetime.fromtimestamp(data['createdAtMs']/1000,timezone.utc)
-                elif isinstance(data.get('createdAtMs'),str):
-                    dt=datetime.fromisoformat(data['createdAtMs'].replace('Z','+00:00'))
-                    if dt.tzinfo is None: dt=dt.replace(tzinfo=timezone.utc)
-                    dt=dt.astimezone(timezone.utc)
-                elif isinstance(data.get('createdAt'),str):
-                    dt=datetime.fromisoformat(data['createdAt'].replace('Z','+00:00'))
-                    if dt.tzinfo is None: dt=dt.replace(tzinfo=timezone.utc)
-                    dt=dt.astimezone(timezone.utc)
-                else: dt=datetime.now(timezone.utc)
-                event_time=dt.isoformat(timespec='milliseconds')
-            except (ValueError,OverflowError,OSError): raise HttpError(400,'Webhook vaqti noto‘g‘ri.')
-            profile=db.execute("SELECT * FROM seller_profiles WHERE identity_reference=? AND identity_provider='sumsub'",(external_id,)).fetchone()
-            if not profile: return {'ok':True,'ignored':'unknown applicant'}
+                event_time=datetime.fromtimestamp(int(payload['timestamp']),timezone.utc).isoformat(timespec='milliseconds')
+            except (KeyError,TypeError,ValueError,OverflowError,OSError): raise HttpError(400,'Didit webhook vaqti noto‘g‘ri.')
+            profile=db.execute("SELECT * FROM seller_profiles WHERE identity_reference=? AND identity_provider='didit'",(session_id,)).fetchone()
+            if not profile: return {'ok':True,'ignored':'unknown session'}
             if profile['identity_last_event_at'] and event_time<=profile['identity_last_event_at']: return {'ok':True,'ignored':'stale event'}
-            review=data.get('reviewResult') if isinstance(data.get('reviewResult'),dict) else {}
-            answer=review.get('reviewAnswer'); review_status=data.get('reviewStatus')
-            identity_status='verified' if review_status=='completed' and answer=='GREEN' else ('rejected' if review_status=='completed' and answer=='RED' else 'pending')
+            provider_status=payload.get('status')
+            decision=payload.get('decision') if isinstance(payload.get('decision'),dict) else {}
+            def feature_passed(key):
+                values=decision.get(key)
+                return isinstance(values,list) and bool(values) and all(isinstance(x,dict) and x.get('status')=='Approved' for x in values)
+            checks_complete=all(feature_passed(key) for key in ('id_verifications','liveness_checks','face_matches'))
+            identity_status='verified' if provider_status=='Approved' and checks_complete else ('rejected' if provider_status=='Declined' else 'pending')
             db.execute('UPDATE seller_profiles SET identity_status=?,identity_verified_at=?,identity_last_event_at=? WHERE user_id=?',(identity_status,event_time if identity_status=='verified' else None,event_time,profile['user_id']))
             if identity_status!='verified':
                 db.execute('UPDATE seller_profiles SET selling_enabled=0 WHERE user_id=?',(profile['user_id'],))
                 db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE seller_id=? AND status='published'",(profile['user_id'],))
-            message={'verified':'Sumsub tekshiruvi yakunlandi. Administrator sotuvchi profilingizni ko‘rib chiqadi.','rejected':'Sumsub shaxsni tekshirishni tasdiqlamadi. Sotish hozircha yopiq.','pending':'Sumsub tekshiruvi ko‘rib chiqilmoqda.'}[identity_status]
+            message={'verified':'Didit tekshiruvi yakunlandi. Administrator sotuvchi profilingizni ko‘rib chiqadi.','rejected':'Didit shaxsni tekshirishni tasdiqlamadi. Sotish hozircha yopiq.','pending':'Didit tekshiruvi ko‘rib chiqilmoqda.'}[identity_status]
             notify(db,profile['user_id'],'identity_review','Shaxsni tekshirish holati yangilandi',message,'/seller')
-            audit(db,None,'sumsub_identity_'+identity_status,'seller',profile['user_id'],{'provider':'sumsub','event_at':event_time})
+            audit(db,None,'didit_identity_'+identity_status,'seller',profile['user_id'],{'provider':'didit','event_at':event_time,'event_id':payload.get('event_id')})
             return {'ok':True}
         if path=='/api/register' and method=='POST':
             if data.get('accept_terms') is not True: raise HttpError(400,'Ro‘yxatdan o‘tish uchun foydalanish shartlarini qabul qiling.')
@@ -812,7 +804,7 @@ class Handler(BaseHTTPRequestHandler):
                 'today_orders':db.execute("SELECT COUNT(*) n FROM orders WHERE created_at::date=CURRENT_DATE" if DATABASE_URL else "SELECT COUNT(*) n FROM orders WHERE date(created_at)=date('now')").fetchone()['n'],
                 'completed_orders':db.execute("SELECT COUNT(*) n FROM orders WHERE status='completed'").fetchone()['n'],
                 'sandbox_volume_minor':int(db.execute("SELECT COALESCE(SUM(amount_minor),0) n FROM payments WHERE provider='sandbox' AND status='succeeded'").fetchone()['n']),
-                'daily_orders':[dict(x) for x in db.execute("SELECT to_char(created_at::date,'YYYY-MM-DD') AS day,COUNT(*) AS count FROM orders WHERE created_at>=CURRENT_DATE-INTERVAL '6 days' GROUP BY created_at::date ORDER BY created_at::date" if DATABASE_URL else "SELECT date(created_at) AS day,COUNT(*) AS count FROM orders WHERE date(created_at)>=date('now','-6 day') GROUP BY date(created_at) ORDER BY date(created_at)").fetchall()],
+                'daily_orders':[dict(x) for x in db.execute("SELECT to_char(created_at::date,'YYYY-MM-DD') AS day,COUNT(*) AS count FROM orders WHERE created_at::date>=CURRENT_DATE-6 GROUP BY created_at::date ORDER BY created_at::date" if DATABASE_URL else "SELECT date(created_at) AS day,COUNT(*) AS count FROM orders WHERE date(created_at)>=date('now','-6 day') GROUP BY date(created_at) ORDER BY date(created_at)").fetchall()],
                 'orders':[dict(x) for x in db.execute('SELECT status,COUNT(*) n FROM orders GROUP BY status').fetchall()],
                 'users':db.execute('SELECT COUNT(*) n FROM users').fetchone()['n'],
                 'mode':MODE,
@@ -826,7 +818,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/admin/reports' and method=='GET':
             require_admin(ctx); return [dict(x) for x in db.execute('SELECT r.*,u.email reporter_email FROM reports r JOIN users u ON u.id=r.reporter_id ORDER BY CASE r.status WHEN \'open\' THEN 0 ELSE 1 END,r.created_at DESC LIMIT 100')]
         if path=='/api/admin/sellers' and method=='GET':
-            require_admin(ctx); return [dict(x) for x in db.execute("SELECT s.user_id,s.shop_name,s.bio,s.verification_status,s.selling_enabled,s.identity_status,s.identity_provider,s.identity_verified_at,s.created_at,u.email,u.display_name FROM seller_profiles s JOIN users u ON u.id=s.user_id WHERE s.verification_status!='verified' OR s.selling_enabled=0 OR s.identity_status!='verified' ORDER BY CASE s.identity_status WHEN 'verified' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,s.created_at DESC LIMIT 100")]
+            require_admin(ctx); return [dict(x) for x in db.execute("SELECT s.user_id,s.shop_name,s.bio,s.verification_status,s.selling_enabled,s.identity_status,s.identity_provider,s.identity_verified_at,s.created_at,u.email,u.display_name FROM seller_profiles s JOIN users u ON u.id=s.user_id WHERE s.verification_status!='verified' OR s.selling_enabled=0 OR s.identity_status!='verified' OR s.identity_provider!='didit' ORDER BY CASE s.identity_status WHEN 'verified' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,s.created_at DESC LIMIT 100")]
         if path=='/api/admin/disputes' and method=='GET':
             require_admin(ctx)
             if DATABASE_URL:
@@ -857,22 +849,22 @@ class Handler(BaseHTTPRequestHandler):
                 fields['currency']=data['currency']
             if fields: db.execute('UPDATE users SET '+', '.join(f'{k}=?' for k in fields)+' WHERE id=?',(*fields.values(),uid))
             return {'user':user_view(db,uid)}
-        if path=='/api/seller/identity-token' and method=='POST':
+        if path=='/api/seller/identity-session' and method=='POST':
             require_verified(ctx)
-            if data.get('consent') is not True: raise HttpError(400,'Sumsub’ga ma’lumot yuborish uchun rozilikni belgilang.')
-            if not identity_service.is_configured(): raise HttpError(503,'Sumsub hali ulanmagan. Administrator API token, maxfiy kalit, tekshiruv darajasi va webhook sozlamalarini ulashi kerak.')
-            check_rate(db,'sumsub_token',uid,5,3600)
+            if data.get('consent') is not True: raise HttpError(400,'Didit’ga ma’lumot yuborish uchun rozilikni belgilang.')
+            if not identity_service.is_configured(): raise HttpError(503,'Didit hali ulanmagan. Serverda API key, workflow ID va webhook secret sozlanishi kerak.')
+            check_rate(db,'didit_session',uid,5,3600)
             user=db.execute('SELECT email FROM users WHERE id=? AND email_verified=1 AND suspended=0',(uid,)).fetchone()
             profile=db.execute('SELECT * FROM seller_profiles WHERE user_id=?',(uid,)).fetchone()
             if not user or not profile: raise HttpError(409,'Avval emailni tasdiqlab, sotuvchi profilini yarating.')
-            if profile['identity_status']=='verified': raise HttpError(409,'Shaxs Sumsub orqali tasdiqlangan.')
-            reference=profile['identity_reference'] or ('bg-'+secrets.token_hex(20))
-            consent_version='kyc-consent-v1'
-            db.execute("UPDATE seller_profiles SET identity_reference=?,identity_provider='sumsub',identity_status='pending',identity_consent_at=?,identity_consent_version=? WHERE user_id=?",(reference,now_iso(),consent_version,uid))
-            try: token=identity_service.create_sdk_token(reference,user['email'])
+            if profile['identity_status']=='verified' and profile['identity_provider']=='didit': raise HttpError(409,'Shaxs Didit orqali tasdiqlangan.')
+            reference='sl-'+hmac.new(SESSION_SECRET.encode('utf-8'),('didit-user:'+uid).encode('utf-8'),hashlib.sha256).hexdigest()[:40]
+            try: session=identity_service.create_verification_session(reference)
             except identity_service.IdentityProviderError as exc: raise HttpError(503,str(exc))
-            audit(db,uid,'sumsub_identity_started','seller',uid,{'provider':'sumsub','consent_version':consent_version})
-            return {'token':token,'status':profile['identity_status'] if profile['identity_status']=='verified' else 'pending'}
+            consent_version='kyc-consent-v1'
+            db.execute("UPDATE seller_profiles SET identity_reference=?,identity_provider='didit',identity_status='pending',identity_verified_at=NULL,identity_last_event_at=NULL,identity_consent_at=?,identity_consent_version=? WHERE user_id=?",(session['session_id'],now_iso(),consent_version,uid))
+            audit(db,uid,'didit_identity_started','seller',uid,{'provider':'didit','consent_version':consent_version})
+            return {'url':session['url'],'status':'pending'}
         if path=='/api/seller' and method=='POST':
             require_verified(ctx); name=clean_text(data.get('shop_name'),'Do‘kon nomi',2,80); bio=clean_text(data.get('bio',''),'Tavsif',0,1000)
             db.execute("INSERT INTO seller_profiles(user_id,shop_name,bio,verification_status,selling_enabled) VALUES(?,?,?,'pending',0) ON CONFLICT(user_id) DO UPDATE SET shop_name=excluded.shop_name,bio=excluded.bio",(uid,name,bio))
@@ -1105,7 +1097,7 @@ class Handler(BaseHTTPRequestHandler):
             profile=db.execute('SELECT s.*,u.email_verified FROM seller_profiles s JOIN users u ON u.id=s.user_id WHERE s.user_id=?',(target,)).fetchone()
             if not profile: raise HttpError(404,'Sotuvchi profili topilmadi.')
             if action=='approve' and not profile['email_verified']: raise HttpError(409,'Sotuvchini tasdiqlashdan oldin emaili tasdiqlangan bo‘lishi kerak.')
-            if action=='approve' and profile['identity_status']!='verified': raise HttpError(409,'Sotuvchini tasdiqlashdan oldin Sumsub shaxsni tekshirish GREEN holatida yakunlanishi kerak.')
+            if action=='approve' and (profile['identity_status']!='verified' or profile['identity_provider']!='didit'): raise HttpError(409,'Sotuvchini tasdiqlashdan oldin Didit ID, liveness va face-match tekshiruvlari tasdiqlanishi kerak.')
             if profile['verification_status']=='verified' and profile['selling_enabled'] and action=='approve': raise HttpError(409,'Sotuvchi allaqachon tasdiqlangan va faol.')
             status='verified' if action=='approve' else 'rejected'; enabled=1 if action=='approve' else 0
             db.execute('UPDATE seller_profiles SET verification_status=?,selling_enabled=? WHERE user_id=?',(status,enabled,target))
