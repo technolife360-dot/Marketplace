@@ -751,10 +751,13 @@ class Handler(BaseHTTPRequestHandler):
             return [listing_detail(db,x['id'],uid) for x in db.execute('SELECT id FROM listings WHERE seller_id=? ORDER BY updated_at DESC',(uid,))]
         if path=='/api/seller/summary' and method=='GET':
             require_user(ctx); seller_ok(db,uid)
-            earnings=db.execute("SELECT COALESCE(SUM(amount_minor),0) amount_minor FROM ledger_entries WHERE user_id=? AND entry_type IN ('seller_earning','refund_adjustment')",(uid,)).fetchone()['amount_minor']
-            paid_out=-db.execute("SELECT COALESCE(SUM(amount_minor),0) amount_minor FROM ledger_entries WHERE user_id=? AND entry_type='payout'",(uid,)).fetchone()['amount_minor']
-            held=db.execute("SELECT COALESCE(SUM(amount_minor),0) amount_minor FROM ledger_entries WHERE user_id=? AND entry_type IN ('escrow_hold','escrow_release')",(uid,)).fetchone()['amount_minor']
-            pending_payout=db.execute("SELECT COALESCE(SUM(amount_minor),0) amount_minor FROM payout_requests WHERE seller_id=? AND status IN ('pending','approved')",(uid,)).fetchone()['amount_minor']
+            # PostgreSQL SUM(bigint) returns NUMERIC (a Decimal in psycopg), which
+            # the standard JSON encoder cannot serialize. Normalize aggregate
+            # minor-unit amounts at the API boundary for both PostgreSQL and SQLite.
+            earnings=int(db.execute("SELECT COALESCE(SUM(amount_minor),0) amount_minor FROM ledger_entries WHERE user_id=? AND entry_type IN ('seller_earning','refund_adjustment')",(uid,)).fetchone()['amount_minor'] or 0)
+            paid_out=-int(db.execute("SELECT COALESCE(SUM(amount_minor),0) amount_minor FROM ledger_entries WHERE user_id=? AND entry_type='payout'",(uid,)).fetchone()['amount_minor'] or 0)
+            held=int(db.execute("SELECT COALESCE(SUM(amount_minor),0) amount_minor FROM ledger_entries WHERE user_id=? AND entry_type IN ('escrow_hold','escrow_release')",(uid,)).fetchone()['amount_minor'] or 0)
+            pending_payout=int(db.execute("SELECT COALESCE(SUM(amount_minor),0) amount_minor FROM payout_requests WHERE seller_id=? AND status IN ('pending','approved')",(uid,)).fetchone()['amount_minor'] or 0)
             wallet_balance=earnings-paid_out
             return {'listings':[dict(x) for x in db.execute('SELECT status,COUNT(*) count FROM listings WHERE seller_id=? GROUP BY status',(uid,)).fetchall()],'orders':[dict(x) for x in db.execute('SELECT o.status,COUNT(DISTINCT o.id) count FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.seller_id=? GROUP BY o.status',(uid,)).fetchall()],'earnings':earnings,'wallet':{'currency':'UZS','held_minor':held,'available_minor':max(0,wallet_balance-pending_payout),'pending_payout_minor':pending_payout,'paid_out_minor':paid_out,'automated_withdrawals_enabled':False}}
         if path=='/api/requests' and method=='GET':
