@@ -14,5 +14,8 @@
   "engines": {
     "node": ">=18",
     "python": ">=3.11"
+  },
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
   }
 }
