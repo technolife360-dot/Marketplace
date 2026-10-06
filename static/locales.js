@@ -13,7 +13,7 @@ window.BOZOR_COPY={
   'Xabarlar':['Сообщения','Messages'],
   'Til':['Язык','Language'],
   'O‘yin, buyum yoki xizmat qidiring…':['Ищите игры, предметы или услуги…','Search games, items, or services…'],
-  'Markaziy Osiyo geymerlari uchun raqamli bozor.':['Цифровой маркетплейс для геймеров Центральной Азии.','A digital marketplace for gamers in Central Asia.'],
+  'Osiyo geymerlari uchun yaratilmoqda.':['Создаётся для геймеров Азии.','Being built for gamers across Asia.'],
   'Qanday ishlaydi':['Как это работает','How it works'],
   'Qanday ishlaydi?':['Как это работает?','How it Works?'],
   'Ro‘yxatdan o‘tish bosqichi':['Регистрация','Registration'],

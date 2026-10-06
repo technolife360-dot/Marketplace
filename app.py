@@ -18,6 +18,7 @@ from payment_providers import get_provider
 import email_service
 import identity_service
 import oauth_service
+from asia_markets import ASIA_COUNTRIES, ASIA_COUNTRY_CURRENCIES, ASIA_CURRENCIES
 
 ROOT = Path(__file__).resolve().parent
 # Small dotenv reader keeps the project dependency-free; real process variables take precedence.
@@ -517,7 +518,7 @@ class Handler(BaseHTTPRequestHandler):
             for value in (v if isinstance(v,(list,tuple)) else [v]): self.send_header(k,value)
         self.end_headers(); self.wfile.write(payload)
     def secure_headers(self):
-        self.send_header('X-Content-Type-Options','nosniff'); self.send_header('X-Frame-Options','DENY'); self.send_header('Referrer-Policy','strict-origin-when-cross-origin'); self.send_header('Permissions-Policy','camera=(self "https://verify.didit.me"), microphone=(self "https://verify.didit.me"), geolocation=()'); self.send_header('Content-Security-Policy',"default-src 'self'; img-src 'self' data: https: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; style-src-attr 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self'; frame-src 'self'; media-src 'self' blob:; worker-src 'self' blob:")
+        self.send_header('X-Content-Type-Options','nosniff'); self.send_header('X-Frame-Options','DENY'); self.send_header('Referrer-Policy','strict-origin-when-cross-origin'); self.send_header('Permissions-Policy','camera=(self "https://verify.didit.me"), microphone=(self "https://verify.didit.me"), geolocation=()'); self.send_header('Content-Security-Policy',"default-src 'self'; img-src 'self' data: https: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; style-src-attr 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self' https://api.frankfurter.dev; frame-src 'self'; media-src 'self' blob:; worker-src 'self' blob:")
     def body(self, limit=MAX_BODY):
         n=int(self.headers.get('Content-Length','0'))
         if n>limit: raise HttpError(413,'So‘rov hajmi cheklovdan oshdi.')
@@ -563,10 +564,10 @@ class Handler(BaseHTTPRequestHandler):
         finally: db.close()
     def do_GET(self):
         if not self.path.startswith('/api/'):
-            parsed=urlparse(self.path); f={'/':'index.html','/static/app.js':'app.js','/static/locales.js':'locales.js','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png'}.get(parsed.path)
+            parsed=urlparse(self.path); f={'/':'index.html','/static/app.js':'app.js','/static/locales.js':'locales.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png'}.get(parsed.path)
             if not f: self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
-            ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8'))))
+            ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))
             self.send_response(200);self.send_header('Content-Type',ctype);self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control','no-store');self.secure_headers();self.end_headers();self.wfile.write(data);return
         self.dispatch()
     def do_POST(self): self.dispatch()
@@ -589,6 +590,8 @@ class Handler(BaseHTTPRequestHandler):
             provider=data.get('provider')
             if provider not in ('google','apple'): raise HttpError(400,'Kirish provayderi noto‘g‘ri.')
             if data.get('accept_terms') is not True: raise HttpError(400,'Davom etish uchun foydalanish shartlarini qabul qiling.')
+            country=data.get('country','UZ')
+            if not isinstance(country,str) or country not in ASIA_COUNTRIES: raise HttpError(400,'Osiyo mamlakatini tanlang.')
             if provider=='google':
                 client_id=os.environ.get('GOOGLE_CLIENT_ID','')
                 if not client_id or not os.environ.get('GOOGLE_CLIENT_SECRET'): raise HttpError(503,'Google Sign In hali sozlanmagan.')
@@ -598,7 +601,7 @@ class Handler(BaseHTTPRequestHandler):
             check_rate(db,'oauth_start_'+provider,self.client_address[0],8)
             base=self.oauth_base_url()
             callback=base+'/api/oauth/'+provider+'/callback'
-            state,nonce=create_token(),create_token()
+            state,nonce=f'{country}.{create_token()}',create_token()
             payload=f'{state}.{nonce}.{int(time.time())}'
             signature=hmac.new(SESSION_SECRET.encode(),(provider+'.'+payload).encode(),hashlib.sha256).hexdigest()
             secure='; Secure' if MODE=='production' else ''
@@ -633,6 +636,8 @@ class Handler(BaseHTTPRequestHandler):
                 print('oauth provider error:',provider,type(exc).__name__)
                 raise HttpError(401,'Google/Apple hisobini tasdiqlab bo‘lmadi. Qayta urinib ko‘ring.')
             subject,email,name=identity['subject'],identity['email'],clean_text(identity['name'],'Ism',1,80)
+            oauth_country=saved_state.split('.',1)[0] if '.' in saved_state else 'UZ'
+            if oauth_country not in ASIA_COUNTRIES: raise HttpError(400,'Kirish so‘rovidagi mamlakat noto‘g‘ri.')
             linked=db.execute('SELECT u.id,u.suspended FROM oauth_identities i JOIN users u ON u.id=i.user_id WHERE i.provider=? AND i.subject=?',(provider,subject)).fetchone()
             if linked:
                 if linked['suspended']: raise HttpError(403,'Hisobingiz vaqtincha cheklangan.')
@@ -641,7 +646,7 @@ class Handler(BaseHTTPRequestHandler):
                 if db.execute('SELECT id FROM users WHERE email=?',(email,)).fetchone(): raise HttpError(409,'Bu emailda avvaldan hisob bor. Xavfsizlik sabab Google/Apple akkauntini avtomatik bog‘lamadik; hozirgi kirish usulingizdan foydalaning.')
                 terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']
                 user_id=ident()
-                db.execute('INSERT INTO users(id,email,password_hash,display_name,email_verified,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,1,?,?)',(user_id,email,password_hash(create_token()),name,terms,now_iso()))
+                db.execute('INSERT INTO users(id,email,password_hash,display_name,country,currency,email_verified,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,1,?,?)',(user_id,email,password_hash(create_token()),name,oauth_country,ASIA_COUNTRY_CURRENCIES[oauth_country],terms,now_iso()))
                 db.execute('INSERT INTO oauth_identities(provider,subject,user_id) VALUES(?,?,?)',(provider,subject,user_id))
             session_token,csrf=session_create(db,user_id); self.set_session(session_token)
             secure='; Secure' if MODE=='production' else ''
@@ -682,7 +687,10 @@ class Handler(BaseHTTPRequestHandler):
             email=clean_text(data.get('email'),'Email',3,254).lower(); name=clean_text(data.get('name'),'Ism',2,80); password=data.get('password','')
             if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email) or len(password)<10 or len(password)>256: raise HttpError(400,'To‘g‘ri email va kamida 10 belgili parol kiriting.')
             if email in (os.environ.get('SEED_ADMIN_EMAIL','').lower(),): raise HttpError(409,'Bu email administratorda ishlatiladi.')
-            user=ident(); terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']; db.execute('INSERT INTO users(id,email,password_hash,display_name,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?)',(user,email,password_hash(password),name,terms,now_iso()))
+            country=data.get('country','UZ')
+            if not isinstance(country,str) or country not in ASIA_COUNTRIES: raise HttpError(400,'Osiyo mamlakatini tanlang.')
+            currency=ASIA_COUNTRY_CURRENCIES[country]
+            user=ident(); terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']; db.execute('INSERT INTO users(id,email,password_hash,display_name,country,currency,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,?)',(user,email,password_hash(password),name,country,currency,terms,now_iso()))
             raw=create_token(); db.execute('INSERT INTO email_tokens(token_hash,user_id,purpose,expires_at) VALUES(?,?,?,?)',(hash_token(raw),user,'verify',(datetime.now(timezone.utc)+timedelta(hours=24)).isoformat()))
             if email_service.is_configured():
                 try: email_service.send_action_email(email,name,'verify',raw)
@@ -889,8 +897,11 @@ class Handler(BaseHTTPRequestHandler):
             if 'language' in data:
                 if data['language'] not in ('uz','ru','en'): raise HttpError(400,'Til tanlovi noto‘g‘ri.')
                 fields['language']=data['language']
+            if 'country' in data:
+                if not isinstance(data['country'],str) or data['country'] not in ASIA_COUNTRIES: raise HttpError(400,'Osiyo mamlakatini tanlang.')
+                fields['country']=data['country']
             if 'currency' in data:
-                if data['currency'] not in ('UZS','USD','KZT','KGS'): raise HttpError(400,'Valyuta tanlovi noto‘g‘ri.')
+                if not isinstance(data['currency'],str) or data['currency'] not in ASIA_CURRENCIES: raise HttpError(400,'Osiyo valyutasini tanlang.')
                 fields['currency']=data['currency']
             if fields: db.execute('UPDATE users SET '+', '.join(f'{k}=?' for k in fields)+' WHERE id=?',(*fields.values(),uid))
             return {'user':user_view(db,uid)}
