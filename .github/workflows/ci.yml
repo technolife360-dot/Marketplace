@@ -10,6 +10,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt
       - name: Syntax checks
         run: |
           python -m py_compile app.py payment_providers.py seed.py
