@@ -1010,12 +1010,10 @@ body.profile-menu-open { overflow: hidden; }
 .auth-provider-button:hover { transform:translateY(-1px);border-color:rgba(163, 181, 211, 46%);background:#161f31 }
 .auth-provider-google { border-color:#d0d9ea;background:#f1f4f9;color:#273758 }
 .auth-provider-google:hover { border-color:#b0bedb;background:#f8faff }
-.auth-provider-apple { border-color:#030407;background:#030407;color:#f1f4f9 }
-.auth-provider-apple:hover { border-color:#202d46;background:#0e1420 }
+.auth-provider-facebook { border-color:#1877f2;background:#1877f2;color:#fff }
+.auth-provider-facebook:hover { border-color:#166fe5;background:#166fe5 }
 .google-mark { font-size:19px;font-weight:850;line-height:1;background:conic-gradient(from -45deg,#4285f4 0 25%,#436399 0 50%,#fbbc05 0 75%,#ea4335 0);color:transparent;background-clip:text;-webkit-background-clip:text }
-.apple-mark { position:relative;width:16px;height:16px;display:inline-block;border-radius:48% 48% 45% 45%;background:#f1f4f9 }
-.apple-mark::before { content:"";position:absolute;width:7px;height:4px;top:-4px;left:8px;border-radius:8px 1px;background:#f1f4f9;transform:rotate(-35deg) }
-.apple-mark::after { content:"";position:absolute;width:4px;height:6px;top:4px;right:-2px;border-radius:50%;background:#030407 }
+.facebook-mark { font-family:Arial,sans-serif;font-size:21px;font-weight:800;line-height:1;color:#fff }
 .identity-success { border-color:rgba(138, 158, 193, 26%);background:rgba(80 112 177 / 8%);color:#d9dfe9 }
 button:disabled { opacity:.48;cursor:not-allowed;filter:saturate(.55) }
 @media (max-width:800px) {

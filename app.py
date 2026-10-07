@@ -544,13 +544,11 @@ class Handler(BaseHTTPRequestHandler):
         db=connect()
         try:
             ctx=self.context(db)
-            csrf_exempt=path in ('/api/webhooks/didit','/api/oauth/apple/callback')
+            csrf_exempt=path=='/api/webhooks/didit'
             if method in ('POST','PATCH','DELETE') and ctx['uid'] and not csrf_exempt:
                 if not hmac.compare_digest(self.headers.get('X-CSRF-Token',''),ctx['csrf'] or ''): raise HttpError(403,'Xavfsizlik tokeni noto‘g‘ri. Sahifani yangilang.')
             raw_body=self.body(MAX_IMAGE_BODY) if method=='POST' and path=='/api/listing-images' else self.body() if method in ('POST','PATCH','PUT') and path.startswith('/api/') else b''
             if path=='/api/listing-images' and method=='POST': data={}
-            elif raw_body and self.headers.get('Content-Type','').startswith('application/x-www-form-urlencoded') and path=='/api/oauth/apple/callback':
-                data={key: values[-1] for key,values in parse_qs(raw_body.decode('utf-8','replace')).items()}
             else: data=parse_json(raw_body) if raw_body else {}
             result=self.route(db,ctx,method,path,parse_qs(parsed.query),data,raw_body)
             if isinstance(result,tuple) and len(result)==3: status,data,headers=result
@@ -587,10 +585,10 @@ class Handler(BaseHTTPRequestHandler):
             row=db.execute("SELECT * FROM blog_posts WHERE slug=? AND status='published'",(slug,)).fetchone()
             if not row: raise HttpError(404,'Maqola topilmadi.')
             return blog_post_view(row)
-        if path=='/api/oauth/providers' and method=='GET': return {'google':bool(os.environ.get('GOOGLE_CLIENT_ID') and os.environ.get('GOOGLE_CLIENT_SECRET')),'apple':bool(os.environ.get('APPLE_SERVICE_ID') and os.environ.get('APPLE_TEAM_ID') and os.environ.get('APPLE_KEY_ID') and os.environ.get('APPLE_PRIVATE_KEY'))}
+        if path=='/api/oauth/providers' and method=='GET': return {'google':bool(os.environ.get('GOOGLE_CLIENT_ID') and os.environ.get('GOOGLE_CLIENT_SECRET')),'facebook':bool(os.environ.get('FACEBOOK_APP_ID') and os.environ.get('FACEBOOK_APP_SECRET'))}
         if path=='/api/oauth/start' and method=='POST':
             provider=data.get('provider')
-            if provider not in ('google','apple'): raise HttpError(400,'Kirish provayderi noto‘g‘ri.')
+            if provider not in ('google','facebook'): raise HttpError(400,'Kirish provayderi noto‘g‘ri.')
             if data.get('accept_terms') is not True: raise HttpError(400,'Davom etish uchun foydalanish shartlarini qabul qiling.')
             country=data.get('country','UZ')
             if not isinstance(country,str) or country not in ASIA_COUNTRIES: raise HttpError(400,'Osiyo mamlakatini tanlang.')
@@ -598,8 +596,8 @@ class Handler(BaseHTTPRequestHandler):
                 client_id=os.environ.get('GOOGLE_CLIENT_ID','')
                 if not client_id or not os.environ.get('GOOGLE_CLIENT_SECRET'): raise HttpError(503,'Google Sign In hali sozlanmagan.')
             else:
-                client_id=os.environ.get('APPLE_SERVICE_ID','')
-                if not all((client_id,os.environ.get('APPLE_TEAM_ID'),os.environ.get('APPLE_KEY_ID'),os.environ.get('APPLE_PRIVATE_KEY'))): raise HttpError(503,'Apple Sign In hali sozlanmagan.')
+                client_id=os.environ.get('FACEBOOK_APP_ID','')
+                if not client_id or not os.environ.get('FACEBOOK_APP_SECRET'): raise HttpError(503,'Facebook orqali kirish hali sozlanmagan.')
             check_rate(db,'oauth_start_'+provider,self.client_address[0],8)
             base=self.oauth_base_url()
             callback=base+'/api/oauth/'+provider+'/callback'
@@ -607,12 +605,11 @@ class Handler(BaseHTTPRequestHandler):
             payload=f'{state}.{nonce}.{int(time.time())}'
             signature=hmac.new(SESSION_SECRET.encode(),(provider+'.'+payload).encode(),hashlib.sha256).hexdigest()
             secure='; Secure' if MODE=='production' else ''
-            same_site='None' if provider=='apple' else 'Lax'
-            self._set_cookie=f'bozorgg_oauth_{provider}={payload}.{signature}; Path=/api/oauth/{provider}/callback; HttpOnly; SameSite={same_site}; Max-Age=600'+secure
-            url=oauth_service.google_authorization_url(client_id,callback,state,nonce) if provider=='google' else oauth_service.apple_authorization_url(client_id,callback,state,nonce)
+            self._set_cookie=f'bozorgg_oauth_{provider}={payload}.{signature}; Path=/api/oauth/{provider}/callback; HttpOnly; SameSite=Lax; Max-Age=600'+secure
+            url=oauth_service.google_authorization_url(client_id,callback,state,nonce) if provider=='google' else oauth_service.facebook_authorization_url(client_id,callback,state)
             return {'authorization_url':url}
-        if path in ('/api/oauth/google/callback','/api/oauth/apple/callback') and method in ('GET','POST'):
-            provider='google' if path.endswith('/google/callback') else 'apple'
+        if path in ('/api/oauth/google/callback','/api/oauth/facebook/callback') and method=='GET':
+            provider='google' if path.endswith('/google/callback') else 'facebook'
             def cookie_value(name):
                 for part in self.headers.get('Cookie','').split(';'):
                     key,sep,value=part.strip().partition('=')
@@ -625,8 +622,8 @@ class Handler(BaseHTTPRequestHandler):
             else: saved_state,saved_nonce,saved_at,signature='','','',''
             signed_payload='.'.join((saved_state,saved_nonce,saved_at))
             expected=hmac.new(SESSION_SECRET.encode(),(provider+'.'+signed_payload).encode(),hashlib.sha256).hexdigest() if payload else ''
-            supplied_state=data.get('state') if method=='POST' else qs.get('state',[''])[0]
-            code=data.get('code') if method=='POST' else qs.get('code',[''])[0]
+            supplied_state=qs.get('state',[''])[0]
+            code=qs.get('code',[''])[0]
             if not payload or not hmac.compare_digest(signature,expected) or not hmac.compare_digest(str(supplied_state or ''),saved_state): raise HttpError(400,'Kirish so‘rovi muddati o‘tgan yoki noto‘g‘ri. Qayta urinib ko‘ring.')
             try: created=int(saved_at)
             except ValueError: created=0
@@ -636,7 +633,7 @@ class Handler(BaseHTTPRequestHandler):
             try: identity=oauth_service.exchange_code(provider,str(code),base+'/api/oauth/'+provider+'/callback',saved_nonce)
             except Exception as exc:
                 print('oauth provider error:',provider,type(exc).__name__)
-                raise HttpError(401,'Google/Apple hisobini tasdiqlab bo‘lmadi. Qayta urinib ko‘ring.')
+                raise HttpError(401,'Google/Facebook hisobini tasdiqlab bo‘lmadi. Qayta urinib ko‘ring.')
             subject,email,name=identity['subject'],identity['email'],clean_text(identity['name'],'Ism',1,80)
             oauth_country=saved_state.split('.',1)[0] if '.' in saved_state else 'UZ'
             if oauth_country not in ASIA_COUNTRIES: raise HttpError(400,'Kirish so‘rovidagi mamlakat noto‘g‘ri.')
@@ -645,14 +642,14 @@ class Handler(BaseHTTPRequestHandler):
                 if linked['suspended']: raise HttpError(403,'Hisobingiz vaqtincha cheklangan.')
                 user_id=linked['id']
             else:
-                if db.execute('SELECT id FROM users WHERE email=?',(email,)).fetchone(): raise HttpError(409,'Bu emailda avvaldan hisob bor. Xavfsizlik sabab Google/Apple akkauntini avtomatik bog‘lamadik; hozirgi kirish usulingizdan foydalaning.')
+                if db.execute('SELECT id FROM users WHERE email=?',(email,)).fetchone(): raise HttpError(409,'Bu emailda avvaldan hisob bor. Xavfsizlik sabab ijtimoiy akkauntni avtomatik bog‘lamadik; hozirgi kirish usulingizdan foydalaning.')
                 terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']
                 user_id=ident()
                 db.execute('INSERT INTO users(id,email,password_hash,display_name,country,language,currency,email_verified,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,1,?,?)',(user_id,email,password_hash(create_token()),name,oauth_country,'en',ASIA_COUNTRY_CURRENCIES[oauth_country],terms,now_iso()))
                 db.execute('INSERT INTO oauth_identities(provider,subject,user_id) VALUES(?,?,?)',(provider,subject,user_id))
             session_token,csrf=session_create(db,user_id); self.set_session(session_token)
             secure='; Secure' if MODE=='production' else ''
-            clear=f'bozorgg_oauth_{provider}=; Path=/api/oauth/{provider}/callback; HttpOnly; SameSite={"None" if provider=="apple" else "Lax"}; Max-Age=0'+secure
+            clear=f'bozorgg_oauth_{provider}=; Path=/api/oauth/{provider}/callback; HttpOnly; SameSite=Lax; Max-Age=0'+secure
             return 302,{'ok':True},{'Location':'/#account','Set-Cookie':[clear]}
         if path=='/api/webhooks/didit' and method=='POST':
             payload=identity_service.verify_webhook(raw_body,self.headers.get('X-Signature-V2',''),self.headers.get('X-Timestamp',''))
