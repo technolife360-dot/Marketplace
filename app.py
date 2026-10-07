@@ -665,7 +665,10 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/oauth/start' and method=='POST':
             provider=data.get('provider')
             if provider not in ('google','facebook'): raise HttpError(400,'Kirish provayderi noto‘g‘ri.')
-            if data.get('accept_terms') is not True: raise HttpError(400,'Davom etish uchun foydalanish shartlarini qabul qiling.')
+            oauth_mode=data.get('mode','login')
+            if oauth_mode not in ('login','link') or (oauth_mode=='link' and provider!='facebook'): raise HttpError(400,'Facebook bog‘lash so‘rovi noto‘g‘ri.')
+            if oauth_mode=='link': require_verified(ctx)
+            elif data.get('accept_terms') is not True: raise HttpError(400,'Davom etish uchun foydalanish shartlarini qabul qiling.')
             country=data.get('country','UZ')
             if not isinstance(country,str) or country not in ASIA_COUNTRIES: raise HttpError(400,'Osiyo mamlakatini tanlang.')
             if provider=='google':
@@ -677,7 +680,7 @@ class Handler(BaseHTTPRequestHandler):
             check_rate(db,'oauth_start_'+provider,self.client_address[0],8)
             base=self.oauth_base_url()
             callback=base+'/api/oauth/'+provider+'/callback'
-            state,nonce=f'{country}.{create_token()}',create_token()
+            state,nonce=f'{country}.{oauth_mode}.{create_token()}',create_token()
             payload=f'{state}.{nonce}.{int(time.time())}'
             signature=hmac.new(SESSION_SECRET.encode(),(provider+'.'+payload).encode(),hashlib.sha256).hexdigest()
             secure='; Secure' if MODE=='production' else ''
@@ -711,21 +714,36 @@ class Handler(BaseHTTPRequestHandler):
                 print('oauth provider error:',provider,type(exc).__name__)
                 raise HttpError(401,'Google/Facebook hisobini tasdiqlab bo‘lmadi. Qayta urinib ko‘ring.')
             subject,email,name=identity['subject'],identity['email'],clean_text(identity['name'],'Ism',1,80)
-            oauth_country=saved_state.split('.',1)[0] if '.' in saved_state else 'UZ'
+            state_parts=saved_state.split('.')
+            oauth_country=state_parts[0] if state_parts else 'UZ'
+            oauth_mode=state_parts[1] if len(state_parts)>2 else 'login'
+            if oauth_mode not in ('login','link'): raise HttpError(400,'Kirish so‘rovi noto‘g‘ri.')
             if oauth_country not in ASIA_COUNTRIES: raise HttpError(400,'Kirish so‘rovidagi mamlakat noto‘g‘ri.')
             linked=db.execute('SELECT u.id,u.suspended FROM oauth_identities i JOIN users u ON u.id=i.user_id WHERE i.provider=? AND i.subject=?',(provider,subject)).fetchone()
+            secure='; Secure' if MODE=='production' else ''
+            clear=f'bozorgg_oauth_{provider}=; Path=/api/oauth/{provider}/callback; HttpOnly; SameSite=Lax; Max-Age=0'+secure
+            if oauth_mode=='link':
+                if not ctx['uid'] or not ctx['user'] or not ctx['user']['email_verified'] or ctx['user']['suspended']:
+                    return 302,{'ok':False},{'Location':'/?oauth_error=link_signin_required#login','Set-Cookie':[clear]}
+                if linked and linked['id']!=ctx['uid']:
+                    return 302,{'ok':False},{'Location':'/?oauth_error=facebook_in_use#login','Set-Cookie':[clear]}
+                existing=db.execute('SELECT subject FROM oauth_identities WHERE provider=? AND user_id=?',(provider,ctx['uid'])).fetchone()
+                if existing and existing['subject']!=subject:
+                    return 302,{'ok':False},{'Location':'/?oauth_error=facebook_already_linked#login','Set-Cookie':[clear]}
+                if not linked:
+                    db.execute('INSERT INTO oauth_identities(provider,subject,user_id) VALUES(?,?,?)',(provider,subject,ctx['uid']))
+                return 302,{'ok':True},{'Location':'/?oauth_linked=facebook#home','Set-Cookie':[clear]}
             if linked:
                 if linked['suspended']: raise HttpError(403,'Hisobingiz vaqtincha cheklangan.')
                 user_id=linked['id']
             else:
-                if db.execute('SELECT id FROM users WHERE email=?',(email,)).fetchone(): raise HttpError(409,'Bu emailda avvaldan hisob bor. Xavfsizlik sabab ijtimoiy akkauntni avtomatik bog‘lamadik; hozirgi kirish usulingizdan foydalaning.')
+                if db.execute('SELECT id FROM users WHERE email=?',(email,)).fetchone():
+                    return 302,{'ok':False},{'Location':'/?oauth_error=account_exists#login','Set-Cookie':[clear]}
                 terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']
                 user_id=ident()
                 db.execute('INSERT INTO users(id,email,password_hash,display_name,country,language,currency,email_verified,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,1,?,?)',(user_id,email,password_hash(create_token()),name,oauth_country,'en',ASIA_COUNTRY_CURRENCIES[oauth_country],terms,now_iso()))
                 db.execute('INSERT INTO oauth_identities(provider,subject,user_id) VALUES(?,?,?)',(provider,subject,user_id))
             session_token,csrf=session_create(db,user_id); self.set_session(session_token)
-            secure='; Secure' if MODE=='production' else ''
-            clear=f'bozorgg_oauth_{provider}=; Path=/api/oauth/{provider}/callback; HttpOnly; SameSite=Lax; Max-Age=0'+secure
             return 302,{'ok':True},{'Location':'/#account','Set-Cookie':[clear]}
         if path=='/api/webhooks/didit' and method=='POST':
             payload=identity_service.verify_webhook(raw_body,self.headers.get('X-Signature-V2',''),self.headers.get('X-Timestamp',''))
