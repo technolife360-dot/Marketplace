@@ -42,6 +42,18 @@ class MarketplaceFlows(unittest.TestCase):
         result=self.handler.route(self.db,self.ctx(uid),method,path,{},data or {})
         return result[1] if isinstance(result,tuple) else result
     def add_cart(self,uid,qty=1): self.db.execute('INSERT INTO carts(user_id,listing_id,quantity) VALUES(?,?,?)',(uid,self.listing,qty))
+    def test_rate_limit_is_atomic_and_rejects_requests_after_the_limit(self):
+        for _ in range(3): app.check_rate(self.db,'test_atomic_rate','client',limit=3,period=300)
+        with self.assertRaises(app.HttpError) as error:
+            app.check_rate(self.db,'test_atomic_rate','client',limit=3,period=300)
+        self.assertEqual(error.exception.status,429)
+        self.assertEqual(self.db.execute("SELECT attempts FROM rate_limits WHERE bucket='test_atomic_rate' AND subject='client'").fetchone()['attempts'],3)
+    def test_vercel_production_startup_requires_supabase_database_url(self):
+        guard=app.VercelWSGIApplication()
+        with patch.object(app,'MODE','production'), patch.object(app,'DATABASE_URL',''), patch.object(app,'migrate') as migrate:
+            with self.assertRaisesRegex(RuntimeError,'DATABASE_URL'):
+                guard._startup()
+        migrate.assert_not_called()
     def test_registration_requires_verified_email_and_creates_session(self):
         with self.assertRaises(app.HttpError): self.route(None,'POST','/api/register',{'email':'no-terms@test.invalid','name':'No Terms','password':'correct horse battery staple','accept_terms':False})
         result=self.route(None,'POST','/api/register',{'email':'new@test.invalid','name':'New User','password':'correct horse battery staple','accept_terms':True})
@@ -93,6 +105,18 @@ class MarketplaceFlows(unittest.TestCase):
         with self.assertRaises(app.HttpError): self.route(self.other,'POST',f"/api/admin/listings/{draft['id']}",{'action':'approve'})
         self.route(self.admin,'POST',f"/api/admin/listings/{draft['id']}",{'action':'approve','note':'Checked'})
         self.assertEqual(self.db.execute('SELECT status FROM listings WHERE id=?',(draft['id'],)).fetchone()['status'],'published')
+    def test_listing_owner_can_view_unpublished_listing_but_other_users_cannot(self):
+        draft=self.route(self.seller,'POST','/api/listings',{'game_id':'valorant','category_id':'accounts','title':'Private draft listing','description':'A sufficiently long listing description.','price_minor':23000,'stock':2})
+        self.assertEqual(self.route(self.seller,'GET',f"/api/listings/{draft['id']}")['status'],'draft')
+        with self.assertRaises(app.HttpError) as error:
+            self.route(self.other,'GET',f"/api/listings/{draft['id']}")
+        self.assertEqual(error.exception.status,404)
+    def test_search_results_include_seller_trust_information(self):
+        results=self.route(None,'GET','/api/listings')
+        item=next(row for row in results['items'] if row['id']==self.listing)
+        self.assertEqual(item['verification_status'],'verified')
+        self.assertEqual(item['review_count'],0)
+        self.assertIsNone(item['seller_rating'])
     def test_checkout_reserves_inventory_and_sandbox_webhook_action_is_idempotent(self):
         self.add_cart(self.buyer)
         order=app.checkout(self.db,self.buyer,True)
@@ -155,8 +179,9 @@ class MarketplaceFlows(unittest.TestCase):
         self.db.execute('UPDATE deliveries SET protected_payload=? WHERE order_item_id=?',('legacy account secret',item))
         app.MODE='production'
         try:
-            with self.assertRaisesRegex(RuntimeError,'Encrypt existing delivery records'):
-                app.main()
+            with patch.object(app,'DATABASE_URL','postgresql://production.invalid/db'), patch.object(app,'migrate'), patch.object(app,'connect',return_value=self.db):
+                with self.assertRaisesRegex(RuntimeError,'Encrypt existing delivery records'):
+                    app.main()
         finally:
             app.MODE='development'
 

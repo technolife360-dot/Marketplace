@@ -352,12 +352,15 @@ def user_view(db, uid):
 
 def check_rate(db, bucket, subject, limit=10, period=300):
     now = int(time.time()); start = now - now % period
-    r = db.execute('SELECT attempts FROM rate_limits WHERE bucket=? AND subject=? AND window_start=?',(bucket,subject,start)).fetchone()
-    if r and r['attempts'] >= limit: raise HttpError(429,'Urinishlar limiti tugadi. Birozdan keyin qayta urinib ko‘ring.')
-    if isinstance(db, PostgresConnection):
-        db.execute('INSERT INTO rate_limits AS current_rate(bucket,subject,window_start,attempts) VALUES(?,?,?,1) ON CONFLICT(bucket,subject,window_start) DO UPDATE SET attempts=current_rate.attempts+1',(bucket,subject,start))
-    else:
-        db.execute('INSERT INTO rate_limits(bucket,subject,window_start,attempts) VALUES(?,?,?,1) ON CONFLICT(bucket,subject,window_start) DO UPDATE SET attempts=attempts+1',(bucket,subject,start))
+    # One conditional upsert makes the limit atomic under concurrent requests.
+    # SQLite and PostgreSQL both support RETURNING for this statement.
+    r = db.execute('''INSERT INTO rate_limits(bucket,subject,window_start,attempts)
+        VALUES(?,?,?,1)
+        ON CONFLICT(bucket,subject,window_start) DO UPDATE
+        SET attempts=rate_limits.attempts+1
+        WHERE rate_limits.attempts < ?
+        RETURNING attempts''',(bucket,subject,start,limit)).fetchone()
+    if not r: raise HttpError(429,'Urinishlar limiti tugadi. Birozdan keyin qayta urinib ko‘ring.')
 
 def is_admin(db, uid): return bool(db.execute('SELECT 1 FROM admin_accounts WHERE user_id=?',(uid,)).fetchone())
 def require_user(ctx):
@@ -462,7 +465,7 @@ def listing_detail(db, lid, viewer=None):
       (SELECT COUNT(*) FROM reviews rv WHERE rv.seller_id=l.seller_id) review_count,(SELECT AVG(rating) FROM reviews rv WHERE rv.seller_id=l.seller_id) seller_rating
       FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id LEFT JOIN seller_profiles s ON s.user_id=l.seller_id WHERE l.id=?""",(lid,)).fetchone()
     if not r: return None
-    out=dict(r); out['available']=max(0,out['stock']-out['reserved']); out['attributes']=json.loads(out.pop('attributes_json') or '{}'); out.pop('seller_id',None)
+    out=dict(r); out['available']=max(0,out['stock']-out['reserved']); out['attributes']=json.loads(out.pop('attributes_json') or '{}')
     out['is_favorite']=bool(viewer and db.execute('SELECT 1 FROM favorites WHERE user_id=? AND listing_id=?',(viewer,lid)).fetchone())
     return out
 
@@ -556,8 +559,9 @@ class Handler(BaseHTTPRequestHandler):
             raise HttpError(400,'Local OAuth host noto‘g‘ri.')
         return 'http://'+host
     def log_message(self, fmt, *args):
-        # Keep access logs minimal; never print bodies or credential values.
-        print('%s - %s' % (self.address_string(), fmt % args))
+        # Request lines can contain OAuth codes, state, or one-time tokens.
+        # Do not log raw paths or query strings from application requests.
+        return
     def send_json(self, code, data, headers=None):
         payload=json.dumps(data,ensure_ascii=False,separators=(',',':')).encode()
         self.send_response(code); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.send_header('Pragma','no-cache'); self.send_header('Vary','Cookie'); self.secure_headers()
@@ -566,6 +570,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers(); self.wfile.write(payload)
     def secure_headers(self):
         self.send_header('X-Content-Type-Options','nosniff'); self.send_header('X-Frame-Options','DENY'); self.send_header('Referrer-Policy','strict-origin-when-cross-origin'); self.send_header('Permissions-Policy','camera=(self "https://verify.didit.me"), microphone=(self "https://verify.didit.me"), geolocation=()'); self.send_header('Content-Security-Policy',"default-src 'self'; img-src 'self' data: https: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; style-src-attr 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self' https://api.frankfurter.dev; frame-src 'self'; media-src 'self' blob:; worker-src 'self' blob:")
+        if MODE=='production': self.send_header('Strict-Transport-Security','max-age=31536000')
     def body(self, limit=MAX_BODY):
         n=int(self.headers.get('Content-Length','0'))
         if n>limit: raise HttpError(413,'So‘rov hajmi cheklovdan oshdi.')
@@ -867,11 +872,12 @@ class Handler(BaseHTTPRequestHandler):
             try: page=max(1,min(10000,int(qs.get('page',['1'])[0])))
             except ValueError: page=1
             limit=24
-            rows=db.execute(f"SELECT l.id,l.title,l.description,l.product_type,l.price_minor,l.currency,l.platform,l.region,l.delivery_eta,l.stock,l.reserved,l.image_url,l.created_at,g.name game_name,g.slug game_slug,c.name category_name,s.shop_name seller_name FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id JOIN seller_profiles s ON s.user_id=l.seller_id WHERE {' AND '.join(where)} AND l.stock>l.reserved ORDER BY {order} LIMIT ? OFFSET ?",(*args,limit,(page-1)*limit)).fetchall()
+            rows=db.execute(f"SELECT l.id,l.title,l.description,l.product_type,l.price_minor,l.currency,l.platform,l.region,l.delivery_eta,l.stock,l.reserved,l.image_url,l.created_at,g.name game_name,g.slug game_slug,c.name category_name,s.shop_name seller_name,s.verification_status,(SELECT COUNT(*) FROM reviews rv WHERE rv.seller_id=l.seller_id) review_count,(SELECT AVG(rating) FROM reviews rv WHERE rv.seller_id=l.seller_id) seller_rating FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id JOIN seller_profiles s ON s.user_id=l.seller_id WHERE {' AND '.join(where)} AND l.stock>l.reserved ORDER BY {order} LIMIT ? OFFSET ?",(*args,limit,(page-1)*limit)).fetchall()
             return {'items':[dict(x) for x in rows],'page':page,'page_size':limit,'has_more':len(rows)==limit}
         if path.startswith('/api/listings/') and method=='GET':
             lid=path.split('/')[-1]; item=listing_detail(db,lid,uid)
             if not item or (item['status']!='published' and item['seller_id']!=uid and not (uid and is_admin(db,uid))): raise HttpError(404,'E’lon topilmadi.')
+            item.pop('seller_id',None)
             item['related']=[dict(x) for x in db.execute('SELECT id,title,price_minor,currency FROM listings WHERE game_id=? AND status=\'published\' AND id<>? ORDER BY created_at DESC LIMIT 4',(item['game_id'],lid))]
             return item
         if path=='/api/cart' and method=='GET':
@@ -1452,7 +1458,14 @@ class _VercelRequest(Handler):
             self.headers['Content-Type']=environ['CONTENT_TYPE']
         if environ.get('CONTENT_LENGTH'):
             self.headers['Content-Length']=environ['CONTENT_LENGTH']
-        self.client_address=(environ.get('REMOTE_ADDR','0.0.0.0'),0)
+        # Vercel overwrites these headers with the public client address.
+        # Prefer its explicit header; validate it before using it as a rate-limit key.
+        forwarded=self.headers.get('X-Vercel-Forwarded-For','').split(',')[0].strip()
+        try:
+            client_ip=str(ipaddress.ip_address(forwarded)) if forwarded else str(ipaddress.ip_address(environ.get('REMOTE_ADDR','0.0.0.0')))
+        except ValueError:
+            client_ip='0.0.0.0'
+        self.client_address=(client_ip,0)
         body_limit=MAX_IMAGE_BODY if path.rstrip('/')=='/api/listing-images' and self.command=='POST' else MAX_BODY
         body=environ.get('wsgi.input',io.BytesIO()).read(body_limit+1)
         self.rfile=io.BytesIO(body)
@@ -1482,7 +1495,34 @@ class _VercelRequest(Handler):
 
 class VercelWSGIApplication:
     """Run the existing routes as a WSGI app for Vercel's Python runtime."""
+    def __init__(self):
+        self._startup_lock=Lock()
+        self._startup_complete=False
+
+    def _startup(self):
+        if self._startup_complete: return
+        with self._startup_lock:
+            if self._startup_complete: return
+            if MODE=='production':
+                if not DATABASE_URL:
+                    raise RuntimeError('Set DATABASE_URL to the production Supabase PostgreSQL connection string.')
+                if not delivery_crypto.crypto_is_available():
+                    raise RuntimeError('Install requirements.txt before starting production.')
+                if not delivery_crypto.key_is_configured():
+                    raise RuntimeError('Set DELIVERY_ENCRYPTION_KEY before starting production.')
+            migrate()
+            if MODE=='production':
+                db=connect()
+                try:
+                    legacy=db.execute("SELECT COUNT(*) n FROM deliveries WHERE protected_payload NOT LIKE 'enc:v1:%'").fetchone()['n']
+                finally:
+                    db.close()
+                if legacy:
+                    raise RuntimeError('Encrypt existing delivery records with scripts/encrypt_delivery_payloads.py before starting production.')
+            self._startup_complete=True
+
     def __call__(self, environ, start_response):
+        self._startup()
         request=_VercelRequest(environ)
         method=request.command
         if method=='HEAD':
@@ -1505,12 +1545,15 @@ class VercelWSGIApplication:
 app=VercelWSGIApplication()
 
 def main():
-    migrate()
     if MODE=='production':
+        if not DATABASE_URL:
+            raise RuntimeError('Set DATABASE_URL to the production Supabase PostgreSQL connection string.')
         if not delivery_crypto.crypto_is_available():
             raise RuntimeError('Install requirements.txt before starting production.')
         if not delivery_crypto.key_is_configured():
             raise RuntimeError('Set DELIVERY_ENCRYPTION_KEY before starting production.')
+    migrate()
+    if MODE=='production':
         db=connect()
         try:
             legacy=db.execute("SELECT COUNT(*) n FROM deliveries WHERE protected_payload NOT LIKE 'enc:v1:%'").fetchone()['n']
