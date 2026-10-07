@@ -28,7 +28,7 @@ class MarketplaceFlows(unittest.TestCase):
         self.db.execute("INSERT INTO seller_profiles(user_id,shop_name,verification_status,selling_enabled,identity_status,identity_provider) VALUES(?,?,'verified',1,'verified','didit')",(self.seller,'Seller Shop'))
         self.db.execute("UPDATE platform_config SET value='1000' WHERE key='commission_bps'")
         self.listing=app.ident()
-        self.db.execute("INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,stock,status) VALUES(?,?,?,?,?,?,?,?,?, 'published')",(self.listing,self.seller,'valorant','accounts','Valorant account lvl 50','A test listing with enough descriptive text.','account',50000,1))
+        self.db.execute("INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,stock,status,seller_account_terms_version) VALUES(?,?,?,?,?,?,?,?,?, 'published',?)",(self.listing,self.seller,'valorant','accounts','Valorant account lvl 50','A test listing with enough descriptive text.','account',50000,1,app.ACCOUNT_SELLER_TERMS_VERSION))
         self.handler=app.Handler.__new__(app.Handler); self.handler.client_address=('127.0.0.1',12345)
     def tearDown(self):
         self.db.close();app.DB_PATH,app.MODE,app.DATABASE_URL=self.old_path,self.old_mode,self.old_database_url
@@ -69,6 +69,32 @@ class MarketplaceFlows(unittest.TestCase):
             self.assertTrue(app.listing_allowed_for_production(self.db,'valorant','item'))
             with patch.dict(os.environ,{'MARKETPLACE_APPROVED_ACCOUNT_GAME_SLUGS':'valorant'},clear=False):
                 self.assertTrue(app.listing_allowed_for_production(self.db,'valorant','account'))
+    def test_account_listing_requires_seller_attestation(self):
+        data={'game_name':'Valorant','category_id':'accounts','title':'New account listing','description':'A sufficiently long listing description.','price_minor':23000,'stock':2}
+        with self.assertRaisesRegex(app.HttpError,'sotuvchi tasdig‘i'):
+            self.route(self.seller,'POST','/api/listings',data)
+        result=self.route(self.seller,'POST','/api/listings',{**data,'accept_account_terms':True})
+        row=self.db.execute('SELECT seller_account_terms_version,seller_account_terms_at FROM listings WHERE id=?',(result['id'],)).fetchone()
+        self.assertEqual(row['seller_account_terms_version'],app.ACCOUNT_SELLER_TERMS_VERSION)
+        self.assertTrue(row['seller_account_terms_at'])
+    def test_production_gate_pauses_legacy_account_without_current_seller_attestation(self):
+        from types import SimpleNamespace
+        legacy=app.ident()
+        self.db.execute("INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,stock,status) VALUES(?,?,?,?,?,?,?,?,?, 'published')",(legacy,self.seller,'valorant','accounts','Legacy account listing','A legacy listing with enough details to pass validation.','account',1000,1))
+        env={'MARKETPLACE_SALES_ENABLED':'true','MARKETPLACE_APPROVED_GAME_SLUGS':'valorant','MARKETPLACE_APPROVED_ACCOUNT_GAME_SLUGS':'valorant'}
+        with patch.object(app,'MODE','production'), patch.object(app,'get_provider',return_value=SimpleNamespace(name='live-test')), patch.dict(os.environ,env,clear=False):
+            app.enforce_production_marketplace_gate(self.db)
+        self.assertEqual(self.db.execute('SELECT status FROM listings WHERE id=?',(self.listing,)).fetchone()['status'],'published')
+        self.assertEqual(self.db.execute('SELECT status FROM listings WHERE id=?',(legacy,)).fetchone()['status'],'paused')
+    def test_account_checkout_requires_and_records_buyer_risk_acknowledgment(self):
+        self.add_cart(self.buyer)
+        with self.assertRaisesRegex(app.HttpError,'Akkaunt xarid qilish xavflari'):
+            app.checkout(self.db,self.buyer,True,False)
+        self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM orders').fetchone()['n'],0)
+        order=app.checkout(self.db,self.buyer,True,True)
+        saved=self.db.execute('SELECT accepted_account_sale_terms_version,accepted_account_sale_terms_at FROM orders WHERE id=?',(order['id'],)).fetchone()
+        self.assertEqual(saved['accepted_account_sale_terms_version'],app.ACCOUNT_BUYER_TERMS_VERSION)
+        self.assertTrue(saved['accepted_account_sale_terms_at'])
     def test_public_listing_html_has_product_metadata_and_canonical_path(self):
         with patch.dict(os.environ,{'PUBLIC_BASE_URL':'http://localhost:8000'},clear=False):
             html=app.seo_listing_html(self.listing).decode()
@@ -83,7 +109,7 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertTrue(verify['user']['email_verified']);self.assertTrue(verify['csrf'])
         self.assertTrue(getattr(self.handler,'_set_cookie','').startswith(app.COOKIE_NAME+'='))
     def test_my_reviews_are_private_and_list_only_reviews_written_by_the_user(self):
-        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True)
+        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True,True)
         self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})
         item=self.db.execute('SELECT id FROM order_items WHERE order_id=?',(order['id'],)).fetchone()['id']
         self.route(self.seller,'POST',f"/api/orders/{order['id']}/deliver",{'item_id':item,'delivery':'test delivery'})
@@ -121,7 +147,7 @@ class MarketplaceFlows(unittest.TestCase):
         with self.assertRaises(app.HttpError):
             self.route(self.admin,'POST',f"/api/admin/blog/{draft['id']}",{**post,'slug':'not valid'})
     def test_order_status_emails_go_to_the_relevant_party_without_delivery_secret(self):
-        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True)
+        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True,True)
         item=self.db.execute('SELECT id FROM order_items WHERE order_id=?',(order['id'],)).fetchone()['id']
         with patch.object(app.email_service,'is_configured',return_value=True), patch.object(app.email_service,'send_order_update') as send:
             self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})
@@ -131,13 +157,13 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertEqual([(x[0],x[3]) for x in messages],[("seller@test.invalid",'paid'),("buyer@test.invalid",'awaiting_delivery'),("seller@test.invalid",'completed')])
         self.assertNotIn('Never include this secret',repr(messages))
     def test_listing_moderation_requires_admin_and_publishes(self):
-        draft=self.route(self.seller,'POST','/api/listings',{'game_id':'valorant','category_id':'accounts','title':'New account listing','description':'A sufficiently long listing description.','price_minor':23000,'stock':2})
+        draft=self.route(self.seller,'POST','/api/listings',{'game_id':'valorant','category_id':'accounts','title':'New account listing','description':'A sufficiently long listing description.','price_minor':23000,'stock':2,'accept_account_terms':True})
         self.route(self.seller,'POST',f"/api/listings/{draft['id']}/submit",{})
         with self.assertRaises(app.HttpError): self.route(self.other,'POST',f"/api/admin/listings/{draft['id']}",{'action':'approve'})
         self.route(self.admin,'POST',f"/api/admin/listings/{draft['id']}",{'action':'approve','note':'Checked'})
         self.assertEqual(self.db.execute('SELECT status FROM listings WHERE id=?',(draft['id'],)).fetchone()['status'],'published')
     def test_listing_owner_can_view_unpublished_listing_but_other_users_cannot(self):
-        draft=self.route(self.seller,'POST','/api/listings',{'game_id':'valorant','category_id':'accounts','title':'Private draft listing','description':'A sufficiently long listing description.','price_minor':23000,'stock':2})
+        draft=self.route(self.seller,'POST','/api/listings',{'game_id':'valorant','category_id':'accounts','title':'Private draft listing','description':'A sufficiently long listing description.','price_minor':23000,'stock':2,'accept_account_terms':True})
         self.assertEqual(self.route(self.seller,'GET',f"/api/listings/{draft['id']}")['status'],'draft')
         with self.assertRaises(app.HttpError) as error:
             self.route(self.other,'GET',f"/api/listings/{draft['id']}")
@@ -150,14 +176,14 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertIsNone(item['seller_rating'])
     def test_checkout_reserves_inventory_and_sandbox_webhook_action_is_idempotent(self):
         self.add_cart(self.buyer)
-        order=app.checkout(self.db,self.buyer,True)
+        order=app.checkout(self.db,self.buyer,True,True)
         stock=self.db.execute('SELECT stock,reserved FROM listings WHERE id=?',(self.listing,)).fetchone()
         self.assertEqual((stock['stock'],stock['reserved']),(1,1))
         terms=self.db.execute('SELECT accepted_checkout_terms_version,accepted_checkout_terms_at FROM orders WHERE id=?',(order['id'],)).fetchone()
         self.assertTrue(terms['accepted_checkout_terms_version']);self.assertTrue(terms['accepted_checkout_terms_at'])
         # A second buyer cannot reserve already-reserved stock.
         self.add_cart(self.other)
-        with self.assertRaises(app.HttpError): app.checkout(self.db,self.other,True)
+        with self.assertRaises(app.HttpError): app.checkout(self.db,self.other,True,True)
         out=self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})
         self.assertEqual(out['status'],'paid')
         again=self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})
@@ -166,7 +192,7 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertEqual((stock['stock'],stock['reserved']),(0,0))
         self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM ledger_entries WHERE order_id=?',(order['id'],)).fetchone()['n'],2)
     def test_delivery_visible_to_buyer_after_payment_but_not_other_user_or_seller(self):
-        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True)
+        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True,True)
         self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})
         item=self.db.execute('SELECT id FROM order_items WHERE order_id=?',(order['id'],)).fetchone()['id']
         self.route(self.seller,'POST',f"/api/orders/{order['id']}/deliver",{'item_id':item,'delivery':'One-time delivery code'})
@@ -181,7 +207,7 @@ class MarketplaceFlows(unittest.TestCase):
         with self.assertRaises(app.HttpError): app.order_view(self.db,order['id'],self.other)
 
     def test_tampered_delivery_ciphertext_is_rejected(self):
-        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True)
+        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True,True)
         self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})
         item=self.db.execute('SELECT id FROM order_items WHERE order_id=?',(order['id'],)).fetchone()['id']
         self.route(self.seller,'POST',f"/api/orders/{order['id']}/deliver",{'item_id':item,'delivery':'test delivery'})
@@ -192,7 +218,7 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertEqual(error.exception.status,503)
 
     def test_legacy_delivery_migration_encrypts_rows_in_place(self):
-        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True)
+        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True,True)
         self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})
         item=self.db.execute('SELECT id FROM order_items WHERE order_id=?',(order['id'],)).fetchone()['id']
         self.route(self.seller,'POST',f"/api/orders/{order['id']}/deliver",{'item_id':item,'delivery':'temporary'})
@@ -203,7 +229,7 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertEqual(app.delivery_crypto.decrypt_payload(stored,item),'legacy account secret')
 
     def test_production_startup_fails_while_legacy_delivery_rows_remain(self):
-        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True)
+        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True,True)
         self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})
         item=self.db.execute('SELECT id FROM order_items WHERE order_id=?',(order['id'],)).fetchone()['id']
         self.route(self.seller,'POST',f"/api/orders/{order['id']}/deliver",{'item_id':item,'delivery':'temporary'})
@@ -217,7 +243,7 @@ class MarketplaceFlows(unittest.TestCase):
             app.MODE='development'
 
     def test_delivery_submission_fails_closed_without_encryption_key(self):
-        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True)
+        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True,True)
         self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})
         item=self.db.execute('SELECT id FROM order_items WHERE order_id=?',(order['id'],)).fetchone()['id']
         os.environ.pop('DELIVERY_ENCRYPTION_KEY',None)
@@ -228,7 +254,7 @@ class MarketplaceFlows(unittest.TestCase):
 
     def test_wallet_escrow_release_and_manual_payout_are_distinct_and_idempotent(self):
         self.add_cart(self.buyer)
-        order=app.checkout(self.db,self.buyer,True)
+        order=app.checkout(self.db,self.buyer,True,True)
         self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})
         held=self.route(self.seller,'GET','/api/seller/summary')
         self.assertEqual(held['wallet']['held_minor'],45000)
@@ -260,7 +286,7 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertEqual(final['wallet']['available_minor'],0)
     def test_server_production_checkout_is_closed_without_provider(self):
         app.MODE='production';self.add_cart(self.buyer)
-        with self.assertRaises(app.HttpError) as ctx: app.checkout(self.db,self.buyer,True)
+        with self.assertRaises(app.HttpError) as ctx: app.checkout(self.db,self.buyer,True,True)
         self.assertEqual(ctx.exception.status,503)
 
     def test_database_backed_search_finds_published_listing(self):
@@ -269,9 +295,9 @@ class MarketplaceFlows(unittest.TestCase):
     def test_commission_rounding_is_allocated_exactly_across_order_items(self):
         self.db.execute("UPDATE platform_config SET value='1500' WHERE key='commission_bps'")
         self.db.execute('UPDATE listings SET price_minor=3 WHERE id=?',(self.listing,))
-        second=app.ident();self.db.execute("INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,stock,status) VALUES(?,?,?,?,?,?,?,?,?, 'published')",(second,self.seller,'valorant','accounts','Second test account','Another description long enough for schema.','account',4,1))
+        second=app.ident();self.db.execute("INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,stock,status,seller_account_terms_version) VALUES(?,?,?,?,?,?,?,?,?, 'published',?)",(second,self.seller,'valorant','accounts','Second test account','Another description long enough for schema.','account',4,1,app.ACCOUNT_SELLER_TERMS_VERSION))
         self.db.execute('INSERT INTO carts(user_id,listing_id,quantity) VALUES(?,?,1)',(self.buyer,self.listing));self.db.execute('INSERT INTO carts(user_id,listing_id,quantity) VALUES(?,?,1)',(self.buyer,second))
-        order=app.checkout(self.db,self.buyer,True)
+        order=app.checkout(self.db,self.buyer,True,True)
         result=self.db.execute('SELECT o.commission_minor,COALESCE(SUM(i.commission_minor),0) line_fees FROM orders o JOIN order_items i ON i.order_id=o.id WHERE o.id=? GROUP BY o.id',(order['id'],)).fetchone()
         self.assertEqual(result['commission_minor'],1);self.assertEqual(result['line_fees'],1)
     def test_password_reset_is_single_use_and_revokes_existing_sessions(self):

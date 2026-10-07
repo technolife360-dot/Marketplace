@@ -54,6 +54,8 @@ COOKIE_NAME = 'bozorgg_session'
 SESSION_DAYS = 7
 MAX_BODY = 64 * 1024
 MAX_IMAGE_BODY = 5 * 1024 * 1024
+ACCOUNT_SELLER_TERMS_VERSION = 'account-seller-v1-2026-10'
+ACCOUNT_BUYER_TERMS_VERSION = 'account-buyer-v1-2026-10'
 
 class HttpError(Exception):
     def __init__(self, status: int, message: str):
@@ -195,8 +197,9 @@ def require_listing_allowed(db, game_id, product_type):
 
 def enforce_production_marketplace_gate(db):
     if MODE != 'production': return
-    for listing in db.execute("SELECT id,game_id,product_type FROM listings WHERE status='published'").fetchall():
-        if not listing_allowed_for_production(db,listing['game_id'],listing['product_type']):
+    for listing in db.execute("SELECT id,game_id,product_type,seller_account_terms_version FROM listings WHERE status='published'").fetchall():
+        if (not listing_allowed_for_production(db,listing['game_id'],listing['product_type'])
+                or (listing['product_type']=='account' and listing['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION)):
             db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='published'",(listing['id'],))
 
 def public_site_base():
@@ -228,6 +231,10 @@ def migrate():
             missing=[table for table in required if not db.execute('SELECT to_regclass(?) AS name',(f'public.{table}',)).fetchone()['name']]
             if missing:
                 raise RuntimeError('Supabase sxemasi topilmadi. Avval supabase/migrations/20261005000000_marketplace_schema.sql migratsiyasini qo‘llang. Yetishmayotgan jadvallar: '+', '.join(missing))
+            db.execute("ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS seller_account_terms_version TEXT NOT NULL DEFAULT ''")
+            db.execute('ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS seller_account_terms_at TEXT')
+            db.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS accepted_account_sale_terms_version TEXT NOT NULL DEFAULT ''")
+            db.execute('ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS accepted_account_sale_terms_at TEXT')
             seed_blog_posts(db)
             db.execute("UPDATE seller_profiles SET selling_enabled=0 WHERE verification_status!='verified' OR identity_status!='verified' OR identity_provider!='didit'")
             db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE status='published' AND seller_id NOT IN (SELECT user_id FROM seller_profiles WHERE verification_status='verified' AND selling_enabled=1 AND identity_status='verified' AND identity_provider='didit')")
@@ -239,6 +246,12 @@ def migrate():
             enforce_production_marketplace_gate(db)
             return
         db.executescript((ROOT / 'migrations/001_initial.sql').read_text())
+        listing_columns={r['name'] for r in db.execute('PRAGMA table_info(listings)')}
+        if 'seller_account_terms_version' not in listing_columns: db.execute("ALTER TABLE listings ADD COLUMN seller_account_terms_version TEXT NOT NULL DEFAULT ''")
+        if 'seller_account_terms_at' not in listing_columns: db.execute('ALTER TABLE listings ADD COLUMN seller_account_terms_at TEXT')
+        order_columns={r['name'] for r in db.execute('PRAGMA table_info(orders)')}
+        if 'accepted_account_sale_terms_version' not in order_columns: db.execute("ALTER TABLE orders ADD COLUMN accepted_account_sale_terms_version TEXT NOT NULL DEFAULT ''")
+        if 'accepted_account_sale_terms_at' not in order_columns: db.execute('ALTER TABLE orders ADD COLUMN accepted_account_sale_terms_at TEXT')
         oauth_table=db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='oauth_identities'").fetchone()
         if oauth_table and 'facebook' not in oauth_table['sql'].lower():
             db.execute('PRAGMA foreign_keys=OFF')
@@ -592,7 +605,7 @@ def order_view(db, oid, uid, admin=False):
     order['payment']=rowdict(db.execute('SELECT provider,status,amount_minor,currency,created_at FROM payments WHERE order_id=?',(oid,)).fetchone())
     return order
 
-def checkout(db,uid,accept_terms=False):
+def checkout(db,uid,accept_terms=False,accept_account_risk=False):
     if not accept_terms: raise HttpError(400,'Checkoutdan oldin savdo shartlarini qabul qiling.')
     try: provider=get_provider(MODE,os.environ.get('PAYMENT_PROVIDER','disabled'))
     except RuntimeError as e: raise HttpError(503,'Haqiqiy to‘lov provayderi hali sozlanmagan. Ishlab chiqarish checkout’i yopiq.')
@@ -608,6 +621,11 @@ def checkout(db,uid,accept_terms=False):
             event(db,x['id'],None,'pending_payment','cancelled','To‘lov muddati tugadi')
         cart=db.execute('SELECT c.listing_id,c.quantity,l.* FROM carts c JOIN listings l ON l.id=c.listing_id WHERE c.user_id=?',(uid,)).fetchall()
         if not cart: raise HttpError(400,'Savatchangiz bo‘sh.')
+        account_lines=[x for x in cart if x['product_type']=='account']
+        if account_lines and not accept_account_risk:
+            raise HttpError(400,'Akkaunt xarid qilish xavflari va noshir qoidalarini tushunganingizni tasdiqlang.')
+        if any(x['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION for x in account_lines):
+            raise HttpError(409,'Akkaunt e’loni sotuvchi tasdiqlashidan o‘tmagan; xaridni davom ettirib bo‘lmaydi.')
         currencies={x['currency'] for x in cart}
         if len(currencies)!=1: raise HttpError(400,'Turli valyutadagi mahsulotlarni bitta buyurtmada xarid qilib bo‘lmaydi.')
         currency=currencies.pop(); subtotal=0; lines=[]
@@ -622,7 +640,7 @@ def checkout(db,uid,accept_terms=False):
         oid,reference,idem=ident(),'BG-'+secrets.token_hex(4).upper(),create_token()
         intent=provider.create_intent(oid,subtotal+commission,currency,idem)
         terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']
-        db.execute('INSERT INTO orders(id,reference,buyer_id,currency,subtotal_minor,commission_minor,commission_bps,total_minor,status,payment_mode,accepted_checkout_terms_version,accepted_checkout_terms_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(oid,reference,uid,currency,subtotal,commission,bps,subtotal+commission,'pending_payment',intent.provider,terms,now_iso()))
+        db.execute('INSERT INTO orders(id,reference,buyer_id,currency,subtotal_minor,commission_minor,commission_bps,total_minor,status,payment_mode,accepted_checkout_terms_version,accepted_checkout_terms_at,accepted_account_sale_terms_version,accepted_account_sale_terms_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(oid,reference,uid,currency,subtotal,commission,bps,subtotal+commission,'pending_payment',intent.provider,terms,now_iso(),ACCOUNT_BUYER_TERMS_VERSION if account_lines else '',now_iso() if account_lines else None))
         remainder=commission-sum((y['price_minor']*y['quantity']*bps)//10000 for y in lines)
         for ix,x in enumerate(lines):
             per_fee=(x['price_minor']*x['quantity']*bps)//10000
@@ -963,7 +981,7 @@ class Handler(BaseHTTPRequestHandler):
                 where.append(f"g.slug IN ({','.join('?' for _ in approved_games)})"); args.extend(approved_games)
                 approved_account_games=sorted(approved_game_slugs('MARKETPLACE_APPROVED_ACCOUNT_GAME_SLUGS'))
                 if approved_account_games:
-                    where.append(f"(l.product_type!='account' OR g.slug IN ({','.join('?' for _ in approved_account_games)}))"); args.extend(approved_account_games)
+                    where.append(f"(l.product_type!='account' OR (g.slug IN ({','.join('?' for _ in approved_account_games)}) AND l.seller_account_terms_version=?))"); args.extend(approved_account_games); args.append(ACCOUNT_SELLER_TERMS_VERSION)
                 else:
                     where.append("l.product_type!='account'")
             for key,col in [('game','g.slug'),('category','c.slug'),('type','l.product_type'),('region','l.region')]:
@@ -1188,6 +1206,8 @@ class Handler(BaseHTTPRequestHandler):
             stock=data.get('stock',1)
             if not isinstance(stock,int) or stock<0 or stock>10000: raise HttpError(400,'Qoldiq miqdori noto‘g‘ri.')
             typ=db.execute('SELECT product_type FROM categories WHERE id=?',(cat,)).fetchone()['product_type']
+            if typ=='account' and data.get('accept_account_terms') is not True:
+                raise HttpError(400,'Akkaunt e’lonidan oldin egalik, noshir qoidalari va taqiqlangan holatlar bo‘yicha sotuvchi tasdig‘i kerak.')
             attributes=data.get('attributes',{})
             if not isinstance(attributes,dict) or len(attributes)>30: raise HttpError(400,'Atributlar noto‘g‘ri.')
             images=listing_image_urls(data.get('images',[data.get('image_url')]) if 'images' not in data and data.get('image_url') else data.get('images',[]))
@@ -1199,8 +1219,10 @@ class Handler(BaseHTTPRequestHandler):
             delivery_eta=clean_text(data.get('delivery_eta','24 hours'),'Yetkazish muddati',2,60); requirements=clean_text(data.get('requirements',''),'Shartlar',0,1000)
             game=resolve_game_id(db,game_name)
             require_listing_allowed(db,game,typ)
-            lid=ident(); db.execute('INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,platform,region,attributes_json,delivery_method,delivery_eta,requirements,stock,image_url,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                (lid,uid,game,cat,title,desc,typ,price,platform,region,json.dumps(attributes,ensure_ascii=False),data.get('delivery_method','manual'),delivery_eta,requirements,stock,image_url,'pending_review' if submit_for_review else 'draft'))
+            account_terms=ACCOUNT_SELLER_TERMS_VERSION if typ=='account' else ''
+            account_terms_at=now_iso() if typ=='account' else None
+            lid=ident(); db.execute('INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,platform,region,attributes_json,delivery_method,delivery_eta,requirements,stock,image_url,status,seller_account_terms_version,seller_account_terms_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                (lid,uid,game,cat,title,desc,typ,price,platform,region,json.dumps(attributes,ensure_ascii=False),data.get('delivery_method','manual'),delivery_eta,requirements,stock,image_url,'pending_review' if submit_for_review else 'draft',account_terms,account_terms_at))
             if submit_for_review:
                 admin=db.execute('SELECT user_id FROM admin_accounts LIMIT 1').fetchone()
                 if admin: notify(db,admin['user_id'],'moderation','Yangi e’lon','Tekshirish uchun yangi e’lon yuborildi.','/admin')
@@ -1213,6 +1235,8 @@ class Handler(BaseHTTPRequestHandler):
             if action=='pause' and l['status']=='published': target='paused'
             elif action=='reopen' and l['status']=='paused':
                 require_listing_allowed(db,l['game_id'],l['product_type']); target='pending_review'
+                if l['product_type']=='account' and l['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION:
+                    raise HttpError(400,'Akkaunt bo‘yicha yangilangan sotuvchi shartlarini tasdiqlang.')
             elif action=='archive' and l['status'] in ('draft','rejected','paused'): target='archived'
             else: raise HttpError(409,'Ushbu holatda bu amalni bajarib bo‘lmaydi.')
             db.execute('UPDATE listings SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(target,lid)); audit(db,uid,'listing_'+action,'listing',lid); return {'status':target}
@@ -1222,6 +1246,8 @@ class Handler(BaseHTTPRequestHandler):
             if not l: raise HttpError(404,'E’lon topilmadi.')
             if l['status'] not in ('draft','rejected','paused'): raise HttpError(409,'Bu e’lon hozir moderatsiyaga yuborilmaydi.')
             require_listing_allowed(db,l['game_id'],l['product_type'])
+            if l['product_type']=='account' and l['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION:
+                raise HttpError(400,'Akkaunt e’lonini yuborishdan oldin sotuvchi shartlarini tasdiqlash kerak.')
             db.execute("UPDATE listings SET status='pending_review',moderation_note='',updated_at=CURRENT_TIMESTAMP WHERE id=?",(lid,)); notify(db,next(iter([r['user_id'] for r in db.execute('SELECT user_id FROM admin_accounts LIMIT 20')]),None),'moderation','Yangi e’lon','Tekshirish uchun yangi e’lon yuborildi.','/admin'); return {'status':'pending_review'}
         m=re.fullmatch(r'/api/listings/([^/]+)',path)
         if m and method=='PATCH':
@@ -1278,7 +1304,7 @@ class Handler(BaseHTTPRequestHandler):
         m=re.fullmatch(r'/api/cart/([^/]+)',path)
         if m and method=='DELETE': require_user(ctx); db.execute('DELETE FROM carts WHERE user_id=? AND listing_id=?',(uid,m.group(1))); return {'ok':True}
         if path=='/api/checkout' and method=='POST':
-            require_verified(ctx); return 201,checkout(db,uid,data.get('accept_terms') is True)
+            require_verified(ctx); return 201,checkout(db,uid,data.get('accept_terms') is True,data.get('accept_account_risk') is True)
         m=re.fullmatch(r'/api/orders/([^/]+)/sandbox-complete',path)
         if m and method=='POST':
             require_verified(ctx)
@@ -1419,7 +1445,10 @@ class Handler(BaseHTTPRequestHandler):
             if action not in ('approve','reject','pause'): raise HttpError(400,'Moderatsiya amali noto‘g‘ri.')
             status={'approve':'published','reject':'rejected','pause':'paused'}[action]; l=db.execute("SELECT * FROM listings WHERE id=? AND status IN ('pending_review','published')",(lid,)).fetchone()
             if not l: raise HttpError(404,'Tekshiriladigan e’lon topilmadi.')
-            if action=='approve': require_listing_allowed(db,l['game_id'],l['product_type'])
+            if action=='approve':
+                require_listing_allowed(db,l['game_id'],l['product_type'])
+                if l['product_type']=='account' and l['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION:
+                    raise HttpError(400,'Sotuvchi akkaunt savdosi qoidalarini tasdiqlamagan.')
             db.execute('UPDATE listings SET status=?,moderation_note=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(status,note,lid)); audit(db,aid,'listing_'+action,'listing',lid,{'note':note}); notify(db,l['seller_id'],'moderation','Moderatsiya natijasi',f'E’loningiz holati: {status}. {note}','/seller'); return {'status':status}
         m=re.fullmatch(r'/api/admin/sellers/([^/]+)',path)
         if m and method=='POST':

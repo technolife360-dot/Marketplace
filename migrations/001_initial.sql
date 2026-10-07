@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS listings (
  title TEXT NOT NULL, description TEXT NOT NULL, product_type TEXT NOT NULL, price_minor INTEGER NOT NULL CHECK(price_minor > 0), currency TEXT NOT NULL DEFAULT 'UZS',
  platform TEXT NOT NULL DEFAULT '', region TEXT NOT NULL DEFAULT '', attributes_json TEXT NOT NULL DEFAULT '{}', delivery_method TEXT NOT NULL DEFAULT 'manual',
  delivery_eta TEXT NOT NULL DEFAULT '24 hours', requirements TEXT NOT NULL DEFAULT '', stock INTEGER NOT NULL DEFAULT 1 CHECK(stock >= 0), reserved INTEGER NOT NULL DEFAULT 0 CHECK(reserved >= 0),
- status TEXT NOT NULL DEFAULT 'draft', moderation_note TEXT NOT NULL DEFAULT '', image_url TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ status TEXT NOT NULL DEFAULT 'draft', moderation_note TEXT NOT NULL DEFAULT '', image_url TEXT NOT NULL DEFAULT '',
+ seller_account_terms_version TEXT NOT NULL DEFAULT '', seller_account_terms_at TEXT,
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS listing_search USING fts5(title,description,content='listings',content_rowid='rowid',tokenize='unicode61 remove_diacritics 2');
@@ -44,7 +46,9 @@ CREATE TABLE IF NOT EXISTS carts (user_id TEXT NOT NULL REFERENCES users(id) ON 
 CREATE TABLE IF NOT EXISTS orders (
  id TEXT PRIMARY KEY, reference TEXT NOT NULL UNIQUE, buyer_id TEXT NOT NULL REFERENCES users(id), currency TEXT NOT NULL, subtotal_minor INTEGER NOT NULL,
  commission_minor INTEGER NOT NULL, commission_bps INTEGER NOT NULL DEFAULT 0, total_minor INTEGER NOT NULL, status TEXT NOT NULL, payment_mode TEXT NOT NULL,
- accepted_checkout_terms_version TEXT NOT NULL DEFAULT '', accepted_checkout_terms_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+ accepted_checkout_terms_version TEXT NOT NULL DEFAULT '', accepted_checkout_terms_at TEXT,
+ accepted_account_sale_terms_version TEXT NOT NULL DEFAULT '', accepted_account_sale_terms_at TEXT,
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS order_items (
  id TEXT PRIMARY KEY, order_id TEXT NOT NULL REFERENCES orders(id), listing_id TEXT NOT NULL REFERENCES listings(id), seller_id TEXT NOT NULL REFERENCES users(id),
