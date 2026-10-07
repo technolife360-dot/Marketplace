@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS sessions (
  csrf TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS oauth_identities (
- provider TEXT NOT NULL CHECK(provider IN ('google','apple')), subject TEXT NOT NULL,
+ provider TEXT NOT NULL CHECK(provider IN ('google','facebook','apple')), subject TEXT NOT NULL,
  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
  PRIMARY KEY(provider,subject), UNIQUE(provider,user_id)
 );

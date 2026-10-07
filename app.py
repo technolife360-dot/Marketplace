@@ -184,6 +184,21 @@ def migrate():
             for slug,name,typ in categories: db.execute('INSERT INTO categories(id,slug,name,product_type) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING',(slug,slug,name,typ))
             return
         db.executescript((ROOT / 'migrations/001_initial.sql').read_text())
+        oauth_table=db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='oauth_identities'").fetchone()
+        if oauth_table and 'facebook' not in oauth_table['sql'].lower():
+            db.execute('PRAGMA foreign_keys=OFF')
+            db.execute('BEGIN')
+            try:
+                db.execute("CREATE TABLE oauth_identities_new (provider TEXT NOT NULL CHECK(provider IN ('google','facebook','apple')), subject TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(provider,subject), UNIQUE(provider,user_id))")
+                db.execute('INSERT INTO oauth_identities_new(provider,subject,user_id,created_at) SELECT provider,subject,user_id,created_at FROM oauth_identities')
+                db.execute('DROP TABLE oauth_identities')
+                db.execute('ALTER TABLE oauth_identities_new RENAME TO oauth_identities')
+                db.execute('COMMIT')
+            except Exception:
+                db.execute('ROLLBACK')
+                db.execute('PRAGMA foreign_keys=ON')
+                raise
+            db.execute('PRAGMA foreign_keys=ON')
         db.execute("""CREATE TABLE IF NOT EXISTS blog_posts (
             id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, category_json TEXT NOT NULL,
             title_json TEXT NOT NULL, summary_json TEXT NOT NULL, body_json TEXT NOT NULL,
@@ -281,6 +296,36 @@ def session_create(db, uid):
 def audit(db, actor, action, kind, entity, data=None):
     db.execute('INSERT INTO audit_logs(id,actor_id,action,entity_type,entity_id,details_json) VALUES(?,?,?,?,?,?)',
                (ident(),actor,action,kind,str(entity),json.dumps(data or {},ensure_ascii=False)))
+
+def erase_account_personal_data(db, uid):
+    """Remove account credentials and profile data while preserving order records.
+
+    Order and ledger rows remain attached to an anonymized user row so financial
+    history and foreign-key integrity are retained. User-authored marketplace
+    content and identity verification data are erased; active listings are hidden.
+    """
+    db.execute('DELETE FROM sessions WHERE user_id=?',(uid,))
+    db.execute('DELETE FROM email_tokens WHERE user_id=?',(uid,))
+    db.execute('DELETE FROM oauth_identities WHERE user_id=?',(uid,))
+    db.execute('DELETE FROM admin_accounts WHERE user_id=?',(uid,))
+    db.execute('DELETE FROM favorites WHERE user_id=?',(uid,))
+    db.execute('DELETE FROM carts WHERE user_id=?',(uid,))
+    db.execute('DELETE FROM notifications WHERE user_id=?',(uid,))
+    db.execute('DELETE FROM messages WHERE sender_id=?',(uid,))
+    db.execute('DELETE FROM conversations WHERE buyer_id=? OR seller_id=?',(uid,uid))
+    db.execute('DELETE FROM request_responses WHERE seller_id=? OR request_id IN (SELECT id FROM product_requests WHERE requester_id=?)',(uid,uid))
+    db.execute('DELETE FROM product_requests WHERE requester_id=?',(uid,))
+    db.execute('DELETE FROM reviews WHERE reviewer_id=?',(uid,))
+    db.execute('DELETE FROM reports WHERE reporter_id=?',(uid,))
+    db.execute("UPDATE listings SET status='archived',title='Removed listing',description='',requirements='',moderation_note='',image_url='',attributes_json='{}',stock=0,reserved=0,updated_at=CURRENT_TIMESTAMP WHERE seller_id=?",(uid,))
+    db.execute('DELETE FROM seller_profiles WHERE user_id=?',(uid,))
+    db.execute('UPDATE ledger_entries SET user_id=NULL WHERE user_id=?',(uid,))
+    db.execute("UPDATE order_events SET actor_id=NULL,note='' WHERE actor_id=?",(uid,))
+    db.execute("UPDATE audit_logs SET actor_id=NULL,details_json='{}' WHERE actor_id=?",(uid,))
+    db.execute("UPDATE account_deletion_requests SET reason='' WHERE user_id=?",(uid,))
+    db.execute("UPDATE users SET email=?,password_hash=?,display_name='Deleted user',country='UZ',language='en',currency='UZS',email_verified=0,suspended=1,accepted_terms_version='',accepted_terms_at=NULL WHERE id=?",
+               ('deleted-'+uid+'@deleted.invalid',password_hash(secrets.token_urlsafe(48)),uid))
+
 def notify(db, uid, kind, title, body, href='/'):
     if uid: db.execute('INSERT INTO notifications(id,user_id,kind,title,body,href) VALUES(?,?,?,?,?,?)',(ident(),uid,kind,title,body,href))
 def email_order_update(db, uid, reference, status, description):
@@ -564,7 +609,7 @@ class Handler(BaseHTTPRequestHandler):
         finally: db.close()
     def do_GET(self):
         if not self.path.startswith('/api/'):
-            parsed=urlparse(self.path); f={'/':'index.html','/static/app.js':'app.js','/static/locales.js':'locales.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png'}.get(parsed.path)
+            parsed=urlparse(self.path); f={'/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/app.js':'app.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png'}.get(parsed.path)
             if not f: self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))
@@ -577,6 +622,37 @@ class Handler(BaseHTTPRequestHandler):
         uid=ctx['uid']
         if path=='/healthz' and method=='GET': return {'ok':True}
         if path=='/api/health' and method=='GET': return {'ok':True,'mode':MODE,'database':'supabase-postgres' if DATABASE_URL else 'sqlite','payments':'sandbox-only' if MODE=='development' else 'unconfigured','identity_verification':'didit' if identity_service.is_configured() else 'unconfigured'}
+        if path=='/api/cron/account-deletions' and method=='GET':
+            cron_secret=os.environ.get('CRON_SECRET','')
+            authorization=self.headers.get('Authorization','')
+            if not cron_secret or not hmac.compare_digest(authorization,'Bearer '+cron_secret):
+                raise HttpError(401,'Avtorizatsiya talab qilinadi.')
+            now=datetime.now(timezone.utc)
+            # Run with a two-day buffer so the daily scheduler's timing does not
+            # push a request past the publicly promised 30-day deletion window.
+            cutoff=now-timedelta(days=28)
+            requests=db.execute("SELECT id,user_id,created_at FROM account_deletion_requests WHERE status IN ('pending','reviewing') ORDER BY created_at LIMIT 1000").fetchall()
+            erased=0
+            for request in requests:
+                try:
+                    created_at=datetime.fromisoformat(str(request['created_at']).replace('Z','+00:00'))
+                    if created_at.tzinfo is None: created_at=created_at.replace(tzinfo=timezone.utc)
+                except (TypeError,ValueError):
+                    continue
+                if created_at>cutoff: continue
+                db.execute('BEGIN')
+                try:
+                    current=db.execute("SELECT user_id FROM account_deletion_requests WHERE id=? AND status IN ('pending','reviewing')",(request['id'],)).fetchone()
+                    if current:
+                        erase_account_personal_data(db,current['user_id'])
+                        db.execute("UPDATE account_deletion_requests SET status='resolved',reviewed_by=NULL,reviewed_at=CURRENT_TIMESTAMP WHERE id=?",(request['id'],))
+                        audit(db,None,'deletion_auto_resolved','deletion_request',request['id'],{'personal_data_erased':True,'retention_days':30})
+                        erased+=1
+                    db.execute('COMMIT')
+                except Exception:
+                    db.execute('ROLLBACK')
+                    raise
+            return {'ok':True,'erased':erased,'checked':len(requests)}
         if path=='/api/me' and method=='GET': return {'user':ctx['user'],'csrf':ctx['csrf'],'mode':MODE}
         if path=='/api/blog' and method=='GET':
             return [blog_post_view(x) for x in db.execute("SELECT * FROM blog_posts WHERE status='published' ORDER BY published_at DESC,created_at DESC LIMIT 100")]
@@ -1312,7 +1388,18 @@ class Handler(BaseHTTPRequestHandler):
         if m and method=='POST':
             aid=require_admin(ctx); action=data.get('action')
             if action not in ('reviewing','dismissed','resolved'): raise HttpError(400,'O‘chirish so‘rovi amali noto‘g‘ri.')
-            db.execute('UPDATE account_deletion_requests SET status=?,reviewed_by=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=?',(action,aid,m.group(1))); audit(db,aid,'deletion_'+action,'deletion_request',m.group(1)); return {'status':action}
+            request=db.execute('SELECT user_id FROM account_deletion_requests WHERE id=?',(m.group(1),)).fetchone()
+            if not request: raise HttpError(404,'O‘chirish so‘rovi topilmadi.')
+            db.execute('BEGIN')
+            try:
+                if action=='resolved': erase_account_personal_data(db,request['user_id'])
+                db.execute('UPDATE account_deletion_requests SET status=?,reviewed_by=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=?',(action,aid,m.group(1)))
+                audit(db,aid,'deletion_'+action,'deletion_request',m.group(1),{'personal_data_erased':action=='resolved'})
+                db.execute('COMMIT')
+            except Exception:
+                db.execute('ROLLBACK')
+                raise
+            return {'status':action,'personal_data_erased':action=='resolved'}
         m=re.fullmatch(r'/api/admin/users/([^/]+)',path)
         if m and method=='POST':
             aid=require_admin(ctx); target=m.group(1); action=data.get('action'); reason=clean_text(data.get('reason'),'Sabab',5,500)

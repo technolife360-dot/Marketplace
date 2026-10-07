@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS public.sessions (
   created_at TEXT NOT NULL DEFAULT to_char(timezone('UTC', now()), 'YYYY-MM-DD HH24:MI:SS')
 );
 CREATE TABLE IF NOT EXISTS public.oauth_identities (
-  provider TEXT NOT NULL CHECK (provider IN ('google', 'apple')),
+  provider TEXT NOT NULL CHECK (provider IN ('google', 'facebook', 'apple')),
   subject TEXT NOT NULL,
   user_id TEXT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   created_at TEXT NOT NULL DEFAULT to_char(timezone('UTC', now()), 'YYYY-MM-DD HH24:MI:SS'),
