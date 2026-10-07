@@ -14,8 +14,7 @@ The server sends only the listing's public game/category, title, description, pl
 
 1. Create a Gemini API key in Google AI Studio.
 2. Add `GEMINI_API_KEY` to the Vercel project's **server-side** Environment Variables for the intended deployment environments. Do not put the key in `static/`, a `VITE_`/`NEXT_PUBLIC_` variable, Git, or a browser request.
-3. Optionally set `GEMINI_MODEL`; the default is `gemini-2.5-flash`.
+3. Optionally set `GEMINI_MODEL`; the default is `gemini-flash-latest`.
 4. Redeploy. A listing submitted for moderation triggers one bounded API request. The result appears in the private admin listing queue.
 
 The integration uses the Gemini REST API directly and adds no client SDK dependency. Free quota is controlled by Google's current model/project rate limits and can pause at any time. A missing key or quota/provider failure is recorded as a private unavailable status and does not block a listing from reaching human review. Switching to paid usage later requires changing the Google project/billing or provider key, not rewriting the moderation flow.
-

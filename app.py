@@ -540,7 +540,7 @@ def parse_json(body):
     try: return json.loads(body or b'{}')
     except Exception: raise HttpError(400,'JSON so‘rovi noto‘g‘ri.')
 
-AI_REVIEW_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash').strip() or 'gemini-2.5-flash'
+AI_REVIEW_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-flash-latest').strip() or 'gemini-flash-latest'
 AI_REVIEW_MAX_TEXT = 2400
 AI_REVIEW_FINDING_CODES = frozenset({'credential_request','off_platform_trade','ownership_claim','publisher_rules','inconsistent_details','duplicate_or_template','other'})
 
