@@ -648,6 +648,9 @@ def listing_detail(db, lid, viewer=None):
       FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id LEFT JOIN seller_profiles s ON s.user_id=l.seller_id WHERE l.id=?""",(lid,)).fetchone()
     if not r: return None
     out=dict(r); out['available']=max(0,out['stock']-out['reserved']); out['attributes']=json.loads(out.pop('attributes_json') or '{}')
+    if viewer and (out['seller_id']==viewer or is_admin(db,viewer)):
+        out['marketplace_visible']=bool(out['status']=='published' and out['available']>0
+                                        and listing_allowed_for_production(db,out['game_id'],out['product_type']))
     # Risk signals are moderation metadata, never part of the public listing payload.
     risk_flags=out['attributes'].pop('_risk_flags',[])
     ai_review=out['attributes'].pop('_ai_review',None)
@@ -1235,7 +1238,7 @@ class Handler(BaseHTTPRequestHandler):
             require_admin(ctx)
             return [blog_post_view(x) for x in db.execute('SELECT * FROM blog_posts ORDER BY updated_at DESC LIMIT 200')]
         if path=='/api/admin/listings' and method=='GET':
-            require_admin(ctx); return [listing_detail(db,x['id'],uid) for x in db.execute("SELECT id FROM listings WHERE status IN ('pending_review','rejected') ORDER BY created_at")]
+            require_admin(ctx); return [listing_detail(db,x['id'],uid) for x in db.execute("SELECT id FROM listings WHERE status IN ('pending_review','rejected','published','paused') ORDER BY CASE status WHEN 'pending_review' THEN 0 WHEN 'rejected' THEN 1 WHEN 'published' THEN 2 ELSE 3 END,updated_at DESC LIMIT 200")]
         if path=='/api/admin/reports' and method=='GET':
             require_admin(ctx); return [dict(x) for x in db.execute('SELECT r.*,u.email reporter_email FROM reports r JOIN users u ON u.id=r.reporter_id ORDER BY CASE r.status WHEN \'open\' THEN 0 ELSE 1 END,r.created_at DESC LIMIT 100')]
         if path=='/api/admin/sellers' and method=='GET':
