@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import json
 import base64
 import os
 import runpy
@@ -54,6 +55,26 @@ class MarketplaceFlows(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'DATABASE_URL'):
                 guard._startup()
         migrate.assert_not_called()
+    def test_production_sales_are_closed_without_provider_and_operator_switch(self):
+        with patch.object(app,'MODE','production'), patch.dict(os.environ,{'MARKETPLACE_SALES_ENABLED':'false'},clear=False):
+            self.assertFalse(app.production_marketplace_sales_enabled())
+            app.enforce_production_marketplace_gate(self.db)
+        self.assertEqual(self.db.execute('SELECT status FROM listings WHERE id=?',(self.listing,)).fetchone()['status'],'paused')
+    def test_game_and_account_sales_require_separate_production_clearance(self):
+        from types import SimpleNamespace
+        env={'MARKETPLACE_SALES_ENABLED':'true','MARKETPLACE_APPROVED_GAME_SLUGS':'valorant','MARKETPLACE_APPROVED_ACCOUNT_GAME_SLUGS':''}
+        with patch.object(app,'MODE','production'), patch.object(app,'get_provider',return_value=SimpleNamespace(name='live-test')), patch.dict(os.environ,env,clear=False):
+            self.assertFalse(app.listing_allowed_for_production(self.db,'valorant','account'))
+            self.assertFalse(app.listing_allowed_for_production(self.db,'dota-2','item'))
+            self.assertTrue(app.listing_allowed_for_production(self.db,'valorant','item'))
+            with patch.dict(os.environ,{'MARKETPLACE_APPROVED_ACCOUNT_GAME_SLUGS':'valorant'},clear=False):
+                self.assertTrue(app.listing_allowed_for_production(self.db,'valorant','account'))
+    def test_public_listing_html_has_product_metadata_and_canonical_path(self):
+        with patch.dict(os.environ,{'PUBLIC_BASE_URL':'http://localhost:8000'},clear=False):
+            html=app.seo_listing_html(self.listing).decode()
+        self.assertIn('<title>Valorant account lvl 50 | Valorant | SentryLoot</title>',html)
+        self.assertIn('<link rel="canonical" href="http://localhost:8000/listing/'+self.listing+'">',html)
+        self.assertIn('A test listing with enough descriptive text.',html)
     def test_registration_requires_verified_email_and_creates_session(self):
         with self.assertRaises(app.HttpError): self.route(None,'POST','/api/register',{'email':'no-terms@test.invalid','name':'No Terms','password':'correct horse battery staple','accept_terms':False})
         result=self.route(None,'POST','/api/register',{'email':'new@test.invalid','name':'New User','password':'correct horse battery staple','accept_terms':True})
@@ -74,6 +95,16 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertEqual(self.route(self.other,'GET','/api/reviews/mine'),[])
         with self.assertRaises(app.HttpError): self.route(None,'GET','/api/reviews/mine')
     def test_blog_posts_require_admin_and_only_published_posts_are_public(self):
+        seeded=self.db.execute("SELECT id,title_json FROM blog_posts WHERE slug='xavfsiz-xarid'").fetchone()
+        self.assertIsNotNone(seeded)
+        self.assertIn('Check publisher rules',seeded['title_json'])
+        # Upgrade the old built-in account-buying article without overwriting edited posts.
+        legacy_title=json.dumps(['O‘yin hisobini sotib olishdan oldin tekshiriladigan 5 narsa','5 вещей, которые нужно проверить перед покупкой игрового аккаунта','5 things to check before buying a game account'],ensure_ascii=False)
+        self.db.execute('UPDATE blog_posts SET title_json=? WHERE id=?',(legacy_title,seeded['id']))
+        app.seed_blog_posts(self.db)
+        refreshed=self.db.execute('SELECT title_json,body_json FROM blog_posts WHERE id=?',(seeded['id'],)).fetchone()
+        self.assertIn('Check publisher rules',refreshed['title_json'])
+        self.assertIn('unauthorized',refreshed['body_json'])
         post={'slug':'safe-account-buying','status':'draft','category':['XAVFSIZ XARID','БЕЗОПАСНАЯ ПОКУПКА','SAFE BUYING'],
               'title':['Hisobni xavfsiz xarid qilish','Безопасная покупка аккаунта','Buying an account safely'],
               'summary':['Xarid oldidan nimalarni tekshirish kerak.','Что проверить перед покупкой аккаунта.','What to check before buying an account.'],

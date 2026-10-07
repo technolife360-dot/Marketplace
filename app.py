@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """SentryLoot marketplace server with SQLite and Supabase PostgreSQL backends."""
 from __future__ import annotations
-import hashlib, hmac, ipaddress, json, os, re, secrets, sqlite3, time, unicodedata
+import hashlib, hmac, html, ipaddress, json, os, re, secrets, sqlite3, time, unicodedata
 import io
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -166,6 +166,60 @@ def connect():
     db.execute('PRAGMA busy_timeout=15000')
     return db
 
+def production_marketplace_sales_enabled():
+    """Fail closed until business, provider, and publisher-rule gates are satisfied."""
+    if MODE != 'production': return True
+    if os.environ.get('MARKETPLACE_SALES_ENABLED','').strip().lower() != 'true': return False
+    try:
+        provider=get_provider(MODE,os.environ.get('PAYMENT_PROVIDER','disabled').strip().lower())
+    except Exception:
+        return False
+    return provider.name not in ('disabled','sandbox')
+
+def approved_game_slugs(variable):
+    return {slug.strip().lower() for slug in os.environ.get(variable,'').split(',')
+            if re.fullmatch(r'[a-z0-9-]{1,100}',slug.strip().lower())}
+
+def listing_allowed_for_production(db, game_id, product_type):
+    if MODE != 'production': return True
+    if not production_marketplace_sales_enabled(): return False
+    game=db.execute('SELECT slug FROM games WHERE id=?',(game_id,)).fetchone()
+    if not game or game['slug'].lower() not in approved_game_slugs('MARKETPLACE_APPROVED_GAME_SLUGS'): return False
+    if product_type=='account' and game['slug'].lower() not in approved_game_slugs('MARKETPLACE_APPROVED_ACCOUNT_GAME_SLUGS'):
+        return False
+    return True
+
+def require_listing_allowed(db, game_id, product_type):
+    if not listing_allowed_for_production(db,game_id,product_type):
+        raise HttpError(503,'Ishlab chiqarishda savdo hozircha yopiq: operator, to‘lov provayderi va shu o‘yin/tovar turi bo‘yicha yozma ruxsat hamda qoidalar tekshiruvi talab qilinadi.')
+
+def enforce_production_marketplace_gate(db):
+    if MODE != 'production': return
+    for listing in db.execute("SELECT id,game_id,product_type FROM listings WHERE status='published'").fetchall():
+        if not listing_allowed_for_production(db,listing['game_id'],listing['product_type']):
+            db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='published'",(listing['id'],))
+
+def public_site_base():
+    value=os.environ.get('PUBLIC_BASE_URL','').strip().rstrip('/')
+    parsed=urlparse(value)
+    if parsed.scheme not in ('https','http') or not parsed.hostname or parsed.username or parsed.password:
+        value='https://gamestorehub.com' if MODE=='production' else 'http://127.0.0.1:8000'
+    return value
+
+def public_sitemap_xml():
+    base=public_site_base()
+    urls=[base+'/',base+'/privacy-policy',base+'/data-deletion']
+    db=connect()
+    try:
+        for listing in db.execute("SELECT id,game_id,product_type FROM listings WHERE status='published' ORDER BY updated_at DESC").fetchall():
+            if listing_allowed_for_production(db,listing['game_id'],listing['product_type']):
+                urls.append(base+'/listing/'+urlquote(str(listing['id']),safe=''))
+    finally:
+        db.close()
+    entries=''.join(f'<url><loc>{html.escape(url)}</loc></url>' for url in urls)
+    return ('<?xml version="1.0" encoding="UTF-8"?>'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+entries+'</urlset>').encode('utf-8')
+
 def migrate():
     db=connect()
     try:
@@ -182,6 +236,7 @@ def migrate():
             categories=[('accounts','Gaming accounts','account'),('items','Items & skins','item'),('currency','In-game currency','currency'),('services','Coaching & services','service'),('codes','Gift cards & digital codes','code')]
             for slug,name in games: db.execute('INSERT INTO games(id,slug,name) VALUES(?,?,?) ON CONFLICT(id) DO NOTHING',(slug,slug,name))
             for slug,name,typ in categories: db.execute('INSERT INTO categories(id,slug,name,product_type) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING',(slug,slug,name,typ))
+            enforce_production_marketplace_gate(db)
             return
         db.executescript((ROOT / 'migrations/001_initial.sql').read_text())
         oauth_table=db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='oauth_identities'").fetchone()
@@ -229,6 +284,7 @@ def migrate():
         categories = [('accounts','Gaming accounts','account'),('items','Items & skins','item'),('currency','In-game currency','currency'),('services','Coaching & services','service'),('codes','Gift cards & digital codes','code')]
         for slug, name in games: db.execute('INSERT OR IGNORE INTO games(id,slug,name) VALUES(?,?,?)',(slug,slug,name))
         for slug, name, typ in categories: db.execute('INSERT OR IGNORE INTO categories(id,slug,name,product_type) VALUES(?,?,?,?)',(slug,slug,name,typ))
+        enforce_production_marketplace_gate(db)
     finally:
         db.close()
 
@@ -247,13 +303,24 @@ def validate_blog_post(data):
     return result
 
 def seed_blog_posts(db):
-    if db.execute('SELECT 1 FROM blog_posts LIMIT 1').fetchone(): return
+    if db.execute('SELECT 1 FROM blog_posts LIMIT 1').fetchone():
+        # Replace only the original built-in article; preserve any administrator-edited copy.
+        seeded=db.execute("SELECT id FROM blog_posts WHERE slug='xavfsiz-xarid' AND title_json LIKE ?",('%before buying a game account%',)).fetchone()
+        if seeded:
+            safe_title=['O‘yin akkauntini sotishdan oldin rasmiy qoidalarni tekshiring','Перед продажей игрового аккаунта проверьте правила издателя','Check publisher rules before transferring a game account']
+            safe_summary=['Ayrim noshirlar akkauntni sotish yoki boshqa odamga berishni taqiqlaydi. Avval o‘yin noshirining amaldagi qoidalarini tekshiring.','Некоторые издатели запрещают продажу и передачу игровых аккаунтов. Сначала проверьте действующие правила издателя.','Some publishers prohibit selling or transferring game accounts. Check the publisher’s current rules first.']
+            safe_body=[
+              ['Akkaunt sizniki bo‘lsa ham, o‘yin qoidalari uni boshqa odamga sotish yoki berishga ruxsat bermasligi mumkin.','EA qoidalari EA hisobini sotish, ulashish yoki boshqa odamga o‘tkazishni taqiqlaydi; FC Mobile qoidalari ham hisob xavfsizligi va uchinchi tomon akkauntlari bo‘yicha cheklov qo‘yadi.','PUBG Mobile rasmiy ogohlantirishi akkaunt savdosini ruxsatsiz deb ataydi va kirish ma’lumotlarini berish xavfini tushuntiradi.','Qoidaga zid akkauntlarni bu marketplace’da e’lon qilmang. Qoidalar va hududiy qonunlar farq qilishi mumkin; tushunarsiz bo‘lsa, noshirga va mahalliy yuristga murojaat qiling.'],
+              ['Даже если аккаунт ваш, правила игры могут запрещать его продажу или передачу.','Правила EA запрещают продавать, передавать или совместно использовать аккаунт EA; правила FC Mobile также ограничивают сторонние аккаунты и требуют беречь данные входа.','Официальное предупреждение PUBG Mobile называет торговлю аккаунтами неразрешённой и объясняет риск передачи данных для входа.','Не размещайте на этой площадке аккаунты, передача которых нарушает правила издателя. Требования зависят от игры и страны; при сомнениях обратитесь к издателю и местному юристу.'],
+              ['Even if an account is yours, the game’s rules may prohibit selling or transferring it.','EA rules prohibit selling, sharing, or transferring an EA Account; FC Mobile rules also restrict third-party accounts and warn players to protect login details.','PUBG Mobile’s official warning describes account trading as unauthorized and explains the risks of sharing login information.','Do not list accounts when a transfer would violate the publisher’s rules. Rules and local laws vary; ask the publisher and a local lawyer if unsure.']]
+            db.execute('UPDATE blog_posts SET category_json=?,title_json=?,summary_json=?,body_json=? WHERE id=?',tuple(json.dumps(x,ensure_ascii=False) for x in (['QOIDALAR','ПРАВИЛА','RULES'],safe_title,safe_summary,safe_body))+(seeded['id'],))
+        return
     posts=[
       ('xavfsiz-xarid',
        ['XAVFSIZ XARID','БЕЗОПАСНАЯ ПОКУПКА','SAFE BUYING'],
-       ['O‘yin hisobini sotib olishdan oldin tekshiriladigan 5 narsa','5 вещей, которые нужно проверить перед покупкой игрового аккаунта','5 things to check before buying a game account'],
-       ['E’lonni tekshirish, sotuvchi bilan xavfsiz yozishish va yetkazishni qabul qilish bo‘yicha qisqa ro‘yxat.','Короткий список: как проверить объявление, безопасно общаться и принять доставку.','A short checklist for reviewing a listing, messaging safely, and accepting delivery.'],
-       [['Platforma va hudud mosligini tekshiring.','Sotuvchidan faqat e’londagi ma’lumotlarni aniqlashtiring; parol yoki OTP so‘ramang.','To‘lovni platformadagi checkout orqali boshlang.','Yetkazilgan ma’lumotni tekshirib, keyin buyurtmani yakunlang.','Nizo bo‘lsa, muammoni buyurtma sahifasidan yuboring.'],['Проверьте платформу и регион.','Уточняйте сведения объявления; не просите пароль или OTP.','Оформляйте заказ через checkout платформы.','Проверьте доставку и только после этого завершайте заказ.','Откройте спор со страницы заказа, если возникла проблема.'],['Check platform and region compatibility.','Ask about listing details; never request a password or OTP.','Start checkout through the marketplace.','Inspect delivery before completing the order.','Open a dispute from the order page if something is wrong.']]),
+       ['O‘yin akkauntini sotishdan oldin rasmiy qoidalarni tekshiring','Перед продажей игрового аккаунта проверьте правила издателя','Check publisher rules before transferring a game account'],
+       ['Ayrim noshirlar akkauntni sotish yoki boshqa odamga berishni taqiqlaydi. Avval o‘yin noshirining amaldagi qoidalarini tekshiring.','Некоторые издатели запрещают продажу и передачу игровых аккаунтов. Сначала проверьте действующие правила издателя.','Some publishers prohibit selling or transferring game accounts. Check the publisher’s current rules first.'],
+       [['Akkaunt sizniki bo‘lsa ham, o‘yin qoidalari uni boshqa odamga sotish yoki berishga ruxsat bermasligi mumkin.','EA qoidalari EA hisobini sotish, ulashish yoki boshqa odamga o‘tkazishni taqiqlaydi; FC Mobile qoidalari ham hisob xavfsizligi va uchinchi tomon akkauntlari bo‘yicha cheklov qo‘yadi.','PUBG Mobile rasmiy ogohlantirishi akkaunt savdosini ruxsatsiz deb ataydi va kirish ma’lumotlarini berish xavfini tushuntiradi.','Qoidaga zid akkauntlarni bu marketplace’da e’lon qilmang. Qoidalar va hududiy qonunlar farq qilishi mumkin; tushunarsiz bo‘lsa, noshirga va mahalliy yuristga murojaat qiling.'],['Даже если аккаунт ваш, правила игры могут запрещать его продажу или передачу.','Правила EA запрещают продавать, передавать или совместно использовать аккаунт EA; правила FC Mobile также ограничивают сторонние аккаунты и требуют беречь данные входа.','Официальное предупреждение PUBG Mobile называет торговлю аккаунтами неразрешённой и объясняет риск передачи данных для входа.','Не размещайте на этой площадке аккаунты, передача которых нарушает правила издателя. Требования зависят от игры и страны; при сомнениях обратитесь к издателю и местному юристу.'],['Even if an account is yours, the game’s rules may prohibit selling or transferring it.','EA rules prohibit selling, sharing, or transferring an EA Account; FC Mobile rules also restrict third-party accounts and warn players to protect login details.','PUBG Mobile’s official warning describes account trading as unauthorized and explains the risks of sharing login information.','Do not list accounts when a transfer would violate the publisher’s rules. Rules and local laws vary; ask the publisher and a local lawyer if unsure.']]),
       ('sotuvchi-qollanma',
        ['SOTUVCHI QO‘LLANMASI','РУКОВОДСТВО ПРОДАВЦА','SELLER GUIDE'],
        ['Aniq va ishonchli e’lon yozish','Как создать понятное объявление','Writing a clear, trustworthy listing'],
@@ -469,6 +536,30 @@ def listing_detail(db, lid, viewer=None):
     out['is_favorite']=bool(viewer and db.execute('SELECT 1 FROM favorites WHERE user_id=? AND listing_id=?',(viewer,lid)).fetchone())
     return out
 
+def seo_listing_html(listing_id):
+    db=connect()
+    try:
+        item=listing_detail(db,listing_id)
+        if (not item or item['status']!='published'
+                or not listing_allowed_for_production(db,item['game_id'],item['product_type'])):
+            return None
+    finally:
+        db.close()
+    template=(ROOT/'static'/'index.html').read_text(encoding='utf-8')
+    base=public_site_base()
+    canonical=base+'/listing/'+urlquote(str(item['id']),safe='')
+    title=f"{item['title']} | {item['game_name']} | SentryLoot"
+    description=re.sub(r'\s+',' ',str(item['description'] or '')).strip()[:260]
+    image=str(item['image_url'] or '')
+    replacements={
+        'SentryLoot — Game Marketplace':html.escape(title,quote=True),
+        'A marketplace for permitted game items and digital services. Marketplace sales are currently restricted to approved games and products.':html.escape(description,quote=True),
+        'https://gamestorehub.com/':html.escape(canonical,quote=True),
+        'https://gamestorehub.com/static/favicon.svg':html.escape(image or base+'/static/assets/sentryloot-app-icon.png',quote=True),
+    }
+    for old,new in replacements.items(): template=template.replace(old,new)
+    return template.encode('utf-8')
+
 def order_view(db, oid, uid, admin=False):
     q=db.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
     if not q: return None
@@ -614,7 +705,19 @@ class Handler(BaseHTTPRequestHandler):
         finally: db.close()
     def do_GET(self):
         if not self.path.startswith('/api/'):
-            parsed=urlparse(self.path); f={'/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/app.js':'app.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png'}.get(parsed.path)
+            parsed=urlparse(self.path)
+            if parsed.path=='/robots.txt':
+                payload=f"User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\nSitemap: {public_site_base()}/sitemap.xml\n".encode('utf-8')
+                self.send_response(200); self.send_header('Content-Type','text/plain; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=3600'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
+            if parsed.path=='/sitemap.xml':
+                payload=public_sitemap_xml()
+                self.send_response(200); self.send_header('Content-Type','application/xml; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=300'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
+            listing_match=re.fullmatch(r'/listing/([A-Za-z0-9_-]{1,100})',parsed.path)
+            if listing_match:
+                payload=seo_listing_html(listing_match.group(1))
+                if payload is None: self.send_error(404); return
+                self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
+            f={'/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/app.js':'app.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png'}.get(parsed.path)
             if not f: self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))
@@ -853,6 +956,16 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/categories' and method=='GET': return [dict(x) for x in db.execute('SELECT id,slug,name,product_type FROM categories WHERE active=1 ORDER BY name')]
         if path=='/api/listings' and method=='GET':
             where=["l.status='published'"]; args=[]
+            if MODE=='production':
+                if not production_marketplace_sales_enabled(): return {'items':[],'page':1,'page_size':24,'has_more':False}
+                approved_games=sorted(approved_game_slugs('MARKETPLACE_APPROVED_GAME_SLUGS'))
+                if not approved_games: return {'items':[],'page':1,'page_size':24,'has_more':False}
+                where.append(f"g.slug IN ({','.join('?' for _ in approved_games)})"); args.extend(approved_games)
+                approved_account_games=sorted(approved_game_slugs('MARKETPLACE_APPROVED_ACCOUNT_GAME_SLUGS'))
+                if approved_account_games:
+                    where.append(f"(l.product_type!='account' OR g.slug IN ({','.join('?' for _ in approved_account_games)}))"); args.extend(approved_account_games)
+                else:
+                    where.append("l.product_type!='account'")
             for key,col in [('game','g.slug'),('category','c.slug'),('type','l.product_type'),('region','l.region')]:
                 val=qs.get(key,[''])[0]
                 if val: where.append(f'{col}=?'); args.append(val)
@@ -877,6 +990,7 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith('/api/listings/') and method=='GET':
             lid=path.split('/')[-1]; item=listing_detail(db,lid,uid)
             if not item or (item['status']!='published' and item['seller_id']!=uid and not (uid and is_admin(db,uid))): raise HttpError(404,'E’lon topilmadi.')
+            if item['status']=='published' and not listing_allowed_for_production(db,item['game_id'],item['product_type']): raise HttpError(404,'E’lon topilmadi.')
             item.pop('seller_id',None)
             item['related']=[dict(x) for x in db.execute('SELECT id,title,price_minor,currency FROM listings WHERE game_id=? AND status=\'published\' AND id<>? ORDER BY created_at DESC LIMIT 4',(item['game_id'],lid))]
             return item
@@ -1029,6 +1143,7 @@ class Handler(BaseHTTPRequestHandler):
             return {'seller':profile}
         if path=='/api/listing-images' and method=='POST':
             require_verified(ctx); seller_ok(db,uid); check_rate(db,'listing_image_upload',uid,30,3600)
+            if not production_marketplace_sales_enabled(): raise HttpError(503,'Ishlab chiqarishda savdo uchun to‘lov va huquqiy talablar yakunlanmaguncha e’lon rasmi yuklash yopiq.')
             if not SUPABASE_URL.startswith('https://') or not SUPABASE_SERVICE_ROLE_KEY or not re.fullmatch(r'[a-z0-9_-]{1,100}',SUPABASE_LISTING_IMAGES_BUCKET):
                 raise HttpError(503,'Rasm yuklash serverda sozlanmagan. Supabase Storage sozlamalari kerak.')
             if not raw_body or len(raw_body)>MAX_IMAGE_BODY: raise HttpError(413,'Rasm 5 MB dan kichik bo‘lishi kerak.')
@@ -1083,6 +1198,7 @@ class Handler(BaseHTTPRequestHandler):
             platform=clean_text(data.get('platform',''),'Platforma',0,60); region=clean_text(data.get('region',''),'Hudud',0,60)
             delivery_eta=clean_text(data.get('delivery_eta','24 hours'),'Yetkazish muddati',2,60); requirements=clean_text(data.get('requirements',''),'Shartlar',0,1000)
             game=resolve_game_id(db,game_name)
+            require_listing_allowed(db,game,typ)
             lid=ident(); db.execute('INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,platform,region,attributes_json,delivery_method,delivery_eta,requirements,stock,image_url,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                 (lid,uid,game,cat,title,desc,typ,price,platform,region,json.dumps(attributes,ensure_ascii=False),data.get('delivery_method','manual'),delivery_eta,requirements,stock,image_url,'pending_review' if submit_for_review else 'draft'))
             if submit_for_review:
@@ -1095,7 +1211,8 @@ class Handler(BaseHTTPRequestHandler):
             if not l: raise HttpError(404,'E’lon topilmadi.')
             action=data.get('action')
             if action=='pause' and l['status']=='published': target='paused'
-            elif action=='reopen' and l['status']=='paused': target='pending_review'
+            elif action=='reopen' and l['status']=='paused':
+                require_listing_allowed(db,l['game_id'],l['product_type']); target='pending_review'
             elif action=='archive' and l['status'] in ('draft','rejected','paused'): target='archived'
             else: raise HttpError(409,'Ushbu holatda bu amalni bajarib bo‘lmaydi.')
             db.execute('UPDATE listings SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(target,lid)); audit(db,uid,'listing_'+action,'listing',lid); return {'status':target}
@@ -1104,6 +1221,7 @@ class Handler(BaseHTTPRequestHandler):
             require_verified(ctx); seller_ok(db,uid); lid=m.group(1); l=db.execute('SELECT * FROM listings WHERE id=? AND seller_id=?',(lid,uid)).fetchone()
             if not l: raise HttpError(404,'E’lon topilmadi.')
             if l['status'] not in ('draft','rejected','paused'): raise HttpError(409,'Bu e’lon hozir moderatsiyaga yuborilmaydi.')
+            require_listing_allowed(db,l['game_id'],l['product_type'])
             db.execute("UPDATE listings SET status='pending_review',moderation_note='',updated_at=CURRENT_TIMESTAMP WHERE id=?",(lid,)); notify(db,next(iter([r['user_id'] for r in db.execute('SELECT user_id FROM admin_accounts LIMIT 20')]),None),'moderation','Yangi e’lon','Tekshirish uchun yangi e’lon yuborildi.','/admin'); return {'status':'pending_review'}
         m=re.fullmatch(r'/api/listings/([^/]+)',path)
         if m and method=='PATCH':
@@ -1301,6 +1419,7 @@ class Handler(BaseHTTPRequestHandler):
             if action not in ('approve','reject','pause'): raise HttpError(400,'Moderatsiya amali noto‘g‘ri.')
             status={'approve':'published','reject':'rejected','pause':'paused'}[action]; l=db.execute("SELECT * FROM listings WHERE id=? AND status IN ('pending_review','published')",(lid,)).fetchone()
             if not l: raise HttpError(404,'Tekshiriladigan e’lon topilmadi.')
+            if action=='approve': require_listing_allowed(db,l['game_id'],l['product_type'])
             db.execute('UPDATE listings SET status=?,moderation_note=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(status,note,lid)); audit(db,aid,'listing_'+action,'listing',lid,{'note':note}); notify(db,l['seller_id'],'moderation','Moderatsiya natijasi',f'E’loningiz holati: {status}. {note}','/seller'); return {'status':status}
         m=re.fullmatch(r'/api/admin/sellers/([^/]+)',path)
         if m and method=='POST':
