@@ -546,8 +546,29 @@ def listing_detail(db, lid, viewer=None):
       FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id LEFT JOIN seller_profiles s ON s.user_id=l.seller_id WHERE l.id=?""",(lid,)).fetchone()
     if not r: return None
     out=dict(r); out['available']=max(0,out['stock']-out['reserved']); out['attributes']=json.loads(out.pop('attributes_json') or '{}')
+    # Risk signals are moderation metadata, never part of the public listing payload.
+    risk_flags=out['attributes'].pop('_risk_flags',[])
+    if viewer and is_admin(db,viewer): out['risk_flags']=risk_flags
     out['is_favorite']=bool(viewer and db.execute('SELECT 1 FROM favorites WHERE user_id=? AND listing_id=?',(viewer,lid)).fetchone())
     return out
+
+def listing_risk_flags(db, seller_id, game_id, product_type, title, description):
+    """Deterministic review signals. These flag listings for a human; they do not accuse or auto-ban."""
+    flags=[]
+    text=f'{title}\n{description}'
+    if re.search(r'(?i)(?:https?://|www\.|t\.me/|telegram|whatsapp|discord\.gg|instagram\.com|pay\s+me\s+direct|outside\s+(?:the\s+)?platform)',text):
+        flags.append('off_platform_contact_or_payment')
+    if re.search(r'(?i)\b(?:password|passcode|otp|2fa|backup\s+code|recovery\s+code)\s*[:=]',text):
+        flags.append('possible_credential_or_code')
+    normalize_title=lambda value: re.sub(r'[^a-z0-9]+',' ',unicodedata.normalize('NFKD',value).encode('ascii','ignore').decode().lower()).strip()
+    normalized=normalize_title(title)
+    if normalized:
+        prior_titles=db.execute("SELECT title FROM listings WHERE seller_id=? AND game_id=? AND status IN ('draft','pending_review','published','paused') ORDER BY created_at DESC LIMIT 50",(seller_id,game_id)).fetchall()
+        if any(normalize_title(row['title'])==normalized for row in prior_titles): flags.append('possible_duplicate_listing')
+    if product_type=='account':
+        account_count=db.execute("SELECT COUNT(*) n FROM listings WHERE seller_id=? AND product_type='account'",(seller_id,)).fetchone()['n']
+        if account_count>=10: flags.append('high_account_listing_volume')
+    return sorted(set(flags))
 
 def seo_listing_html(listing_id):
     db=connect()
@@ -747,7 +768,13 @@ class Handler(BaseHTTPRequestHandler):
     def route(self,db,ctx,method,path,qs,data,raw_body=b''):
         uid=ctx['uid']
         if path=='/healthz' and method=='GET': return {'ok':True}
-        if path=='/api/health' and method=='GET': return {'ok':True,'mode':MODE,'database':'supabase-postgres' if DATABASE_URL else 'sqlite','payments':'sandbox-only' if MODE=='development' else 'unconfigured','identity_verification':'didit' if identity_service.is_configured() else 'unconfigured'}
+        if path=='/api/health' and method=='GET':
+            try: payment_state=get_provider(MODE,os.environ.get('PAYMENT_PROVIDER','disabled').strip().lower()).name
+            except RuntimeError: payment_state='unconfigured'
+            return {'ok':True,'mode':MODE,'database':'supabase-postgres' if DATABASE_URL else 'sqlite',
+                    'payments':payment_state,'identity_verification':'didit-configured' if identity_service.is_configured() else 'unconfigured',
+                    'sales_enabled':production_marketplace_sales_enabled() if MODE=='production' else False,
+                    'sales_guard':'closed' if MODE=='production' and not production_marketplace_sales_enabled() else 'preview'}
         if path=='/api/cron/account-deletions' and method=='GET':
             cron_secret=os.environ.get('CRON_SECRET','')
             authorization=self.headers.get('Authorization','')
@@ -987,6 +1014,11 @@ class Handler(BaseHTTPRequestHandler):
             for key,col in [('game','g.slug'),('category','c.slug'),('type','l.product_type'),('region','l.region')]:
                 val=qs.get(key,[''])[0]
                 if val: where.append(f'{col}=?'); args.append(val)
+            for key,col in [('platform','l.platform'),('rank','l.attributes_json')]:
+                val=qs.get(key,[''])[0].strip()
+                if val:
+                    if key=='rank': where.append('lower(l.attributes_json) LIKE ?'); args.append('%'+val.lower()+'%')
+                    else: where.append(f'lower({col}) LIKE ?'); args.append('%'+val.lower()+'%')
             search=qs.get('q',[''])[0].strip()
             if search:
                 phrase='\"'+search.replace('\"','\"\"')+'\"'
@@ -1098,7 +1130,7 @@ class Handler(BaseHTTPRequestHandler):
             require_admin(ctx)
             return [blog_post_view(x) for x in db.execute('SELECT * FROM blog_posts ORDER BY updated_at DESC LIMIT 200')]
         if path=='/api/admin/listings' and method=='GET':
-            require_admin(ctx); return [listing_detail(db,x['id']) for x in db.execute("SELECT id FROM listings WHERE status IN ('pending_review','rejected') ORDER BY created_at")]
+            require_admin(ctx); return [listing_detail(db,x['id'],uid) for x in db.execute("SELECT id FROM listings WHERE status IN ('pending_review','rejected') ORDER BY created_at")]
         if path=='/api/admin/reports' and method=='GET':
             require_admin(ctx); return [dict(x) for x in db.execute('SELECT r.*,u.email reporter_email FROM reports r JOIN users u ON u.id=r.reporter_id ORDER BY CASE r.status WHEN \'open\' THEN 0 ELSE 1 END,r.created_at DESC LIMIT 100')]
         if path=='/api/admin/sellers' and method=='GET':
@@ -1221,6 +1253,8 @@ class Handler(BaseHTTPRequestHandler):
             require_listing_allowed(db,game,typ)
             account_terms=ACCOUNT_SELLER_TERMS_VERSION if typ=='account' else ''
             account_terms_at=now_iso() if typ=='account' else None
+            risk_flags=listing_risk_flags(db,uid,game,typ,title,desc)
+            if risk_flags: attributes['_risk_flags']=risk_flags
             lid=ident(); db.execute('INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,platform,region,attributes_json,delivery_method,delivery_eta,requirements,stock,image_url,status,seller_account_terms_version,seller_account_terms_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                 (lid,uid,game,cat,title,desc,typ,price,platform,region,json.dumps(attributes,ensure_ascii=False),data.get('delivery_method','manual'),delivery_eta,requirements,stock,image_url,'pending_review' if submit_for_review else 'draft',account_terms,account_terms_at))
             if submit_for_review:
@@ -1449,6 +1483,9 @@ class Handler(BaseHTTPRequestHandler):
                 require_listing_allowed(db,l['game_id'],l['product_type'])
                 if l['product_type']=='account' and l['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION:
                     raise HttpError(400,'Sotuvchi akkaunt savdosi qoidalarini tasdiqlamagan.')
+                risk_flags=json.loads(l['attributes_json'] or '{}').get('_risk_flags',[])
+                if risk_flags and len(note.strip())<10:
+                    raise HttpError(400,'Xavf belgilarini moderator izohida ko‘rib chiqib, kamida 10 belgi bilan qayd eting.')
             db.execute('UPDATE listings SET status=?,moderation_note=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(status,note,lid)); audit(db,aid,'listing_'+action,'listing',lid,{'note':note}); notify(db,l['seller_id'],'moderation','Moderatsiya natijasi',f'E’loningiz holati: {status}. {note}','/seller'); return {'status':status}
         m=re.fullmatch(r'/api/admin/sellers/([^/]+)',path)
         if m and method=='POST':

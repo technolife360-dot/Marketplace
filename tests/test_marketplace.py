@@ -69,6 +69,28 @@ class MarketplaceFlows(unittest.TestCase):
             self.assertTrue(app.listing_allowed_for_production(self.db,'valorant','item'))
             with patch.dict(os.environ,{'MARKETPLACE_APPROVED_ACCOUNT_GAME_SLUGS':'valorant'},clear=False):
                 self.assertTrue(app.listing_allowed_for_production(self.db,'valorant','account'))
+    def test_listing_risk_signals_are_private_and_require_moderator_reason(self):
+        flags=app.listing_risk_flags(self.db,self.seller,'valorant','account','Risky account listing','Contact me at https://example.invalid and send OTP: 123456')
+        self.assertIn('off_platform_contact_or_payment',flags)
+        self.assertIn('possible_credential_or_code',flags)
+        result=self.route(self.seller,'POST','/api/listings',{'game_id':'valorant','category_id':'accounts','title':'Risky account listing','description':'Contact me at https://example.invalid and send OTP: 123456','price_minor':23000,'stock':1,'accept_account_terms':True})
+        saved=self.db.execute('SELECT attributes_json FROM listings WHERE id=?',(result['id'],)).fetchone()
+        self.assertIn('off_platform_contact_or_payment',json.loads(saved['attributes_json'])['_risk_flags'])
+        self.assertNotIn('_risk_flags',result['attributes'])
+        admin_view=self.route(self.admin,'GET',f"/api/listings/{result['id']}")
+        self.assertIn('possible_credential_or_code',admin_view['risk_flags'])
+        self.route(self.seller,'POST',f"/api/listings/{result['id']}/submit",{})
+        with self.assertRaisesRegex(app.HttpError,'moderator izohida'):
+            self.route(self.admin,'POST',f"/api/admin/listings/{result['id']}",{'action':'approve','note':'ok'})
+        self.route(self.admin,'POST',f"/api/admin/listings/{result['id']}",{'action':'approve','note':'Reviewed off-platform contact and code risk.'})
+
+    def test_health_reports_guarded_configuration_without_secrets(self):
+        result=self.route(None,'GET','/api/health')
+        self.assertEqual(result['payments'],'sandbox')
+        self.assertFalse(result['sales_enabled'])
+        self.assertEqual(result['sales_guard'],'preview')
+        self.assertNotIn('secret',json.dumps(result).lower())
+
     def test_account_listing_requires_seller_attestation(self):
         data={'game_name':'Valorant','category_id':'accounts','title':'New account listing','description':'A sufficiently long listing description.','price_minor':23000,'stock':2}
         with self.assertRaisesRegex(app.HttpError,'sotuvchi tasdig‘i'):
@@ -156,6 +178,22 @@ class MarketplaceFlows(unittest.TestCase):
         messages=[call.args for call in send.call_args_list]
         self.assertEqual([(x[0],x[3]) for x in messages],[("seller@test.invalid",'paid'),("buyer@test.invalid",'awaiting_delivery'),("seller@test.invalid",'completed')])
         self.assertNotIn('Never include this secret',repr(messages))
+    def test_dispute_queue_uses_order_id_for_actions_and_keeps_money_sandbox_only(self):
+        self.add_cart(self.buyer)
+        order=app.checkout(self.db,self.buyer,True,True)
+        self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})
+        self.route(self.buyer,'POST',f"/api/orders/{order['id']}/dispute",{'details':'Seller reclaimed the game account after delivery.','evidence_url':'https://evidence.example.invalid/case/123'})
+        queued=self.route(self.admin,'GET','/api/admin/disputes')
+        self.assertEqual(len(queued),1)
+        self.assertNotEqual(queued[0]['order_id'],queued[0]['report_id'])
+        self.route(self.admin,'POST',f"/api/admin/disputes/{order['id']}",{'action':'request_info','note':'Please provide account recovery timeline.'})
+        report=self.db.execute("SELECT status FROM reports WHERE order_id=? AND reason='order_dispute'",(order['id'],)).fetchone()
+        self.assertEqual(report['status'],'reviewing')
+        self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?',(order['id'],)).fetchone()['status'],'disputed')
+        self.route(self.admin,'POST',f"/api/admin/disputes/{order['id']}",{'action':'refund_buyer','note':'Sandbox refund recorded after review.'})
+        self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?',(order['id'],)).fetchone()['status'],'refunded')
+        self.assertEqual(self.db.execute('SELECT status FROM payments WHERE order_id=?',(order['id'],)).fetchone()['status'],'sandbox_refunded')
+
     def test_listing_moderation_requires_admin_and_publishes(self):
         draft=self.route(self.seller,'POST','/api/listings',{'game_id':'valorant','category_id':'accounts','title':'New account listing','description':'A sufficiently long listing description.','price_minor':23000,'stock':2,'accept_account_terms':True})
         self.route(self.seller,'POST',f"/api/listings/{draft['id']}/submit",{})

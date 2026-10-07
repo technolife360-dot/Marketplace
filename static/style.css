@@ -383,6 +383,15 @@ body.profile-menu-open { overflow: hidden; }
 .linked-account-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); font-size: 10px; }
 .linked-account-badge .provider-mark { width: 19px; height: 19px; font-size: 11px; border-radius: 6px; }
 .linked-account-badge .provider-glyph svg { width: 13px; height: 13px; }
+.game-specific-fields { margin-top: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(170,187,218,4%); }
+.game-specific-fields h4 { margin: 0 0 10px; font-size: 13px; }
+.compare-listing-button { width: calc(100% - 20px); min-height: 34px; margin: 0 10px 10px; }
+.comparison-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: stretch; }
+.comparison-item { display: grid; align-content: start; gap: 10px; min-width: 0; }
+.comparison-item > * { overflow-wrap: anywhere; }
+.comparison-item > span { padding-top: 8px; border-top: 1px solid var(--line); color: var(--muted); }
+.comparison-item h3 { min-height: 2.5em; margin: 0; }
+.comparison-item strong { font-size: 18px; }
 .form-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
 .listing-form .form-grid > .field { min-width: 0; }
 .listing-form .form-grid > .field > label { display: flex; min-height: 2.6em; align-items: flex-end; line-height: 1.3; }
