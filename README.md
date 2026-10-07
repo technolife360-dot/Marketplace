@@ -64,6 +64,8 @@ Seller identity verification uses Didit’s hosted verification session. Configu
 
 Google and Facebook sign-in use server-side authorization-code flows. Configure a Google OAuth Web client and set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`; for Facebook Login set `FACEBOOK_APP_ID` / `FACEBOOK_APP_SECRET`. In production register each exact callback at `<PUBLIC_BASE_URL>/api/oauth/{google,facebook}/callback` in its provider console. In development, the callback host follows the browser host, so use one host consistently (`localhost` or `127.0.0.1`) and register its exact callback URI. Facebook requests only `public_profile` and `email`; the server exchanges the code and obtains the profile over HTTPS. Provider buttons appear only when credentials are configured. Existing password accounts are never silently linked by matching email; a conflicting provider identity is rejected until an explicit account-linking flow is added. Social registration records the same terms acceptance as password registration, and a provider identity never grants admin access.
 
+Optional AI listing review uses Gemini from the backend when a listing enters the moderator queue. Add `GEMINI_API_KEY` as a server-only Vercel secret to enable it; no key means manual review and deterministic checks continue. Only redacted, allowlisted public listing fields are sent. AI output is a private advisory for admins and cannot approve/reject listings or take account/payment actions. See [AI listing review setup](docs/AI_LISTING_REVIEW.md), including the free-tier data-use caveat.
+
 File upload and private object storage are not enabled; listings use optional external image URLs only. Never put protected credentials in public listing media.
 
 ## Data/security notes
