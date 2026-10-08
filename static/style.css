@@ -1946,7 +1946,7 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
 .support-launcher, .support-panel { pointer-events: auto; }
 .support-launcher { min-height: 52px; display: inline-flex; align-items: center; gap: 10px; padding: 0 18px; border: 1px solid rgba(236, 198, 255, 34%); border-radius: 999px; background: linear-gradient(135deg, #c733ed, #872bf0); color: #fff; font: inherit; font-size: 14px; font-weight: 750; box-shadow: 0 12px 34px rgba(115, 25, 170, 36%), inset 0 1px rgba(255,255,255,20%); cursor: pointer; transition: transform .18s ease, box-shadow .18s ease; }
 .support-launcher:hover { transform: translateY(-2px); box-shadow: 0 16px 38px rgba(115, 25, 170, 48%), inset 0 1px rgba(255,255,255,20%); }
-.support-launcher .icon { width: 19px; height: 19px; }
+.support-launcher img { width: 30px; height: 30px; flex: 0 0 auto; border: 1px solid rgba(255,255,255,30%); border-radius: 9px; object-fit: cover; box-shadow: 0 2px 8px rgba(42, 8, 66, 25%); }
 .support-panel { width: min(390px, calc(100vw - 32px)); max-height: min(610px, calc(100dvh - 110px)); overflow: auto; overscroll-behavior: contain; border: 1px solid rgba(203, 183, 224, 28%); border-radius: 22px; background: #f3f5fb; color: #20132e; box-shadow: 0 24px 70px rgba(5, 1, 13, 42%); animation: support-panel-in .2s ease-out; }
 .support-panel-header { padding: 18px 21px 25px; background: linear-gradient(145deg, #c426df, #a122ec 58%, #8525e6); color: #fff; }
 .support-panel-top { display: flex; align-items: center; gap: 9px; margin-bottom: 22px; font-size: 12px; font-weight: 800; letter-spacing: .04em; }
