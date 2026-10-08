@@ -215,7 +215,7 @@ def public_site_base():
 
 def public_sitemap_xml():
     base=public_site_base()
-    urls=[base+'/',base+'/browse',base+'/blog',base+'/help',base+'/guide',base+'/fees',base+'/policies',base+'/privacy-policy',base+'/data-deletion']
+    urls=[base+'/',base+'/browse',base+'/blog',base+'/guide',base+'/fees',base+'/policies',base+'/privacy-policy',base+'/data-deletion']
     db=connect()
     try:
         for listing in db.execute("SELECT id,game_id,product_type FROM listings WHERE status='published' AND stock>reserved ORDER BY updated_at DESC").fetchall():
@@ -725,7 +725,6 @@ def seo_page_html(path, slug=None):
     base=public_site_base(); template=(ROOT/'static'/'index.html').read_text(encoding='utf-8')
     title_map={
         '/browse':('Game marketplace listings','Browse approved game items and services on SentryLoot.'),
-        '/help':('SentryLoot Help Center','Help with marketplace orders, account safety, and support.'),
         '/guide':('Buying and safety guide','Learn how to use SentryLoot safely and review marketplace rules.'),
         '/fees':('Marketplace fees and payments','Current payment and fee information for SentryLoot.'),
         '/policies':('SentryLoot marketplace policies','Marketplace, publisher, and account-transfer policies.'),
@@ -916,8 +915,10 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path=='/sitemap.xml':
                 payload=public_sitemap_xml()
                 self.send_response(200); self.send_header('Content-Type','application/xml; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=300'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
+            if parsed.path.rstrip('/')=='/help':
+                self.send_response(301); self.send_header('Location','/'); self.send_header('Cache-Control','public, max-age=3600'); self.secure_headers(); self.end_headers(); return
             public_route=parsed.path.rstrip('/') or '/'
-            if public_route in ('/browse','/blog','/help','/guide','/fees','/policies'):
+            if public_route in ('/browse','/blog','/guide','/fees','/policies'):
                 payload=seo_page_html(public_route)
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=300'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
             blog_match=re.fullmatch(r'/blog/([a-z0-9]+(?:-[a-z0-9]+)*)',public_route)
