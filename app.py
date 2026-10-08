@@ -1189,6 +1189,24 @@ class Handler(BaseHTTPRequestHandler):
                 if session_token: db.execute('DELETE FROM sessions WHERE token_hash=?',(hash_token(session_token),))
             self._set_cookie=f'{COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0' + ('; Secure' if MODE=='production' else '')
             return {'ok':True}
+        if path=='/api/listing-games' and method=='GET':
+            where=["l.status='published'",'l.stock>l.reserved']
+            if MODE=='production':
+                if not production_marketplace_sales_enabled(): return []
+                approved_games=sorted(approved_game_slugs('MARKETPLACE_APPROVED_GAME_SLUGS'))
+                if not approved_games: return []
+                where.append(f"g.slug IN ({','.join('?' for _ in approved_games)})")
+                args=list(approved_games)
+                approved_account_games=sorted(approved_game_slugs('MARKETPLACE_APPROVED_ACCOUNT_GAME_SLUGS'))
+                if approved_account_games:
+                    where.append(f"(l.product_type!='account' OR (g.slug IN ({','.join('?' for _ in approved_account_games)}) AND l.seller_account_terms_version=?))")
+                    args.extend(approved_account_games); args.append(ACCOUNT_SELLER_TERMS_VERSION)
+                else:
+                    where.append("l.product_type!='account'")
+            else:
+                args=[]
+            rows=db.execute(f"SELECT DISTINCT g.id,g.slug,g.name FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id JOIN seller_profiles s ON s.user_id=l.seller_id WHERE {' AND '.join(where)} ORDER BY g.name",tuple(args)).fetchall()
+            return [dict(row) for row in rows]
         if path=='/api/games' and method=='GET': return [dict(x) for x in db.execute('SELECT id,slug,name FROM games WHERE active=1 ORDER BY name')]
         if path=='/api/categories' and method=='GET': return [dict(x) for x in db.execute('SELECT id,slug,name,product_type FROM categories WHERE active=1 ORDER BY name')]
         if path=='/api/listings' and method=='GET':
