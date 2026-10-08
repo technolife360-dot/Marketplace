@@ -12,8 +12,13 @@ function adminText(uz,ru,en){return locale==='ru'?ru:locale==='uz'?uz:(window.BO
 let supportWidgetOpen=false;
 let supportWidgetLoadStarted=false,supportWidgetLoadFailed=false,supportOpenRequested=false;
 const TAWK_WIDGET_SRC='https://embed.tawk.to/6ac78e863cc0eb34c3894ff4/1k4do9fpd';
+const TAWK_DIRECT_CHAT_URL='https://tawk.to/chat/6ac78e863cc0eb34c3894ff4/1k4do9fpd?layout=modern';
+function markTawkWidgetLoadFailed(){
+ supportWidgetLoadFailed=true;
+ toast(adminText('Yordam chati ulanmayapti. Bevosita chat havolasini ochib ko‘ring.','Чат поддержки не подключается. Попробуйте открыть прямую ссылку.','Support chat could not load. Try opening the direct chat link.'));
+}
 function openTawkSupport(){
- if(supportWidgetLoadFailed){window.location.href='mailto:compliance@gamestorehub.com?subject=SentryLoot%20support%20request';return}
+ if(supportWidgetLoadFailed){window.open(TAWK_DIRECT_CHAT_URL,'_blank','noopener,noreferrer');return}
  supportOpenRequested=true;
  const api=window.Tawk_API;
  if(api&&typeof api.maximize==='function'){supportOpenRequested=false;api.showWidget?.();api.maximize();return}
@@ -21,14 +26,21 @@ function openTawkSupport(){
  loadTawkWidget();
 }
 function loadTawkWidget(){
- if(supportWidgetLoadStarted||supportWidgetLoadFailed)return;
- supportWidgetLoadStarted=true;
+ if(supportWidgetLoadFailed)return;
  window.Tawk_API=window.Tawk_API||{};
  window.Tawk_API.onLoad=function(){if(supportOpenRequested){supportOpenRequested=false;window.Tawk_API?.maximize?.()}};
  window.Tawk_API.onChatMaximized=function(){supportWidgetOpen=true};
  window.Tawk_API.onChatMinimized=function(){supportWidgetOpen=false};
  window.Tawk_API.onChatHidden=function(){supportWidgetOpen=false};
- const script=document.createElement('script');script.async=true;script.src=TAWK_WIDGET_SRC;script.charset='UTF-8';script.crossOrigin='anonymous';script.onerror=()=>{supportWidgetLoadFailed=true;toast(adminText('Yordam chati ulanmayapti. Email orqali yozishingiz mumkin.','Чат поддержки недоступен. Напишите нам по email.','Support chat is unavailable. You can contact us by email.'))};document.head.append(script);
+ const existingScript=document.querySelector(`script[src="${TAWK_WIDGET_SRC}"]`);
+ if(existingScript){
+  supportWidgetLoadStarted=true;
+  if(!existingScript.dataset.supportErrorBound){existingScript.dataset.supportErrorBound='true';existingScript.addEventListener('error',markTawkWidgetLoadFailed,{once:true})}
+  return;
+ }
+ if(supportWidgetLoadStarted)return;
+ supportWidgetLoadStarted=true;
+ const script=document.createElement('script');script.async=true;script.src=TAWK_WIDGET_SRC;script.charset='UTF-8';script.crossOrigin='*';script.onerror=markTawkWidgetLoadFailed;document.head.append(script);
 }
 function renderSupportWidget(){
  if(!document.documentElement.dataset.tawkSupportBound){
@@ -289,7 +301,7 @@ function profileMenuMarkup(){
     ${menuRow('#messages','message',t('Xabarlar','Сообщения','Messages'),t('Sotuvchi va xaridorlar bilan suhbatlar','Переписка с продавцами и покупателями','Conversations with buyers and sellers'))}
     ${menuRow('#requests','search',t('Mahsulot so‘rovlari','Запросы товаров','Product requests'),t('Siz yuborgan so‘rovlar va javoblar','Ваши запросы и ответы','Your requests and replies'))}
     ${me.is_admin&&me.email?.trim().toLowerCase()==='admin@gamestore.com'?menuRow('#admin','shield',t('Admin paneli','Панель администратора','Admin panel'),t('Sayt boshqaruvi','Управление сайтом','Manage the marketplace')):''}
-    ${me.email_verified?`<button class="profile-menu-row profile-menu-button" data-action="link-facebook"><span class="profile-menu-icon"><span class="facebook-mark" aria-hidden="true">f</span></span><span class="profile-menu-copy"><b>${t('Facebook’ni ulash','Подключить Facebook','Link Facebook')}</b><small>${t('Mavjud hisobingizga xavfsiz ulash','Безопасно подключить к вашему аккаунту','Securely link it to this account')}</small></span></button>`:''}</nav><nav class="profile-menu profile-account-actions" aria-label="${t('Yordam va hisob','Помощь и аккаунт','Help and account')}"><h2>${t('Yordam va hisob','Помощь и аккаунт','Help & account')}</h2><button class="profile-menu-row profile-menu-button" type="button" data-open-support-chat><span class="profile-menu-icon">${icon('message')}</span><span class="profile-menu-copy"><b>${t('Yordam chatini ochish','Открыть чат поддержки','Open support chat')}</b><small>${t('Tawk.to orqali yozing','Напишите через Tawk.to','Chat with us through Tawk.to')}</small></span></button>${menuRow('#blog','box',t('Blog','Блог','Blog'),t('Xarid va savdo bo‘yicha qo‘llanmalar','Руководства по покупкам и продажам','Guides for buying and selling'))}<button class="profile-menu-row profile-menu-button" data-action="logout"><span class="profile-menu-icon">${icon('arrow-up-right')}</span><span class="profile-menu-copy"><b>${t('Hisobdan chiqish','Выйти из аккаунта','Sign out')}</b><small>${t('SentryLoot hisobingizdan xavfsiz chiqing','Безопасно выйти из аккаунта SentryLoot','Securely sign out of SentryLoot')}</small></span></button></nav>
+    ${me.email_verified?`<button class="profile-menu-row profile-menu-button" data-action="link-facebook"><span class="profile-menu-icon"><span class="facebook-mark" aria-hidden="true">f</span></span><span class="profile-menu-copy"><b>${t('Facebook’ni ulash','Подключить Facebook','Link Facebook')}</b><small>${t('Mavjud hisobingizga xavfsiz ulash','Безопасно подключить к вашему аккаунту','Securely link it to this account')}</small></span></button>`:''}</nav><nav class="profile-menu profile-account-actions" aria-label="${t('Yordam va hisob','Помощь и аккаунт','Help and account')}"><h2>${t('Yordam va hisob','Помощь и аккаунт','Help & account')}</h2><button class="profile-menu-row profile-menu-button" type="button" data-open-support-chat><span class="profile-menu-icon">${icon('message')}</span><span class="profile-menu-copy"><b>${t('Yordam chatini ochish','Открыть чат поддержки','Open support chat')}</b><small>${t('Tawk.to orqali yozing','Напишите через Tawk.to','Chat with us through Tawk.to')}</small></span></button><a class="profile-menu-row profile-menu-button" href="${TAWK_DIRECT_CHAT_URL}" target="_blank" rel="noopener noreferrer"><span class="profile-menu-icon">${icon('arrow-up-right')}</span><span class="profile-menu-copy"><b>${t('Bevosita chat havolasini ochish','Открыть прямую ссылку на чат','Open direct chat link')}</b><small>${t('Tawk.to chatini yangi oynada oching','Откройте чат Tawk.to в новой вкладке','Open Tawk.to chat in a new tab')}</small></span></a>${menuRow('#blog','box',t('Blog','Блог','Blog'),t('Xarid va savdo bo‘yicha qo‘llanmalar','Руководства по покупкам и продажам','Guides for buying and selling'))}<button class="profile-menu-row profile-menu-button" data-action="logout"><span class="profile-menu-icon">${icon('arrow-up-right')}</span><span class="profile-menu-copy"><b>${t('Hisobdan chiqish','Выйти из аккаунта','Sign out')}</b><small>${t('SentryLoot hisobingizdan xavfsiz chiqing','Безопасно выйти из аккаунта SentryLoot','Securely sign out of SentryLoot')}</small></span></button></nav>
   </div></div></aside>`;
 }
 async function openProfileMenu(){if(!me){location.hash='login';return}await loadAsiaMarkets();const root=$('#profile-menu-root');if(!root)return;root.innerHTML=profileMenuMarkup();root.hidden=false;document.body.classList.add('profile-menu-open');$('#account-button')?.setAttribute('aria-expanded','true');$('#profile-dropdown')?.focus({preventScroll:true});$('#profile-form')?.elements.namedItem('language')&&( $('#profile-form').elements.namedItem('language').value=locale );$('#profile-form')?.elements.namedItem('currency')&&( $('#profile-form').elements.namedItem('currency').value=me.currency);if(me.seller?.identity_status==='verified'&&me.seller?.selling_enabled){try{await loadWalletFx();const summary=await api('/seller/summary');const balance=$('#profile-wallet-balance');if(balance)balance.innerHTML=walletAmount(summary.wallet.available_minor,summary.wallet.currency)}catch{const balance=$('#profile-wallet-balance');if(balance)balance.textContent=t('Balansni yuklab bo‘lmadi','Не удалось загрузить баланс','Balance unavailable')}}}
