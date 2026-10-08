@@ -49,6 +49,11 @@ class MarketplaceFlows(unittest.TestCase):
             app.check_rate(self.db,'test_atomic_rate','client',limit=3,period=300)
         self.assertEqual(error.exception.status,429)
         self.assertEqual(self.db.execute("SELECT attempts FROM rate_limits WHERE bucket='test_atomic_rate' AND subject='client'").fetchone()['attempts'],3)
+    def test_vercel_adapter_uses_validated_client_ip_for_rate_limits(self):
+        request=app._VercelRequest({'REQUEST_METHOD':'GET','PATH_INFO':'/api/me','REMOTE_ADDR':'10.0.0.1','HTTP_X_VERCEL_FORWARDED_FOR':'203.0.113.12','wsgi.input':app.io.BytesIO()})
+        self.assertEqual(request.client_address[0],'203.0.113.12')
+        malformed=app._VercelRequest({'REQUEST_METHOD':'GET','PATH_INFO':'/api/me','REMOTE_ADDR':'10.0.0.1','HTTP_X_VERCEL_FORWARDED_FOR':'not-an-ip','wsgi.input':app.io.BytesIO()})
+        self.assertEqual(malformed.client_address[0],'10.0.0.1')
     def test_vercel_production_startup_requires_supabase_database_url(self):
         guard=app.VercelWSGIApplication()
         with patch.object(app,'MODE','production'), patch.object(app,'DATABASE_URL',''), patch.object(app,'migrate') as migrate:
@@ -123,6 +128,27 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertIn('<title>Valorant account lvl 50 | Valorant | SentryLoot</title>',html)
         self.assertIn('<link rel="canonical" href="http://localhost:8000/listing/'+self.listing+'">',html)
         self.assertIn('A test listing with enough descriptive text.',html)
+    def test_public_content_routes_have_crawlable_copy_canonical_and_sitemap_entries(self):
+        with patch.dict(os.environ,{'PUBLIC_BASE_URL':'http://localhost:8000'},clear=False):
+            help_page=app.seo_page_html('/help').decode()
+            blog_page=app.seo_page_html('/blog','xavfsiz-xarid').decode()
+            sitemap=app.public_sitemap_xml().decode()
+        self.assertIn('<title>SentryLoot Help Center</title>',help_page)
+        self.assertIn('<link rel="canonical" href="http://localhost:8000/help">',help_page)
+        self.assertIn('<h1>',blog_page)
+        self.assertIn('http://localhost:8000/blog/xavfsiz-xarid',blog_page)
+        self.assertIn('http://localhost:8000/help',sitemap)
+        self.assertIn('http://localhost:8000/blog/xavfsiz-xarid',sitemap)
+        self.assertIn('http://localhost:8000/listing/'+self.listing,sitemap)
+    def test_ai_listing_review_route_is_removed_and_legacy_ai_results_are_purged(self):
+        self.db.execute('UPDATE listings SET attributes_json=? WHERE id=?',(json.dumps({'_ai_review':{'status':'complete'},'rank':'Gold'}),self.listing))
+        app.remove_stored_ai_reviews(self.db)
+        row=self.db.execute('SELECT attributes_json FROM listings WHERE id=?',(self.listing,)).fetchone()
+        self.assertEqual(json.loads(row['attributes_json']),{'rank':'Gold'})
+        listing=app.listing_detail(self.db,self.listing,self.admin)
+        self.assertNotIn('ai_review',listing)
+        with self.assertRaises(app.HttpError):
+            self.route(self.admin,'POST',f'/api/admin/listings/{self.listing}/ai-review',{})
     def test_registration_requires_verified_email_and_creates_session(self):
         with self.assertRaises(app.HttpError): self.route(None,'POST','/api/register',{'email':'no-terms@test.invalid','name':'No Terms','password':'correct horse battery staple','accept_terms':False})
         result=self.route(None,'POST','/api/register',{'email':'new@test.invalid','name':'New User','password':'correct horse battery staple','accept_terms':True})
@@ -131,6 +157,7 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertTrue(verify['user']['email_verified']);self.assertTrue(verify['csrf'])
         self.assertTrue(getattr(self.handler,'_set_cookie','').startswith(app.COOKIE_NAME+'='))
     def test_my_reviews_are_private_and_list_only_reviews_written_by_the_user(self):
+        self.db.execute("UPDATE listings SET product_type='item' WHERE id=?",(self.listing,))
         self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True,True)
         self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})
         item=self.db.execute('SELECT id FROM order_items WHERE order_id=?',(order['id'],)).fetchone()['id']
@@ -169,6 +196,7 @@ class MarketplaceFlows(unittest.TestCase):
         with self.assertRaises(app.HttpError):
             self.route(self.admin,'POST',f"/api/admin/blog/{draft['id']}",{**post,'slug':'not valid'})
     def test_order_status_emails_go_to_the_relevant_party_without_delivery_secret(self):
+        self.db.execute("UPDATE listings SET product_type='item' WHERE id=?",(self.listing,))
         self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True,True)
         item=self.db.execute('SELECT id FROM order_items WHERE order_id=?',(order['id'],)).fetchone()['id']
         with patch.object(app.email_service,'is_configured',return_value=True), patch.object(app.email_service,'send_order_update') as send:
@@ -193,6 +221,66 @@ class MarketplaceFlows(unittest.TestCase):
         self.route(self.admin,'POST',f"/api/admin/disputes/{order['id']}",{'action':'refund_buyer','note':'Sandbox refund recorded after review.'})
         self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?',(order['id'],)).fetchone()['status'],'refunded')
         self.assertEqual(self.db.execute('SELECT status FROM payments WHERE order_id=?',(order['id'],)).fetchone()['status'],'sandbox_refunded')
+
+    def test_account_purchase_requires_two_private_screenshots_and_admin_review_before_wallet_credit(self):
+        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True,True)
+        item=self.db.execute('SELECT id FROM order_items WHERE order_id=?',(order['id'],)).fetchone()['id']
+        self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})
+        self.route(self.seller,'POST',f"/api/orders/{order['id']}/deliver",{'item_id':item,'delivery':'Temporary access details'})
+        with self.assertRaises(app.HttpError) as error:
+            self.route(self.buyer,'POST',f"/api/orders/{order['id']}/complete",{})
+        self.assertEqual(error.exception.status,409)
+        self.assertEqual(self.route(self.seller,'GET',f"/api/orders/{order['id']}")['status'],'awaiting_delivery')
+        with patch.object(app,'upload_account_evidence',return_value=f"private/{order['id']}-1.webp"):
+            self.handler.headers=app.Message(); self.handler.headers['Content-Type']='image/png'
+            self.handler.route(self.db,self.ctx(self.buyer),'POST',f"/api/orders/{order['id']}/account-evidence/1",{}, {}, b'normalized in test')
+        with self.assertRaises(app.HttpError):
+            self.route(self.buyer,'POST',f"/api/orders/{order['id']}/account-verification/submit",{'confirm_privacy':True})
+        self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?',(order['id'],)).fetchone()['status'],'awaiting_delivery')
+        with patch.object(app,'upload_account_evidence',return_value=f"private/{order['id']}-2.webp"):
+            self.handler.route(self.db,self.ctx(self.buyer),'POST',f"/api/orders/{order['id']}/account-evidence/2",{}, {}, b'normalized in test')
+        with self.assertRaises(app.HttpError):
+            self.route(self.other,'GET','/api/admin/account-reviews')
+        self.assertEqual(self.route(self.buyer,'POST',f"/api/orders/{order['id']}/account-verification/submit",{'confirm_privacy':True})['status'],'under_review')
+        self.assertEqual(self.route(self.seller,'GET',f"/api/orders/{order['id']}")['status'],'under_review')
+        self.assertEqual(self.route(self.seller,'GET','/api/seller/summary')['wallet']['available_minor'],0)
+        with patch.object(app,'require_private_evidence_bucket'), patch.object(app,'signed_account_evidence_url',side_effect=lambda path:'https://storage.test/'+path):
+            queue=self.route(self.admin,'GET','/api/admin/account-reviews')
+        self.assertEqual(len(queue),1)
+        self.assertEqual([e['slot'] for e in queue[0]['evidence']],[1,2])
+        with patch.object(app,'require_private_evidence_bucket'):
+            result=self.route(self.admin,'POST',f"/api/admin/account-reviews/{order['id']}",{'action':'approve','note':'Both screenshots reviewed carefully.'})
+        self.assertFalse(result['real_money_moved'])
+        self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?',(order['id'],)).fetchone()['status'],'completed')
+        self.assertEqual(self.db.execute('SELECT status FROM account_reviews WHERE order_id=?',(order['id'],)).fetchone()['status'],'approved')
+        self.assertEqual(self.route(self.seller,'GET','/api/seller/summary')['wallet']['available_minor'],45000)
+
+    def test_account_evidence_is_removed_by_retention_and_account_deletion(self):
+        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True,True)
+        self.db.execute("INSERT INTO account_reviews(order_id,buyer_id,status,reviewed_at) VALUES(?,?,'approved','2020-01-01T00:00:00+00:00')",(order['id'],self.buyer))
+        self.db.execute("INSERT INTO account_review_evidence(order_id,slot,object_path) VALUES(?,1,'private/expired.webp')",(order['id'],))
+        self.handler.headers=app.Message(); self.handler.headers['Authorization']='Bearer test-cron'
+        with patch.dict(os.environ,{'CRON_SECRET':'test-cron'}), patch.object(app,'delete_account_evidence_object',return_value=True) as remove:
+            result=self.handler.route(self.db,{'db':self.db,'uid':None,'user':None,'csrf':None},'GET','/api/cron/account-evidence-retention',{}, {})
+        self.assertEqual(result['evidence_deleted'],1)
+        remove.assert_called_once_with('private/expired.webp')
+        self.db.execute("INSERT INTO account_review_evidence(order_id,slot,object_path) VALUES(?,1,'private/deletion.webp')",(order['id'],))
+        with patch.object(app,'delete_account_evidence_object',return_value=True): app.erase_account_personal_data(self.db,self.buyer)
+        self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM account_review_evidence WHERE order_id=?',(order['id'],)).fetchone()['n'],0)
+
+    def test_account_deletion_cron_requires_secret_and_erases_expired_request(self):
+        request_id=app.ident()
+        self.db.execute("INSERT INTO account_deletion_requests(id,user_id,reason,created_at) VALUES(?,?,?,'2020-01-01T00:00:00+00:00')",(request_id,self.buyer,'Please delete my account.'))
+        self.handler.headers=app.Message()
+        with patch.dict(os.environ,{'CRON_SECRET':'test-cron'}):
+            with self.assertRaises(app.HttpError) as error:
+                self.handler.route(self.db,{'db':self.db,'uid':None,'user':None,'csrf':None},'GET','/api/cron/account-deletions',{}, {})
+            self.assertEqual(error.exception.status,401)
+            self.handler.headers['Authorization']='Bearer test-cron'
+            result=self.handler.route(self.db,{'db':self.db,'uid':None,'user':None,'csrf':None},'GET','/api/cron/account-deletions',{}, {})
+        self.assertEqual(result['erased'],1)
+        self.assertEqual(self.db.execute('SELECT email,suspended FROM users WHERE id=?',(self.buyer,)).fetchone()['email'],'deleted-'+self.buyer+'@deleted.invalid')
+        self.assertEqual(self.db.execute('SELECT status,reason FROM account_deletion_requests WHERE id=?',(request_id,)).fetchone()['status'],'resolved')
 
     def test_listing_moderation_requires_admin_and_publishes(self):
         draft=self.route(self.seller,'POST','/api/listings',{'game_id':'valorant','category_id':'accounts','title':'New account listing','description':'A sufficiently long listing description.','price_minor':23000,'stock':2,'accept_account_terms':True})
@@ -291,6 +379,7 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM deliveries WHERE order_item_id=?',(item,)).fetchone()['n'],0)
 
     def test_wallet_escrow_release_and_manual_payout_are_distinct_and_idempotent(self):
+        self.db.execute("UPDATE listings SET product_type='item' WHERE id=?",(self.listing,))
         self.add_cart(self.buyer)
         order=app.checkout(self.db,self.buyer,True,True)
         self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})

@@ -1,5 +1,9 @@
 // Uzbek source phrases mapped to Russian and English. Game names and user content stay as entered.
 window.BOZOR_COPY={
+  'Maxfiylik siyosati':['Политика конфиденциальности','Privacy policy'],
+  'Ma’lumotlarni o‘chirish':['Удаление данных','Data deletion'],
+  'Qoidalar':['Правила','Policies'],
+  'Xarid yordamiga compliance@gamestorehub.com orqali yozing; nizoni buyurtma sahifasidan yuboring.':['По вопросам поддержки напишите на compliance@gamestorehub.com; спор отправьте со страницы заказа.','For support, email compliance@gamestorehub.com; submit order disputes from the order page.'],
   'Bozor':['Маркет','Marketplace'],
   'O‘yinlar olami,':['Мир игр,','A world of games,'],
   'Jade green 3D gaming controller with gold accents':['3D-геймпад из нефрита с золотыми акцентами','Jade 3D gaming controller with gold accents'],

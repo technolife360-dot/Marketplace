@@ -21,6 +21,10 @@ next-env.d.ts
 *.sqlite3
 __pycache__/
 *.py[cod]
+/.env
+/.env.*
+!/.env.example
+/secrets/
 
 # Local OAuth client credentials
-client_secret_37796535330-borbonbs3tk06qv9arebcgki4thpesdh.apps.googleusercontent.com.json
+client_secret_*.json
