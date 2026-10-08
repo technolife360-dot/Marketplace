@@ -1248,11 +1248,13 @@ body.home-page .footer a:hover { color: #d8e5ff; }
 body.home-page .sell-item-button { border-color: #c9d9f7; background: #c9d9f7; color: #101a2b; box-shadow: 0 5px 16px rgb(180 200 239 / 15%); }
 body.home-page .sell-item-button:hover { background: #e0eaff; box-shadow: 0 8px 20px rgb(180 200 239 / 20%); }
 
-/* Center the listings heading and anchor the custom sort menu to its trigger. */
-.listings-section-head { flex-direction: column; align-items: center; justify-content: center; gap: 14px; margin-bottom: 26px; text-align: center; }
-.listings-section-head > :first-child { flex: 0 0 auto; }
+/* Keep the listings title and single filter control on one clear line. */
+.listings-section-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px 24px; margin-bottom: 26px; text-align: left; }
+.listings-section-head > :first-child { min-width: 0; }
 .listings-section-head h2 { font-size: clamp(23px, 3vw, 30px); }
-.listings-section-head .filters { align-self: center; justify-content: center; }
+.listings-section-head h2::after { margin-left: 0; }
+.listings-section-head > .filter-panel-toggle { grid-column: 2; grid-row: 1; justify-self: end; }
+.listings-section-head > .filter-panel { grid-column: 1 / -1; justify-self: end; margin: 0; }
 .sort-select { position: relative; width: 168px; flex: 0 0 168px; }
 .sort-trigger { width: 100%; min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px; border: 1px solid rgb(170 192 230 / 18%); border-radius: 11px; background: rgb(17 28 47 / 88%); color: #dce6f8; font-size: 12px; font-weight: 650; text-align: left; transition: border-color .18s ease, background .18s ease, box-shadow .18s ease; }
 .sort-trigger:hover, .sort-trigger[aria-expanded="true"] { border-color: rgb(195 213 246 / 42%); background: #111c2f; }
@@ -1911,8 +1913,11 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
 #app.home-background .filter-panel .sort-select { min-width: 0; }
 #app.home-background .filter-panel > button[type="submit"] { grid-column: span 2; }
 @media (max-width: 680px) {
+  .listings-section-head { grid-template-columns: minmax(0, 1fr); gap: 13px; text-align: left; }
+  .listings-section-head > .filter-panel-toggle { grid-column: 1; grid-row: auto; justify-self: stretch; width: 100%; }
+  .listings-section-head > .filter-panel { grid-column: 1; justify-self: stretch; width: 100%; }
   #app.home-background .filter-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px; gap: 8px; }
-  #app.home-background .filter-panel-toggle { width: min(100%, 360px); }
+  #app.home-background .filter-panel-toggle { width: 100%; }
 }
 @media (max-width: 380px) {
   #app.home-background .filter-panel { grid-template-columns: minmax(0, 1fr); }
