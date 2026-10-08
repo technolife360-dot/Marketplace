@@ -1896,30 +1896,37 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
 #app.home-background .filter-panel {
   display: grid;
   width: min(100%, 900px);
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 13px 12px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 18px;
   border: 1px solid rgba(197, 145, 255, 18%);
   border-radius: 18px;
   background: rgba(15, 10, 28, 88%);
   box-shadow: 0 18px 44px rgba(4, 2, 12, 25%);
   backdrop-filter: blur(16px);
 }
+#app.home-background .filter-field { display: grid; min-width: 0; min-inline-size: 0; gap: 7px; margin: 0; padding: 0; border: 0; }
+#app.home-background .filter-field-label { padding: 0; color: #c7b6dc; font-size: 11px; font-weight: 650; letter-spacing: .02em; }
 #app.home-background .filter-panel input,
 #app.home-background .filter-panel select,
 #app.home-background .filter-panel .sort-trigger,
-#app.home-background .filter-panel > button[type="submit"] { width: 100%; min-width: 0; height: 44px; }
-#app.home-background .filter-panel .sort-select { min-width: 0; }
-#app.home-background .filter-panel > button[type="submit"] { grid-column: span 2; }
+#app.home-background .filter-panel > button[type="submit"] { box-sizing: border-box; width: 100%; min-width: 0; height: 44px; }
+#app.home-background .filter-panel .sort-select { position: relative; width: 100%; min-width: 0; flex: 1 1 auto; }
+#app.home-background .filter-panel .sort-trigger { min-height: 44px; }
+#app.home-background .filter-price-inputs { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 7px; }
+#app.home-background .filter-price-inputs span { color: #9c88b3; font-size: 13px; }
+#app.home-background .filter-apply-button { grid-column: 3; justify-self: end; max-width: 180px; }
 @media (max-width: 680px) {
   .listings-section-head { grid-template-columns: minmax(0, 1fr); gap: 13px; text-align: left; }
   .listings-section-head > .filter-panel-toggle { grid-column: 1; grid-row: auto; justify-self: stretch; width: 100%; }
   .listings-section-head > .filter-panel { grid-column: 1; justify-self: stretch; width: 100%; }
-  #app.home-background .filter-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px; gap: 8px; }
+  #app.home-background .filter-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 14px; gap: 12px 9px; }
   #app.home-background .filter-panel-toggle { width: 100%; }
+  #app.home-background .filter-apply-button { grid-column: 1 / -1; justify-self: stretch; max-width: none; }
 }
 @media (max-width: 380px) {
   #app.home-background .filter-panel { grid-template-columns: minmax(0, 1fr); }
-  #app.home-background .filter-panel > button[type="submit"] { grid-column: auto; }
+  #app.home-background .filter-apply-button { grid-column: 1; }
 }
