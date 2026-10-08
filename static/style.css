@@ -1769,3 +1769,15 @@ body:not(.home-page) .identity-consent { color: #e2d3f0; }
 body:not(.home-page) .identity-consent-panel>p { color: #a890bd; }
 body:not(.home-page) .identity-privacy { border-color: rgba(197,145,255,14%); color: #bba4d0; }
 body:not(.home-page) .identity-privacy summary { color: #e0c9f4; }
+
+/* SentryLoot crest logo */
+.brand-mark img,
+.admin-brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+.brand-mark { overflow: hidden; flex: 0 0 auto; }
+.admin-brand-mark { overflow: hidden; padding: 0; }
