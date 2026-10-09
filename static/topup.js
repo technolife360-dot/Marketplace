@@ -1,4 +1,10 @@
 const TOPUP_GAME_ORDER = ['pubg-mobile', 'mobile-legends', 'free-fire', 'honor-of-kings'];
+const TOPUP_OFFICIAL_GAME_ART = {
+  'pubg-mobile': 'https://play-lh.googleusercontent.com/xRj26dOD5JhpfQ54rOXl8WNwij9p5dOYoaKGbyEjsEhRu35ogBp08qYS7HFHfHjlahSWEPs8VJRmqbjw8Q4SsQ%3Dw526-h296',
+  'mobile-legends': 'https://play-lh.googleusercontent.com/hrpZdffP0Mt4nSZnr6FUk0OyeEm_GyXZ3TxCoQb7cSFoNOeF0KGEQoXgSR-PKqk1rlOyImJFvIPvZyXuoG3eXA%3Dw526-h296',
+  'free-fire': 'https://play-lh.googleusercontent.com/LsawRbqk_iyOjjY_NkmKv62sTH9U4WqaF9juPzT0nhN4u9v52SHAfQliNaKpYZgo4KPN2j-cLVI44PhKpuAGJQ%3Dw526-h296',
+  'honor-of-kings': 'https://play-lh.googleusercontent.com/m7qsYcurlr6a2PrgrgzWq1RO4mbs9miB7X9gb0oTTcYUI-Tbe8eELvvh3uO8VNy8-3UQchKw9W7P5iAgLRUe%3Dw526-h296'
+};
 
 function topupGameIcon(slug) {
   const art = {
@@ -44,7 +50,7 @@ async function renderTopUpCatalog(selectedGame) {
     body = '<section class="topup-game-detail"><div class="topup-game-detail-art topup-game-' + esc(game.slug) + '"><img src="/static/assets/topup-' + esc(game.slug) + '.svg" alt="" fetchpriority="high"><div class="topup-game-detail-shade"></div><div class="topup-game-detail-label">' + topupGameIcon(game.slug) + '<span>' + esc(game.name) + '</span></div></div><div class="topup-section-heading"><div><span class="topup-overline">' + esc(game.currency) + '</span><h2>' + esc(game.name) + ' ' + words.packages + '</h2></div><span class="topup-count">' + game.packages.length + ' ' + words.packs + '</span></div><div class="topup-package-grid">' + game.packages.map(item => packageCard(item, false)).join('') + '</div></section>';
   } else {
     body = '<div class="topup-games-grid">' + rows.map(function(item, index) {
-      return '<article class="topup-game-card topup-game-' + esc(item.slug) + '"><a class="topup-game-cover" href="/top-up/' + encodeURIComponent(item.slug) + '" aria-label="' + esc(item.name) + '"><img src="/static/assets/topup-' + esc(item.slug) + '.svg" alt="" loading="' + (index < 2 ? 'eager' : 'lazy') + '"' + (index < 2 ? ' fetchpriority="high"' : '') + '><span class="topup-game-cover-shade"></span><span class="topup-cover-index">0' + (index + 1) + '</span></a><div class="topup-game-card-body"><div class="topup-currency-row"><span class="topup-currency-icon">' + icon('wallet') + '</span><span>' + esc(item.currency) + '</span></div><h2>' + esc(item.name) + '</h2><a class="topup-game-cta" href="/top-up/' + encodeURIComponent(item.slug) + '">Buy</a></div></article>';
+      return '<article class="topup-game-card topup-game-' + esc(item.slug) + '"><a class="topup-game-cover" href="/top-up/' + encodeURIComponent(item.slug) + '" aria-label="' + esc(item.name) + '"><img src="' + TOPUP_OFFICIAL_GAME_ART[item.slug] + '" alt="' + esc(item.name) + '" loading="' + (index < 2 ? 'eager' : 'lazy') + '"' + (index < 2 ? ' fetchpriority="high"' : '') + '><span class="topup-game-cover-shade"></span><span class="topup-cover-index">0' + (index + 1) + '</span></a><div class="topup-game-card-body"><div class="topup-currency-row"><span class="topup-currency-icon">' + icon('wallet') + '</span><span>' + esc(item.currency) + '</span></div><h2>' + esc(item.name) + '</h2><a class="topup-game-cta" href="/top-up/' + encodeURIComponent(item.slug) + '">Buy</a></div></article>';
     }).join('') + '</div>';
   }
   const count = rows.reduce((total, item) => total + item.packages.length, 0);
