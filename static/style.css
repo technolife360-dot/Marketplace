@@ -2526,3 +2526,6 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
   .topup-admin-order { grid-template-columns:1fr 1fr; gap:10px; padding:11px 12px; }
   .topup-admin-order > div:last-child { grid-column:span 2; display:flex; align-items:center; justify-content:space-between; }
 }
+
+/* Let the full-bleed Top Up catalog hero start flush beneath the site header. */
+.topup-page:has(> .topup-hero-image) { padding-top:0; }
