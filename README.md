@@ -20,7 +20,7 @@ Open http://127.0.0.1:8000. Development verification tokens and sandbox payment 
 
 ## Supabase PostgreSQL
 
-The application uses Supabase only when `DATABASE_URL` is set in the server environment. Apply `supabase/migrations/20261005000000_marketplace_schema.sql` first, then every later migration in timestamp order, including `20261007010000_facebook_oauth.sql` and `20261008000000_account_reviews_private_evidence.sql`, in the Supabase SQL Editor or your migration runner. The server checks for the required tables and seeds reference rows on startup. Install dependencies with `python3 -m pip install -r requirements.txt`; Psycopg 3 connects to PostgreSQL and uses dictionary rows for the existing API code. Keep `DATABASE_URL` on the backend in a deployment secret manager; never expose it in browser code or commit it. If unset, the app continues to use the local SQLite database.
+The application uses Supabase only when `DATABASE_URL` is set in the server environment. Apply `supabase/migrations/20261005000000_marketplace_schema.sql` first, then every later migration in timestamp order, including `20261007010000_facebook_oauth.sql`, `20261008000000_account_reviews_private_evidence.sql`, and `20261009000000_topup_catalog.sql`, in the Supabase SQL Editor or your migration runner. The server checks for the required tables and seeds reference rows on startup. Install dependencies with `python3 -m pip install -r requirements.txt`; Psycopg 3 connects to PostgreSQL and uses dictionary rows for the existing API code. Keep `DATABASE_URL` on the backend in a deployment secret manager; never expose it in browser code or commit it. If unset, the app continues to use the local SQLite database.
 
 Vercel runs a daily account-deletion job. Set a random `CRON_SECRET` environment variable for Production; Vercel sends it as a bearer token. Pending or reviewing deletion requests are automatically erased after 30 days, while anonymized order and ledger records are retained.
 
@@ -48,6 +48,7 @@ This adds a small set of games/categories, explicitly labelled development demo 
 - Add a published listing to cart; local development checkout creates a clearly labeled sandbox payment. Confirm it via the order page's sandbox action.
 - Seller submits delivery; buyer can view delivery only after confirmed payment and can complete the order.
 - Buyers/sellers can use messages, favorites, wanted requests, reports, and reviews after eligible order completion.
+- Top Up pages use stable game/package URLs. Admins can set package prices and visibility, add packages, and adjust auditable stock. Prices start at zero and stock starts empty by design; configure both in Admin before publishing packages.
 
 ## Commands
 
@@ -87,6 +88,8 @@ Implemented locally: registration/login, Google and Apple ID OAuth sign-in bound
 Not launch-complete: production OAuth client/service IDs and HTTPS callback registration, verified SMTP sender configuration, Didit production credentials/workflow/webhook registration, private evidence uploads with malware scanning, a real payment/refund/payout adapter, backup/restore and monitoring/alerts, complete reviewed RU/EN translations, and jurisdiction-specific legal/tax/publisher-rule review. The repository now includes deterministic, moderator-only fraud review flags, game-specific account fields for the five seeded games, platform/rank search filters, a three-listing comparison view, and a non-secret health readiness report. These do not replace human review or external provider configuration. Listing photos are public product media after upload; they must not contain secrets, account credentials, or personal documents. Read [the six launch-readiness areas](docs/SIX_READINESS_WORK.md) before changing production gates. Do not open public sales until the required provider and operational items are completed.
 
 The configured Asia market list supplies account country defaults and display-currency choices only. It does not mean buyers or sellers in every listed market can transact, pass provider onboarding, or receive a payout. Real checkout remains unavailable until a provider confirms coverage and is integrated.
+
+Top Up catalog and admin inventory management are implemented, but live Top Up checkout is intentionally closed until the payment method is selected and integrated. Supplier fallback is also not active until a specific supplier API and credentials are supplied; the admin page labels this state instead of claiming that automatic fulfillment is available.
 
 ## Deployment
 

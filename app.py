@@ -215,7 +215,7 @@ def public_site_base():
 
 def public_sitemap_xml():
     base=public_site_base()
-    urls=[base+'/',base+'/browse',base+'/blog',base+'/guide',base+'/fees',base+'/policies',base+'/support',base+'/terms',base+'/refunds',base+'/seller-policy',base+'/prohibited-items',base+'/contact',base+'/privacy-policy',base+'/data-deletion']
+    urls=[base+'/',base+'/top-up',base+'/browse',base+'/blog',base+'/guide',base+'/fees',base+'/policies',base+'/support',base+'/help',base+'/terms',base+'/refunds',base+'/seller-policy',base+'/prohibited-items',base+'/contact',base+'/privacy-policy',base+'/data-deletion']
     db=connect()
     try:
         for listing in db.execute("SELECT id,game_id,product_type FROM listings WHERE status='published' AND stock>reserved ORDER BY updated_at DESC").fetchall():
@@ -224,6 +224,9 @@ def public_sitemap_xml():
         for post in db.execute("SELECT slug FROM blog_posts WHERE status='published' ORDER BY published_at DESC").fetchall():
             if re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',str(post['slug'])):
                 urls.append(base+'/blog/'+urlquote(str(post['slug']),safe=''))
+        for product in db.execute('SELECT game_slug,url_slug FROM topup_packages WHERE enabled=1 ORDER BY game_slug,amount').fetchall():
+            if re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',str(product['game_slug'])) and re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',str(product['url_slug'])):
+                urls.append(base+'/top-up/'+urlquote(str(product['game_slug']),safe='')+'/'+urlquote(str(product['url_slug']),safe=''))
     finally:
         db.close()
     entries=''.join(f'<url><loc>{html.escape(url)}</loc></url>' for url in urls)
@@ -238,6 +241,29 @@ def remove_stored_ai_reviews(db):
         if isinstance(attributes,dict) and attributes.pop('_ai_review',None) is not None:
             db.execute('UPDATE listings SET attributes_json=? WHERE id=?',(json.dumps(attributes,ensure_ascii=False),row['id']))
 
+TOPUP_CATALOG = (
+    ('pubg-mobile','PUBG Mobile','UC',(60,325,660,1800,3850,8100)),
+    ('mobile-legends','Mobile Legends: Bang Bang','Diamonds',(14,42,70,140,284,716,1446)),
+    ('free-fire','Free Fire','Diamonds',(100,200,300,310,520,830,1060)),
+    ('honor-of-kings','Honor of Kings','Tokens',(16,80,240,400,560,830,1245)),
+)
+
+def seed_topup_catalog(db):
+    """Seed stable package identities; prices and stock intentionally need admin setup."""
+    for game_slug,game_name,currency,amounts in TOPUP_CATALOG:
+        for amount in amounts:
+            suffix=f'{amount}-{currency.lower()}'
+            package_id=f'{game_slug}-{suffix}'
+            db.execute('''INSERT INTO topup_packages(id,game_slug,game_name,url_slug,currency,amount)
+                VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING''',
+                (package_id,game_slug,game_name,suffix,currency,amount))
+
+def topup_public_package(row):
+    available=int(row['stock_on_hand'])-int(row['stock_reserved'])>0
+    return {'id':row['id'],'game_slug':row['game_slug'],'game_name':row['game_name'],'url_slug':row['url_slug'],
+            'currency':row['currency'],'amount':row['amount'],'price_minor':row['price_minor'],
+            'available':available,'priced':int(row['price_minor'])>0,'purchasable':False,'payment_ready':False}
+
 def migrate():
     db=connect()
     try:
@@ -251,6 +277,34 @@ def migrate():
             security_issues=[row['relname'] for row in security_rows if not row['relrowsecurity'] or row['anon_select'] or row['authenticated_select']]
             if security_issues:
                 raise RuntimeError('Supabase RLS yoki browser-role ruxsatlari xavfsiz emas. Tekshiring: '+', '.join(security_issues))
+            db.execute("""CREATE TABLE IF NOT EXISTS topup_packages (
+                id TEXT PRIMARY KEY, game_slug TEXT NOT NULL, game_name TEXT NOT NULL,
+                url_slug TEXT NOT NULL, currency TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount>0),
+                price_minor INTEGER NOT NULL DEFAULT 0 CHECK(price_minor>=0), stock_on_hand INTEGER NOT NULL DEFAULT 0 CHECK(stock_on_hand>=0),
+                stock_reserved INTEGER NOT NULL DEFAULT 0 CHECK(stock_reserved>=0), enabled INTEGER NOT NULL DEFAULT 1,
+                manual_enabled INTEGER NOT NULL DEFAULT 1, supplier_enabled INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(game_slug,url_slug), CHECK(stock_reserved<=stock_on_hand)
+            )""")
+            db.execute("""CREATE TABLE IF NOT EXISTS topup_orders (
+                id TEXT PRIMARY KEY, reference TEXT NOT NULL UNIQUE, buyer_id TEXT NOT NULL REFERENCES users(id),
+                package_id TEXT NOT NULL REFERENCES topup_packages(id), player_id TEXT NOT NULL, server_id TEXT NOT NULL DEFAULT '',
+                quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity>0), unit_price_minor INTEGER NOT NULL CHECK(unit_price_minor>0),
+                currency TEXT NOT NULL DEFAULT 'UZS', status TEXT NOT NULL DEFAULT 'awaiting_payment',
+                payment_reference TEXT NOT NULL DEFAULT '', inventory_quantity INTEGER NOT NULL DEFAULT 0,
+                supplier_quantity INTEGER NOT NULL DEFAULT 0, supplier_reference TEXT NOT NULL DEFAULT '',
+                fulfillment_note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, completed_at TEXT,
+                CHECK(inventory_quantity+supplier_quantity<=quantity)
+            )""")
+            db.execute("""CREATE TABLE IF NOT EXISTS topup_inventory_events (
+                id TEXT PRIMARY KEY, package_id TEXT NOT NULL REFERENCES topup_packages(id), actor_id TEXT REFERENCES users(id),
+                delta INTEGER NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""")
+            for table in ('topup_packages','topup_orders','topup_inventory_events'):
+                db.execute(f'ALTER TABLE public.{table} ENABLE ROW LEVEL SECURITY')
+                db.execute(f'REVOKE ALL ON public.{table} FROM anon, authenticated')
+            required=required+('topup_packages','topup_orders','topup_inventory_events')
             remove_stored_ai_reviews(db)
             db.execute("ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS seller_account_terms_version TEXT NOT NULL DEFAULT ''")
             db.execute('ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS seller_account_terms_at TEXT')
@@ -264,6 +318,7 @@ def migrate():
             categories=[('accounts','Gaming accounts','account'),('items','Items & skins','item'),('currency','In-game currency','currency'),('services','Coaching & services','service'),('codes','Gift cards & digital codes','code')]
             for slug,name in games: db.execute('INSERT INTO games(id,slug,name) VALUES(?,?,?) ON CONFLICT(id) DO NOTHING',(slug,slug,name))
             for slug,name,typ in categories: db.execute('INSERT INTO categories(id,slug,name,product_type) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING',(slug,slug,name,typ))
+            seed_topup_catalog(db)
             enforce_production_marketplace_gate(db)
             return
         db.executescript((ROOT / 'migrations/001_initial.sql').read_text())
@@ -337,6 +392,31 @@ def migrate():
         categories = [('accounts','Gaming accounts','account'),('items','Items & skins','item'),('currency','In-game currency','currency'),('services','Coaching & services','service'),('codes','Gift cards & digital codes','code')]
         for slug, name in games: db.execute('INSERT OR IGNORE INTO games(id,slug,name) VALUES(?,?,?)',(slug,slug,name))
         for slug, name, typ in categories: db.execute('INSERT OR IGNORE INTO categories(id,slug,name,product_type) VALUES(?,?,?,?)',(slug,slug,name,typ))
+        db.execute("""CREATE TABLE IF NOT EXISTS topup_packages (
+            id TEXT PRIMARY KEY, game_slug TEXT NOT NULL, game_name TEXT NOT NULL,
+            url_slug TEXT NOT NULL, currency TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount>0),
+            price_minor INTEGER NOT NULL DEFAULT 0 CHECK(price_minor>=0), stock_on_hand INTEGER NOT NULL DEFAULT 0 CHECK(stock_on_hand>=0),
+            stock_reserved INTEGER NOT NULL DEFAULT 0 CHECK(stock_reserved>=0), enabled INTEGER NOT NULL DEFAULT 1,
+            manual_enabled INTEGER NOT NULL DEFAULT 1, supplier_enabled INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(game_slug,url_slug), CHECK(stock_reserved<=stock_on_hand)
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS topup_orders (
+            id TEXT PRIMARY KEY, reference TEXT NOT NULL UNIQUE, buyer_id TEXT NOT NULL REFERENCES users(id),
+            package_id TEXT NOT NULL REFERENCES topup_packages(id), player_id TEXT NOT NULL, server_id TEXT NOT NULL DEFAULT '',
+            quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity>0), unit_price_minor INTEGER NOT NULL CHECK(unit_price_minor>0),
+            currency TEXT NOT NULL DEFAULT 'UZS', status TEXT NOT NULL DEFAULT 'awaiting_payment',
+            payment_reference TEXT NOT NULL DEFAULT '', inventory_quantity INTEGER NOT NULL DEFAULT 0,
+            supplier_quantity INTEGER NOT NULL DEFAULT 0, supplier_reference TEXT NOT NULL DEFAULT '',
+            fulfillment_note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, completed_at TEXT,
+            CHECK(inventory_quantity+supplier_quantity<=quantity)
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS topup_inventory_events (
+            id TEXT PRIMARY KEY, package_id TEXT NOT NULL REFERENCES topup_packages(id), actor_id TEXT REFERENCES users(id),
+            delta INTEGER NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+        seed_topup_catalog(db)
         enforce_production_marketplace_gate(db)
     finally:
         db.close()
@@ -724,6 +804,8 @@ def seo_page_html(path, slug=None):
     """Return crawlable metadata/content for public SPA routes."""
     base=public_site_base(); template=(ROOT/'static'/'index.html').read_text(encoding='utf-8')
     title_map={
+        '/top-up':('Game currency top ups','Browse PUBG Mobile, Mobile Legends, Free Fire, and Honor of Kings top-up packages on SentryLoot.'),
+        '/help':('SentryLoot Help Center','Find answers to payment, order, refund, and dispute questions.'),
         '/browse':('Game marketplace listings','Browse approved game items and services on SentryLoot.'),
         '/guide':('Buying and safety guide','Learn how to use SentryLoot safely and review marketplace rules.'),
         '/fees':('Marketplace fees and payments','Current payment and fee information for SentryLoot.'),
@@ -737,7 +819,22 @@ def seo_page_html(path, slug=None):
         '/blog':('SentryLoot Blog','Guides to safer buying, selling, and gaming marketplaces.')}
     canonical=base+path
     body=''
-    if path=='/blog' and slug:
+    if path=='/top-up' and slug:
+        parts=slug.split('/')
+        db=connect()
+        try:
+            if len(parts)==1:
+                game=db.execute('SELECT game_name FROM topup_packages WHERE game_slug=? AND enabled=1 LIMIT 1',(parts[0],)).fetchone()
+                if not game: return None
+                title=str(game['game_name'])+' Top Up | SentryLoot'; description='Browse '+str(game['game_name'])+' game currency packages.'; canonical=base+'/top-up/'+urlquote(parts[0],safe='')
+            elif len(parts)==2:
+                package=db.execute('SELECT game_name,amount,currency FROM topup_packages WHERE game_slug=? AND url_slug=? AND enabled=1',(parts[0],parts[1])).fetchone()
+                if not package: return None
+                title=f"{package['amount']} {package['currency']} {package['game_name']} Top Up | SentryLoot"; description=f"Top up {package['amount']} {package['currency']} for {package['game_name']} on SentryLoot."; canonical=base+'/top-up/'+urlquote(parts[0],safe='')+'/'+urlquote(parts[1],safe='')
+            else: return None
+        finally: db.close()
+        body='<section class="page"><h1>'+html.escape(title)+'</h1><p>'+html.escape(description)+'</p></section>'
+    elif path=='/blog' and slug:
         db=connect()
         try: row=db.execute("SELECT * FROM blog_posts WHERE slug=? AND status='published'",(slug,)).fetchone()
         finally: db.close()
@@ -921,11 +1018,15 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path=='/sitemap.xml':
                 payload=public_sitemap_xml()
                 self.send_response(200); self.send_header('Content-Type','application/xml; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=300'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
-            if parsed.path.rstrip('/')=='/help':
-                self.send_response(301); self.send_header('Location','/'); self.send_header('Cache-Control','public, max-age=3600'); self.secure_headers(); self.end_headers(); return
             public_route=parsed.path.rstrip('/') or '/'
-            if public_route in ('/browse','/blog','/guide','/fees','/policies','/support','/terms','/refunds','/seller-policy','/prohibited-items','/contact'):
+            if public_route in ('/top-up','/browse','/blog','/guide','/fees','/policies','/support','/help','/terms','/refunds','/seller-policy','/prohibited-items','/contact'):
                 payload=seo_page_html(public_route)
+                self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=300'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
+            topup_match=re.fullmatch(r'/top-up(?:/([a-z0-9-]+))?(?:/([a-z0-9-]+))?',public_route)
+            if topup_match:
+                slug='/'.join(part for part in topup_match.groups() if part) or None
+                payload=seo_page_html('/top-up',slug)
+                if payload is None: self.send_error(404); return
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=300'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
             blog_match=re.fullmatch(r'/blog/([a-z0-9]+(?:-[a-z0-9]+)*)',public_route)
             if blog_match:
@@ -937,7 +1038,7 @@ class Handler(BaseHTTPRequestHandler):
                 payload=seo_listing_html(listing_match.group(1))
                 if payload is None: self.send_error(404); return
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
-            f={'/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/app.js':'app.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png'}.get(parsed.path)
+            f={'/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/app.js':'app.js','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png'}.get(parsed.path)
             if not f: self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))
@@ -1216,6 +1317,22 @@ class Handler(BaseHTTPRequestHandler):
             return [dict(row) for row in rows]
         if path=='/api/games' and method=='GET': return [dict(x) for x in db.execute('SELECT id,slug,name FROM games WHERE active=1 ORDER BY name')]
         if path=='/api/categories' and method=='GET': return [dict(x) for x in db.execute('SELECT id,slug,name,product_type FROM categories WHERE active=1 ORDER BY name')]
+        if path=='/api/top-up/catalog' and method=='GET':
+            packages=db.execute('SELECT * FROM topup_packages WHERE enabled=1 ORDER BY game_name,amount').fetchall()
+            games=[]
+            by_slug={}
+            for row in packages:
+                if row['game_slug'] not in by_slug:
+                    game={'slug':row['game_slug'],'name':row['game_name'],'currency':row['currency'],'packages':[]}
+                    games.append(game); by_slug[row['game_slug']]=game
+                item=topup_public_package(row)
+                by_slug[row['game_slug']]['packages'].append(item)
+            return games
+        topup_match=re.fullmatch(r'/api/top-up/packages/([a-z0-9-]+)/([a-z0-9-]+)',path)
+        if topup_match and method=='GET':
+            row=db.execute('SELECT * FROM topup_packages WHERE game_slug=? AND url_slug=? AND enabled=1',(topup_match.group(1),topup_match.group(2))).fetchone()
+            if not row: raise HttpError(404,'Top Up mahsuloti topilmadi.')
+            return topup_public_package(row)
         if path=='/api/listings' and method=='GET':
             where=["l.status='published'"]; args=[]
             if MODE=='production':
@@ -1376,6 +1493,64 @@ class Handler(BaseHTTPRequestHandler):
             require_user(ctx); return [dict(x) for x in db.execute('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 50',(uid,))]
         if path=='/api/favorites' and method=='GET':
             require_user(ctx); return [listing_detail(db,x['listing_id'],uid) for x in db.execute('SELECT listing_id FROM favorites WHERE user_id=? ORDER BY created_at DESC',(uid,))]
+        if path=='/api/admin/top-up' and method=='GET':
+            require_admin(ctx)
+            packages=[dict(x) for x in db.execute('SELECT p.*,COALESCE((SELECT SUM(o.quantity) FROM topup_orders o WHERE o.package_id=p.id),0) order_count FROM topup_packages p ORDER BY p.game_name,p.amount')]
+            orders=[dict(x) for x in db.execute('SELECT o.*,u.email buyer_email,p.game_name,p.currency package_currency,p.amount FROM topup_orders o JOIN users u ON u.id=o.buyer_id JOIN topup_packages p ON p.id=o.package_id ORDER BY o.created_at DESC LIMIT 100')]
+            return {'packages':packages,'orders':orders,'supplier':{'configured':False,'provider':'','message':'Ta’minotchi API tanlanmagan.'},'payments':{'configured':False,'provider':'disabled'}}
+        if path=='/api/admin/top-up/packages' and method=='POST':
+            aid=require_admin(ctx)
+            game_slug=clean_text(data.get('game_slug'),'O‘yin manzili',2,80).lower()
+            if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',game_slug): raise HttpError(400,'O‘yin manzili kichik lotin harflari va tirelardan iborat bo‘lsin.')
+            game_name=clean_text(data.get('game_name'),'O‘yin nomi',2,100)
+            currency=clean_text(data.get('currency'),'Valyuta turi',2,20)
+            if not re.fullmatch(r'[A-Za-z0-9 -]{2,20}',currency): raise HttpError(400,'Valyuta turi harf va raqamlardan iborat bo‘lsin.')
+            amount=data.get('amount')
+            if not isinstance(amount,int) or isinstance(amount,bool) or amount<1 or amount>1000000000: raise HttpError(400,'Paket miqdori noto‘g‘ri.')
+            url_slug=clean_text(data.get('url_slug'),'Paket URL manzili',2,100).lower()
+            if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',url_slug): raise HttpError(400,'Paket manzili kichik lotin harflari, raqam va tirelardan iborat bo‘lsin.')
+            price=data.get('price_minor',0)
+            if not isinstance(price,int) or isinstance(price,bool) or price<0 or price>1000000000000: raise HttpError(400,'Narx miqdori noto‘g‘ri.')
+            existing=db.execute('SELECT game_name,currency FROM topup_packages WHERE game_slug=? LIMIT 1',(game_slug,)).fetchone()
+            if existing and (existing['game_name']!=game_name or existing['currency'].casefold()!=currency.casefold()):
+                raise HttpError(409,'Bu o‘yin manzili uchun nom va valyuta avvaldan belgilangan.')
+            package_id=game_slug+'-'+url_slug
+            db.execute('INSERT INTO topup_packages(id,game_slug,game_name,url_slug,currency,amount,price_minor,enabled,manual_enabled) VALUES(?,?,?,?,?,?,?,1,1)',(package_id,game_slug,game_name,url_slug,currency,amount,price))
+            audit(db,aid,'topup_package_create','topup_package',package_id,{'game_slug':game_slug,'amount':amount,'currency':currency,'price_minor':price})
+            return 201,{'ok':True,'package':dict(db.execute('SELECT * FROM topup_packages WHERE id=?',(package_id,)).fetchone())}
+        admin_topup_package=re.fullmatch(r'/api/admin/top-up/packages/([a-z0-9-]+)',path)
+        if admin_topup_package and method=='PATCH':
+            aid=require_admin(ctx); package_id=admin_topup_package.group(1)
+            package=db.execute('SELECT * FROM topup_packages WHERE id=?',(package_id,)).fetchone()
+            if not package: raise HttpError(404,'Top Up paketi topilmadi.')
+            fields={}
+            if 'price_minor' in data:
+                price=data['price_minor']
+                if not isinstance(price,int) or isinstance(price,bool) or price<0 or price>1000000000000: raise HttpError(400,'Narx 0 yoki undan katta UZS miqdori bo‘lishi kerak.')
+                fields['price_minor']=price
+            if 'enabled' in data:
+                if not isinstance(data['enabled'],bool): raise HttpError(400,'Faollik qiymati noto‘g‘ri.')
+                fields['enabled']=int(data['enabled'])
+            if 'manual_enabled' in data:
+                if not isinstance(data['manual_enabled'],bool): raise HttpError(400,'Qo‘lda yetkazish qiymati noto‘g‘ri.')
+                fields['manual_enabled']=int(data['manual_enabled'])
+            if not fields: raise HttpError(400,'Saqlash uchun o‘zgarish topilmadi.')
+            assignments=','.join(f'{key}=?' for key in fields)
+            db.execute(f'UPDATE topup_packages SET {assignments},updated_at=CURRENT_TIMESTAMP WHERE id=?',(*fields.values(),package_id))
+            audit(db,aid,'topup_package_update','topup_package',package_id,fields)
+            return {'ok':True,'package':dict(db.execute('SELECT * FROM topup_packages WHERE id=?',(package_id,)).fetchone())}
+        if path=='/api/admin/top-up/inventory' and method=='POST':
+            aid=require_admin(ctx); package_id=clean_text(data.get('package_id'),'Paket',1,160)
+            delta=data.get('delta'); reason=clean_text(data.get('reason'),'Izoh',3,240)
+            if not isinstance(delta,int) or isinstance(delta,bool) or delta==0 or abs(delta)>100000: raise HttpError(400,'Ombor o‘zgarishi 1–100000 oralig‘ida bo‘lishi kerak.')
+            package=db.execute('SELECT * FROM topup_packages WHERE id=?',(package_id,)).fetchone()
+            if not package: raise HttpError(404,'Top Up paketi topilmadi.')
+            next_stock=package['stock_on_hand']+delta
+            if next_stock<package['stock_reserved']: raise HttpError(409,'Yangi qoldiq band qilingan miqdordan kam bo‘la olmaydi.')
+            db.execute('UPDATE topup_packages SET stock_on_hand=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(next_stock,package_id))
+            db.execute('INSERT INTO topup_inventory_events(id,package_id,actor_id,delta,reason) VALUES(?,?,?,?,?)',(ident(),package_id,aid,delta,reason))
+            audit(db,aid,'topup_inventory_adjust','topup_package',package_id,{'delta':delta,'reason':reason,'stock_on_hand':next_stock})
+            return {'ok':True,'stock_on_hand':next_stock,'available':next_stock-package['stock_reserved']}
         if path=='/api/admin/overview' and method=='GET':
             require_admin(ctx)
             return {
