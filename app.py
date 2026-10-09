@@ -265,6 +265,13 @@ def topup_public_package(row):
             'coming_soon':bool(row['coming_soon']),'available':available,
             'priced':int(row['price_minor'])>0,'purchasable':False,'payment_ready':False}
 
+def topup_admin_row(row):
+    """Normalize PostgreSQL timestamp values before returning admin API rows as JSON."""
+    result=dict(row)
+    for key,value in result.items():
+        if isinstance(value,datetime): result[key]=value.isoformat()
+    return result
+
 def migrate():
     db=connect()
     try:
@@ -1506,12 +1513,12 @@ class Handler(BaseHTTPRequestHandler):
             require_admin(ctx)
             packages=[]
             for row in db.execute('SELECT p.*,COALESCE((SELECT SUM(o.quantity) FROM topup_orders o WHERE o.package_id=p.id),0) order_count FROM topup_packages p ORDER BY p.game_name,p.amount'):
-                package=dict(row)
+                package=topup_admin_row(row)
                 # PostgreSQL can return NUMERIC for SUM(bigint), which psycopg
                 # represents as Decimal; the standard JSON encoder rejects it.
                 package['order_count']=int(package['order_count'] or 0)
                 packages.append(package)
-            orders=[dict(x) for x in db.execute('SELECT o.*,u.email buyer_email,p.game_name,p.currency package_currency,p.amount FROM topup_orders o JOIN users u ON u.id=o.buyer_id JOIN topup_packages p ON p.id=o.package_id ORDER BY o.created_at DESC LIMIT 100')]
+            orders=[topup_admin_row(x) for x in db.execute('SELECT o.*,u.email buyer_email,p.game_name,p.currency package_currency,p.amount FROM topup_orders o JOIN users u ON u.id=o.buyer_id JOIN topup_packages p ON p.id=o.package_id ORDER BY o.created_at DESC LIMIT 100')]
             return {'packages':packages,'orders':orders,'supplier':{'configured':False,'provider':'','message':'Ta’minotchi API tanlanmagan.'},'payments':{'configured':False,'provider':'disabled'}}
         if path=='/api/admin/top-up/packages' and method=='POST':
             aid=require_admin(ctx)
