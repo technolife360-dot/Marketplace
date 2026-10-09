@@ -1578,7 +1578,7 @@ class Handler(BaseHTTPRequestHandler):
             package_id=game_slug+'-'+url_slug
             db.execute('INSERT INTO topup_packages(id,game_slug,game_name,url_slug,currency,amount,price_minor,enabled,coming_soon,manual_enabled) VALUES(?,?,?,?,?,?,?,1,?,1)',(package_id,game_slug,game_name,url_slug,currency,amount,price,int(coming_soon)))
             audit(db,aid,'topup_package_create','topup_package',package_id,{'game_slug':game_slug,'amount':amount,'currency':currency,'price_minor':price,'coming_soon':coming_soon})
-            return 201,{'ok':True,'package':dict(db.execute('SELECT * FROM topup_packages WHERE id=?',(package_id,)).fetchone())}
+            return 201,{'ok':True,'package':topup_admin_row(db.execute('SELECT * FROM topup_packages WHERE id=?',(package_id,)).fetchone())}
         admin_topup_package=re.fullmatch(r'/api/admin/top-up/packages/([a-z0-9-]+)',path)
         if admin_topup_package and method=='PATCH':
             aid=require_admin(ctx); package_id=admin_topup_package.group(1)
@@ -1607,7 +1607,7 @@ class Handler(BaseHTTPRequestHandler):
             assignments=','.join(f'{key}=?' for key in fields)
             db.execute(f'UPDATE topup_packages SET {assignments},updated_at=CURRENT_TIMESTAMP WHERE id=?',(*fields.values(),package_id))
             audit(db,aid,'topup_package_update','topup_package',package_id,fields)
-            return {'ok':True,'package':dict(db.execute('SELECT * FROM topup_packages WHERE id=?',(package_id,)).fetchone())}
+            return {'ok':True,'package':topup_admin_row(db.execute('SELECT * FROM topup_packages WHERE id=?',(package_id,)).fetchone())}
         if path=='/api/admin/top-up/inventory' and method=='POST':
             aid=require_admin(ctx); package_id=clean_text(data.get('package_id'),'Paket',1,160)
             delta=data.get('delta'); reason=clean_text(data.get('reason'),'Izoh',3,240)
