@@ -2233,3 +2233,31 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
 @media(max-width:540px) { .topup-games-grid { grid-template-columns:1fr; } .topup-game-cover { height:190px; } .topup-game-card-body { min-height:168px; } }
 .topup-game-card-body h2 { margin-bottom:auto; }
 .topup-game-card-body .topup-game-cta { justify-content:center; width:100%; margin-top:18px; }
+
+/* Unified Top Up flow: choose a game, choose a pack, then enter player details inline. */
+.topup-catalog-heading { margin-top:0; }
+.topup-game-choice { position:relative; min-height:88px; display:flex; align-items:center; gap:13px; padding:10px; overflow:hidden; border:1px solid rgba(196,181,253,.13); border-radius:16px; background:linear-gradient(145deg,#171724,#10121c 75%); color:#f5f0fb; transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease; }
+.topup-game-choice:hover { transform:translateY(-2px); border-color:rgba(168,85,247,.45); }
+.topup-game-choice.is-active { border-color:rgba(192,132,252,.74); background:linear-gradient(120deg,rgba(91,33,182,.3),#12121e 75%); box-shadow:0 0 0 2px rgba(168,85,247,.1),0 10px 30px rgba(0,0,0,.2); }
+.topup-game-choice > img { width:92px; height:66px; flex:0 0 auto; border-radius:10px; object-fit:cover; }
+.topup-game-choice-copy { min-width:0; display:grid; gap:5px; }
+.topup-game-choice-copy small { color:#bda0e4; font-size:9px; font-weight:800; letter-spacing:1px; text-transform:uppercase; }
+.topup-game-choice-copy b { overflow:hidden; color:#f5f0fb; font-size:13px; text-overflow:ellipsis; }
+.topup-game-choice-index { position:absolute; top:8px; right:10px; color:#90869f; font-size:9px; font-weight:800; }
+.topup-package-card.is-selected { border-color:rgba(192,132,252,.78); background:linear-gradient(135deg,rgba(109,40,217,.24),rgba(25,20,38,.92)); box-shadow:inset 0 0 0 1px rgba(192,132,252,.13),0 8px 24px rgba(0,0,0,.16); }
+.topup-inline-product { scroll-margin-top:24px; display:grid; grid-template-columns:minmax(180px,.65fr) minmax(0,1fr); margin-top:24px; overflow:hidden; border:1px solid rgba(192,132,252,.25); border-radius:22px; background:radial-gradient(ellipse at 0 0,rgba(124,58,237,.14),transparent 40%),linear-gradient(145deg,#191724,#10121c); box-shadow:0 22px 56px rgba(0,0,0,.22); }
+.topup-inline-product-art { position:relative; min-height:420px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; overflow:hidden; color:#f5f0fb; font-size:17px; font-weight:800; }
+.topup-inline-product-art > img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.topup-inline-product-art:after { position:absolute; inset:0; background:linear-gradient(0deg,rgba(16,12,25,.92),rgba(16,12,25,.12) 85%); content:""; }
+.topup-inline-product-art .topup-product-glyph,.topup-inline-product-art > b { z-index:1; }
+.topup-inline-product-art > b { text-shadow:0 2px 12px #08070d; }
+.topup-inline-product-info { min-width:0; padding:clamp(22px,4vw,38px); }
+.topup-inline-product-info > .topup-coming-soon { margin:0 0 16px; padding:7px 11px; font-size:9px; }
+.topup-inline-product-info h2 { margin:7px 0; color:#f7f2ff; font-size:clamp(27px,4vw,36px); letter-spacing:-.8px; }
+.topup-inline-product-info > p { margin:0 0 19px; color:#a7a2b6; font-size:13px; line-height:1.6; }
+.topup-inline-product-info .topup-price-box { margin-bottom:15px; }
+.topup-inline-product-info .topup-order-form .field { margin-bottom:9px; }
+.topup-inline-product-info .topup-order-form .button-accent { min-height:48px; }
+.topup-inline-product-info .topup-unavailable-note { margin-top:12px; }
+@media(max-width:760px) { .topup-inline-product { grid-template-columns:minmax(0,1fr); } .topup-inline-product-art { min-height:210px; } }
+@media(max-width:540px) { .topup-game-choice { min-height:76px; gap:10px; padding:8px; } .topup-game-choice > img { width:78px; height:58px; } .topup-game-choice-copy b { font-size:12px; } .topup-inline-product { border-radius:17px; } .topup-inline-product-art { min-height:175px; } }
