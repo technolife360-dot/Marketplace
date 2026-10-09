@@ -2231,3 +2231,5 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
 .topup-game-cta { min-height:37px; margin-top:auto; }
 @media(max-width:900px) { .topup-games-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .topup-game-cover { height:165px; } }
 @media(max-width:540px) { .topup-games-grid { grid-template-columns:1fr; } .topup-game-cover { height:190px; } .topup-game-card-body { min-height:168px; } }
+.topup-game-card-body h2 { margin-bottom:auto; }
+.topup-game-card-body .topup-game-cta { justify-content:center; width:100%; margin-top:18px; }
