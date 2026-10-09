@@ -1318,6 +1318,9 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/games' and method=='GET': return [dict(x) for x in db.execute('SELECT id,slug,name FROM games WHERE active=1 ORDER BY name')]
         if path=='/api/categories' and method=='GET': return [dict(x) for x in db.execute('SELECT id,slug,name,product_type FROM categories WHERE active=1 ORDER BY name')]
         if path=='/api/top-up/catalog' and method=='GET':
+            # Keep the public catalog recoverable if a deployment started against a
+            # database whose schema migration ran without the app startup seeder.
+            seed_topup_catalog(db)
             packages=db.execute('SELECT * FROM topup_packages WHERE enabled=1 ORDER BY game_name,amount').fetchall()
             games=[]
             by_slug={}
@@ -1330,6 +1333,7 @@ class Handler(BaseHTTPRequestHandler):
             return games
         topup_match=re.fullmatch(r'/api/top-up/packages/([a-z0-9-]+)/([a-z0-9-]+)',path)
         if topup_match and method=='GET':
+            seed_topup_catalog(db)
             row=db.execute('SELECT * FROM topup_packages WHERE game_slug=? AND url_slug=? AND enabled=1',(topup_match.group(1),topup_match.group(2))).fetchone()
             if not row: raise HttpError(404,'Top Up mahsuloti topilmadi.')
             return topup_public_package(row)
