@@ -215,7 +215,7 @@ def public_site_base():
 
 def public_sitemap_xml():
     base=public_site_base()
-    urls=[base+'/',base+'/browse',base+'/blog',base+'/guide',base+'/fees',base+'/policies',base+'/privacy-policy',base+'/data-deletion']
+    urls=[base+'/',base+'/browse',base+'/blog',base+'/guide',base+'/fees',base+'/policies',base+'/support',base+'/terms',base+'/refunds',base+'/seller-policy',base+'/prohibited-items',base+'/contact',base+'/privacy-policy',base+'/data-deletion']
     db=connect()
     try:
         for listing in db.execute("SELECT id,game_id,product_type FROM listings WHERE status='published' AND stock>reserved ORDER BY updated_at DESC").fetchall():
@@ -728,6 +728,12 @@ def seo_page_html(path, slug=None):
         '/guide':('Buying and safety guide','Learn how to use SentryLoot safely and review marketplace rules.'),
         '/fees':('Marketplace fees and payments','Current payment and fee information for SentryLoot.'),
         '/policies':('SentryLoot marketplace policies','Marketplace, publisher, and account-transfer policies.'),
+        '/support':('Crisp Support and FAQ','Help with payments, orders, refunds, and disputes.'),
+        '/terms':('Terms of Service — SentryLoot','Terms for using the SentryLoot marketplace.'),
+        '/refunds':('Refund and Dispute Policy — SentryLoot','How to request help with an order or report a dispute.'),
+        '/seller-policy':('Seller Policy — SentryLoot','Rules and responsibilities for SentryLoot sellers.'),
+        '/prohibited-items':('Prohibited Items — SentryLoot','Products and conduct prohibited on SentryLoot.'),
+        '/contact':('Contact SentryLoot','Contact SentryLoot support and compliance.'),
         '/blog':('SentryLoot Blog','Guides to safer buying, selling, and gaming marketplaces.')}
     canonical=base+path
     body=''
@@ -918,7 +924,7 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path.rstrip('/')=='/help':
                 self.send_response(301); self.send_header('Location','/'); self.send_header('Cache-Control','public, max-age=3600'); self.secure_headers(); self.end_headers(); return
             public_route=parsed.path.rstrip('/') or '/'
-            if public_route in ('/browse','/blog','/guide','/fees','/policies'):
+            if public_route in ('/browse','/blog','/guide','/fees','/policies','/support','/terms','/refunds','/seller-policy','/prohibited-items','/contact'):
                 payload=seo_page_html(public_route)
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=300'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
             blog_match=re.fullmatch(r'/blog/([a-z0-9]+(?:-[a-z0-9]+)*)',public_route)

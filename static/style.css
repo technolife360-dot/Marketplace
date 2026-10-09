@@ -444,6 +444,10 @@ body.profile-menu-open { overflow: hidden; }
 .stat b { display: block; margin-top: 7px; font-size: 23px; font-weight: 760; line-height: 1.2; }
 .legal-copy { max-width: 790px; color: #384f7c; font-size: 14px; line-height: 1.8; }
 .legal-copy h3 { margin-top: 28px; color: var(--ink); font-size: 17px; font-weight: 730; }
+.legal-copy h2 { margin: 28px 0 10px; color: var(--ink); font-size: 20px; font-weight: 760; }
+.legal-copy details { margin: 10px 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255,255,255,3%); }
+.legal-copy summary { color: var(--ink); font-weight: 720; cursor: pointer; }
+.legal-copy details p { margin: 11px 0 0; }
 .notice { margin: 13px 0; padding: 13px 15px; border: 1px solid #d7dde8; border-radius: 13px; background: #eef1f7; color: #374d7a; font-size: 12px; line-height: 1.65; }
 .notice.warn { border-color: #eee1c8; background: #fbf6ea; color: #795f32; }
 .notice.error { border-color: #efd9d4; background: #fff3f0; color: #91483f; }
@@ -461,7 +465,7 @@ body.profile-menu-open { overflow: hidden; }
 .queue-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 11px; }
 
 /* Footer */
-.footer { display: grid; grid-template-columns: minmax(220px, 1.2fr) repeat(2, minmax(130px, .65fr)); align-items: start; gap: 24px 44px; padding: 36px clamp(24px, 6vw, 90px) 20px; background: #101623; color: #f1f4f9; }
+.footer { display: grid; grid-template-columns: minmax(180px, 1.2fr) repeat(3, minmax(130px, .7fr)); align-items: start; gap: 24px 34px; padding: 36px clamp(24px, 6vw, 90px) 20px; background: #101623; color: #f1f4f9; }
 .footer-brand { min-width: 0; }
 .footer p { max-width: 300px; margin: 9px 0 0; color: #889eca; font-size: 12px; line-height: 1.55; }
 .footer .brand { font-size: 18px; }
@@ -672,6 +676,8 @@ body.profile-menu-open { overflow: hidden; }
 .stat small { color: #7f97c6; }
 .legal-copy { color: #adbcda; }
 .legal-copy h3 { color: #e8ebf0; }
+.legal-copy h2, .legal-copy summary { color: #f0e5fa; }
+.legal-copy details { border-color: rgba(197,145,255,15%); background: rgba(165,56,244,5%); }
 .notice { border-color: rgba(171, 186, 213, 14%); background: rgba(128, 149, 186, 7%); color: #b7c4df; }
 .notice.warn { border-color: rgb(215 174 109 / 17%); background: rgb(215 174 109 / 7%); color: #e5c892; }
 .notice.error { border-color: rgb(227 154 138 / 17%); background: rgb(180 81 64 / 8%); color: #e7b0a4; }
