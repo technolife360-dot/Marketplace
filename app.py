@@ -18,6 +18,7 @@ from payment_providers import get_provider
 import email_service
 import identity_service
 import oauth_service
+import seagm_supplier
 from asia_markets import ASIA_COUNTRIES, ASIA_COUNTRY_CURRENCIES, ASIA_CURRENCIES
 
 SUPPORTED_LANGUAGES = frozenset({'en', 'uz', 'ru', 'zh', 'ja', 'ko', 'id', 'ms', 'th', 'vi', 'hi', 'ar', 'tr', 'kk', 'bn'})
@@ -295,6 +296,7 @@ def migrate():
                 UNIQUE(game_slug,url_slug), CHECK(stock_reserved<=stock_on_hand)
             )""")
             db.execute('ALTER TABLE public.topup_packages ADD COLUMN IF NOT EXISTS coming_soon INTEGER NOT NULL DEFAULT 1')
+            db.execute("ALTER TABLE public.topup_packages ADD COLUMN IF NOT EXISTS supplier_type_id TEXT NOT NULL DEFAULT ''")
             db.execute("""CREATE TABLE IF NOT EXISTS topup_orders (
                 id TEXT PRIMARY KEY, reference TEXT NOT NULL UNIQUE, buyer_id TEXT NOT NULL REFERENCES users(id),
                 package_id TEXT NOT NULL REFERENCES topup_packages(id), player_id TEXT NOT NULL, server_id TEXT NOT NULL DEFAULT '',
@@ -413,6 +415,8 @@ def migrate():
         topup_columns={r['name'] for r in db.execute('PRAGMA table_info(topup_packages)')}
         if 'coming_soon' not in topup_columns:
             db.execute('ALTER TABLE topup_packages ADD COLUMN coming_soon INTEGER NOT NULL DEFAULT 1')
+        if 'supplier_type_id' not in topup_columns:
+            db.execute("ALTER TABLE topup_packages ADD COLUMN supplier_type_id TEXT NOT NULL DEFAULT ''")
         db.execute("""CREATE TABLE IF NOT EXISTS topup_orders (
             id TEXT PRIMARY KEY, reference TEXT NOT NULL UNIQUE, buyer_id TEXT NOT NULL REFERENCES users(id),
             package_id TEXT NOT NULL REFERENCES topup_packages(id), player_id TEXT NOT NULL, server_id TEXT NOT NULL DEFAULT '',
@@ -1519,7 +1523,40 @@ class Handler(BaseHTTPRequestHandler):
                 package['order_count']=int(package['order_count'] or 0)
                 packages.append(package)
             orders=[topup_admin_row(x) for x in db.execute('SELECT o.*,u.email buyer_email,p.game_name,p.currency package_currency,p.amount FROM topup_orders o JOIN users u ON u.id=o.buyer_id JOIN topup_packages p ON p.id=o.package_id ORDER BY o.created_at DESC LIMIT 100')]
-            return {'packages':packages,'orders':orders,'supplier':{'configured':False,'provider':'','message':'Ta’minotchi API tanlanmagan.'},'payments':{'configured':False,'provider':'disabled'}}
+            supplier_config=seagm_supplier.configuration()
+            try:
+                payment_provider=get_provider(MODE,os.environ.get('PAYMENT_PROVIDER','disabled').strip().lower()).name
+            except RuntimeError:
+                payment_provider='unconfigured'
+            return {'packages':packages,'orders':orders,
+                    'supplier':{'configured':supplier_config['configured'],'provider':'SEAGM',
+                                'environment':supplier_config['environment'],
+                                'message':'SEAGM API kalitlari sozlangan.' if supplier_config['configured'] else 'SEAGM API kalitlari serverda kiritilmagan.'},
+                    'payments':{'configured':payment_provider not in ('disabled','unconfigured'),'provider':payment_provider}}
+        if path=='/api/admin/top-up/supplier/check' and method=='POST':
+            require_admin(ctx)
+            check_rate(db,'admin_seagm_check',uid,6)
+            try:
+                account=seagm_supplier.account_status()
+            except seagm_supplier.SupplierError as error:
+                raise HttpError(502,str(error))
+            return {'ok':True,'account':account,'orders_enabled':False,
+                    'message':'SEAGM API aloqasi tekshirildi. Xaridlar to‘lov provayderi va paket mosliklari sozlanmaguncha o‘chiq qoladi.'}
+        if path=='/api/admin/top-up/supplier/catalog' and method=='GET':
+            require_admin(ctx)
+            try:
+                categories=seagm_supplier.catalog_categories()
+            except seagm_supplier.SupplierError as error:
+                raise HttpError(502,str(error))
+            return {'provider':'SEAGM','environment':seagm_supplier.configuration()['environment'],'categories':categories}
+        seagm_types=re.fullmatch(r'/api/admin/top-up/supplier/categories/(\d+)/types',path)
+        if seagm_types and method=='GET':
+            require_admin(ctx)
+            try:
+                products=seagm_supplier.catalog_types(int(seagm_types.group(1)))
+            except seagm_supplier.SupplierError as error:
+                raise HttpError(502,str(error))
+            return {'provider':'SEAGM','products':products}
         if path=='/api/admin/top-up/packages' and method=='POST':
             aid=require_admin(ctx)
             game_slug=clean_text(data.get('game_slug'),'O‘yin manzili',2,80).lower()
@@ -1561,6 +1598,11 @@ class Handler(BaseHTTPRequestHandler):
             if 'coming_soon' in data:
                 if not isinstance(data['coming_soon'],bool): raise HttpError(400,'Coming Soon holati noto‘g‘ri.')
                 fields['coming_soon']=int(data['coming_soon'])
+            if 'supplier_type_id' in data:
+                supplier_type_id=str(data['supplier_type_id'] or '').strip()
+                if supplier_type_id and not re.fullmatch(r'\d{1,20}',supplier_type_id): raise HttpError(400,'SEAGM type ID faqat raqamlardan iborat bo‘lishi kerak.')
+                fields['supplier_type_id']=supplier_type_id
+                fields['supplier_enabled']=int(bool(supplier_type_id))
             if not fields: raise HttpError(400,'Saqlash uchun o‘zgarish topilmadi.')
             assignments=','.join(f'{key}=?' for key in fields)
             db.execute(f'UPDATE topup_packages SET {assignments},updated_at=CURRENT_TIMESTAMP WHERE id=?',(*fields.values(),package_id))

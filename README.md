@@ -20,7 +20,7 @@ Open http://127.0.0.1:8000. Development verification tokens and sandbox payment 
 
 ## Supabase PostgreSQL
 
-The application uses Supabase only when `DATABASE_URL` is set in the server environment. Apply `supabase/migrations/20261005000000_marketplace_schema.sql` first, then every later migration in timestamp order, including `20261007010000_facebook_oauth.sql`, `20261008000000_account_reviews_private_evidence.sql`, and `20261009000000_topup_catalog.sql`, in the Supabase SQL Editor or your migration runner. The server checks for the required tables and seeds reference rows on startup. Install dependencies with `python3 -m pip install -r requirements.txt`; Psycopg 3 connects to PostgreSQL and uses dictionary rows for the existing API code. Keep `DATABASE_URL` on the backend in a deployment secret manager; never expose it in browser code or commit it. If unset, the app continues to use the local SQLite database.
+The application uses Supabase only when `DATABASE_URL` is set in the server environment. Apply `supabase/migrations/20261005000000_marketplace_schema.sql` first, then every later migration in timestamp order, including `20261007010000_facebook_oauth.sql`, `20261008000000_account_reviews_private_evidence.sql`, `20261009000000_topup_catalog.sql`, `20261010000000_topup_coming_soon.sql`, and `20261010010000_topup_supplier_mapping.sql`, in the Supabase SQL Editor or your migration runner. The server checks for the required tables and seeds reference rows on startup. Install dependencies with `python3 -m pip install -r requirements.txt`; Psycopg 3 connects to PostgreSQL and uses dictionary rows for the existing API code. Keep `DATABASE_URL` on the backend in a deployment secret manager; never expose it in browser code or commit it. If unset, the app continues to use the local SQLite database.
 
 Vercel runs a daily account-deletion job. Set a random `CRON_SECRET` environment variable for Production; Vercel sends it as a bearer token. Pending or reviewing deletion requests are automatically erased after 30 days, while anonymized order and ledger records are retained.
 
@@ -90,6 +90,12 @@ Not launch-complete: production OAuth client/service IDs and HTTPS callback regi
 The configured Asia market list supplies account country defaults and display-currency choices only. It does not mean buyers or sellers in every listed market can transact, pass provider onboarding, or receive a payout. Real checkout remains unavailable until a provider confirms coverage and is integrated.
 
 Top Up catalog and admin inventory management are implemented, but live Top Up checkout is intentionally closed until the payment method is selected and integrated. Supplier fallback is also not active until a specific supplier API and credentials are supplied; the admin page labels this state instead of claiming that automatic fulfillment is available.
+
+### SEAGM supplier setup
+
+The server includes a SEAGM Open API connection check and a read-only direct-top-up category browser in Admin → Top Up. Apply through SEAGM's business partnership form, then add `SEAGM_UID` and `SEAGM_SECRET_KEY` to the private local environment file or deployment secret manager. Leave `SEAGM_API_ENV=sandbox` while checking credentials; only switch to `production` after SEAGM approves the account and the sandbox flow has been reviewed. Never put the secret in browser code, chat, or the repository. The admin actions show account connection/balance and supplier category IDs without placing a paid order.
+
+This is supplier-side preparation, not a live storefront launch. Each enabled package still needs an approved SEAGM product/region mapping and a verified retail price. Top Up order creation and supplier fulfillment remain disabled until a real customer payment adapter and its signed success callback exist; the supplier must only be charged after payment is confirmed. SEAGM API keys and sandbox access cannot be created by this repository, and the actual account/API response must be checked after merchant onboarding.
 
 ## Deployment
 
