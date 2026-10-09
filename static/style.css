@@ -2266,7 +2266,7 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
 .topup-intro-points b,.topup-intro-points small { display:block; }
 .topup-intro-points b { color:#e8e1f0; font-size:9px; }
 .topup-intro-points small { margin-top:3px; color:#8e879c; font-size:8px; }
-.topup-trust-card { align-self:start; padding:18px; border:1px solid rgba(196,181,253,.14); border-radius:17px; background:linear-gradient(145deg,rgba(18,19,33,.97),rgba(13,15,25,.99)); box-shadow:0 15px 38px rgba(0,0,0,.18); }
+.topup-trust-card { align-self:start; padding:18px; }
 .topup-trust-brand { display:flex; align-items:center; gap:11px; }
 .topup-trust-brand > span:last-child { min-width:0; }
 .topup-trust-brand b,.topup-trust-brand small { display:block; }
@@ -2284,7 +2284,8 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
 .topup-payment-state b { color:#e7dcf5; font-size:9px; }
 .topup-payment-state small { margin-top:3px; color:#9c92a9; font-size:8px; line-height:1.45; }
 .topup-purchase-layout { display:grid; grid-template-columns:minmax(0,2.1fr) minmax(270px,.9fr); align-items:start; gap:22px; }
-.topup-package-panel,.topup-order-summary,.topup-how-panel,.topup-faq-panel { min-width:0; padding:22px; border:1px solid rgba(196,181,253,.13); border-radius:18px; background:linear-gradient(145deg,rgba(16,20,34,.98),rgba(12,16,27,.98)); box-shadow:0 16px 42px rgba(0,0,0,.16); }
+.topup-trust-card,.topup-package-panel,.topup-order-summary,.topup-how-panel,.topup-faq-panel { min-width:0; border:1px solid rgba(226,232,255,.2); border-radius:18px; background:linear-gradient(135deg,rgba(255,255,255,.11),rgba(255,255,255,.025) 38%,rgba(139,92,246,.055)),rgba(14,18,31,.24); box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 16px 42px rgba(0,0,0,.22); -webkit-backdrop-filter:blur(24px) saturate(180%); backdrop-filter:blur(24px) saturate(180%); }
+.topup-package-panel,.topup-order-summary,.topup-how-panel,.topup-faq-panel { padding:22px; }
 .topup-panel-heading { display:flex; align-items:center; justify-content:space-between; gap:14px; }
 .topup-panel-heading h2,.topup-how-panel h2,.topup-faq-panel h2 { margin:6px 0 0; color:#f3eff8; font-size:18px; letter-spacing:-.4px; }
 .topup-panel-heading .topup-overline,.topup-how-panel > .topup-overline,.topup-faq-panel > .topup-overline { color:#a98acb; font-size:8px; letter-spacing:1.2px; }
