@@ -2196,3 +2196,19 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
 .topup-package-card.is-compact .topup-package-price { display:none; }
 .topup-package-card.is-compact b { min-width:0; font-size:11px; line-height:1.25; }
 .topup-package-card.is-compact .topup-coming-soon { flex:0 0 auto; margin:0; padding:3px 6px; white-space:nowrap; }
+
+.topup-hero-image { min-height:350px; display:flex; align-items:center; padding:clamp(26px,5vw,58px); background:#10091b; }
+.topup-hero-image:after { content:none; }
+.topup-hero-background,.topup-hero-overlay { position:absolute; inset:0; width:100%; height:100%; }
+.topup-hero-background { z-index:0; object-fit:cover; object-position:center 44%; }
+.topup-hero-overlay { z-index:1; background:linear-gradient(90deg,rgba(9,5,20,.9) 0%,rgba(18,8,31,.76) 38%,rgba(22,10,34,.26) 72%,rgba(19,8,28,.08) 100%),linear-gradient(0deg,rgba(10,6,18,.42),transparent 48%,rgba(28,13,44,.12)); }
+.topup-hero-content { position:relative; z-index:2; width:min(100%,700px); }
+.topup-hero-brand { display:inline-flex; align-items:center; gap:10px; margin-bottom:18px; color:#fff; }
+.topup-hero-brand > span { width:31px; height:31px; display:grid; place-items:center; border:1px solid rgba(216,180,254,.65); border-radius:10px; background:linear-gradient(145deg,#a855f7,#5b21b6); box-shadow:0 5px 22px rgba(124,58,237,.42); color:white; font-size:17px; font-weight:900; }
+.topup-hero-brand b { font-size:16px; font-weight:850; letter-spacing:.15px; text-shadow:0 2px 14px rgba(0,0,0,.5); }
+.topup-hero-image .topup-hero-kicker { display:flex; width:max-content; align-items:center; gap:9px; padding:7px 10px; border:1px solid rgba(216,180,254,.2); border-radius:999px; background:rgba(19,9,31,.5); color:#eadbff; backdrop-filter:blur(8px); }
+.topup-hero-image h1 { max-width:660px; margin:15px 0 11px; font-size:clamp(36px,5.3vw,60px); line-height:1.02; text-shadow:0 3px 23px rgba(0,0,0,.55); }
+.topup-hero-image p { max-width:540px; color:#eee9f5; text-shadow:0 2px 14px rgba(0,0,0,.7); }
+.topup-hero-image .topup-hero-stats b { text-shadow:0 2px 12px rgba(0,0,0,.6); }
+@media(max-width:760px) { .topup-hero-image { min-height:320px; } .topup-hero-image .topup-hero-overlay { background:linear-gradient(90deg,rgba(9,5,20,.84),rgba(18,8,31,.56) 72%,rgba(19,8,28,.25)),linear-gradient(0deg,rgba(10,6,18,.4),transparent 55%); } }
+@media(max-width:540px) { .topup-hero-image { min-height:365px; align-items:flex-end; padding:24px 19px; } .topup-hero-background { object-position:55% center; } .topup-hero-brand { margin-bottom:13px; } .topup-hero-image h1 { max-width:100%; margin:12px 0 9px; font-size:34px; } .topup-hero-image p { font-size:11px; line-height:1.6; } .topup-hero-image .topup-hero-stats { margin-top:16px; } }
