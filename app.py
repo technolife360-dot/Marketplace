@@ -1504,7 +1504,13 @@ class Handler(BaseHTTPRequestHandler):
             require_user(ctx); return [listing_detail(db,x['listing_id'],uid) for x in db.execute('SELECT listing_id FROM favorites WHERE user_id=? ORDER BY created_at DESC',(uid,))]
         if path=='/api/admin/top-up' and method=='GET':
             require_admin(ctx)
-            packages=[dict(x) for x in db.execute('SELECT p.*,COALESCE((SELECT SUM(o.quantity) FROM topup_orders o WHERE o.package_id=p.id),0) order_count FROM topup_packages p ORDER BY p.game_name,p.amount')]
+            packages=[]
+            for row in db.execute('SELECT p.*,COALESCE((SELECT SUM(o.quantity) FROM topup_orders o WHERE o.package_id=p.id),0) order_count FROM topup_packages p ORDER BY p.game_name,p.amount'):
+                package=dict(row)
+                # PostgreSQL can return NUMERIC for SUM(bigint), which psycopg
+                # represents as Decimal; the standard JSON encoder rejects it.
+                package['order_count']=int(package['order_count'] or 0)
+                packages.append(package)
             orders=[dict(x) for x in db.execute('SELECT o.*,u.email buyer_email,p.game_name,p.currency package_currency,p.amount FROM topup_orders o JOIN users u ON u.id=o.buyer_id JOIN topup_packages p ON p.id=o.package_id ORDER BY o.created_at DESC LIMIT 100')]
             return {'packages':packages,'orders':orders,'supplier':{'configured':False,'provider':'','message':'Ta’minotchi API tanlanmagan.'},'payments':{'configured':False,'provider':'disabled'}}
         if path=='/api/admin/top-up/packages' and method=='POST':
