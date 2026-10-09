@@ -2338,7 +2338,7 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
 .topup-checkout-unavailable small { margin-top:3px; color:#9f97a9; font-size:8px; line-height:1.5; }
 .topup-terms-copy { margin:12px 0 0; color:#777183; font-size:8px; line-height:1.6; }
 .topup-terms-copy a { color:#ad91d0; }
-.topup-how-grid { display:grid; grid-template-columns:minmax(0,2.05fr) minmax(260px,.95fr); gap:22px; margin-top:22px; }
+.topup-how-grid { display:grid; grid-template-columns:minmax(0,2.1fr) minmax(270px,.9fr); gap:22px; margin-top:22px; }
 .topup-how-panel,.topup-faq-panel { padding:21px; }
 .topup-how-panel h2,.topup-faq-panel h2 { margin-bottom:18px; }
 .topup-steps { display:grid; grid-template-columns:1fr auto 1fr auto 1fr auto 1fr; align-items:start; gap:10px; }
