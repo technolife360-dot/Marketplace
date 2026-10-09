@@ -2048,6 +2048,7 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
   .topup-admin-heading { align-items:flex-start; flex-direction:column; }
   .topup-admin-save { grid-template-columns:1fr 1fr; }
   .topup-admin-save label:first-child { grid-column:span 2; }
+
   .topup-stock-adjust { grid-template-columns:1fr 1fr; }
   .topup-stock-adjust button { grid-column:span 2; }
   .topup-game-card { padding:17px; }
@@ -2188,3 +2189,10 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
   .topup-stock-adjust button { grid-column:span 2; }
   .topup-admin-create-soon { grid-column:span 2; }
 }
+
+/* Keep the compact package chips readable inside the game cards. */
+.topup-package-card.is-compact { display:flex; align-items:center; justify-content:space-between; gap:7px; padding:9px 28px 9px 11px; }
+.topup-package-card.is-compact .topup-package-currency,
+.topup-package-card.is-compact .topup-package-price { display:none; }
+.topup-package-card.is-compact b { min-width:0; font-size:11px; line-height:1.25; }
+.topup-package-card.is-compact .topup-coming-soon { flex:0 0 auto; margin:0; padding:3px 6px; white-space:nowrap; }
