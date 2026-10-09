@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 430" fill="none">
+  <defs>
+    <linearGradient id="sky" x2="1" y2="1"><stop stop-color="#111827"/><stop offset=".52" stop-color="#4c1d95"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
+    <linearGradient id="gold" x2="1" y2="1"><stop stop-color="#f3e8ff"/><stop offset=".5" stop-color="#c084fc"/><stop offset="1" stop-color="#6d28d9"/></linearGradient>
+    <radialGradient id="moon"><stop stop-color="#e9d5ff" stop-opacity=".82"/><stop offset="1" stop-color="#c084fc" stop-opacity="0"/></radialGradient>
+  </defs>
+  <path fill="url(#sky)" d="M0 0h900v430H0z"/>
+  <circle cx="697" cy="110" r="108" fill="url(#moon)"/>
+  <path d="M0 250 102 203l76 30 100-111 87 127 104-93 70 91 104-135 81 112 76-46 100 71v181H0z" fill="#261d43" fill-opacity=".82"/>
+  <path d="M0 355c126-39 249-11 356-29 161-28 239 25 371-9 68-18 113-31 173-15v128H0z" fill="#14121e" fill-opacity=".94"/>
+  <path d="m615 326 14-96 20-29 22 20 17 105 24 12v18H581v-18z" fill="#162a31"/>
+  <path d="M646 206v-64l-35 35-16-15 51-52 51 52-16 15-35-35" fill="url(#gold)"/>
+  <path d="M606 233h-76m132 0h95" stroke="#d8b4fe" stroke-width="5" stroke-linecap="round"/>
+  <path d="m527 233-22-10m251 10 22-10" stroke="#d8b4fe" stroke-width="3"/>
+  <path d="M92 78h180M92 95h118" stroke="#fff" stroke-opacity=".13" stroke-width="2"/>
+  <path d="m322 172 4 10 11 1-8 7 3 11-10-6-10 6 3-11-8-7 11-1 4-10Zm421 92 3 7 8 1-6 5 2 8-7-4-7 4 2-8-6-5 8-1 3-7Z" fill="#e9d5ff" fill-opacity=".75"/>
+</svg>

@@ -262,7 +262,8 @@ def topup_public_package(row):
     available=int(row['stock_on_hand'])-int(row['stock_reserved'])>0
     return {'id':row['id'],'game_slug':row['game_slug'],'game_name':row['game_name'],'url_slug':row['url_slug'],
             'currency':row['currency'],'amount':row['amount'],'price_minor':row['price_minor'],
-            'available':available,'priced':int(row['price_minor'])>0,'purchasable':False,'payment_ready':False}
+            'coming_soon':bool(row['coming_soon']),'available':available,
+            'priced':int(row['price_minor'])>0,'purchasable':False,'payment_ready':False}
 
 def migrate():
     db=connect()
@@ -281,11 +282,12 @@ def migrate():
                 id TEXT PRIMARY KEY, game_slug TEXT NOT NULL, game_name TEXT NOT NULL,
                 url_slug TEXT NOT NULL, currency TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount>0),
                 price_minor INTEGER NOT NULL DEFAULT 0 CHECK(price_minor>=0), stock_on_hand INTEGER NOT NULL DEFAULT 0 CHECK(stock_on_hand>=0),
-                stock_reserved INTEGER NOT NULL DEFAULT 0 CHECK(stock_reserved>=0), enabled INTEGER NOT NULL DEFAULT 1,
+                stock_reserved INTEGER NOT NULL DEFAULT 0 CHECK(stock_reserved>=0), enabled INTEGER NOT NULL DEFAULT 1, coming_soon INTEGER NOT NULL DEFAULT 1,
                 manual_enabled INTEGER NOT NULL DEFAULT 1, supplier_enabled INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(game_slug,url_slug), CHECK(stock_reserved<=stock_on_hand)
             )""")
+            db.execute('ALTER TABLE public.topup_packages ADD COLUMN IF NOT EXISTS coming_soon INTEGER NOT NULL DEFAULT 1')
             db.execute("""CREATE TABLE IF NOT EXISTS topup_orders (
                 id TEXT PRIMARY KEY, reference TEXT NOT NULL UNIQUE, buyer_id TEXT NOT NULL REFERENCES users(id),
                 package_id TEXT NOT NULL REFERENCES topup_packages(id), player_id TEXT NOT NULL, server_id TEXT NOT NULL DEFAULT '',
@@ -396,11 +398,14 @@ def migrate():
             id TEXT PRIMARY KEY, game_slug TEXT NOT NULL, game_name TEXT NOT NULL,
             url_slug TEXT NOT NULL, currency TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount>0),
             price_minor INTEGER NOT NULL DEFAULT 0 CHECK(price_minor>=0), stock_on_hand INTEGER NOT NULL DEFAULT 0 CHECK(stock_on_hand>=0),
-            stock_reserved INTEGER NOT NULL DEFAULT 0 CHECK(stock_reserved>=0), enabled INTEGER NOT NULL DEFAULT 1,
+            stock_reserved INTEGER NOT NULL DEFAULT 0 CHECK(stock_reserved>=0), enabled INTEGER NOT NULL DEFAULT 1, coming_soon INTEGER NOT NULL DEFAULT 1,
             manual_enabled INTEGER NOT NULL DEFAULT 1, supplier_enabled INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(game_slug,url_slug), CHECK(stock_reserved<=stock_on_hand)
         )""")
+        topup_columns={r['name'] for r in db.execute('PRAGMA table_info(topup_packages)')}
+        if 'coming_soon' not in topup_columns:
+            db.execute('ALTER TABLE topup_packages ADD COLUMN coming_soon INTEGER NOT NULL DEFAULT 1')
         db.execute("""CREATE TABLE IF NOT EXISTS topup_orders (
             id TEXT PRIMARY KEY, reference TEXT NOT NULL UNIQUE, buyer_id TEXT NOT NULL REFERENCES users(id),
             package_id TEXT NOT NULL REFERENCES topup_packages(id), player_id TEXT NOT NULL, server_id TEXT NOT NULL DEFAULT '',
@@ -1515,12 +1520,14 @@ class Handler(BaseHTTPRequestHandler):
             if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',url_slug): raise HttpError(400,'Paket manzili kichik lotin harflari, raqam va tirelardan iborat bo‘lsin.')
             price=data.get('price_minor',0)
             if not isinstance(price,int) or isinstance(price,bool) or price<0 or price>1000000000000: raise HttpError(400,'Narx miqdori noto‘g‘ri.')
+            coming_soon=data.get('coming_soon',True)
+            if not isinstance(coming_soon,bool): raise HttpError(400,'Coming Soon holati noto‘g‘ri.')
             existing=db.execute('SELECT game_name,currency FROM topup_packages WHERE game_slug=? LIMIT 1',(game_slug,)).fetchone()
             if existing and (existing['game_name']!=game_name or existing['currency'].casefold()!=currency.casefold()):
                 raise HttpError(409,'Bu o‘yin manzili uchun nom va valyuta avvaldan belgilangan.')
             package_id=game_slug+'-'+url_slug
-            db.execute('INSERT INTO topup_packages(id,game_slug,game_name,url_slug,currency,amount,price_minor,enabled,manual_enabled) VALUES(?,?,?,?,?,?,?,1,1)',(package_id,game_slug,game_name,url_slug,currency,amount,price))
-            audit(db,aid,'topup_package_create','topup_package',package_id,{'game_slug':game_slug,'amount':amount,'currency':currency,'price_minor':price})
+            db.execute('INSERT INTO topup_packages(id,game_slug,game_name,url_slug,currency,amount,price_minor,enabled,coming_soon,manual_enabled) VALUES(?,?,?,?,?,?,?,1,?,1)',(package_id,game_slug,game_name,url_slug,currency,amount,price,int(coming_soon)))
+            audit(db,aid,'topup_package_create','topup_package',package_id,{'game_slug':game_slug,'amount':amount,'currency':currency,'price_minor':price,'coming_soon':coming_soon})
             return 201,{'ok':True,'package':dict(db.execute('SELECT * FROM topup_packages WHERE id=?',(package_id,)).fetchone())}
         admin_topup_package=re.fullmatch(r'/api/admin/top-up/packages/([a-z0-9-]+)',path)
         if admin_topup_package and method=='PATCH':
@@ -1538,6 +1545,9 @@ class Handler(BaseHTTPRequestHandler):
             if 'manual_enabled' in data:
                 if not isinstance(data['manual_enabled'],bool): raise HttpError(400,'Qo‘lda yetkazish qiymati noto‘g‘ri.')
                 fields['manual_enabled']=int(data['manual_enabled'])
+            if 'coming_soon' in data:
+                if not isinstance(data['coming_soon'],bool): raise HttpError(400,'Coming Soon holati noto‘g‘ri.')
+                fields['coming_soon']=int(data['coming_soon'])
             if not fields: raise HttpError(400,'Saqlash uchun o‘zgarish topilmadi.')
             assignments=','.join(f'{key}=?' for key in fields)
             db.execute(f'UPDATE topup_packages SET {assignments},updated_at=CURRENT_TIMESTAMP WHERE id=?',(*fields.values(),package_id))
