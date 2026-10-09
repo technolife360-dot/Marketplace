@@ -2307,7 +2307,7 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
 .topup-why-card b { color:#eee8f7; font-size:10px; }
 .topup-why-card ul { display:grid; gap:5px; margin:9px 0 0; padding:0; color:#aaa1b7; font-size:9px; list-style:none; }
 .topup-why-card li:before { margin-right:7px; color:#a78bfa; content:'✓'; }
-.topup-order-summary { position:sticky; top:22px; padding:21px; }
+.topup-order-summary { padding:21px; }
 .topup-summary-product { display:flex; align-items:center; gap:11px; margin:17px 0 18px; padding:12px; border:1px solid rgba(196,181,253,.1); border-radius:12px; background:rgba(255,255,255,.025); }
 .topup-summary-game-icon { width:43px; height:43px; display:grid; flex:0 0 auto; place-items:center; border:1px solid rgba(196,181,253,.16); border-radius:11px; background:rgba(139,92,246,.11); color:#d8b4fe; }
 .topup-summary-game-icon .icon { width:23px; height:23px; }
