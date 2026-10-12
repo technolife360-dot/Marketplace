@@ -2329,4 +2329,4 @@ def main():
     host=os.environ.get('HOST','127.0.0.1'); port=int(os.environ.get('PORT','8000'))
     print(f'SentryLoot {MODE} server: http://{host}:{port}')
     Server((host,port),Handler).serve_forever()
-if __name__=='__main__': main()
+
