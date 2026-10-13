@@ -1297,7 +1297,7 @@ body.home-page .sell-item-button:hover { background: #e0eaff; box-shadow: 0 8px 
 #app.home-background .game-chip { border-color: rgb(116 164 231 / 22%); background: linear-gradient(110deg, rgb(21 38 64 / 72%), rgb(10 18 33 / 62%)); }
 #app.home-background .game-chip .game-icon { background: rgb(64 126 210 / 18%); color: #9bcaff; }
 #app.home-background .game-chip:hover { border-color: rgb(95 181 255 / 58%); background: linear-gradient(110deg, rgb(25 54 91 / 86%), rgb(13 25 46 / 82%)); box-shadow: 0 0 20px rgb(48 132 229 / 15%); }
-#app.home-background .listings-section-head h2::after, #app.home-background .how-it-works-head h2::after { width: 30px; height: 2px; display: block; margin: 9px auto 0; border-radius: 2px; background: linear-gradient(90deg, #55b6ff, #8b81ff); box-shadow: 0 0 12px rgb(83 157 255 / 28%); content: ""; }
+#app.home-background .listings-section-head h2::after { width: 30px; height: 2px; display: block; margin: 9px auto 0; border-radius: 2px; background: linear-gradient(90deg, #55b6ff, #8b81ff); box-shadow: 0 0 12px rgb(83 157 255 / 28%); content: ""; }
 #app.home-background .product-card { border-color: rgb(139 170 221 / 21%); }
 #app.home-background .product-card:hover { border-color: rgb(91 177 255 / 52%); box-shadow: 0 14px 36px rgb(1 4 12 / 38%), 0 0 22px rgb(55 133 232 / 13%); }
 #app.home-background .product-cover .cover-game { border-color: rgb(114 182 255 / 35%); background: rgb(9 24 45 / 72%); color: #b7d9ff; }
@@ -1424,7 +1424,6 @@ body.home-page .site-header .account-button:hover { border-color: #f5ca71; backg
 .how-it-works-eyebrow { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 13px; color: #cb98f8; font-size: 10px; font-weight: 750; letter-spacing: 1.8px; }
 .how-it-works-eyebrow>span { width: 6px; height: 6px; border-radius: 50%; background: #bf78fc; box-shadow: 0 0 0 4px rgba(191,120,252,9%); }
 #app.home-background .how-it-works-head h2 { font-size: clamp(25px,3vw,34px); line-height: 1.2; letter-spacing: -1px; color: #f6efff; }
-#app.home-background .how-it-works-head h2::after { content: none; }
 #app.home-background .how-it-works-head p { margin-top: 10px; color: #ad98be; font-size: 14px; }
 .how-it-works-guide { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 18px; min-height: 44px; padding: 11px 17px; border: 1px solid rgba(202,155,245,24%); border-radius: 12px; background: rgba(196,127,255,6%); color: #e9d3fb; font-size: 12px; font-weight: 650; text-decoration: none; transition: background .2s,border-color .2s; }
 .how-it-works-guide .icon { width: 17px; height: 17px; color: #c88ff7; }
@@ -1440,7 +1439,6 @@ body.home-page .site-header .account-button:hover { border-color: #f5ca71; backg
 .how-step-number { color: rgba(var(--step-rgb),25%); font-size: 43px; font-weight: 800; letter-spacing: -2px; line-height: 1; font-variant-numeric: tabular-nums; }
 #app.home-background .how-it-works-card h3 { margin: 0 0 11px; font-size: 17px; font-weight: 720; color: #f5edff; letter-spacing: -.3px; }
 #app.home-background .how-it-works-card p { max-width: none; margin: 0; font-size: 12px; line-height: 1.8; color: #b2a0c1; }
-.how-it-works-card:not(:last-child)::after { content: "→"; position: absolute; z-index: 1; top: 40px; right: -21px; display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid #44304e; border-radius: 50%; background: #1c102a; color: #b590ce; font-size: 13px; }
 .how-it-works-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 24px; padding-top: 21px; border-top: 1px solid rgba(197,145,255,10%); font-size: 12px; }
 .how-it-works-footer>span { display: inline-flex; align-items: center; gap: 9px; color: #a894b9; }
 .how-it-works-footer .icon { width: 17px; height: 17px; color: #ba8bdc; }
@@ -1451,7 +1449,6 @@ body.home-page .site-header .account-button:hover { border-color: #f5ca71; backg
  #app.home-background .how-it-works-card:hover { transform: translateY(-4px); border-color: rgba(var(--step-rgb),45%); box-shadow: 0 16px 30px rgba(0,0,0,20%),0 0 24px rgba(var(--step-rgb),7%); }
 }
 @media (max-width: 900px) {
- .how-it-works-card:nth-child(2)::after { content: none; }
  #app.home-background .how-it-works-card { min-height: 220px; }
 }
 @media (max-width: 560px) {
@@ -1466,7 +1463,6 @@ body.home-page .site-header .account-button:hover { border-color: #f5ca71; backg
  .how-step-icon .icon { width: 22px; height: 22px; }
  .how-step-number { font-size: 22px; letter-spacing: 0; }
  #app.home-background .how-it-works-card h3 { font-size: 16px; margin-bottom: 8px; }
- .how-it-works-card:not(:last-child)::after { content: ""; top: auto; bottom: -15px; left: 40px; right: auto; width: 1px; height: 14px; border: 0; border-radius: 0; background: rgba(197,145,255,28%); }
  .how-it-works-footer { flex-wrap: wrap; gap: 8px; margin-top: 20px; padding-top: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
