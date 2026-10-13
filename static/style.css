@@ -1692,7 +1692,7 @@ body:not(.home-page) .auth-showcase-art { display: grid; flex: 1; min-height: 32
 body:not(.home-page) .auth-orbit { border-color: rgba(218,178,255,20%); }
 body:not(.home-page) .auth-orbit-one { width: 250px; height: 360px; transform: rotate(23deg); box-shadow: 0 0 45px rgba(165,56,244,12%); }
 body:not(.home-page) .auth-orbit-two { width: 190px; height: 300px; transform: rotate(-27deg); }
-body:not(.home-page) .auth-game-character { height: 112%; max-height: 430px; width: auto; position: absolute; bottom: -56px; left: 50%; transform: translateX(-50%); filter: drop-shadow(0 24px 34px rgba(0,0,0,38%)); object-fit: contain; }
+body:not(.home-page) .auth-game-character { width: 100%; height: 100%; max-height: 430px; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); filter: drop-shadow(0 24px 34px rgba(0,0,0,38%)); object-fit: contain; object-position: center bottom; }
 body:not(.home-page) .auth-art-tag { position: absolute; bottom: 18px; left: 0; display: grid; gap: 3px; padding: 9px 12px; border: 1px solid rgba(197,145,255,18%); border-radius: 12px; background: rgba(15,5,26,76%); color: #f1dfff; backdrop-filter: blur(12px); }
 body:not(.home-page) .auth-art-tag b { font-size: 9px; letter-spacing: 1px; }
 body:not(.home-page) .auth-art-tag small { color: #bda4d3; font-size: 9px; }
@@ -1729,8 +1729,8 @@ body:not(.home-page) .auth-provider-button:hover { border-color: rgba(194,91,255
  body:not(.home-page) .auth-page { padding: 18px; }
  body:not(.home-page) .auth-shell { width: min(600px,100%); min-height: 0; grid-template-columns: 1fr; }
  body:not(.home-page) .auth-showcase { min-height: 260px; padding: 23px 26px 21px; }
- body:not(.home-page) .auth-showcase-art { min-height: 190px; position: absolute; inset: 35px 0 0 auto; width: 48%; opacity: .78; }
- body:not(.home-page) .auth-game-character { height: 120%; bottom: -35px; }
+ body:not(.home-page) .auth-showcase-art { min-height: 190px; position: absolute; inset: 35px 0 0 auto; width: 48%; opacity: .78; transform: none; }
+ body:not(.home-page) .auth-game-character { max-height: none; }
  body:not(.home-page) .auth-showcase-copy { position: relative; z-index: 1; max-width: 58%; margin-top: 28px; }
  body:not(.home-page) .auth-showcase-copy h2 { font-size: 24px; }
  body:not(.home-page) .auth-showcase-copy p { font-size: 11px; }
