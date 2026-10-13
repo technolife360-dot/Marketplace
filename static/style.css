@@ -1682,17 +1682,28 @@ body:not(.home-page) .auth-page.is-closing .auth-shell { opacity: 0; transform: 
 @media (prefers-reduced-motion: reduce) {
  body:not(.home-page) .auth-page, body:not(.home-page) .auth-shell { transition: none; }
 }
-body:not(.home-page) .auth-showcase { min-height: 100%; padding: 32px clamp(24px,3vw,42px) 28px; background: radial-gradient(ellipse at 44% 46%,rgba(165,56,244,24%),transparent 45%),linear-gradient(150deg,#25103a,#170a27 59%,#10051b); }
-body:not(.home-page) .auth-showcase::before { width: 420px; height: 420px; top: 130px; border-color: rgba(215,166,255,12%); box-shadow: 0 0 0 44px rgba(197,145,255,3%),0 0 0 92px rgba(197,145,255,2%); }
-body:not(.home-page) .auth-showcase::after { width: 290px; height: 290px; top: 195px; border-color: rgba(215,166,255,17%); }
+body:not(.home-page) .auth-showcase { min-height: 100%; padding: 32px clamp(24px,3vw,42px) 28px; background: radial-gradient(ellipse at 8% 35%,rgba(81,40,199,40%),transparent 48%),radial-gradient(ellipse at 94% 32%,rgba(32,133,172,25%),transparent 44%),linear-gradient(165deg,#070d1e,#121027 52%,#10091c 82%); }
+body:not(.home-page) .auth-showcase::before { width: 125%; height: 75%; top: -12%; left: -28%; right: auto; border: 0; border-radius: 0; transform: rotate(-24deg); background: linear-gradient(90deg,transparent 20%,rgba(138,86,255,12%) 40%,rgba(173,126,255,22%) 43%,transparent 59%); filter: blur(22px); box-shadow: none; pointer-events: none; }
+body:not(.home-page) .auth-showcase::after { width: 90%; height: 55%; top: 6%; left: auto; right: -40%; border: 0; background: radial-gradient(ellipse,rgba(244,164,70,16%),transparent 67%); transform: rotate(-18deg); filter: blur(28px); pointer-events: none; }
 body:not(.home-page) .auth-showcase-brand { display: flex; color: #fbf5ff; }
 body:not(.home-page) .auth-showcase-brand .brand-mark { border: 0; background: linear-gradient(145deg,#c552ff,#7f23dc); color: #fff; box-shadow: 0 8px 24px rgba(165,56,244,28%); }
 body:not(.home-page) .auth-showcase-brand>span:last-child span { color: #f3ba69; }
-body:not(.home-page) .auth-showcase-art { display: grid; flex: 1; min-height: 320px; overflow: hidden; }
-body:not(.home-page) .auth-orbit { border-color: rgba(218,178,255,20%); }
-body:not(.home-page) .auth-orbit-one { width: 250px; height: 360px; transform: rotate(23deg); box-shadow: 0 0 45px rgba(165,56,244,12%); }
-body:not(.home-page) .auth-orbit-two { width: 190px; height: 300px; transform: rotate(-27deg); }
-body:not(.home-page) .auth-game-character { width: 100%; height: 100%; max-height: 430px; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); filter: drop-shadow(0 24px 34px rgba(0,0,0,38%)); object-fit: contain; object-position: center bottom; }
+/* Separate light, characters and foreground haze give the cutout depth. */
+body:not(.home-page) .auth-showcase-art { display: grid; flex: 1; min-height: 350px; margin: 12px -18px 0; overflow: hidden; isolation: isolate; pointer-events: none; }
+body:not(.home-page) .auth-showcase-art::after { content: ""; position: absolute; z-index: 3; bottom: 0; left: 8%; width: 84%; height: 35px; background: radial-gradient(ellipse,rgba(123,77,204,25%),transparent 68%); filter: blur(9px); }
+body:not(.home-page) .auth-orbit { z-index: 0; border: 0; filter: blur(24px); animation: auth-light-drift 9s ease-in-out infinite alternate; }
+body:not(.home-page) .auth-orbit-one { width: 74%; height: 80%; left: -4%; top: 7%; background: radial-gradient(ellipse,rgba(128,61,255,48%),transparent 67%); transform: rotate(-18deg); box-shadow: none; }
+body:not(.home-page) .auth-orbit-two { width: 66%; height: 72%; right: -3%; top: 16%; background: radial-gradient(ellipse,rgba(45,170,224,34%),transparent 67%); transform: rotate(18deg); animation-delay: -4.5s; }
+body:not(.home-page) .auth-game-character { z-index: 1; width: 100%; height: calc(100% - 20px); max-height: 430px; position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); transform-origin: center bottom; filter: drop-shadow(0 14px 16px rgba(0,0,0,65%)) drop-shadow(-5px 0 12px rgba(128,61,255,24%)) drop-shadow(6px 0 10px rgba(60,180,244,16%)); object-fit: contain; object-position: center bottom; -webkit-mask-image: linear-gradient(#000 78%,transparent 100%); mask-image: linear-gradient(#000 78%,transparent 100%); animation: auth-character-breathe 7s ease-in-out infinite; }
+body:not(.home-page) .auth-showcase-art .auth-spark { z-index: 2; width: 3px; height: 3px; background: #c5aeff; box-shadow: 0 0 10px 2px rgba(158,112,255,60%),26px 48px 0 -1px #ad8cf3,-24px 106px 0 -1px #86cbef; animation: auth-ember-rise 6s ease-in-out infinite; }
+body:not(.home-page) .auth-showcase-art .auth-spark-two { background: #ffd99b; box-shadow: 0 0 10px 2px rgba(255,191,103,45%); animation-delay: -2s; }
+body:not(.home-page) .auth-showcase-art .auth-spark-three { animation-delay: -4s; }
+@keyframes auth-character-breathe { 0%,100% { transform: translate3d(-50%,0,0) scale(1); } 50% { transform: translate3d(-50%,-5px,0) scale(1.012); } }
+@keyframes auth-light-drift { from { opacity: .65; transform: translate3d(-8px,5px,0) scale(.96); } to { opacity: 1; transform: translate3d(8px,-7px,0) scale(1.06); } }
+@keyframes auth-ember-rise { 0%,100% { opacity: 0; transform: translate3d(0,12px,0); } 25%,65% { opacity: .75; } 90% { opacity: 0; transform: translate3d(9px,-34px,0); } }
+@media (prefers-reduced-motion: reduce) {
+ body:not(.home-page) .auth-game-character, body:not(.home-page) .auth-orbit, body:not(.home-page) .auth-showcase-art .auth-spark { animation: none; }
+}
 body:not(.home-page) .auth-art-tag { position: absolute; bottom: 18px; left: 0; display: grid; gap: 3px; padding: 9px 12px; border: 1px solid rgba(197,145,255,18%); border-radius: 12px; background: rgba(15,5,26,76%); color: #f1dfff; backdrop-filter: blur(12px); }
 body:not(.home-page) .auth-art-tag b { font-size: 9px; letter-spacing: 1px; }
 body:not(.home-page) .auth-art-tag small { color: #bda4d3; font-size: 9px; }
@@ -1729,7 +1740,7 @@ body:not(.home-page) .auth-provider-button:hover { border-color: rgba(194,91,255
  body:not(.home-page) .auth-page { padding: 18px; }
  body:not(.home-page) .auth-shell { width: min(600px,100%); min-height: 0; grid-template-columns: 1fr; }
  body:not(.home-page) .auth-showcase { min-height: 260px; padding: 23px 26px 21px; }
- body:not(.home-page) .auth-showcase-art { min-height: 190px; position: absolute; inset: 35px 0 0 auto; width: 48%; opacity: .78; transform: none; }
+ body:not(.home-page) .auth-showcase-art { min-height: 190px; position: absolute; inset: 35px 0 0 auto; width: 48%; margin: 0; opacity: .9; transform: none; }
  body:not(.home-page) .auth-game-character { max-height: none; }
  body:not(.home-page) .auth-showcase-copy { position: relative; z-index: 1; max-width: 58%; margin-top: 28px; }
  body:not(.home-page) .auth-showcase-copy h2 { font-size: 24px; }
