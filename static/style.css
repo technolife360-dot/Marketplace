@@ -2011,8 +2011,10 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
 }
 
 /* Game top-up catalog and package pages */
-.topup-nav-link { color: #aebbd2 !important; }
-.topup-nav-link span { color: #aebbd2; }
+.site-header .desktop-nav .topup-nav-link { color: #aebbd2; }
+.topup-nav-link span { color: #aebbd2; transition: color .18s ease; }
+.site-header .desktop-nav .topup-nav-link:hover span,
+.site-header .desktop-nav .topup-nav-link[aria-current="page"] span { color: #d689ff; }
 .topup-page { max-width: 1160px; padding-top: 28px; }
 .topup-hero { position: relative; margin: 0 0 25px; padding: clamp(27px,5vw,48px); overflow: hidden; border: 1px solid rgba(188,118,255,.19); border-radius: 25px; background: radial-gradient(ellipse at 82% 5%,rgba(168,71,255,.2),transparent 38%),linear-gradient(130deg,#17102b,#0e1421 74%); box-shadow: 0 20px 60px rgba(0,0,0,.19); }
 .topup-hero:after { position:absolute; right:-30px; bottom:-110px; width:310px; height:240px; border:1px solid rgba(198,137,255,.13); border-radius:50%; box-shadow:0 0 0 26px rgba(198,137,255,.025),0 0 0 55px rgba(198,137,255,.02); content:""; pointer-events:none; }
