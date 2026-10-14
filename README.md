@@ -1,6 +1,6 @@
 # SentryLoot — gaming marketplace foundation
 
-A runnable, Uzbek-first marketplace built with Python, SQLite or Supabase PostgreSQL, and vanilla JavaScript. SQLite remains the default for local development. Set `DATABASE_URL` to use the server-side Supabase PostgreSQL connection; keep this credential private and out of browser code.
+A runnable gaming marketplace built with Python, SQLite or Supabase PostgreSQL, and vanilla JavaScript. The interface defaults to English and supports Uzbek and Russian; additional languages currently use reviewed translations where available and otherwise fall back to English. SQLite remains the default for local development. Set `DATABASE_URL` to use the server-side Supabase PostgreSQL connection; keep this credential private and out of browser code.
 
 ## Run locally
 
@@ -30,7 +30,7 @@ Account-purchase evidence uses a separate private Supabase Storage bucket named 
 
 Local secrets are kept in `~/Desktop/SentryLoot-Secrets/.env`, outside the repository. The application checks that path before falling back to a project `.env`; both are ignored by Git. Restrict file permissions and do not share or sync this folder publicly.
 
-The app has no Node package dependencies; `package.json` provides optional npm aliases for environments that expect npm commands. `npm install` needs no third-party packages, `npm run build` checks the frontend and Python syntax, and `npm start` runs the Python server.
+The app uses small browser-side Node packages for analytics and support. `package.json` also provides npm aliases: `npm run build` checks frontend and Python syntax, and `npm start` runs the Python server.
 
 ## Development accounts and seed data
 
@@ -71,7 +71,7 @@ Seller identity verification uses Didit’s hosted verification session. Configu
 Google and Facebook sign-in use server-side authorization-code flows. Configure a Google OAuth Web client and set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`; for Facebook Login set `FACEBOOK_APP_ID` / `FACEBOOK_APP_SECRET`. In production register each exact callback at `<PUBLIC_BASE_URL>/api/oauth/{google,facebook}/callback` in its provider console. In development, the callback host follows the browser host, so use one host consistently (`localhost` or `127.0.0.1`) and register its exact callback URI. Facebook requests only `public_profile` and `email`; the server exchanges the code and obtains the profile over HTTPS. Provider buttons appear only when credentials are configured. Existing password accounts are never silently linked by matching email; a conflicting provider identity is rejected until an explicit account-linking flow is added. Social registration records the same terms acceptance as password registration, and a provider identity never grants admin access.
 
 
-File upload and private object storage are not enabled; listings use optional external image URLs only. Never put protected credentials in public listing media.
+Listing photo upload uses public Supabase Storage when configured, while account-purchase evidence uses a separate private bucket. Without the required bucket and server-side settings, the upload APIs fail closed. Never put protected credentials in public listing media.
 
 ## Data/security notes
 

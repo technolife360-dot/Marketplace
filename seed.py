@@ -19,6 +19,7 @@ else:
             buyer_id=app.ident();db.execute('INSERT INTO users(id,email,password_hash,display_name,email_verified) VALUES(?,?,?,?,1)',(buyer_id,'buyer@example.test',app.password_hash('BuyerDev!2026'),'Demo buyer'))
         else:buyer_id=buyer['id']
         db.execute("INSERT OR IGNORE INTO seller_profiles(user_id,shop_name,bio,verification_status) VALUES(?,?,?,'unverified')",(seller_id,'Demo Shop · Development','Namuna do‘kon. Mahsulot va savdolar sinov ma’lumoti hisoblanadi.'))
+        db.execute("UPDATE seller_profiles SET identity_provider='development_fixture', verification_status='unverified', selling_enabled=0, identity_status='not_started' WHERE user_id=?",(seller_id,))
         listings=[
             ('demo-valorant-account','valorant','accounts','[DEMO] Valorant account · Platinum','Namuna e’lon. Ushbu hisob tafsilotlari uydirma bo‘lib, faqat development sinovi uchun ishlatiladi.',145000,'PC','Asia','manual','24 soat',1),
             ('demo-pubg-items','pubg-mobile','items','[DEMO] PUBG Mobile kolleksiya buyumlari','Namuna e’lon. Haqiqiy tranzaksiya yoki mahsulotni anglatmaydi.',78000,'Mobile','Global','manual','12 soat',4),
@@ -26,6 +27,7 @@ else:
         ]
         for lid,game,cat,title,desc,price,platform,region,delivery,eta,stock in listings:
             db.execute("INSERT OR IGNORE INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,currency,platform,region,delivery_method,delivery_eta,stock,status) VALUES(?,?,?,?,?,?,?,?, 'UZS',?,?,?,?,?, 'published')",(lid,seller_id,game,cat,title,desc,db.execute('SELECT product_type FROM categories WHERE id=?',(cat,)).fetchone()['product_type'],price,platform,region,delivery,eta,stock))
+            db.execute("UPDATE listings SET status='published' WHERE id=? AND seller_id=?",(lid,seller_id))
         # One clearly identified sample wanted post and a sample conversation; no reviews or completed orders.
         db.execute("INSERT OR IGNORE INTO product_requests(id,requester_id,game_id,category_id,title,description,budget_minor,currency,expires_at) VALUES('demo-request-valorant',?,'valorant','accounts','[DEMO] Valorant account wanted','Development namuna so‘rovi. Xarid taklifi emas.',200000,'UZS',datetime('now','+20 days'))",(buyer_id,))
         conv='demo-conversation-1'

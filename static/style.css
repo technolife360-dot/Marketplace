@@ -39,6 +39,8 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .icon-library { position: absolute; width: 0; height: 0; overflow: hidden; }
 .icon { width: 19px; height: 19px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.skip-link { position: fixed; z-index: 1000; top: 12px; left: 12px; padding: 10px 14px; border-radius: 8px; background: var(--paper); color: var(--ink); transform: translateY(-180%); }
+.skip-link:focus { transform: translateY(0); }
 
 /* Header */
 .topbar {
@@ -2584,3 +2586,16 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
 
 /* Let the full-bleed Top Up catalog hero start flush beneath the site header. */
 .topup-page:has(> .topup-hero-image) { padding-top:0; }
+
+@media (max-width: 540px) {
+  .site-header .desktop-nav { gap: 8px; padding-inline: 10px; }
+  .site-header .desktop-nav a { gap: 4px; font-size: 10px; }
+  .site-header .desktop-nav a .icon { width: 14px; height: 14px; }
+}
+@media (max-width: 360px) {
+  .site-header .topbar .brand > span:last-child { display: none; }
+  .site-header .desktop-nav { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; padding: 4px 10px; overflow: visible; }
+  .site-header .desktop-nav a { grid-column: span 2; min-height: 44px; justify-content: center; gap: 4px; font-size: 11px; }
+  .site-header .desktop-nav a:nth-child(n+4) { grid-column: span 3; }
+  .site-header .desktop-nav a .icon { width: 14px; height: 14px; }
+}

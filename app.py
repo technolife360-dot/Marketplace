@@ -275,6 +275,8 @@ def topup_admin_row(row):
 
 def migrate():
     db=connect()
+    # Seeded demo listings may be browsed only in development; they never qualify as verified sellers.
+    demo_listing_clause=" OR identity_provider='development_fixture'" if MODE=='development' else ''
     try:
         if DATABASE_URL:
             required=('account_deletion_requests','account_review_evidence','account_reviews','admin_accounts','audit_logs','blog_posts','carts','categories','conversations','deliveries','email_tokens','favorites','games','ledger_entries','listings','messages','notifications','oauth_identities','order_events','order_items','orders','payments','payout_requests','platform_config','product_requests','rate_limits','reports','request_responses','reviews','seller_profiles','sessions','users')
@@ -323,7 +325,7 @@ def migrate():
             db.execute('ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS accepted_account_sale_terms_at TEXT')
             seed_blog_posts(db)
             db.execute("UPDATE seller_profiles SET selling_enabled=0 WHERE verification_status!='verified' OR identity_status!='verified' OR identity_provider!='didit'")
-            db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE status='published' AND seller_id NOT IN (SELECT user_id FROM seller_profiles WHERE verification_status='verified' AND selling_enabled=1 AND identity_status='verified' AND identity_provider='didit')")
+            db.execute(f"UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE status='published' AND seller_id NOT IN (SELECT user_id FROM seller_profiles WHERE (verification_status='verified' AND selling_enabled=1 AND identity_status='verified' AND identity_provider='didit'){demo_listing_clause})")
             db.execute("INSERT INTO platform_config(key,value) VALUES('commission_bps','0'),('completion_window_hours','72'),('terms_version','draft-2026-10') ON CONFLICT(key) DO NOTHING")
             games=[('valorant','Valorant'),('pubg-mobile','PUBG Mobile'),('dota-2','Dota 2'),('counter-strike-2','Counter-Strike 2'),('mobile-legends','Mobile Legends')]
             categories=[('accounts','Gaming accounts','account'),('items','Items & skins','item'),('currency','In-game currency','currency'),('services','Coaching & services','service'),('codes','Gift cards & digital codes','code')]
@@ -394,7 +396,7 @@ def migrate():
         # Sellers from older local builds did not pass an approval workflow. Keep them
         # closed until an administrator has reviewed and explicitly enabled the profile.
         db.execute("UPDATE seller_profiles SET selling_enabled=0 WHERE verification_status!='verified' OR identity_status!='verified' OR identity_provider!='didit'")
-        db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE status='published' AND seller_id NOT IN (SELECT user_id FROM seller_profiles WHERE verification_status='verified' AND selling_enabled=1 AND identity_status='verified' AND identity_provider='didit')")
+        db.execute(f"UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE status='published' AND seller_id NOT IN (SELECT user_id FROM seller_profiles WHERE (verification_status='verified' AND selling_enabled=1 AND identity_status='verified' AND identity_provider='didit'){demo_listing_clause})")
         db.execute("INSERT INTO listing_search(listing_search) VALUES('rebuild')")
         db.execute("INSERT OR IGNORE INTO platform_config(key,value) VALUES('commission_bps','0')")
         db.execute("INSERT OR IGNORE INTO platform_config(key,value) VALUES('completion_window_hours','72')")
@@ -957,6 +959,19 @@ def checkout(db,uid,accept_terms=False,accept_account_risk=False):
     except Exception:
         db.execute('ROLLBACK'); raise
 
+class HeadOnlyWriter:
+    """Forward response headers while discarding the GET body for a HEAD request."""
+    def __init__(self, stream):
+        self.stream=stream
+        self.headers_written=False
+    def write(self, data):
+        if not self.headers_written:
+            self.headers_written=True
+            return self.stream.write(data)
+        return len(data)
+    def flush(self):
+        return self.stream.flush()
+
 class Handler(BaseHTTPRequestHandler):
     server_version='SentryLoot/0.1'
     def oauth_base_url(self):
@@ -1058,8 +1073,24 @@ class Handler(BaseHTTPRequestHandler):
             if not f: self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))
-            self.send_response(200);self.send_header('Content-Type',ctype);self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control','no-store');self.secure_headers();self.end_headers();self.wfile.write(data);return
+            cache_control='public, max-age=3600' if parsed.path.startswith('/static/') and not f.endswith('.html') else 'no-store'
+            self.send_response(200);self.send_header('Content-Type',ctype);self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control',cache_control);self.secure_headers();self.end_headers();self.wfile.write(data);return
         self.dispatch()
+    def do_HEAD(self):
+        # Public GET pages and assets have no write side effects. API routes may
+        # include callbacks, so never replay them through this shortcut.
+        if urlparse(self.path).path.startswith('/api/'):
+            self.send_response(405)
+            self.send_header('Allow','GET, POST, PATCH, DELETE')
+            self.send_header('Content-Length','0')
+            self.secure_headers()
+            self.end_headers()
+            return
+        original_stream,original_command=self.wfile,self.command
+        self.wfile=HeadOnlyWriter(original_stream)
+        self.command='GET'
+        try: self.do_GET()
+        finally: self.wfile,self.command=original_stream,original_command
     def do_POST(self): self.dispatch()
     def do_PATCH(self): self.dispatch()
     def do_DELETE(self): self.dispatch()
