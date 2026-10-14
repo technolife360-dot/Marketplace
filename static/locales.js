@@ -517,6 +517,19 @@ Object.assign(window.BOZOR_COPY,{
 // Reviewed copy for the support center and trust pages. Keep these strings in the
 // shared catalog so dynamically rendered routes use the same language as the UI.
 Object.assign(window.BOZOR_COPY,{
+  'O‘yin mahsulotlari va xizmatlarini toping. Xariddan oldin e’lon, sotuvchi va o‘yin qoidalarini tekshiring.':['Находите игровые товары и услуги. Перед покупкой проверьте объявление, продавца и правила игры.','Find game items and services. Review the listing, seller, and game rules before buying.'],
+  'Haqiqiy to‘lovlar hozircha yoqilmagan.':['Реальные платежи пока не подключены.','Live payments are not enabled yet.'],
+  'Xarid va sotuv':['Покупка и продажа','Buy & Sell'],
+  'E’lonlar, savdo bosqichlari va xarajatlar.':['Объявления, этапы сделки и расходы.','Listings, transaction steps, and costs.'],
+  'Top Up — tez orada':['Top Up — скоро','Top Up — coming soon'],
+  'Xarid qanday ishlaydi':['Как проходит покупка','How buying works'],
+  'Komissiya va to‘lovlar':['Комиссии и платежи','Fees and payments'],
+  'Buyurtma yoki hisob bo‘yicha savollarga javoblar.':['Ответы на вопросы о заказах и аккаунте.','Answers to questions about orders and accounts.'],
+  'Buyurtma va yetkazish':['Заказы и доставка','Orders and delivery'],
+  'To‘lovlar bo‘yicha yordam':['Помощь с платежами','Payment support'],
+  'Biz bilan bog‘lanish':['Связаться с нами','Contact us'],
+  'Chat orqali yozish':['Написать в чат','Message support'],
+  'Savdodan oldin shartlar va cheklovlarni o‘qing.':['Перед сделкой ознакомьтесь с условиями и ограничениями.','Read the terms and restrictions before a transaction.'],
   'Yordam':['Помощь','Help'],
   'Ishonch va qoidalar':['Доверие и правила','Trust & policies'],
   'Marketplace qoidalari':['Правила маркетплейса','Marketplace policies'],

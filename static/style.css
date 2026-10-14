@@ -470,21 +470,25 @@ body.profile-menu-open { overflow: hidden; }
 .footer { display: grid; grid-template-columns: minmax(180px, 1.2fr) repeat(3, minmax(130px, .7fr)); align-items: start; gap: 24px 34px; padding: 36px clamp(24px, 6vw, 90px) 20px; background: #101623; color: #f1f4f9; }
 .footer-brand { min-width: 0; }
 .footer p { max-width: 300px; margin: 9px 0 0; color: #889eca; font-size: 12px; line-height: 1.55; }
+.footer .footer-status { margin-top: 12px; color: #d4c0ec; font-weight: 650; }
+.footer .footer-email { display: inline-block; margin-top: 12px; color: #c9d8f3; font-size: 12px; overflow-wrap: anywhere; text-underline-offset: 3px; }
 .footer .brand { font-size: 18px; }
 .footer .brand-mark { width: 29px; height: 29px; border-radius: 10px; }
-.footer-links { display: grid; align-content: start; justify-items: start; gap: 8px; color: #b2c0dd; font-size: 11px; }
-.footer-links h2 { margin: 1px 0 4px; color: #f1f4f9; font-size: 11px; font-weight: 720; }
-.footer-links a { min-height: 24px; display: inline-flex; align-items: center; text-underline-offset: 4px; }
+.footer-links { display: grid; align-content: start; justify-items: start; gap: 9px; color: #b2c0dd; font-size: 12px; }
+.footer-links h2 { margin: 1px 0 4px; color: #f1f4f9; font-size: 13px; font-weight: 720; }
+.footer-links p { margin: 0 0 5px; color: #93a7c8; font-size: 12px; line-height: 1.5; }
+.footer-links a { min-height: 26px; display: inline-flex; align-items: center; line-height: 1.4; text-underline-offset: 4px; }
 .footer-links a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 3px; }
 .footer-bottom { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 14px; padding-top: 14px; border-top: 1px solid rgba(170, 187, 218, 12%); }
-.footer small { color: #748dc0; font-size: 10px; }
-.footer-bottom a { color: #b2c0dd; font-size: 10px; text-underline-offset: 3px; }
+.footer small { color: #748dc0; font-size: 11px; }
+.footer-bottom a { color: #b2c0dd; font-size: 11px; text-underline-offset: 3px; }
 
 @media (max-width: 1060px) {
   .topbar { gap: 20px; padding-inline: 24px; }
   .desktop-nav { gap: 15px; }
   .product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .footer { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(110px, .65fr)); gap: 20px 24px; }
+  .footer { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 24px; }
+  .footer-brand { grid-column: 1 / -1; }
 }
 @media (max-width: 760px) {
   .topbar { min-height: 66px; flex-wrap: wrap; gap: 8px 14px; padding: 10px 16px 12px; }
@@ -533,7 +537,9 @@ body.profile-menu-open { overflow: hidden; }
   .listing-gallery { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .footer { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 22px; padding: 27px 22px 18px; }
   .footer-brand, .footer-bottom { grid-column: 1 / -1; }
-  .footer-bottom { padding-top: 12px; }
+  .footer-trust { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 22px; }
+  .footer-trust h2, .footer-trust p { grid-column: 1 / -1; }
+  .footer-bottom { flex-direction: column; align-items: flex-start; gap: 8px; padding-top: 12px; }
   .page { padding: 30px 17px 54px; }
   .detail-grid { grid-template-columns: 1fr; gap: 17px; }
   .detail-panel { position: static; }
