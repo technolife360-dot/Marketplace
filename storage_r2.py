@@ -1,0 +1,92 @@
+"""Server-only Cloudflare R2 object storage for marketplace images."""
+from __future__ import annotations
+
+import os
+import re
+from functools import lru_cache
+from urllib.parse import quote, urlparse
+
+
+def _settings():
+    account = os.environ.get('R2_ACCOUNT_ID', '').strip()
+    access_key = os.environ.get('R2_ACCESS_KEY_ID', '').strip()
+    secret_key = os.environ.get('R2_SECRET_ACCESS_KEY', '').strip()
+    listing_bucket = os.environ.get('R2_LISTING_BUCKET', '').strip()
+    evidence_bucket = os.environ.get('R2_EVIDENCE_BUCKET', '').strip()
+    public_base = os.environ.get('R2_PUBLIC_BASE_URL', '').strip().rstrip('/')
+    try:
+        parsed = urlparse(public_base)
+        valid_port = parsed.port is None
+    except ValueError:
+        raise RuntimeError('Invalid R2 public domain') from None
+    valid_domain = (parsed.scheme == 'https' and bool(parsed.hostname) and
+                    not parsed.username and not parsed.password and valid_port and
+                    not parsed.path and not parsed.query and not parsed.fragment and
+                    parsed.hostname != 'r2.dev' and not parsed.hostname.endswith('.r2.dev') and
+                    not parsed.hostname.endswith('.r2.cloudflarestorage.com'))
+    valid_buckets = (bool(re.fullmatch(r'[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]', listing_bucket)) and
+                     bool(re.fullmatch(r'[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]', evidence_bucket)) and
+                     listing_bucket != evidence_bucket)
+    if not (re.fullmatch(r'[0-9a-fA-F]{32}', account) and access_key and secret_key and valid_buckets and valid_domain):
+        raise RuntimeError('Cloudflare R2 account, scoped keys, separate buckets and public custom domain are required')
+    return account, access_key, secret_key, listing_bucket, evidence_bucket, public_base
+
+
+def is_configured():
+    try:
+        _settings()
+        return True
+    except RuntimeError:
+        return False
+
+
+@lru_cache(maxsize=1)
+def _client():
+    import boto3
+    from botocore.config import Config
+
+    account, access_key, secret_key, _, _, _ = _settings()
+    return boto3.client(
+        's3', endpoint_url=f'https://{account}.r2.cloudflarestorage.com',
+        aws_access_key_id=access_key, aws_secret_access_key=secret_key,
+        region_name='auto', config=Config(signature_version='s3v4',
+                                          connect_timeout=5, read_timeout=15, retries={'max_attempts': 2}),
+    )
+
+
+def _key(value):
+    if not isinstance(value, str) or not re.fullmatch(r'[0-9a-f]{20,24}/[0-9a-f]{40,48}\.webp', value):
+        raise ValueError('Invalid R2 object key')
+    return value
+
+
+def check_evidence_bucket():
+    _, _, _, _, bucket, _ = _settings()
+    _client().head_bucket(Bucket=bucket)
+
+
+def put_evidence(key, body):
+    key = _key(key)
+    _, _, _, _, bucket, _ = _settings()
+    _client().put_object(Bucket=bucket, Key=key, Body=body, ContentType='image/webp',
+                         CacheControl='private, no-store')
+
+
+def evidence_url(key):
+    key = _key(key)
+    _, _, _, _, bucket, _ = _settings()
+    return _client().generate_presigned_url('get_object', Params={'Bucket': bucket, 'Key': key}, ExpiresIn=300)
+
+
+def delete_evidence(key):
+    key = _key(key)
+    _, _, _, _, bucket, _ = _settings()
+    _client().delete_object(Bucket=bucket, Key=key)
+
+
+def put_listing(key, body):
+    key = _key(key)
+    _, _, _, bucket, _, public_base = _settings()
+    _client().put_object(Bucket=bucket, Key=key, Body=body, ContentType='image/webp',
+                         CacheControl='public, max-age=31536000, immutable')
+    return f'{public_base}/{quote(key, safe="/")}'

@@ -1,3 +1,4 @@
 cryptography==50.0.1
 psycopg[binary]>=3.2,<4
 Pillow>=12.3,<13
+boto3>=1.35,<2

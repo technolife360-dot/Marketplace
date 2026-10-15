@@ -6,14 +6,14 @@ This checklist covers the controls that cannot be proven by repository tests alo
 
 - Keep local `.env` and OAuth client JSON files in `~/Desktop/SentryLoot-Secrets/`; never put real keys in the repository, screenshots, chat, or a public sync folder.
 - The local secrets folder and `.env` should be owner-only (`700` directory, `600` files). Rotate any credential that was shared outside a trusted private channel.
-- Put production values in Vercel Environment Variables. Keep `SESSION_SECRET`, `CRON_SECRET`, `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, email, OAuth, identity, encryption, and AI keys server-only.
+- Put production values in Vercel Environment Variables. Keep `SESSION_SECRET`, `CRON_SECRET`, `DATABASE_URL`, R2 S3 credentials, email, OAuth, identity, encryption, and AI keys server-only.
 - Do not copy development secrets to Vercel or reuse a local key as a production key.
 
-## Supabase access and evidence storage
+## Supabase access and R2 evidence storage
 
-1. Apply migrations in timestamp order, including `20261008000000_account_reviews_private_evidence.sql`.
-2. In Supabase Storage, create `account-evidence` with **Public bucket disabled**. Keep `listing-images` separate; listing photos are public media and must never contain account credentials or private evidence.
-3. Set `SUPABASE_ACCOUNT_EVIDENCE_BUCKET=account-evidence`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` only as server variables. The application rejects evidence uploads if the bucket is public or cannot be verified.
+1. Apply Supabase migrations in timestamp order, including `20261015010000_validate_topup_integrity.sql`.
+2. In Cloudflare R2, create separate listing and evidence buckets. Attach a production custom domain only to the listing bucket. Keep `r2.dev` disabled on the evidence bucket and do not attach any public custom domain to it. Confirm this in the Cloudflare dashboard before enabling uploads.
+3. Set the R2 account ID, scoped S3 access key pair, bucket names, and listing custom-domain URL only as server variables. The application refuses uploads when configuration is missing or bucket names match; the S3 API does not verify public-domain settings.
 4. In the SQL editor, confirm RLS and grants after migrations:
 
 ```sql
@@ -28,7 +28,7 @@ where n.nspname = 'public'
 order by c.relname;
 ```
 
-Every listed table should have RLS enabled and the two direct SELECT privileges should be false. Do not grant browser roles access to evidence tables; the server uses the service role and checks user/admin ownership itself.
+Every listed table should have RLS enabled and the two direct SELECT privileges should be false. Do not grant browser roles access to evidence tables; the backend checks user/admin ownership itself.
 
 ## Buyer screenshot review
 

@@ -19,6 +19,7 @@ import email_service
 import identity_service
 import oauth_service
 import seagm_supplier
+import storage_r2
 from asia_markets import ASIA_COUNTRIES, ASIA_COUNTRY_CURRENCIES, ASIA_CURRENCIES
 
 SUPPORTED_LANGUAGES = frozenset({'en', 'uz', 'ru', 'zh', 'ja', 'ko', 'id', 'ms', 'th', 'vi', 'hi', 'ar', 'tr', 'kk', 'bn'})
@@ -36,10 +37,6 @@ import delivery_crypto
 MODE = os.environ.get('MARKETPLACE_MODE', 'development').lower()
 DB_PATH = os.environ.get('DATABASE_PATH', str(ROOT / 'marketplace.sqlite3'))
 DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
-SUPABASE_URL = os.environ.get('SUPABASE_URL', '').strip().rstrip('/')
-SUPABASE_SERVICE_ROLE_KEY = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '').strip()
-SUPABASE_LISTING_IMAGES_BUCKET = os.environ.get('SUPABASE_LISTING_IMAGES_BUCKET', 'listing-images').strip()
-SUPABASE_ACCOUNT_EVIDENCE_BUCKET = os.environ.get('SUPABASE_ACCOUNT_EVIDENCE_BUCKET', 'account-evidence').strip()
 try:
     import psycopg
     from psycopg.rows import dict_row
@@ -653,20 +650,11 @@ def evidence_link(value):
         raise HttpError(400,'Dalil havolasi HTTPS bo‘lishi va login/parol saqlamasligi kerak.')
     return value
 
-def evidence_bucket_path(object_path):
-    if not SUPABASE_URL.startswith('https://') or not SUPABASE_SERVICE_ROLE_KEY or not re.fullmatch(r'[a-z0-9_-]{1,100}',SUPABASE_ACCOUNT_EVIDENCE_BUCKET):
-        raise HttpError(503,'Maxfiy dalil saqlash hali sozlanmagan. Supabase private Storage bucket va server kalitlari kerak.')
-    return f"{SUPABASE_URL}/storage/v1/object/{urlquote(SUPABASE_ACCOUNT_EVIDENCE_BUCKET,safe='')}/{urlquote(object_path,safe='/')}"
-
 def require_private_evidence_bucket():
-    url=f"{SUPABASE_URL}/storage/v1/bucket/{urlquote(SUPABASE_ACCOUNT_EVIDENCE_BUCKET,safe='')}"
-    request=UrlRequest(url,headers={'Authorization':f'Bearer {SUPABASE_SERVICE_ROLE_KEY}','apikey':SUPABASE_SERVICE_ROLE_KEY},method='GET')
     try:
-        with urlopen_request(request,timeout=10) as response: info=json.loads(response.read())
+        storage_r2.check_evidence_bucket()
     except Exception as exc:
-        raise HttpError(503,'Supabase dalil bucketini tekshirib bo‘lmadi; u mavjud, maxfiy va server kaliti to‘g‘ri ekanini tekshiring.') from exc
-    if not isinstance(info,dict) or info.get('public') is not False:
-        raise HttpError(503,'Akkaunt dalillari uchun bucket public emasligini Supabase’da sozlang.')
+        raise HttpError(503,'Cloudflare R2 dalil bucketiga ulanib bo‘lmadi. Server sozlamalarini tekshiring.') from exc
 
 def normalize_account_evidence(raw_body,content_type):
     if not raw_body or len(raw_body)>MAX_IMAGE_BODY: raise HttpError(413,'Har bir skrinshot 5 MB dan kichik bo‘lishi kerak.')
@@ -696,35 +684,22 @@ def upload_account_evidence(uid,oid,slot,raw_body,content_type):
     image_bytes=normalize_account_evidence(raw_body,content_type)
     user_key=hashlib.sha256(str(uid).encode()).hexdigest()[:24]
     object_path=f"{user_key}/{secrets.token_hex(24)}.webp"
-    request=UrlRequest(evidence_bucket_path(object_path),data=image_bytes,method='POST',headers={'Authorization':f'Bearer {SUPABASE_SERVICE_ROLE_KEY}','apikey':SUPABASE_SERVICE_ROLE_KEY,'Content-Type':'image/webp','Cache-Control':'private, no-store','x-upsert':'false'})
     try:
-        with urlopen_request(request,timeout=20) as response:
-            if response.status not in (200,201): raise HttpError(502,'Skrinshot maxfiy saqlash joyiga yuklanmadi.')
-    except (UrlHTTPError,UrlURLError,TimeoutError) as exc:
+        storage_r2.put_evidence(object_path,image_bytes)
+    except Exception as exc:
         raise HttpError(502,'Skrinshot maxfiy saqlash joyiga yuklanmadi.') from exc
     return object_path
 
 def signed_account_evidence_url(object_path):
-    bucket_path=evidence_bucket_path(object_path)
-    endpoint=bucket_path.replace('/storage/v1/object/','/storage/v1/object/sign/',1)
-    request=UrlRequest(endpoint,data=json.dumps({'expiresIn':300}).encode(),method='POST',headers={'Authorization':f'Bearer {SUPABASE_SERVICE_ROLE_KEY}','apikey':SUPABASE_SERVICE_ROLE_KEY,'Content-Type':'application/json'})
     try:
-        with urlopen_request(request,timeout=10) as response: result=json.loads(response.read())
+        return storage_r2.evidence_url(object_path)
     except Exception as exc:
         raise HttpError(503,'Moderator uchun vaqtinchalik dalil havolasini yaratib bo‘lmadi.') from exc
-    signed=result.get('signedURL') if isinstance(result,dict) else None
-    if not isinstance(signed,str) or not signed: raise HttpError(503,'Storage vaqtinchalik havolani qaytarmadi.')
-    if signed.startswith('/'): return SUPABASE_URL+'/storage/v1'+signed
-    if signed.startswith('https://') and signed.startswith(SUPABASE_URL+'/'): return signed
-    raise HttpError(503,'Storage xavfsiz dalil havolasini qaytarmadi.')
 
 def delete_account_evidence_object(object_path):
-    request=UrlRequest(evidence_bucket_path(object_path),method='DELETE',headers={'Authorization':f'Bearer {SUPABASE_SERVICE_ROLE_KEY}','apikey':SUPABASE_SERVICE_ROLE_KEY})
     try:
-        with urlopen_request(request,timeout=10) as response: return response.status in (200,204)
-    except UrlHTTPError as exc:
-        if exc.code==404: return True
-        return False
+        storage_r2.delete_evidence(object_path)
+        return True
     except Exception:
         return False
 def money(value):
@@ -1117,7 +1092,7 @@ class Handler(BaseHTTPRequestHandler):
             except RuntimeError: payment_state='unconfigured'
             return {'ok':True,'mode':MODE,'database':'supabase-postgres' if DATABASE_URL else 'sqlite',
                     'payments':payment_state,'identity_verification':'didit-configured' if identity_service.is_configured() else 'unconfigured',
-                    'account_evidence_storage_credentials':'present' if SUPABASE_URL.startswith('https://') and SUPABASE_SERVICE_ROLE_KEY and re.fullmatch(r'[a-z0-9_-]{1,100}',SUPABASE_ACCOUNT_EVIDENCE_BUCKET) else 'missing',
+                    'account_evidence_storage_credentials':'present' if storage_r2.is_configured() else 'missing',
                     'sales_enabled':production_marketplace_sales_enabled() if MODE=='production' else False,
                     'sales_guard':'closed' if MODE=='production' and not production_marketplace_sales_enabled() else 'preview'}
         if path=='/api/cron/account-deletions' and method=='GET':
@@ -1770,8 +1745,8 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/listing-images' and method=='POST':
             require_verified(ctx); seller_ok(db,uid); check_rate(db,'listing_image_upload',uid,30,3600)
             if not production_marketplace_sales_enabled(): raise HttpError(503,'Ishlab chiqarishda savdo uchun to‘lov va huquqiy talablar yakunlanmaguncha e’lon rasmi yuklash yopiq.')
-            if not SUPABASE_URL.startswith('https://') or not SUPABASE_SERVICE_ROLE_KEY or not re.fullmatch(r'[a-z0-9_-]{1,100}',SUPABASE_LISTING_IMAGES_BUCKET):
-                raise HttpError(503,'Rasm yuklash serverda sozlanmagan. Supabase Storage sozlamalari kerak.')
+            if not storage_r2.is_configured():
+                raise HttpError(503,'Rasm yuklash serverda sozlanmagan. Cloudflare R2 sozlamalari kerak.')
             if not raw_body or len(raw_body)>MAX_IMAGE_BODY: raise HttpError(413,'Rasm 5 MB dan kichik bo‘lishi kerak.')
             mime=self.headers.get('Content-Type','').split(';',1)[0].strip().lower()
             image_formats={'image/jpeg':'JPEG','image/png':'PNG','image/webp':'WEBP'}
@@ -1795,14 +1770,10 @@ class Handler(BaseHTTPRequestHandler):
             except Image.DecompressionBombError: raise HttpError(413,'Rasm o‘lchami juda katta.')
             except Exception: raise HttpError(400,'Rasm fayli yaroqsiz yoki buzilgan.')
             object_path=f"{hashlib.sha256(str(uid).encode()).hexdigest()[:20]}/{secrets.token_hex(20)}.webp"
-            bucket_path=urlquote(SUPABASE_LISTING_IMAGES_BUCKET,safe='')+'/'+urlquote(object_path,safe='/')
-            storage_request=UrlRequest(f'{SUPABASE_URL}/storage/v1/object/{bucket_path}',data=image_bytes,method='POST',headers={'Authorization':f'Bearer {SUPABASE_SERVICE_ROLE_KEY}','apikey':SUPABASE_SERVICE_ROLE_KEY,'Content-Type':'image/webp','Cache-Control':'public, max-age=31536000, immutable','x-upsert':'false'})
             try:
-                with urlopen_request(storage_request,timeout=15) as response:
-                    if response.status not in (200,201): raise HttpError(502,'Rasm storage xizmatiga yuklanmadi.')
-            except UrlHTTPError: raise HttpError(502,'Rasm storage xizmatiga yuklanmadi.')
-            except UrlURLError: raise HttpError(503,'Rasm storage xizmatiga ulanish vaqtincha ishlamayapti.')
-            public_url=f'{SUPABASE_URL}/storage/v1/object/public/{bucket_path}'
+                public_url=storage_r2.put_listing(object_path,image_bytes)
+            except Exception as exc:
+                raise HttpError(502,'Rasm R2 xizmatiga yuklanmadi.') from exc
             return 201,{'url':public_url,'content_type':'image/webp','size':len(image_bytes)}
         if path=='/api/listings' and method=='POST':
             require_verified(ctx); seller_ok(db,uid); check_rate(db,'listing_create',uid,30,3600)
