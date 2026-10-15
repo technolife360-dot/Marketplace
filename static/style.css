@@ -450,6 +450,15 @@ body.profile-menu-open { overflow: hidden; }
 .legal-copy details { margin: 10px 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255,255,255,3%); }
 .legal-copy summary { color: var(--ink); font-weight: 720; cursor: pointer; }
 .legal-copy details p { margin: 11px 0 0; }
+.info-page .legal-copy { max-width: 880px; }
+.info-section { margin-top: 24px; padding: 0 0 20px; border-bottom: 1px solid rgba(170, 187, 218, 15%); }
+.info-section h2 { margin-top: 0; }
+.info-section p { margin: 10px 0; }
+.info-section li { margin: 8px 0; }
+.publisher-source-list { padding-left: 22px; }
+.publisher-source-list li { padding-left: 3px; }
+.publisher-source-list a { display: inline-block; margin-left: 4px; text-underline-offset: 3px; }
+.info-related { margin-top: 26px; }
 .notice { margin: 13px 0; padding: 13px 15px; border: 1px solid #d7dde8; border-radius: 13px; background: #eef1f7; color: #374d7a; font-size: 12px; line-height: 1.65; }
 .notice.warn { border-color: #eee1c8; background: #fbf6ea; color: #795f32; }
 .notice.error { border-color: #efd9d4; background: #fff3f0; color: #91483f; }

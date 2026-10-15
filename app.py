@@ -216,7 +216,7 @@ def public_site_base():
 
 def public_sitemap_xml():
     base=public_site_base()
-    urls=[base+'/',base+'/top-up',base+'/browse',base+'/blog',base+'/guide',base+'/fees',base+'/policies',base+'/support',base+'/help',base+'/terms',base+'/refunds',base+'/seller-policy',base+'/prohibited-items',base+'/contact',base+'/privacy-policy',base+'/data-deletion']
+    urls=[base+'/',base+'/top-up',base+'/browse',base+'/blog',base+'/selling',base+'/guide',base+'/fees',base+'/policies',base+'/support',base+'/help',base+'/help/orders',base+'/help/payments',base+'/help/refunds',base+'/help/chat',base+'/terms',base+'/refunds',base+'/seller-policy',base+'/prohibited-items',base+'/contact',base+'/privacy-policy',base+'/data-deletion']
     db=connect()
     try:
         for listing in db.execute("SELECT id,game_id,product_type FROM listings WHERE status='published' AND stock>reserved ORDER BY updated_at DESC").fetchall():
@@ -273,6 +273,22 @@ def topup_admin_row(row):
         if isinstance(value,datetime): result[key]=value.isoformat()
     return result
 
+def assert_private_postgres_tables(db, table_names):
+    """Fail closed if browser roles can reach any server-managed table."""
+    placeholders=','.join('?' for _ in table_names)
+    rows=db.execute(f"""SELECT c.relname, c.relrowsecurity,
+        has_table_privilege('anon', c.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER') AS anon_access,
+        has_table_privilege('authenticated', c.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER') AS authenticated_access
+        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE n.nspname='public' AND c.relkind IN ('r', 'p') AND c.relname IN ({placeholders})""",tuple(table_names)).fetchall()
+    found={row['relname'] for row in rows}
+    missing=sorted(set(table_names)-found)
+    if missing:
+        raise RuntimeError('Supabase sxemasi to‘liq emas. Migratsiyalarni qo‘llang. Yetishmayotgan jadvallar: '+', '.join(missing))
+    insecure=sorted(row['relname'] for row in rows if not row['relrowsecurity'] or row['anon_access'] or row['authenticated_access'])
+    if insecure:
+        raise RuntimeError('Supabase RLS yoki browser-role ruxsatlari xavfsiz emas. Tekshiring: '+', '.join(insecure))
+
 def migrate():
     db=connect()
     # Seeded demo listings may be browsed only in development; they never qualify as verified sellers.
@@ -280,14 +296,7 @@ def migrate():
     try:
         if DATABASE_URL:
             required=('account_deletion_requests','account_review_evidence','account_reviews','admin_accounts','audit_logs','blog_posts','carts','categories','conversations','deliveries','email_tokens','favorites','games','ledger_entries','listings','messages','notifications','oauth_identities','order_events','order_items','orders','payments','payout_requests','platform_config','product_requests','rate_limits','reports','request_responses','reviews','seller_profiles','sessions','users')
-            missing=[table for table in required if not db.execute('SELECT to_regclass(?) AS name',(f'public.{table}',)).fetchone()['name']]
-            if missing:
-                raise RuntimeError('Supabase sxemasi topilmadi. Avval supabase/migrations/20261005000000_marketplace_schema.sql migratsiyasini qo‘llang. Yetishmayotgan jadvallar: '+', '.join(missing))
-            required_sql=','.join('?' for _ in required)
-            security_rows=db.execute(f"SELECT c.relname,c.relrowsecurity,has_table_privilege('anon',c.oid,'select') anon_select,has_table_privilege('authenticated',c.oid,'select') authenticated_select FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname IN ({required_sql})",tuple(required)).fetchall()
-            security_issues=[row['relname'] for row in security_rows if not row['relrowsecurity'] or row['anon_select'] or row['authenticated_select']]
-            if security_issues:
-                raise RuntimeError('Supabase RLS yoki browser-role ruxsatlari xavfsiz emas. Tekshiring: '+', '.join(security_issues))
+            assert_private_postgres_tables(db, required)
             db.execute("""CREATE TABLE IF NOT EXISTS topup_packages (
                 id TEXT PRIMARY KEY, game_slug TEXT NOT NULL, game_name TEXT NOT NULL,
                 url_slug TEXT NOT NULL, currency TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount>0),
@@ -316,8 +325,9 @@ def migrate():
             )""")
             for table in ('topup_packages','topup_orders','topup_inventory_events'):
                 db.execute(f'ALTER TABLE public.{table} ENABLE ROW LEVEL SECURITY')
-                db.execute(f'REVOKE ALL ON public.{table} FROM anon, authenticated')
+                db.execute(f'REVOKE ALL ON public.{table} FROM PUBLIC, anon, authenticated')
             required=required+('topup_packages','topup_orders','topup_inventory_events')
+            assert_private_postgres_tables(db, required)
             remove_stored_ai_reviews(db)
             db.execute("ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS seller_account_terms_version TEXT NOT NULL DEFAULT ''")
             db.execute('ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS seller_account_terms_at TEXT')
@@ -824,7 +834,12 @@ def seo_page_html(path, slug=None):
     title_map={
         '/top-up':('Game currency top ups','Browse PUBG Mobile, Mobile Legends, Free Fire, and Honor of Kings top-up packages on SentryLoot.'),
         '/help':('SentryLoot Help Center','Find answers to payment, order, refund, and dispute questions.'),
+        '/help/orders':('Order and delivery help — SentryLoot','Understand order status, delivery and reporting issues.'),
+        '/help/payments':('Payment help — SentryLoot','Current payment status and how to report suspicious requests.'),
+        '/help/refunds':('Refund and dispute help — SentryLoot','How to record a dispute and send evidence safely.'),
+        '/help/chat':('Chat support — SentryLoot','How to contact SentryLoot support through chat.'),
         '/browse':('Game marketplace listings','Browse approved game items and services on SentryLoot.'),
+        '/selling':('Start selling — SentryLoot','How to prepare a permitted marketplace listing.'),
         '/guide':('Buying and safety guide','Learn how to use SentryLoot safely and review marketplace rules.'),
         '/fees':('Marketplace fees and payments','Current payment and fee information for SentryLoot.'),
         '/policies':('SentryLoot marketplace policies','Marketplace, publisher, and account-transfer policies.'),
@@ -1050,7 +1065,7 @@ class Handler(BaseHTTPRequestHandler):
                 payload=public_sitemap_xml()
                 self.send_response(200); self.send_header('Content-Type','application/xml; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=300'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
             public_route=parsed.path.rstrip('/') or '/'
-            if public_route in ('/top-up','/browse','/blog','/guide','/fees','/policies','/support','/help','/terms','/refunds','/seller-policy','/prohibited-items','/contact'):
+            if public_route in ('/top-up','/browse','/blog','/selling','/guide','/fees','/policies','/support','/help','/help/orders','/help/payments','/help/refunds','/help/chat','/terms','/refunds','/seller-policy','/prohibited-items','/contact'):
                 payload=seo_page_html(public_route)
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=300'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
             topup_match=re.fullmatch(r'/top-up(?:/([a-z0-9-]+))?(?:/([a-z0-9-]+))?',public_route)
@@ -1069,7 +1084,7 @@ class Handler(BaseHTTPRequestHandler):
                 payload=seo_listing_html(listing_match.group(1))
                 if payload is None: self.send_error(404); return
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
-            f={'/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/app.js':'app.js','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
+            f={'/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
             if not f: self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))

@@ -3,7 +3,7 @@ window.BOZOR_COPY={
   'Maxfiylik siyosati':['Политика конфиденциальности','Privacy policy'],
   'Ma’lumotlarni o‘chirish':['Удаление данных','Data deletion'],
   'Qoidalar':['Правила','Policies'],
-  'Xarid yordamiga compliance@gamestorehub.com orqali yozing; nizoni buyurtma sahifasidan yuboring.':['По вопросам поддержки напишите на compliance@gamestorehub.com; спор отправьте со страницы заказа.','For support, email compliance@gamestorehub.com; submit order disputes from the order page.'],
+  'Xarid yordamiga sentryloot@gamestorehub.com orqali yozing; nizoni buyurtma sahifasidan yuboring.':['По вопросам поддержки напишите на sentryloot@gamestorehub.com; спор отправьте со страницы заказа.','For support, email sentryloot@gamestorehub.com; submit order disputes from the order page.'],
   'Bozor':['Маркет','Marketplace'],
   'O‘yinlar olami,':['Мир игр,','A world of games,'],
   'Jade green 3D gaming controller with gold accents':['3D-геймпад из нефрита с золотыми акцентами','Jade 3D gaming controller with gold accents'],
@@ -609,13 +609,13 @@ Object.assign(window.BOZOR_COPY,{
 
 Object.assign(window.BOZOR_COPY,{
   'Yordam:':['Помощь:','Help:'],
-  'compliance@gamestorehub.com':['compliance@gamestorehub.com','compliance@gamestorehub.com'],
+  'sentryloot@gamestorehub.com':['sentryloot@gamestorehub.com','sentryloot@gamestorehub.com'],
   'Salom! SentryLoot bo‘yicha yordam kerak. Mavzu: ':['Здравствуйте! Нужна помощь по SentryLoot. Тема: ','Hello! I need help with SentryLoot. Topic: '],
   'Salom, to‘lov bo‘yicha yordam kerak. Buyurtma raqami: ':['Здравствуйте, нужна помощь с оплатой. Номер заказа: ','Hello, I need payment help. Order number: '],
   'Salom, buyurtma bo‘yicha yordam kerak. Buyurtma raqami: ':['Здравствуйте, нужна помощь с заказом. Номер заказа: ','Hello, I need order help. Order number: '],
   'Salom, buyurtma bo‘yicha nizo/yordam kerak. Buyurtma raqami: ':['Здравствуйте, нужна помощь или спор по заказу. Номер заказа: ','Hello, I need help with or want to dispute an order. Order number: '],
   'Salom, SentryLoot bilan bog‘lanmoqchiman. Mavzu: ':['Здравствуйте, хочу связаться с SentryLoot. Тема: ','Hello, I would like to contact SentryLoot. Topic: '],
-  'compliance@gamestorehub.com.':['compliance@gamestorehub.com.','compliance@gamestorehub.com.']
+  'sentryloot@gamestorehub.com.':['sentryloot@gamestorehub.com.','sentryloot@gamestorehub.com.']
 });
 
 Object.assign(window.BOZOR_COPY,{
