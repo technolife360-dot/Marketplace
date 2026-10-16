@@ -1526,6 +1526,7 @@ body.home-page .site-header .account-button:hover { border-color: #f5ca71; backg
   .site-header .top-actions { gap: 0; }
   .site-header .icon-button { width: 27px; }
   .site-header .sell-item-button { max-width: 68px; padding-inline: 4px; font-size: 9px; }
+  body.home-page .site-header .sell-item-button { min-height: 35px; padding-inline: 4px; font-size: 10px; }
   body.home-page .account-button { padding-inline: 7px; font-size: 10px; }
   .site-header .desktop-nav { gap: 17px; }
   .site-header .desktop-nav a { gap: 5px; font-size: 10px; }

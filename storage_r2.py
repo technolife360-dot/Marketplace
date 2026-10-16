@@ -60,6 +60,19 @@ def _key(value):
     return value
 
 
+def is_listing_url(value):
+    """Accept only object URLs generated for this deployment's listing bucket."""
+    try:
+        public_base = _settings()[5]
+        prefix = public_base + '/'
+        if not isinstance(value, str) or not value.startswith(prefix):
+            return False
+        _key(value[len(prefix):])
+        return True
+    except (RuntimeError, ValueError):
+        return False
+
+
 def check_evidence_bucket():
     _, _, _, _, bucket, _ = _settings()
     _client().head_bucket(Bucket=bucket)

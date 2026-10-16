@@ -734,6 +734,9 @@ def listing_image_urls(value):
         except ValueError: pass
         if url not in urls: urls.append(url)
     return urls
+def require_listing_images_on_r2(urls, existing=()):
+    if MODE=='production' and any(url not in existing and not storage_r2.is_listing_url(url) for url in urls):
+        raise HttpError(400,'Yangi e’lon rasmlari faqat sayt orqali Cloudflare R2 ga yuklanishi kerak.')
 def linked_account_providers(value):
     if value is None: return []
     if not isinstance(value,list) or len(value)>len(LINKED_ACCOUNT_PROVIDERS) or any(not isinstance(x,str) or x not in LINKED_ACCOUNT_PROVIDERS for x in value):
@@ -760,7 +763,7 @@ def listing_detail(db, lid, viewer=None):
     out['is_favorite']=bool(viewer and db.execute('SELECT 1 FROM favorites WHERE user_id=? AND listing_id=?',(viewer,lid)).fetchone())
     return out
 
-def listing_risk_flags(db, seller_id, game_id, product_type, title, description):
+def listing_risk_flags(db, seller_id, game_id, product_type, title, description, exclude_listing_id=''):
     """Deterministic review signals. These flag listings for a human; they do not accuse or auto-ban."""
     flags=[]
     text=f'{title}\n{description}'
@@ -771,7 +774,7 @@ def listing_risk_flags(db, seller_id, game_id, product_type, title, description)
     normalize_title=lambda value: re.sub(r'[^a-z0-9]+',' ',unicodedata.normalize('NFKD',value).encode('ascii','ignore').decode().lower()).strip()
     normalized=normalize_title(title)
     if normalized:
-        prior_titles=db.execute("SELECT title FROM listings WHERE seller_id=? AND game_id=? AND status IN ('draft','pending_review','published','paused') ORDER BY created_at DESC LIMIT 50",(seller_id,game_id)).fetchall()
+        prior_titles=db.execute("SELECT title FROM listings WHERE seller_id=? AND game_id=? AND id<>? AND status IN ('draft','pending_review','published','paused') ORDER BY created_at DESC LIMIT 50",(seller_id,game_id,exclude_listing_id)).fetchall()
         if any(normalize_title(row['title'])==normalized for row in prior_titles): flags.append('possible_duplicate_listing')
     if product_type=='account':
         account_count=db.execute("SELECT COUNT(*) n FROM listings WHERE seller_id=? AND product_type='account'",(seller_id,)).fetchone()['n']
@@ -1744,7 +1747,6 @@ class Handler(BaseHTTPRequestHandler):
             return {'seller':profile}
         if path=='/api/listing-images' and method=='POST':
             require_verified(ctx); seller_ok(db,uid); check_rate(db,'listing_image_upload',uid,30,3600)
-            if not production_marketplace_sales_enabled(): raise HttpError(503,'Ishlab chiqarishda savdo uchun to‘lov va huquqiy talablar yakunlanmaguncha e’lon rasmi yuklash yopiq.')
             if not storage_r2.is_configured():
                 raise HttpError(503,'Rasm yuklash serverda sozlanmagan. Cloudflare R2 sozlamalari kerak.')
             if not raw_body or len(raw_body)>MAX_IMAGE_BODY: raise HttpError(413,'Rasm 5 MB dan kichik bo‘lishi kerak.')
@@ -1789,7 +1791,9 @@ class Handler(BaseHTTPRequestHandler):
                 raise HttpError(400,'Akkaunt e’lonidan oldin egalik, noshir qoidalari va taqiqlangan holatlar bo‘yicha sotuvchi tasdig‘i kerak.')
             attributes=data.get('attributes',{})
             if not isinstance(attributes,dict) or len(attributes)>30: raise HttpError(400,'Atributlar noto‘g‘ri.')
+            if any(not isinstance(key,str) or key.startswith('_') for key in attributes): raise HttpError(400,'Ichki e’lon atributlarini o‘zgartirib bo‘lmaydi.')
             images=listing_image_urls(data.get('images',[data.get('image_url')]) if 'images' not in data and data.get('image_url') else data.get('images',[]))
+            require_listing_images_on_r2(images)
             providers=linked_account_providers(data.get('linked_accounts',attributes.get('linked_accounts',[])))
             if 'server' in attributes: attributes['server']=clean_text(attributes['server'],'Server',0,60)
             attributes={**attributes,'images':images,'linked_accounts':providers}
@@ -1798,7 +1802,9 @@ class Handler(BaseHTTPRequestHandler):
             platform=clean_text(data.get('platform',''),'Platforma',0,60); region=clean_text(data.get('region',''),'Hudud',0,60)
             delivery_eta=clean_text(data.get('delivery_eta','24 hours'),'Yetkazish muddati',2,60); requirements=clean_text(data.get('requirements',''),'Shartlar',0,1000)
             game=resolve_game_id(db,game_name)
-            require_listing_allowed(db,game,typ)
+            # Sellers may prepare private drafts before checkout is launched.
+            # Review and publication still require the production clearance gate.
+            if submit_for_review: require_listing_allowed(db,game,typ)
             account_terms=ACCOUNT_SELLER_TERMS_VERSION if typ=='account' else ''
             account_terms_at=now_iso() if typ=='account' else None
             risk_flags=listing_risk_flags(db,uid,game,typ,title,desc)
@@ -1830,7 +1836,10 @@ class Handler(BaseHTTPRequestHandler):
             require_listing_allowed(db,l['game_id'],l['product_type'])
             if l['product_type']=='account' and l['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION:
                 raise HttpError(400,'Akkaunt e’lonini yuborishdan oldin sotuvchi shartlarini tasdiqlash kerak.')
-            db.execute("UPDATE listings SET status='pending_review',moderation_note='',updated_at=CURRENT_TIMESTAMP WHERE id=?",(lid,)); notify(db,next(iter([r['user_id'] for r in db.execute('SELECT user_id FROM admin_accounts LIMIT 20')]),None),'moderation','Yangi e’lon','Tekshirish uchun yangi e’lon yuborildi.','/admin'); return {'status':'pending_review'}
+            db.execute("UPDATE listings SET status='pending_review',moderation_note='',updated_at=CURRENT_TIMESTAMP WHERE id=?",(lid,))
+            for admin in db.execute('SELECT user_id FROM admin_accounts LIMIT 20').fetchall():
+                notify(db,admin['user_id'],'moderation','Yangi e’lon','Tekshirish uchun yangi e’lon yuborildi.','/admin')
+            return {'status':'pending_review'}
         m=re.fullmatch(r'/api/listings/([^/]+)',path)
         if m and method=='PATCH':
             require_verified(ctx); seller_ok(db,uid); lid=m.group(1); l=db.execute('SELECT * FROM listings WHERE id=? AND seller_id=?',(lid,uid)).fetchone()
@@ -1849,18 +1858,25 @@ class Handler(BaseHTTPRequestHandler):
                 fields['image_url']=listing_image_urls([legacy_image])[0] if legacy_image else ''
             attrs=json.loads(l['attributes_json'] or '{}')
             if not isinstance(attrs,dict): attrs={}
+            previous_images={url for url in [l['image_url'], *(attrs.get('images') if isinstance(attrs.get('images'),list) else [])] if isinstance(url,str)}
             if 'image_url' in data and 'images' not in data: attrs['images']=[fields['image_url']] if fields.get('image_url') else []
             if 'attributes' in fields:
                 if not isinstance(fields['attributes'],dict) or len(fields['attributes'])>30: raise HttpError(400,'Atributlar noto‘g‘ri.')
+                if any(not isinstance(key,str) or key.startswith('_') or key in ('images','linked_accounts') for key in fields['attributes']):
+                    raise HttpError(400,'Ichki e’lon atributlarini o‘zgartirib bo‘lmaydi.')
                 attrs.update(fields.pop('attributes'))
                 if 'server' in attrs: attrs['server']=clean_text(attrs['server'],'Server',0,60)
             if 'images' in fields:
                 images=listing_image_urls(fields.pop('images')); attrs['images']=images; fields['image_url']=images[0] if images else ''
             if 'linked_accounts' in fields: attrs['linked_accounts']=linked_account_providers(fields.pop('linked_accounts'))
-            if 'attributes' in data or 'images' in data or 'linked_accounts' in data or 'image_url' in data: fields['attributes_json']=json.dumps(attrs,ensure_ascii=False)
+            if 'images' in data or 'image_url' in data: require_listing_images_on_r2(attrs.get('images',[]),previous_images)
             if 'game_name' in fields: fields['game_id']=resolve_game_id(db,fields.pop('game_name'))
+            risk_flags=listing_risk_flags(db,uid,fields.get('game_id',l['game_id']),l['product_type'],fields.get('title',l['title']),fields.get('description',l['description']),lid)
+            if risk_flags: attrs['_risk_flags']=risk_flags
+            else: attrs.pop('_risk_flags',None)
+            if 'attributes' in data or 'images' in data or 'linked_accounts' in data or 'image_url' in data or any(key in data for key in ('title','description','game_name')):
+                fields['attributes_json']=json.dumps(attrs,ensure_ascii=False)
             next_status='pending_review' if fields and l['status']=='published' or fields.get('stock',l['stock'])>0 and l['status']=='sold_out' else None
-            if 'attributes' in fields: fields['attributes_json']=json.dumps(fields.pop('attributes'),ensure_ascii=False)
             if fields:
                 assignments=[f'{k}=?' for k in fields]; values=list(fields.values())
                 if next_status: assignments.extend(['status=?',"moderation_note=''"]); values.append(next_status)

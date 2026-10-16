@@ -53,3 +53,11 @@ class R2StorageTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 storage_r2.evidence_url('../private.txt')
             client.assert_not_called()
+
+    def test_listing_urls_must_use_the_configured_public_domain_and_object_key(self):
+        key = 'a' * 20 + '/' + 'b' * 40 + '.webp'
+        with patch.dict(os.environ, R2_ENV):
+            self.assertTrue(storage_r2.is_listing_url('https://assets.gamestorehub.com/' + key))
+            self.assertFalse(storage_r2.is_listing_url('https://other.example.com/' + key))
+            self.assertFalse(storage_r2.is_listing_url('https://assets.gamestorehub.com/' + key + '?x=1'))
+            self.assertFalse(storage_r2.is_listing_url('https://assets.gamestorehub.com/../private.webp'))

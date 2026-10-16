@@ -16,6 +16,7 @@ window.BOZOR_COPY={
   'Savatcha':['Корзина','Cart'],
   'Xabarlar':['Сообщения','Messages'],
   'Til':['Язык','Language'],
+  'Tilni tanlash':['Выбрать язык','Choose language'],
   'O‘yin, buyum yoki xizmat qidiring…':['Ищите игры, предметы или услуги…','Search games, items, or services…'],
   'Osiyo geymerlari uchun yaratilmoqda.':['Создаётся для геймеров Азии.','Being built for gamers across Asia.'],
   'Qanday ishlaydi':['Как это работает','How it works'],

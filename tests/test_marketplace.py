@@ -65,6 +65,62 @@ class MarketplaceFlows(unittest.TestCase):
             self.assertFalse(app.production_marketplace_sales_enabled())
             app.enforce_production_marketplace_gate(self.db)
         self.assertEqual(self.db.execute('SELECT status FROM listings WHERE id=?',(self.listing,)).fetchone()['status'],'paused')
+    def test_production_prelaunch_allows_private_drafts_but_blocks_review_and_publication(self):
+        data={'game_name':'Dota 2','category_id':'items','title':'Prelaunch draft item',
+              'description':'A private draft prepared before payment launch.',
+              'price_minor':23000,'stock':1,'submit_for_review':False}
+        with patch.object(app,'MODE','production'), patch.dict(os.environ,{'MARKETPLACE_SALES_ENABLED':'false'},clear=False):
+            draft=self.route(self.seller,'POST','/api/listings',data)
+            self.assertEqual(draft['status'],'draft')
+            self.assertFalse(any(row['id']==draft['id'] for row in self.route(None,'GET','/api/listings')['items']))
+            with self.assertRaises(app.HttpError) as image_error:
+                self.route(self.seller,'POST','/api/listings',{**data,'images':['https://other.example.com/photo.webp']})
+            self.assertEqual(image_error.exception.status,400)
+            with self.assertRaises(app.HttpError) as error:
+                self.route(self.seller,'POST',f"/api/listings/{draft['id']}/submit",{})
+            self.assertEqual(error.exception.status,503)
+            with self.assertRaises(app.HttpError) as error:
+                self.route(self.seller,'POST','/api/listings',{**data,'submit_for_review':True})
+            self.assertEqual(error.exception.status,503)
+    def test_submitting_a_draft_without_an_admin_still_enters_review_queue(self):
+        data={'game_name':'Dota 2','category_id':'items','title':'Draft without admin',
+              'description':'A draft that can enter the queue without an admin account.',
+              'price_minor':23000,'stock':1}
+        draft=self.route(self.seller,'POST','/api/listings',data)
+        self.db.execute('DELETE FROM admin_accounts')
+        result=self.route(self.seller,'POST',f"/api/listings/{draft['id']}/submit",{})
+        self.assertEqual(result['status'],'pending_review')
+        self.assertEqual(self.db.execute('SELECT status FROM listings WHERE id=?',(draft['id'],)).fetchone()['status'],'pending_review')
+    def test_seller_cannot_replace_private_risk_flags_and_edits_recompute_them(self):
+        with self.assertRaises(app.HttpError) as create_error:
+            self.route(self.seller,'POST','/api/listings',{
+                'game_name':'Dota 2','category_id':'items','title':'Private flag injection',
+                'description':'An item listing with enough descriptive text.','price_minor':23000,
+                'attributes':{'_risk_flags':[]}})
+        self.assertEqual(create_error.exception.status,400)
+        with self.assertRaises(app.HttpError) as edit_error:
+            self.route(self.seller,'PATCH',f'/api/listings/{self.listing}',{'attributes':{'_risk_flags':[]}})
+        self.assertEqual(edit_error.exception.status,400)
+        self.route(self.seller,'PATCH',f'/api/listings/{self.listing}',{
+            'description':'Message me on Telegram to pay outside the platform.'})
+        saved=json.loads(self.db.execute('SELECT attributes_json FROM listings WHERE id=?',(self.listing,)).fetchone()['attributes_json'])
+        self.assertIn('off_platform_contact_or_payment',saved['_risk_flags'])
+        self.assertNotIn('possible_duplicate_listing',saved['_risk_flags'])
+    def test_production_prelaunch_listing_photo_upload_uses_r2(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest('Pillow is not installed in this local Python environment')
+        source=app.io.BytesIO()
+        Image.new('RGB',(2,2),'purple').save(source,format='PNG')
+        self.handler.headers=app.Message(); self.handler.headers['Content-Type']='image/png'
+        with patch.object(app,'MODE','production'), patch.dict(os.environ,{'MARKETPLACE_SALES_ENABLED':'false'},clear=False), \
+             patch.object(app.storage_r2,'is_configured',return_value=True), \
+             patch.object(app.storage_r2,'put_listing',return_value='https://images.example.com/test.webp') as upload:
+            status,result=self.handler.route(self.db,self.ctx(self.seller),'POST','/api/listing-images',{}, {},source.getvalue())
+        self.assertEqual(status,201)
+        self.assertEqual(result['url'],'https://images.example.com/test.webp')
+        self.assertTrue(upload.called)
     def test_game_and_account_sales_require_separate_production_clearance(self):
         from types import SimpleNamespace
         env={'MARKETPLACE_SALES_ENABLED':'true','MARKETPLACE_APPROVED_GAME_SLUGS':'valorant','MARKETPLACE_APPROVED_ACCOUNT_GAME_SLUGS':''}
