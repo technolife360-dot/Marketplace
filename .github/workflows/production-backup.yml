@@ -55,6 +55,7 @@ jobs:
             if docker exec sentryloot-restore pg_isready -U postgres >/dev/null 2>&1; then break; fi
             sleep 1
           done
+          docker exec sentryloot-restore psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c 'DROP SCHEMA public CASCADE'
           docker exec sentryloot-restore pg_restore --no-owner --no-acl -U postgres -d postgres /out/verified.dump
           count=$(docker exec sentryloot-restore psql -U postgres -d postgres -Atc "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='r'")
           test "$count" -ge 36
