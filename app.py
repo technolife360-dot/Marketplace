@@ -1110,18 +1110,18 @@ class Handler(BaseHTTPRequestHandler):
             public_route=parsed.path.rstrip('/') or '/'
             if public_route in ('/top-up','/browse','/blog','/selling','/guide','/fees','/policies','/support','/help','/help/orders','/help/payments','/help/refunds','/help/chat','/terms','/refunds','/seller-policy','/prohibited-items','/contact'):
                 payload=seo_page_html(public_route)
-                self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=300'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
+                self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
             topup_match=re.fullmatch(r'/top-up(?:/([a-z0-9-]+))?(?:/([a-z0-9-]+))?',public_route)
             if topup_match:
                 slug='/'.join(part for part in topup_match.groups() if part) or None
                 payload=seo_page_html('/top-up',slug)
                 if payload is None: self.send_error(404); return
-                self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=300'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
+                self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
             blog_match=re.fullmatch(r'/blog/([a-z0-9]+(?:-[a-z0-9]+)*)',public_route)
             if blog_match:
                 payload=seo_page_html('/blog',blog_match.group(1))
                 if payload is None: self.send_error(404); return
-                self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=300'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
+                self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
             listing_match=re.fullmatch(r'/listing/([A-Za-z0-9_-]{1,100})',parsed.path)
             if listing_match:
                 payload=seo_listing_html(listing_match.group(1))
