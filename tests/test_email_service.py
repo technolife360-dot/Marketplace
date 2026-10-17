@@ -10,7 +10,7 @@ class ResendEmailTests(unittest.TestCase):
     def setUp(self):
         self.env=patch.dict(os.environ,{
             'EMAIL_PROVIDER':'resend','RESEND_API_KEY':'unit-test-key',
-            'EMAIL_FROM':'SentryLoot <onboarding@resend.dev>',
+            'EMAIL_FROM':'SentryLoot <no-reply@mail.gamestorehub.com>',
             'PUBLIC_BASE_URL':'https://sentryloot.example','MARKETPLACE_MODE':'production'
         })
         self.env.start()
@@ -47,6 +47,12 @@ class ResendEmailTests(unittest.TestCase):
 
     def test_resend_not_configured_without_server_side_key(self):
         with patch.dict(os.environ,{'RESEND_API_KEY':'','EMAIL_API_KEY':''}):
+            self.assertFalse(email_service.is_configured())
+
+    def test_resend_requires_verified_domain_sender_in_production(self):
+        with patch.dict(os.environ,{'EMAIL_FROM':'SentryLoot <onboarding@resend.dev>'}):
+            self.assertFalse(email_service.is_configured())
+        with patch.dict(os.environ,{'EMAIL_FROM':''}):
             self.assertFalse(email_service.is_configured())
 
 

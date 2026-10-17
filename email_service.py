@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from email.message import EmailMessage
+from email.utils import parseaddr
 from html import escape
 from urllib.parse import quote, urlsplit
 import os
@@ -14,8 +15,12 @@ from urllib.error import HTTPError, URLError
 
 def is_configured() -> bool:
     provider=os.environ.get('EMAIL_PROVIDER','disabled').strip().lower()
-    from_configured=bool(os.environ.get('EMAIL_FROM','').strip()) or provider=='resend'
-    if not from_configured: return False
+    sender=os.environ.get('EMAIL_FROM','').strip()
+    address=parseaddr(sender)[1]
+    if not address or '@' not in address: return False
+    if os.environ.get('MARKETPLACE_MODE','development').lower()=='production':
+        domain=address.rsplit('@',1)[1].lower()
+        if domain=='resend.dev' or domain.endswith('.resend.dev'): return False
     if provider=='resend':
         return bool((os.environ.get('RESEND_API_KEY') or os.environ.get('EMAIL_API_KEY') or '').strip())
     return (provider=='smtp' and bool(os.environ.get('SMTP_HOST','').strip())
@@ -25,7 +30,7 @@ def is_configured() -> bool:
 
 
 def _from_address() -> str:
-    return os.environ.get('EMAIL_FROM','').strip() or 'SentryLoot <onboarding@resend.dev>'
+    return os.environ.get('EMAIL_FROM','').strip()
 
 
 def _deliver(message: EmailMessage) -> None:

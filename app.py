@@ -1163,6 +1163,7 @@ class Handler(BaseHTTPRequestHandler):
             return {'ok':True,'mode':MODE,'database':'supabase-postgres' if DATABASE_URL else 'sqlite',
                     'payments':payment_state,'identity_verification':'didit-configured' if identity_service.is_configured() else 'unconfigured',
                     'account_evidence_storage_credentials':'present' if storage_r2.is_configured() else 'missing',
+                    'transactional_email':'configured' if email_service.is_configured() else 'unconfigured',
                     'sales_enabled':production_marketplace_sales_enabled() if MODE=='production' else False,
                     'sales_guard':'closed' if MODE=='production' and not production_marketplace_sales_enabled() else 'preview'}
         if path=='/api/cron/account-deletions' and method=='GET':
