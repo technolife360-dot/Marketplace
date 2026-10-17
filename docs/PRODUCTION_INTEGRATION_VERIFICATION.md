@@ -2,6 +2,16 @@
 
 This is an evidence record, not a launch approval. The production site is behind Vercel Authentication and live sales remain closed. Do not treat a configured secret or a provider dashboard badge as an end-to-end transaction test.
 
+## Follow-up verification — 2026-10-18
+
+- Resend delivered a fresh signup email to `sentryloot+qa-20261018@gamestorehub.com` in Zoho. The verification link worked once and reuse failed. A password-reset email arrived; changing the password worked and reuse of the reset link failed. The account logged in with the new password. A second email to `sentryloot@gamestorehub.com` showed `Delivered` in Resend; its verification link was opened and that account's email is verified. Order-status email delivery still needs an eligible order.
+- The `sentryloot@gamestorehub.com` account has a pending test seller profile. Its Didit document/face check is awaiting the owner's own consent and completion. No identity approval or seller selling permission has been inferred from the configured workflow.
+- Production `/api/health` returned `ok: true`, `supabase-postgres`, `didit-configured`, R2 credentials present, transactional email configured, and `sales_enabled: false`. A read-only Supabase audit passed 36 public tables, RLS, and browser grants with no warnings. This does not prove a real paid transaction.
+- Both account-deletion and private-evidence-retention Vercel cron routes were run manually with no eligible deletion/evidence records, and each returned HTTP 200 in production logs. Automatic daily scheduling and deletion of an eligible real record are separate checks.
+- A recent public R2 WebP object loaded over HTTPS. The private evidence bucket still has public access disabled, no custom domain, and no `r2.dev` URL. A fresh site listing-image upload and a buyer's restricted evidence upload remain untested until an eligible seller/order exists.
+- The local suite passed 59 tests, including email, Didit signature, R2 storage boundaries, backup encryption/tamper checks, and purchase/dispute flows. The new GitHub Actions workflow is designed for a daily encrypted R2 backup and isolated restore check; it must not be treated as operational until a full remote run succeeds and its next scheduled run is observed. Supabase Free still has no managed project backup.
+- Vercel Hobby alerts are unavailable; Vercel Authentication redirects anonymous health checks to SSO. Support primary/backup staffing, incident alert routing, live supplier credentials, operator registration, market-by-market legal review, and real payment remain launch gates.
+
 ## Integration checks
 
 | Area | Observed result | Still required |
