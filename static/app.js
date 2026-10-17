@@ -299,7 +299,28 @@ function profileMenuMarkup(){
     ${me.email_verified?`<button class="profile-menu-row profile-menu-button" data-action="link-facebook"><span class="profile-menu-icon"><span class="facebook-mark" aria-hidden="true">f</span></span><span class="profile-menu-copy"><b>${t('Facebook’ni ulash','Подключить Facebook','Link Facebook')}</b><small>${t('Mavjud hisobingizga xavfsiz ulash','Безопасно подключить к вашему аккаунту','Securely link it to this account')}</small></span></button>`:''}</nav><nav class="profile-menu profile-account-actions" aria-label="${t('Yordam va hisob','Помощь и аккаунт','Help and account')}"><h2>${t('Yordam va hisob','Помощь и аккаунт','Help & account')}</h2><button class="profile-menu-row profile-menu-button" type="button" data-open-support-chat><span class="profile-menu-icon">${icon('message')}</span><span class="profile-menu-copy"><b>${t('Yordam chatini ochish','Открыть чат поддержки','Open support chat')}</b><small>${t('Crisp orqali yozing','Напишите через Crisp','Chat with us through Crisp')}</small></span></button><a class="profile-menu-row profile-menu-button" href="${CRISP_DIRECT_CHAT_URL}" target="_blank" rel="noopener noreferrer"><span class="profile-menu-icon">${icon('arrow-up-right')}</span><span class="profile-menu-copy"><b>${t('Bevosita chat havolasini ochish','Открыть прямую ссылку на чат','Open direct chat link')}</b><small>${t('Crisp chatini yangi oynada oching','Откройте чат Crisp в новой вкладке','Open Crisp chat in a new tab')}</small></span></a>${menuRow('#blog','box',t('Blog','Блог','Blog'),t('Xarid va savdo bo‘yicha qo‘llanmalar','Руководства по покупкам и продажам','Guides for buying and selling'))}<button class="profile-menu-row profile-menu-button" data-action="logout"><span class="profile-menu-icon">${icon('arrow-up-right')}</span><span class="profile-menu-copy"><b>${t('Hisobdan chiqish','Выйти из аккаунта','Sign out')}</b><small>${t('SentryLoot hisobingizdan xavfsiz chiqing','Безопасно выйти из аккаунта SentryLoot','Securely sign out of SentryLoot')}</small></span></button></nav>
   </div></div></aside>`;
 }
-async function openProfileMenu(){if(!me){location.hash='login';return}await loadAsiaMarkets();const root=$('#profile-menu-root');if(!root)return;root.innerHTML=profileMenuMarkup();root.hidden=false;document.body.classList.add('profile-menu-open');$('#account-button')?.setAttribute('aria-expanded','true');$('#profile-dropdown')?.focus({preventScroll:true});$('#profile-form')?.elements.namedItem('language')&&( $('#profile-form').elements.namedItem('language').value=locale );$('#profile-form')?.elements.namedItem('currency')&&( $('#profile-form').elements.namedItem('currency').value=me.currency);try{const bonuses=await api('/bonuses');const balance=$('#profile-bonus-balance');if(balance)balance.textContent=Number(bonuses.real_points).toLocaleString(localeTag())+' '+t('ball','баллов','points')+(bonuses.preview_points?' · '+Number(bonuses.preview_points).toLocaleString(localeTag())+' '+t('sinov','тест','preview'):'')}catch{const balance=$('#profile-bonus-balance');if(balance)balance.textContent=t('Yuklanmadi','Не загрузилось','Unavailable')}if(me.seller?.identity_status==='verified'&&me.seller?.selling_enabled){try{await loadWalletFx();const summary=await api('/seller/summary');const balance=$('#profile-wallet-balance');if(balance)balance.innerHTML=walletAmount(summary.wallet.available_minor,summary.wallet.currency)}catch{const balance=$('#profile-wallet-balance');if(balance)balance.textContent=t('Balansni yuklab bo‘lmadi','Не удалось загрузить баланс','Balance unavailable')}}}
+async function refreshProfileBonusBalance(){
+ const balance=$('#profile-bonus-balance');if(!balance)return;
+ try{const bonuses=await api('/bonuses');if(!balance.isConnected)return;const real=Number(bonuses.real_points)||0,preview=Number(bonuses.preview_points)||0;balance.textContent=real.toLocaleString(localeTag())+' '+t('ball','баллов','points')+(preview?' · '+preview.toLocaleString(localeTag())+' '+t('sinov','тест','preview'):'')}
+ catch{if(balance.isConnected)balance.textContent=t('Yuklanmadi','Не загрузилось','Unavailable')}
+}
+async function refreshProfileWalletBalance(){
+ if(me?.seller?.identity_status!=='verified'||!me?.seller?.selling_enabled)return;
+ const balance=$('#profile-wallet-balance');if(!balance)return;
+ try{await loadWalletFx();const summary=await api('/seller/summary');if(balance.isConnected)balance.innerHTML=walletAmount(summary.wallet.available_minor,summary.wallet.currency)}
+ catch{if(balance.isConnected)balance.textContent=t('Balansni yuklab bo‘lmadi','Не удалось загрузить баланс','Balance unavailable')}
+}
+async function openProfileMenu(){
+ if(!me){location.hash='login';return}
+ await loadAsiaMarkets();
+ const root=$('#profile-menu-root');if(!root)return;
+ root.innerHTML=profileMenuMarkup();root.hidden=false;document.body.classList.add('profile-menu-open');
+ $('#account-button')?.setAttribute('aria-expanded','true');
+ void refreshProfileBonusBalance();
+ void refreshProfileWalletBalance();
+ $('#profile-dropdown')?.focus({preventScroll:true});
+ const form=$('#profile-form');if(form){form.elements.namedItem('language').value=locale;form.elements.namedItem('currency').value=me.currency}
+}
 function closeProfileMenu(){const root=$('#profile-menu-root');if(!root)return;root.innerHTML='';root.hidden=true;document.body.classList.remove('profile-menu-open');$('#account-button')?.setAttribute('aria-expanded','false')}
 async function renderAccount(){if(!me){location.hash='login';return}closeProfileMenu();history.replaceState(history.state,'',location.pathname+location.search+'#home');await renderHome()}
 async function renderBonuses(){
