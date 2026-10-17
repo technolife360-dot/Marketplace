@@ -120,3 +120,11 @@ CREATE INDEX IF NOT EXISTS idx_requests_open ON product_requests(status, created
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ledger_user ON ledger_entries(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, created_at DESC);
+CREATE TABLE IF NOT EXISTS bonus_entries (
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ source_type TEXT NOT NULL, source_id TEXT NOT NULL, entry_type TEXT NOT NULL,
+ points INTEGER NOT NULL CHECK(points<>0), mode TEXT NOT NULL CHECK(mode IN ('preview','real')),
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ UNIQUE(user_id,source_type,source_id,entry_type)
+);
+CREATE INDEX IF NOT EXISTS idx_bonus_entries_user ON bonus_entries(user_id, created_at DESC);

@@ -65,7 +65,7 @@ class MarketplaceFlows(unittest.TestCase):
             self.assertFalse(app.production_marketplace_sales_enabled())
             app.enforce_production_marketplace_gate(self.db)
         self.assertEqual(self.db.execute('SELECT status FROM listings WHERE id=?',(self.listing,)).fetchone()['status'],'paused')
-    def test_production_prelaunch_allows_private_drafts_but_blocks_review_and_publication(self):
+    def test_production_prelaunch_allows_review_but_blocks_publication(self):
         data={'game_name':'Dota 2','category_id':'items','title':'Prelaunch draft item',
               'description':'A private draft prepared before payment launch.',
               'price_minor':23000,'stock':1,'submit_for_review':False}
@@ -76,12 +76,13 @@ class MarketplaceFlows(unittest.TestCase):
             with self.assertRaises(app.HttpError) as image_error:
                 self.route(self.seller,'POST','/api/listings',{**data,'images':['https://other.example.com/photo.webp']})
             self.assertEqual(image_error.exception.status,400)
+            self.assertEqual(self.route(self.seller,'POST',f"/api/listings/{draft['id']}/submit",{})['status'],'pending_review')
+            reviewed=self.route(self.seller,'POST','/api/listings',{**data,'submit_for_review':True})
+            self.assertEqual(reviewed['status'],'pending_review')
             with self.assertRaises(app.HttpError) as error:
-                self.route(self.seller,'POST',f"/api/listings/{draft['id']}/submit",{})
+                self.route(self.admin,'POST',f"/api/admin/listings/{reviewed['id']}",{'action':'approve','note':'Reviewed for publication.'})
             self.assertEqual(error.exception.status,503)
-            with self.assertRaises(app.HttpError) as error:
-                self.route(self.seller,'POST','/api/listings',{**data,'submit_for_review':True})
-            self.assertEqual(error.exception.status,503)
+            self.assertFalse(any(row['id']==reviewed['id'] for row in self.route(None,'GET','/api/listings')['items']))
     def test_submitting_a_draft_without_an_admin_still_enters_review_queue(self):
         data={'game_name':'Dota 2','category_id':'items','title':'Draft without admin',
               'description':'A draft that can enter the queue without an admin account.',
@@ -310,6 +311,32 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?',(order['id'],)).fetchone()['status'],'completed')
         self.assertEqual(self.db.execute('SELECT status FROM account_reviews WHERE order_id=?',(order['id'],)).fetchone()['status'],'approved')
         self.assertEqual(self.route(self.seller,'GET','/api/seller/summary')['wallet']['available_minor'],45000)
+        buyer_bonus=self.route(self.buyer,'GET','/api/bonuses')
+        seller_bonus=self.route(self.seller,'GET','/api/bonuses')
+        self.assertEqual((buyer_bonus['preview_points'],seller_bonus['preview_points']),(50,22))
+        self.assertEqual((buyer_bonus['real_points'],seller_bonus['real_points']),(0,0))
+        self.assertFalse(buyer_bonus['redeemable'])
+        app.award_account_order_bonuses(self.db,order['id'])
+        self.assertEqual(self.route(self.buyer,'GET','/api/bonuses')['preview_points'],50)
+        self.assertEqual(self.route(self.other,'GET','/api/bonuses')['entries'],[])
+
+    def test_bonus_refund_reversal_is_idempotent_and_requires_completed_payment(self):
+        with self.assertRaises(app.HttpError) as unauthenticated:
+            self.route(None,'GET','/api/bonuses')
+        self.assertEqual(unauthenticated.exception.status,401)
+        self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True,True)
+        app.award_account_order_bonuses(self.db,order['id'])
+        self.assertEqual(self.route(self.buyer,'GET','/api/bonuses')['preview_points'],0)
+        self.db.execute("UPDATE orders SET status='completed' WHERE id=?",(order['id'],))
+        app.award_account_order_bonuses(self.db,order['id'])
+        self.assertEqual(self.route(self.buyer,'GET','/api/bonuses')['preview_points'],0)
+        self.db.execute("UPDATE payments SET status='succeeded' WHERE order_id=?",(order['id'],))
+        app.award_account_order_bonuses(self.db,order['id'])
+        app.reverse_order_bonuses(self.db,order['id'])
+        app.reverse_order_bonuses(self.db,order['id'])
+        summary=self.route(self.buyer,'GET','/api/bonuses')
+        self.assertEqual(summary['preview_points'],0)
+        self.assertEqual(len(summary['entries']),2)
 
     def test_account_evidence_is_removed_by_retention_and_account_deletion(self):
         self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True,True)

@@ -320,10 +320,18 @@ def migrate():
                 id TEXT PRIMARY KEY, package_id TEXT NOT NULL REFERENCES topup_packages(id), actor_id TEXT REFERENCES users(id),
                 delta INTEGER NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )""")
-            for table in ('topup_packages','topup_orders','topup_inventory_events'):
+            db.execute("""CREATE TABLE IF NOT EXISTS bonus_entries (
+                id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                source_type TEXT NOT NULL, source_id TEXT NOT NULL, entry_type TEXT NOT NULL,
+                points INTEGER NOT NULL CHECK(points<>0), mode TEXT NOT NULL CHECK(mode IN ('preview','real')),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id,source_type,source_id,entry_type)
+            )""")
+            db.execute('CREATE INDEX IF NOT EXISTS idx_bonus_entries_user ON public.bonus_entries(user_id,created_at DESC)')
+            for table in ('topup_packages','topup_orders','topup_inventory_events','bonus_entries'):
                 db.execute(f'ALTER TABLE public.{table} ENABLE ROW LEVEL SECURITY')
                 db.execute(f'REVOKE ALL ON public.{table} FROM PUBLIC, anon, authenticated')
-            required=required+('topup_packages','topup_orders','topup_inventory_events')
+            required=required+('topup_packages','topup_orders','topup_inventory_events','bonus_entries')
             assert_private_postgres_tables(db, required)
             remove_stored_ai_reviews(db)
             db.execute("ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS seller_account_terms_version TEXT NOT NULL DEFAULT ''")
@@ -441,6 +449,14 @@ def migrate():
             id TEXT PRIMARY KEY, package_id TEXT NOT NULL REFERENCES topup_packages(id), actor_id TEXT REFERENCES users(id),
             delta INTEGER NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS bonus_entries (
+            id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            source_type TEXT NOT NULL, source_id TEXT NOT NULL, entry_type TEXT NOT NULL,
+            points INTEGER NOT NULL CHECK(points<>0), mode TEXT NOT NULL CHECK(mode IN ('preview','real')),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id,source_type,source_id,entry_type)
+        )""")
+        db.execute('CREATE INDEX IF NOT EXISTS idx_bonus_entries_user ON bonus_entries(user_id,created_at DESC)')
         seed_topup_catalog(db)
         enforce_production_marketplace_gate(db)
     finally:
@@ -614,6 +630,53 @@ def seller_ok(db,uid):
         raise HttpError(403,'Sotuv boshlashdan oldin administrator sotuvchi profilingizni tekshirishi kerak.')
     return p
 
+def add_bonus_entry(db,user_id,source_type,source_id,entry_type,points,mode):
+    if points == 0: return
+    db.execute('''INSERT OR IGNORE INTO bonus_entries
+        (id,user_id,source_type,source_id,entry_type,points,mode)
+        VALUES(?,?,?,?,?,?,?)''',(ident(),user_id,source_type,source_id,entry_type,points,mode))
+
+def award_account_order_bonuses(db,oid):
+    """Award points once, only after a verified payment and completed account sale."""
+    order=db.execute("SELECT buyer_id,status FROM orders WHERE id=?",(oid,)).fetchone()
+    payment=db.execute("SELECT provider,status FROM payments WHERE order_id=?",(oid,)).fetchone()
+    if not order or order['status']!='completed' or not payment or payment['status']!='succeeded': return
+    items=db.execute('''SELECT i.seller_id,i.quantity,i.unit_price_minor,i.commission_minor
+        FROM order_items i JOIN listings l ON l.id=i.listing_id
+        WHERE i.order_id=? AND l.product_type='account' ''',(oid,)).fetchall()
+    if not items: return
+    mode='preview' if payment['provider']=='sandbox' else 'real'
+    buyer_amount=sum(i['unit_price_minor']*i['quantity'] for i in items)
+    add_bonus_entry(db,order['buyer_id'],'account_buy',oid,'earned',buyer_amount//1000,mode)
+    seller_amounts={}
+    for item in items:
+        seller_amounts[item['seller_id']]=seller_amounts.get(item['seller_id'],0)+item['unit_price_minor']*item['quantity']-item['commission_minor']
+    for seller_id,amount in seller_amounts.items():
+        add_bonus_entry(db,seller_id,'account_sell',oid,'earned',amount//2000,mode)
+
+def reverse_order_bonuses(db,oid):
+    """Keep an audit trail if a previously rewarded order is refunded."""
+    rows=db.execute("SELECT user_id,source_type,points,mode FROM bonus_entries WHERE source_id=? AND entry_type='earned' AND source_type IN ('account_buy','account_sell')",(oid,)).fetchall()
+    for row in rows:
+        add_bonus_entry(db,row['user_id'],row['source_type'],oid,'reversed',-row['points'],row['mode'])
+
+def bonus_summary(db,uid):
+    rows=db.execute('''SELECT source_type,source_id,entry_type,points,mode,created_at
+        FROM bonus_entries WHERE user_id=? ORDER BY created_at DESC,id DESC LIMIT 100''',(uid,)).fetchall()
+    totals=db.execute("SELECT mode,COALESCE(SUM(points),0) total FROM bonus_entries WHERE user_id=? GROUP BY mode",(uid,)).fetchall()
+    balances={row['mode']:max(0,int(row['total'])) for row in totals}
+    entries=[]
+    for row in rows:
+        entry=dict(row)
+        created=datetime.fromisoformat(str(entry['created_at']).replace('Z','+00:00'))
+        if created.tzinfo is None: created=created.replace(tzinfo=timezone.utc)
+        entry['created_at']=created.astimezone(timezone.utc).isoformat()
+        entries.append(entry)
+    return {'real_points':balances.get('real',0),'preview_points':balances.get('preview',0),
+            'entries':entries,
+            'rules':{'account_buy_uzs_per_point':1000,'account_sell_uzs_per_point':2000,
+                     'topup_uzs_per_point':1000},'redeemable':False}
+
 def settle_seller_escrow(db,oid):
     """Move sandbox-held amounts into withdrawable seller balances after resolution."""
     order=db.execute('SELECT currency FROM orders WHERE id=?',(oid,)).fetchone()
@@ -626,11 +689,13 @@ def settle_seller_escrow(db,oid):
         if item['commission_minor']:
             db.execute('INSERT INTO ledger_entries(id,order_id,user_id,entry_type,amount_minor,currency,description) VALUES(?,?,?,?,?,?,?)',(ident(),oid,None,'escrow_fee_release',-item['commission_minor'],order['currency'],'Platforma komissiyasi escrow’dan chiqarildi'))
             db.execute('INSERT INTO ledger_entries(id,order_id,user_id,entry_type,amount_minor,currency,description) VALUES(?,?,?,?,?,?,?)',(ident(),oid,None,'platform_commission',item['commission_minor'],order['currency'],'Platforma komissiyasi'))
+    award_account_order_bonuses(db,oid)
 
 def refund_sandbox_escrow(db,oid,buyer_id):
     """Record a simulated sandbox refund; it never represents a live cash transfer."""
     order=db.execute('SELECT currency,total_minor FROM orders WHERE id=?',(oid,)).fetchone()
     if not order: raise HttpError(404,'Buyurtma topilmadi.')
+    reverse_order_bonuses(db,oid)
     for item in db.execute('SELECT * FROM order_items WHERE order_id=?',(oid,)).fetchall():
         net=item['unit_price_minor']*item['quantity']-item['commission_minor']
         db.execute('INSERT INTO ledger_entries(id,order_id,user_id,entry_type,amount_minor,currency,description) VALUES(?,?,?,?,?,?,?)',(ident(),oid,item['seller_id'],'escrow_release',-net,order['currency'],'Sandbox nizosi: sotuvchi escrow’i bekor qilindi'))
@@ -1147,6 +1212,9 @@ class Handler(BaseHTTPRequestHandler):
                 db.execute('DELETE FROM account_review_evidence WHERE order_id=?',(review['order_id'],)); removed+=len(evidence)
             return {'ok':True,'evidence_deleted':removed,'reviews_checked':len(reviews),'retention_days':30}
         if path=='/api/me' and method=='GET': return {'user':ctx['user'],'csrf':ctx['csrf'],'mode':MODE}
+        if path=='/api/bonuses' and method=='GET':
+            require_user(ctx)
+            return bonus_summary(db,uid)
         if path=='/api/blog' and method=='GET':
             return [blog_post_view(x) for x in db.execute("SELECT * FROM blog_posts WHERE status='published' ORDER BY published_at DESC,created_at DESC LIMIT 100")]
         if path.startswith('/api/blog/') and method=='GET':
@@ -1802,9 +1870,7 @@ class Handler(BaseHTTPRequestHandler):
             platform=clean_text(data.get('platform',''),'Platforma',0,60); region=clean_text(data.get('region',''),'Hudud',0,60)
             delivery_eta=clean_text(data.get('delivery_eta','24 hours'),'Yetkazish muddati',2,60); requirements=clean_text(data.get('requirements',''),'Shartlar',0,1000)
             game=resolve_game_id(db,game_name)
-            # Sellers may prepare private drafts before checkout is launched.
-            # Review and publication still require the production clearance gate.
-            if submit_for_review: require_listing_allowed(db,game,typ)
+            # Review may proceed before launch; publication remains gated below.
             account_terms=ACCOUNT_SELLER_TERMS_VERSION if typ=='account' else ''
             account_terms_at=now_iso() if typ=='account' else None
             risk_flags=listing_risk_flags(db,uid,game,typ,title,desc)
@@ -1822,7 +1888,7 @@ class Handler(BaseHTTPRequestHandler):
             action=data.get('action')
             if action=='pause' and l['status']=='published': target='paused'
             elif action=='reopen' and l['status']=='paused':
-                require_listing_allowed(db,l['game_id'],l['product_type']); target='pending_review'
+                target='pending_review'
                 if l['product_type']=='account' and l['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION:
                     raise HttpError(400,'Akkaunt bo‘yicha yangilangan sotuvchi shartlarini tasdiqlang.')
             elif action=='archive' and l['status'] in ('draft','rejected','paused'): target='archived'
@@ -1833,7 +1899,6 @@ class Handler(BaseHTTPRequestHandler):
             require_verified(ctx); seller_ok(db,uid); lid=m.group(1); l=db.execute('SELECT * FROM listings WHERE id=? AND seller_id=?',(lid,uid)).fetchone()
             if not l: raise HttpError(404,'E’lon topilmadi.')
             if l['status'] not in ('draft','rejected','paused'): raise HttpError(409,'Bu e’lon hozir moderatsiyaga yuborilmaydi.')
-            require_listing_allowed(db,l['game_id'],l['product_type'])
             if l['product_type']=='account' and l['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION:
                 raise HttpError(400,'Akkaunt e’lonini yuborishdan oldin sotuvchi shartlarini tasdiqlash kerak.')
             db.execute("UPDATE listings SET status='pending_review',moderation_note='',updated_at=CURRENT_TIMESTAMP WHERE id=?",(lid,))
