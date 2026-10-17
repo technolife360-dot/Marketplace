@@ -1,20 +1,16 @@
 (function () {
-  var selected = 'en';
-  try {
-    selected = localStorage.getItem('bozor-language') || 'en';
-  } catch (_) {}
-
-  document.querySelectorAll('[data-language-only]').forEach(function (node) {
-    node.hidden = node.dataset.languageOnly !== selected;
-  });
-
-  document.querySelectorAll('[data-language-summary-container]').forEach(function (node) {
-    node.hidden = selected !== 'uz' && selected !== 'ru';
-  });
-
-  var summaryHeading = document.querySelector('[data-language-summary-heading]');
-  if (summaryHeading) {
-    summaryHeading.hidden = selected !== 'uz' && selected !== 'ru';
-    summaryHeading.textContent = selected === 'uz' ? 'Qisqacha mazmun' : 'Краткое содержание';
+  let selected = 'en';
+  try { selected = localStorage.getItem('bozor-language') || 'en'; } catch (_) {}
+  if (!['en', 'uz', 'ru'].includes(selected)) selected = 'en';
+  document.documentElement.lang = selected;
+  const page = location.pathname === '/privacy-policy' ? 'privacy' : 'deletion';
+  const copy = window.SENTRYLOOT_LEGAL_TRANSLATIONS?.[page]?.[selected];
+  const article = document.querySelector('.legal-copy');
+  if (!article) return;
+  if (copy) {
+    article.innerHTML = `<h1>${copy.title}</h1>${copy.body}`;
+    document.title = `${copy.title} — SentryLoot`;
+    const description = document.querySelector('meta[name="description"]');
+    if (description) description.content = copy.lead;
   }
 })();

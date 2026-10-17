@@ -37,7 +37,7 @@ function topupGameIcon(slug) {
 }
 
 function topupComingSoonBadge(show) {
-  return show ? '<span class="topup-coming-soon"><span></span>' + adminText('Coming soon','Скоро','Coming soon') + '</span>' : '';
+  return show ? '<span class="topup-coming-soon"><span></span>' + adminText('Tez orada','Скоро','Coming soon') + '</span>' : '';
 }
 
 async function renderTopUpCatalog(selectedGame, selectedProduct) {

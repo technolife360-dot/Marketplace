@@ -1,6 +1,6 @@
 # SentryLoot — gaming marketplace foundation
 
-A runnable gaming marketplace built with Python, SQLite or Supabase PostgreSQL, and vanilla JavaScript. The interface defaults to English and supports Uzbek and Russian; additional languages currently use reviewed translations where available and otherwise fall back to English. SQLite remains the default for local development. Set `DATABASE_URL` to use the server-side Supabase PostgreSQL connection; keep this credential private and out of browser code.
+A runnable gaming marketplace built with Python, SQLite or Supabase PostgreSQL, and vanilla JavaScript. The interface defaults to English. The language menu offers English, Uzbek, and Russian; other partial translations are hidden until their pages and user flows are fully reviewed. SQLite remains the default for local development. Set `DATABASE_URL` to use the server-side Supabase PostgreSQL connection; keep this credential private and out of browser code.
 
 ## Run locally
 
