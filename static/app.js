@@ -301,14 +301,14 @@ function profileMenuMarkup(){
 }
 async function refreshProfileBonusBalance(){
  const balance=$('#profile-bonus-balance');if(!balance)return;
- try{const bonuses=await api('/bonuses');if(!balance.isConnected)return;const real=Number(bonuses.real_points)||0,preview=Number(bonuses.preview_points)||0;balance.textContent=real.toLocaleString(localeTag())+' '+t('ball','баллов','points')+(preview?' · '+preview.toLocaleString(localeTag())+' '+t('sinov','тест','preview'):'')}
- catch{if(balance.isConnected)balance.textContent=t('Yuklanmadi','Не загрузилось','Unavailable')}
+ try{const bonuses=await api('/bonuses');if(!balance.isConnected)return;const real=Number(bonuses.real_points)||0,preview=Number(bonuses.preview_points)||0;balance.textContent=real.toLocaleString(localeTag())+' '+adminText('ball','баллов','points')+(preview?' · '+preview.toLocaleString(localeTag())+' '+adminText('sinov','тест','preview'):'')}
+ catch{if(balance.isConnected)balance.textContent=adminText('Yuklanmadi','Не загрузилось','Unavailable')}
 }
 async function refreshProfileWalletBalance(){
  if(me?.seller?.identity_status!=='verified'||!me?.seller?.selling_enabled)return;
  const balance=$('#profile-wallet-balance');if(!balance)return;
  try{await loadWalletFx();const summary=await api('/seller/summary');if(balance.isConnected)balance.innerHTML=walletAmount(summary.wallet.available_minor,summary.wallet.currency)}
- catch{if(balance.isConnected)balance.textContent=t('Balansni yuklab bo‘lmadi','Не удалось загрузить баланс','Balance unavailable')}
+ catch{if(balance.isConnected)balance.textContent=adminText('Balansni yuklab bo‘lmadi','Не удалось загрузить баланс','Balance unavailable')}
 }
 async function openProfileMenu(){
  if(!me){location.hash='login';return}
