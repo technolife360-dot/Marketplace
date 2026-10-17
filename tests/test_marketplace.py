@@ -400,6 +400,26 @@ class MarketplaceFlows(unittest.TestCase):
         stock=self.db.execute('SELECT stock,reserved FROM listings WHERE id=?',(self.listing,)).fetchone()
         self.assertEqual((stock['stock'],stock['reserved']),(0,0))
         self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM ledger_entries WHERE order_id=?',(order['id'],)).fetchone()['n'],2)
+    def test_declined_test_payment_is_retryable_without_ledger_or_stock_changes(self):
+        self.add_cart(self.buyer)
+        order=app.checkout(self.db,self.buyer,True,True)
+        path=f"/api/orders/{order['id']}/sandbox-complete"
+        declined=self.route(self.buyer,'POST',path,{'outcome':'decline'})
+        self.assertEqual(declined['status'],'declined')
+        self.assertTrue(declined['retryable'])
+        self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?',(order['id'],)).fetchone()['status'],'pending_payment')
+        self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM ledger_entries WHERE order_id=?',(order['id'],)).fetchone()['n'],0)
+        stock=self.db.execute('SELECT stock,reserved FROM listings WHERE id=?',(self.listing,)).fetchone()
+        self.assertEqual((stock['stock'],stock['reserved']),(1,1))
+        self.assertEqual(self.route(self.buyer,'POST',path,{'outcome':'approve'})['status'],'paid')
+        self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?',(order['id'],)).fetchone()['status'],'paid')
+    def test_fixture_seller_can_test_delivery_only_in_development(self):
+        self.db.execute("UPDATE seller_profiles SET identity_provider='development_fixture' WHERE user_id=?",(self.seller,))
+        self.assertEqual(app.seller_ok(self.db,self.seller)['user_id'],self.seller)
+        with patch.object(app,'MODE','production'):
+            with self.assertRaises(app.HttpError) as error:
+                app.seller_ok(self.db,self.seller)
+            self.assertEqual(error.exception.status,403)
     def test_delivery_visible_to_buyer_after_payment_but_not_other_user_or_seller(self):
         self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True,True)
         self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})

@@ -288,8 +288,9 @@ def assert_private_postgres_tables(db, table_names):
 
 def migrate():
     db=connect()
-    # Seeded demo listings may be browsed only in development; they never qualify as verified sellers.
+    # Development fixtures are isolated from production and may exercise the full local order flow.
     demo_listing_clause=" OR identity_provider='development_fixture'" if MODE=='development' else ''
+    demo_seller_clause=" AND identity_provider!='development_fixture'" if MODE=='development' else ''
     try:
         if DATABASE_URL:
             required=('account_deletion_requests','account_review_evidence','account_reviews','admin_accounts','audit_logs','blog_posts','carts','categories','conversations','deliveries','email_tokens','favorites','games','ledger_entries','listings','messages','notifications','oauth_identities','order_events','order_items','orders','payments','payout_requests','platform_config','product_requests','rate_limits','reports','request_responses','reviews','seller_profiles','sessions','users')
@@ -339,7 +340,7 @@ def migrate():
             db.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS accepted_account_sale_terms_version TEXT NOT NULL DEFAULT ''")
             db.execute('ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS accepted_account_sale_terms_at TEXT')
             seed_blog_posts(db)
-            db.execute("UPDATE seller_profiles SET selling_enabled=0 WHERE verification_status!='verified' OR identity_status!='verified' OR identity_provider!='didit'")
+            db.execute(f"UPDATE seller_profiles SET selling_enabled=0 WHERE verification_status!='verified' OR identity_status!='verified' OR (identity_provider!='didit'{demo_seller_clause})")
             db.execute(f"UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE status='published' AND seller_id NOT IN (SELECT user_id FROM seller_profiles WHERE (verification_status='verified' AND selling_enabled=1 AND identity_status='verified' AND identity_provider='didit'){demo_listing_clause})")
             db.execute("INSERT INTO platform_config(key,value) VALUES('commission_bps','0'),('completion_window_hours','72'),('terms_version','draft-2026-10') ON CONFLICT(key) DO NOTHING")
             games=[('valorant','Valorant'),('pubg-mobile','PUBG Mobile'),('dota-2','Dota 2'),('counter-strike-2','Counter-Strike 2'),('mobile-legends','Mobile Legends')]
@@ -410,7 +411,7 @@ def migrate():
         if 'evidence_url' not in report_columns: db.execute("ALTER TABLE reports ADD COLUMN evidence_url TEXT NOT NULL DEFAULT ''")
         # Sellers from older local builds did not pass an approval workflow. Keep them
         # closed until an administrator has reviewed and explicitly enabled the profile.
-        db.execute("UPDATE seller_profiles SET selling_enabled=0 WHERE verification_status!='verified' OR identity_status!='verified' OR identity_provider!='didit'")
+        db.execute(f"UPDATE seller_profiles SET selling_enabled=0 WHERE verification_status!='verified' OR identity_status!='verified' OR (identity_provider!='didit'{demo_seller_clause})")
         db.execute(f"UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE status='published' AND seller_id NOT IN (SELECT user_id FROM seller_profiles WHERE (verification_status='verified' AND selling_enabled=1 AND identity_status='verified' AND identity_provider='didit'){demo_listing_clause})")
         db.execute("INSERT INTO listing_search(listing_search) VALUES('rebuild')")
         db.execute("INSERT OR IGNORE INTO platform_config(key,value) VALUES('commission_bps','0')")
@@ -624,7 +625,8 @@ def require_admin(ctx):
 def seller_ok(db,uid):
     p=db.execute('SELECT * FROM seller_profiles WHERE user_id=?',(uid,)).fetchone()
     if not p: raise HttpError(403,'Avval sotuvchi profilini yarating.')
-    if p['identity_status']!='verified' or p['identity_provider']!='didit':
+    fixture_seller=MODE=='development' and p['identity_provider']=='development_fixture'
+    if not fixture_seller and (p['identity_status']!='verified' or p['identity_provider']!='didit'):
         raise HttpError(403,'Sotishdan oldin tashqi KYC provayderida pasport va yuz tekshiruvi yakunlanishi kerak. Hujjatlarni bu saytga yuklamang.')
     if p['verification_status']!='verified' or not p['selling_enabled']:
         raise HttpError(403,'Sotuv boshlashdan oldin administrator sotuvchi profilingizni tekshirishi kerak.')
@@ -1981,6 +1983,13 @@ class Handler(BaseHTTPRequestHandler):
                 if o['status']!='pending_payment': raise HttpError(409,'Buyurtma to‘lovga tayyor emas.')
                 p=db.execute("SELECT * FROM payments WHERE order_id=? AND provider='sandbox'",(oid,)).fetchone()
                 if not p or p['status']!='pending': raise HttpError(409,'Sandbox to‘lov topilmadi.')
+                if p['amount_minor']!=o['total_minor'] or p['currency']!=o['currency']:
+                    raise HttpError(409,'Buyurtma va to‘lov summasi mos kelmadi.')
+                if data.get('outcome')=='decline':
+                    db.execute('COMMIT')
+                    return {'status':'declined','retryable':True,'mode':'sandbox'}
+                if data.get('outcome') not in (None,'approve'):
+                    raise HttpError(400,'Sinov to‘lov natijasi noto‘g‘ri.')
                 db.execute("UPDATE payments SET status='succeeded',provider_reference=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'",('sandbox-'+secrets.token_hex(6),p['id']))
                 db.execute("UPDATE orders SET status='paid',updated_at=CURRENT_TIMESTAMP WHERE id=?",(oid,)); event(db,oid,uid,'pending_payment','paid','Development sandbox payment verified on server')
                 for it in db.execute('SELECT * FROM order_items WHERE order_id=?',(oid,)).fetchall():
