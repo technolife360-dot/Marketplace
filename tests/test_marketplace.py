@@ -103,9 +103,8 @@ class MarketplaceFlows(unittest.TestCase):
             self.assertFalse(app.production_marketplace_sales_enabled())
         enabled={**closed,'MARKETPLACE_INTERNAL_TESTING_ENABLED':'true'}
         with patch.object(app,'MODE','production'), patch.dict(os.environ,enabled,clear=False):
-            app.enforce_production_marketplace_gate(self.db)
-            self.assertEqual(self.db.execute('SELECT status FROM listings WHERE id=?',(listing['id'],)).fetchone()['status'],'published')
             self.assertIn(listing['id'],[item['id'] for item in self.route(None,'GET','/api/listings')['items']])
+            self.assertEqual(self.db.execute('SELECT status FROM listings WHERE id=?',(listing['id'],)).fetchone()['status'],'published')
             self.assertIn('dota-2',[game['slug'] for game in self.route(None,'GET','/api/listing-games')])
             health=self.route(None,'GET','/api/health')
             self.assertEqual(health['payments'],'sandbox')

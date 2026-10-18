@@ -209,15 +209,19 @@ def require_listing_allowed(db, game_id, product_type):
     if not listing_allowed_for_production(db,game_id,product_type):
         raise HttpError(503,'Ishlab chiqarishda savdo hozircha yopiq: operator, to‘lov provayderi va shu o‘yin/tovar turi bo‘yicha yozma ruxsat hamda qoidalar tekshiruvi talab qilinadi.')
 
-def enforce_production_marketplace_gate(db):
-    if MODE != 'production': return
+def promote_internal_test_listings(db):
     if internal_testing_enabled():
-        # Listings already approved by a moderator can enter the protected test catalog.
-        for listing in db.execute("SELECT l.id,l.product_type,l.seller_account_terms_version,s.verification_status,s.selling_enabled,s.identity_status FROM listings l JOIN seller_profiles s ON s.user_id=l.seller_id WHERE l.status='approved_private'").fetchall():
+        # Cold starts and environment updates can happen independently on Vercel.
+        # Rechecking here makes previously approved listings visible when browsing.
+        for listing in db.execute("SELECT l.id,l.product_type,l.seller_account_terms_version,s.verification_status,s.selling_enabled,s.identity_status,s.identity_provider FROM listings l JOIN seller_profiles s ON s.user_id=l.seller_id WHERE l.status='approved_private'").fetchall():
             if (listing['verification_status']=='verified' and listing['selling_enabled']
-                    and listing['identity_status']=='verified'
+                    and listing['identity_status']=='verified' and listing['identity_provider']=='didit'
                     and (listing['product_type']!='account' or listing['seller_account_terms_version']==ACCOUNT_SELLER_TERMS_VERSION)):
                 db.execute("UPDATE listings SET status='published',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='approved_private'",(listing['id'],))
+
+def enforce_production_marketplace_gate(db):
+    if MODE != 'production': return
+    promote_internal_test_listings(db)
     for listing in db.execute("SELECT id,game_id,product_type,seller_account_terms_version FROM listings WHERE status='published'").fetchall():
         if (not listing_allowed_for_production(db,listing['game_id'],listing['product_type'])
                 or (listing['product_type']=='account' and listing['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION)):
@@ -1464,6 +1468,7 @@ class Handler(BaseHTTPRequestHandler):
             self._set_cookie=f'{COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0' + ('; Secure' if MODE=='production' else '')
             return {'ok':True}
         if path=='/api/listing-games' and method=='GET':
+            promote_internal_test_listings(db)
             where=["l.status='published'",'l.stock>l.reserved']
             if MODE=='production' and not internal_testing_enabled():
                 if not production_marketplace_sales_enabled(): return []
@@ -1504,6 +1509,7 @@ class Handler(BaseHTTPRequestHandler):
             if not row: raise HttpError(404,'Top Up mahsuloti topilmadi.')
             return topup_public_package(row)
         if path=='/api/listings' and method=='GET':
+            promote_internal_test_listings(db)
             where=["l.status='published'"]; args=[]
             if MODE=='production' and not internal_testing_enabled():
                 if not production_marketplace_sales_enabled(): return {'items':[],'total_count':0,'page':1,'page_size':24,'has_more':False}
