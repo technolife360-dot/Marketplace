@@ -1595,10 +1595,12 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 db.execute('ROLLBACK'); raise
         if path=='/api/seller/listings' and method=='GET':
-            require_user(ctx); seller_ok(db,uid)
+            # Reading only the caller's own listings must remain possible when
+            # seller approval is pending, revoked, or changed mid-session.
+            require_user(ctx)
             return [listing_detail(db,x['id'],uid) for x in db.execute('SELECT id FROM listings WHERE seller_id=? ORDER BY updated_at DESC',(uid,))]
         if path=='/api/seller/summary' and method=='GET':
-            require_user(ctx); seller_ok(db,uid)
+            require_user(ctx)
             # PostgreSQL SUM(bigint) returns NUMERIC (a Decimal in psycopg), which
             # the standard JSON encoder cannot serialize. Normalize aggregate
             # minor-unit amounts at the API boundary for both PostgreSQL and SQLite.
@@ -2168,8 +2170,13 @@ class Handler(BaseHTTPRequestHandler):
                 if l['product_type']=='account' and l['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION:
                     raise HttpError(400,'Sotuvchi akkaunt savdosi qoidalarini tasdiqlamagan.')
                 risk_flags=json.loads(l['attributes_json'] or '{}').get('_risk_flags',[])
-                if risk_flags and len(note.strip())<10:
+                if risk_flags and note.strip() and len(note.strip())<10:
                     raise HttpError(400,'Xavf belgilarini moderator izohida ko‘rib chiqib, kamida 10 belgi bilan qayd eting.')
+                if not note.strip():
+                    note='E’lon moderator tomonidan ko‘rib chiqilib tasdiqlandi.'
+                    if risk_flags:
+                        note+=' Tekshiruv signallari: '+', '.join(str(flag) for flag in risk_flags)+'.'
+                    note=note[:1000]
             db.execute('UPDATE listings SET status=?,moderation_note=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(status,note,lid)); audit(db,aid,'listing_'+action,'listing',lid,{'note':note}); notify(db,l['seller_id'],'moderation','Moderatsiya natijasi',f'E’loningiz holati: {status}. {note}','/seller'); return {'status':status}
         m=re.fullmatch(r'/api/admin/sellers/([^/]+)',path)
         if m and method=='POST':

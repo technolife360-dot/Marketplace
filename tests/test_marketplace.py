@@ -185,7 +185,10 @@ class MarketplaceFlows(unittest.TestCase):
         self.route(self.seller,'POST',f"/api/listings/{result['id']}/submit",{})
         with self.assertRaisesRegex(app.HttpError,'moderator izohida'):
             self.route(self.admin,'POST',f"/api/admin/listings/{result['id']}",{'action':'approve','note':'ok'})
-        self.route(self.admin,'POST',f"/api/admin/listings/{result['id']}",{'action':'approve','note':'Reviewed off-platform contact and code risk.'})
+        self.route(self.admin,'POST',f"/api/admin/listings/{result['id']}",{'action':'approve'})
+        note=self.db.execute('SELECT moderation_note FROM listings WHERE id=?',(result['id'],)).fetchone()['moderation_note']
+        self.assertIn('off_platform_contact_or_payment',note)
+        self.assertIn('possible_credential_or_code',note)
 
     def test_health_reports_guarded_configuration_without_secrets(self):
         result=self.route(None,'GET','/api/health')
@@ -419,6 +422,19 @@ class MarketplaceFlows(unittest.TestCase):
         with self.assertRaises(app.HttpError): self.route(self.other,'POST',f"/api/admin/listings/{draft['id']}",{'action':'approve'})
         self.route(self.admin,'POST',f"/api/admin/listings/{draft['id']}",{'action':'approve','note':'Checked'})
         self.assertEqual(self.db.execute('SELECT status FROM listings WHERE id=?',(draft['id'],)).fetchone()['status'],'published')
+    def test_approval_generates_note_without_moderator_prompt(self):
+        draft=self.route(self.seller,'POST','/api/listings',{'game_id':'valorant','category_id':'items','title':'Transferable game item','description':'A game item delivered through an in-game trade.','price_minor':23000,'stock':1})
+        self.route(self.seller,'POST',f"/api/listings/{draft['id']}/submit",{})
+        self.route(self.admin,'POST',f"/api/admin/listings/{draft['id']}",{'action':'approve'})
+        note=self.db.execute('SELECT moderation_note FROM listings WHERE id=?',(draft['id'],)).fetchone()['moderation_note']
+        self.assertIn('tasdiqlandi',note)
+    def test_seller_list_reads_own_rows_after_approval_revoked(self):
+        self.db.execute("UPDATE seller_profiles SET selling_enabled=0 WHERE user_id=?",(self.seller,))
+        own=self.route(self.seller,'GET','/api/seller/listings')
+        self.assertEqual([row['id'] for row in own],[self.listing])
+        self.assertEqual(self.route(self.other,'GET','/api/seller/listings'),[])
+        summary=self.route(self.seller,'GET','/api/seller/summary')
+        self.assertEqual(summary['listings'][0]['count'],1)
     def test_listing_owner_can_view_unpublished_listing_but_other_users_cannot(self):
         draft=self.route(self.seller,'POST','/api/listings',{'game_id':'valorant','category_id':'accounts','title':'Private draft listing','description':'A sufficiently long listing description.','price_minor':23000,'stock':2,'accept_account_terms':True})
         self.assertEqual(self.route(self.seller,'GET',f"/api/listings/{draft['id']}")['status'],'draft')
