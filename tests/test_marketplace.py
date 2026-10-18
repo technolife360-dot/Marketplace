@@ -89,6 +89,37 @@ class MarketplaceFlows(unittest.TestCase):
             self.assertEqual(error.exception.status,404)
             edited=self.route(self.seller,'PATCH',f"/api/listings/{reviewed['id']}",{'title':'Updated prelaunch listing'})
             self.assertEqual(edited['status'],'pending_review')
+
+    def test_protected_internal_testing_publishes_approved_listings_and_uses_sandbox(self):
+        data={'game_name':'Dota 2','category_id':'items','title':'Protected test item',
+              'description':'A reviewed item for the protected marketplace test.',
+              'price_minor':23000,'stock':1,'submit_for_review':True}
+        closed={'MARKETPLACE_INTERNAL_TESTING_ENABLED':'false','PAYMENT_PROVIDER':'sandbox',
+                'MARKETPLACE_SALES_ENABLED':'false'}
+        with patch.object(app,'MODE','production'), patch.dict(os.environ,closed,clear=False):
+            listing=self.route(self.seller,'POST','/api/listings',data)
+            result=self.route(self.admin,'POST',f"/api/admin/listings/{listing['id']}",{'action':'approve'})
+            self.assertEqual(result['status'],'approved_private')
+            self.assertFalse(app.production_marketplace_sales_enabled())
+        enabled={**closed,'MARKETPLACE_INTERNAL_TESTING_ENABLED':'true'}
+        with patch.object(app,'MODE','production'), patch.dict(os.environ,enabled,clear=False):
+            app.enforce_production_marketplace_gate(self.db)
+            self.assertEqual(self.db.execute('SELECT status FROM listings WHERE id=?',(listing['id'],)).fetchone()['status'],'published')
+            self.assertIn(listing['id'],[item['id'] for item in self.route(None,'GET','/api/listings')['items']])
+            self.assertIn('dota-2',[game['slug'] for game in self.route(None,'GET','/api/listing-games')])
+            health=self.route(None,'GET','/api/health')
+            self.assertEqual(health['payments'],'sandbox')
+            self.assertEqual(health['sales_guard'],'internal_testing')
+            self.assertFalse(health['sales_enabled'])
+            self.route(self.buyer,'POST','/api/cart',{'listing_id':listing['id'],'quantity':1})
+            order=self.route(self.buyer,'POST','/api/checkout',{'accept_terms':True})
+            self.assertEqual(order['mode'],'sandbox')
+            self.assertEqual(self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})['status'],'paid')
+        with patch.object(app,'MODE','production'), patch.dict(os.environ,closed,clear=False):
+            self.assertFalse(app.internal_testing_enabled())
+            with self.assertRaises(app.HttpError) as error:
+                self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})
+            self.assertEqual(error.exception.status,403)
     def test_submitting_a_draft_without_an_admin_still_enters_review_queue(self):
         data={'game_name':'Dota 2','category_id':'items','title':'Draft without admin',
               'description':'A draft that can enter the queue without an admin account.',

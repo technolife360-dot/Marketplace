@@ -180,12 +180,24 @@ def production_marketplace_sales_enabled():
         return False
     return provider.name not in ('disabled','sandbox')
 
+def internal_testing_enabled():
+    """Explicitly opt in to sandbox transactions inside the protected deployment."""
+    return (MODE == 'production'
+            and os.environ.get('MARKETPLACE_INTERNAL_TESTING_ENABLED','').strip().lower() == 'true'
+            and os.environ.get('PAYMENT_PROVIDER','').strip().lower() == 'sandbox')
+
+def configured_payment_provider():
+    if internal_testing_enabled():
+        return get_provider('development','sandbox')
+    return get_provider(MODE,os.environ.get('PAYMENT_PROVIDER','disabled').strip().lower())
+
 def approved_game_slugs(variable):
     return {slug.strip().lower() for slug in os.environ.get(variable,'').split(',')
             if re.fullmatch(r'[a-z0-9-]{1,100}',slug.strip().lower())}
 
 def listing_allowed_for_production(db, game_id, product_type):
     if MODE != 'production': return True
+    if internal_testing_enabled(): return True
     if not production_marketplace_sales_enabled(): return False
     game=db.execute('SELECT slug FROM games WHERE id=?',(game_id,)).fetchone()
     if not game or game['slug'].lower() not in approved_game_slugs('MARKETPLACE_APPROVED_GAME_SLUGS'): return False
@@ -199,6 +211,13 @@ def require_listing_allowed(db, game_id, product_type):
 
 def enforce_production_marketplace_gate(db):
     if MODE != 'production': return
+    if internal_testing_enabled():
+        # Listings already approved by a moderator can enter the protected test catalog.
+        for listing in db.execute("SELECT l.id,l.product_type,l.seller_account_terms_version,s.verification_status,s.selling_enabled,s.identity_status FROM listings l JOIN seller_profiles s ON s.user_id=l.seller_id WHERE l.status='approved_private'").fetchall():
+            if (listing['verification_status']=='verified' and listing['selling_enabled']
+                    and listing['identity_status']=='verified'
+                    and (listing['product_type']!='account' or listing['seller_account_terms_version']==ACCOUNT_SELLER_TERMS_VERSION)):
+                db.execute("UPDATE listings SET status='published',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='approved_private'",(listing['id'],))
     for listing in db.execute("SELECT id,game_id,product_type,seller_account_terms_version FROM listings WHERE status='published'").fetchall():
         if (not listing_allowed_for_production(db,listing['game_id'],listing['product_type'])
                 or (listing['product_type']=='account' and listing['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION)):
@@ -1004,7 +1023,7 @@ def order_view(db, oid, uid, admin=False):
 
 def checkout(db,uid,accept_terms=False,accept_account_risk=False):
     if not accept_terms: raise HttpError(400,'Checkoutdan oldin savdo shartlarini qabul qiling.')
-    try: provider=get_provider(MODE,os.environ.get('PAYMENT_PROVIDER','disabled'))
+    try: provider=configured_payment_provider()
     except RuntimeError as e: raise HttpError(503,'Haqiqiy to‘lov provayderi hali sozlanmagan. Ishlab chiqarish checkout’i yopiq.')
     db.execute('BEGIN IMMEDIATE')
     try:
@@ -1046,8 +1065,8 @@ def checkout(db,uid,accept_terms=False,accept_account_risk=False):
             if reservation.rowcount!=1: raise HttpError(409,'Mahsulot qoldig‘i band qilindi. Savatchani yangilang.')
             db.execute('INSERT INTO order_items(id,order_id,listing_id,seller_id,title,quantity,unit_price_minor,commission_minor,delivery_method) VALUES(?,?,?,?,?,?,?,?,?)',(ident(),oid,x['listing_id'],x['seller_id'],x['title'],x['quantity'],x['price_minor'],per_fee,x['delivery_method']))
         db.execute('INSERT INTO payments(id,order_id,provider,amount_minor,currency,status,idempotency_key) VALUES(?,?,?,?,?,?,?)',(ident(),oid,intent.provider,intent.amount_minor,intent.currency,'pending',intent.idempotency_key))
-        db.execute('DELETE FROM carts WHERE user_id=?',(uid,)); event(db,oid,uid,None,'pending_payment','Sandbox to‘lov yaratildi')
-        db.execute('COMMIT'); return {'id':oid,'reference':reference,'status':'pending_payment','total_minor':subtotal+commission,'currency':currency,'mode':'sandbox'}
+        db.execute('DELETE FROM carts WHERE user_id=?',(uid,)); event(db,oid,uid,None,'pending_payment','Sinov to‘lovi yaratildi' if intent.provider=='sandbox' else 'To‘lov yaratildi')
+        db.execute('COMMIT'); return {'id':oid,'reference':reference,'status':'pending_payment','total_minor':subtotal+commission,'currency':currency,'mode':intent.provider,'checkout_url':intent.checkout_url}
     except Exception:
         db.execute('ROLLBACK'); raise
 
@@ -1190,14 +1209,15 @@ class Handler(BaseHTTPRequestHandler):
         uid=ctx['uid']
         if path=='/healthz' and method=='GET': return {'ok':True}
         if path=='/api/health' and method=='GET':
-            try: payment_state=get_provider(MODE,os.environ.get('PAYMENT_PROVIDER','disabled').strip().lower()).name
+            try: payment_state=configured_payment_provider().name
             except RuntimeError: payment_state='unconfigured'
             return {'ok':True,'mode':MODE,'database':'supabase-postgres' if DATABASE_URL else 'sqlite',
                     'payments':payment_state,'identity_verification':'didit-configured' if identity_service.is_configured() else 'unconfigured',
                     'account_evidence_storage_credentials':'present' if storage_r2.is_configured() else 'missing',
                     'transactional_email':'configured' if email_service.is_configured() else 'unconfigured',
+                    'internal_testing_enabled':internal_testing_enabled(),
                     'sales_enabled':production_marketplace_sales_enabled() if MODE=='production' else False,
-                    'sales_guard':'closed' if MODE=='production' and not production_marketplace_sales_enabled() else 'preview'}
+                    'sales_guard':'internal_testing' if internal_testing_enabled() else 'closed' if MODE=='production' and not production_marketplace_sales_enabled() else 'preview'}
         if path=='/api/cron/account-deletions' and method=='GET':
             cron_secret=os.environ.get('CRON_SECRET','')
             authorization=self.headers.get('Authorization','')
@@ -1445,7 +1465,7 @@ class Handler(BaseHTTPRequestHandler):
             return {'ok':True}
         if path=='/api/listing-games' and method=='GET':
             where=["l.status='published'",'l.stock>l.reserved']
-            if MODE=='production':
+            if MODE=='production' and not internal_testing_enabled():
                 if not production_marketplace_sales_enabled(): return []
                 approved_games=sorted(approved_game_slugs('MARKETPLACE_APPROVED_GAME_SLUGS'))
                 if not approved_games: return []
@@ -1485,7 +1505,7 @@ class Handler(BaseHTTPRequestHandler):
             return topup_public_package(row)
         if path=='/api/listings' and method=='GET':
             where=["l.status='published'"]; args=[]
-            if MODE=='production':
+            if MODE=='production' and not internal_testing_enabled():
                 if not production_marketplace_sales_enabled(): return {'items':[],'total_count':0,'page':1,'page_size':24,'has_more':False}
                 approved_games=sorted(approved_game_slugs('MARKETPLACE_APPROVED_GAME_SLUGS'))
                 if not approved_games: return {'items':[],'total_count':0,'page':1,'page_size':24,'has_more':False}
@@ -2015,7 +2035,7 @@ class Handler(BaseHTTPRequestHandler):
         m=re.fullmatch(r'/api/orders/([^/]+)/sandbox-complete',path)
         if m and method=='POST':
             require_verified(ctx)
-            if MODE!='development': raise HttpError(403,'Sandbox to‘lov faqat development rejimida ishlaydi.')
+            if MODE!='development' and not internal_testing_enabled(): raise HttpError(403,'Sinov to‘lovi bu muhitda ishlamaydi.')
             oid=m.group(1); db.execute('BEGIN IMMEDIATE')
             try:
                 o=db.execute('SELECT * FROM orders WHERE id=? AND buyer_id=?',(oid,uid)).fetchone()
@@ -2205,7 +2225,7 @@ class Handler(BaseHTTPRequestHandler):
             evidence=db.execute('SELECT slot,object_path FROM account_review_evidence WHERE order_id=? ORDER BY slot',(oid,)).fetchall()
             if len(evidence)!=2 or [row['slot'] for row in evidence]!=[1,2]: raise HttpError(409,'Ikkala maxfiy skrinshot ham mavjud bo‘lishi shart.')
             payment=db.execute('SELECT * FROM payments WHERE order_id=?',(oid,)).fetchone()
-            if MODE!='development' or not payment or payment['provider']!='sandbox' or payment['status']!='succeeded':
+            if (MODE!='development' and not internal_testing_enabled()) or not payment or payment['provider']!='sandbox' or payment['status']!='succeeded':
                 raise HttpError(503,'Bu amal faqat sandbox buyurtmada ishlaydi. Haqiqiy pul uchun tasdiqlangan payment/refund/escrow jarayoni kerak; mablag‘ o‘zgartirilmadi.')
             if action in ('approve','request_info'): require_private_evidence_bucket()
             db.execute('BEGIN IMMEDIATE')
@@ -2254,7 +2274,7 @@ class Handler(BaseHTTPRequestHandler):
                 for seller in sellers: notify(db,seller,'dispute_update','Nizo bo‘yicha qo‘shimcha ma’lumot',note,'/order/'+oid)
                 return {'status':'reviewing','funds_moved':False}
             payment=db.execute('SELECT * FROM payments WHERE order_id=?',(oid,)).fetchone()
-            if MODE!='development' or not payment or payment['provider']!='sandbox' or payment['status']!='succeeded':
+            if (MODE!='development' and not internal_testing_enabled()) or not payment or payment['provider']!='sandbox' or payment['status']!='succeeded':
                 raise HttpError(503,'Haqiqiy nizoni yakunlash uchun provayderning tasdiqlangan refund/escrow adapteri kerak. Hech qanday mablag‘ o‘zgartirilmadi.')
             db.execute('BEGIN IMMEDIATE')
             try:
