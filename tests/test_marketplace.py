@@ -121,6 +121,18 @@ class MarketplaceFlows(unittest.TestCase):
         with self.assertRaises(app.HttpError):
             self.route(self.seller,'POST','/api/listings',{
                 **base,'category_id':'items','attributes':{'code_kind':'Gift card'}})
+    def test_listing_images_are_limited_to_four_and_edits_keep_existing_images(self):
+        images=[f'https://images.example.com/listing-{index}.webp' for index in range(5)]
+        data={'game_name':'Example game','category_id':'items','title':'Four uploaded item photos',
+              'description':'A digital item with four photos and clear delivery details.',
+              'price_minor':20000,'stock':1}
+        with self.assertRaises(app.HttpError) as error:
+            self.route(self.seller,'POST','/api/listings',{**data,'images':images})
+        self.assertEqual(error.exception.status,400)
+        listing=self.route(self.seller,'POST','/api/listings',{**data,'images':images[:4]})
+        self.assertEqual(listing['attributes']['images'],images[:4])
+        edited=self.route(self.seller,'PATCH',f"/api/listings/{listing['id']}",{'title':'Four item photos retained'})
+        self.assertEqual(edited['attributes']['images'],images[:4])
     def test_seller_cannot_replace_private_risk_flags_and_edits_recompute_them(self):
         with self.assertRaises(app.HttpError) as create_error:
             self.route(self.seller,'POST','/api/listings',{

@@ -784,7 +784,7 @@ def resolve_game_id(db, value):
     return row['id']
 def listing_image_urls(value):
     if value is None: return []
-    if not isinstance(value,list) or len(value)>6: raise HttpError(400,'Ko‘pi bilan 6 ta rasm qo‘shish mumkin.')
+    if not isinstance(value,list) or len(value)>4: raise HttpError(400,'Ko‘pi bilan 4 ta rasm qo‘shish mumkin.')
     urls=[]
     for item in value:
         url=clean_text(item,'Rasm manzili',1,500)
