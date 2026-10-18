@@ -1,0 +1,66 @@
+name: Production perimeter monitor
+
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: 'Fail after healthy responses to test alert delivery'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sentryloot-production-perimeter
+  cancel-in-progress: false
+
+jobs:
+  perimeter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SIMULATE_FAILURE: ${{ inputs.simulate_failure || 'false' }}
+    steps:
+      - name: Check protected site and public R2 delivery
+        run: |
+          python - <<'PY'
+          import os
+          from urllib.error import HTTPError
+          from urllib.parse import urlparse
+          from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
+
+          class NoRedirect(HTTPRedirectHandler):
+              def redirect_request(self, request, fp, code, msg, headers, newurl):
+                  return None
+
+          try:
+              opener = build_opener(NoRedirect)
+              try:
+                  opener.open(Request('https://gamestorehub.com/api/health'), timeout=20)
+                  raise RuntimeError('Vercel Authentication did not redirect an anonymous request')
+              except HTTPError as response:
+                  location = response.headers.get('Location', '')
+                  if response.code not in (302, 303, 307, 308):
+                      raise RuntimeError('protected site did not redirect')
+                  if urlparse(location).hostname != 'vercel.com':
+                      raise RuntimeError('unexpected authentication redirect')
+
+              image_url = ('https://images.gamestorehub.com/780fda4ca167ac700c33/'
+                           '11d8d518fe8c5328a15e5beebba7584a5180b597.webp')
+              with urlopen(Request(image_url, headers={'Accept': 'image/webp'}), timeout=20) as response:
+                  if response.status != 200 or 'image/webp' not in response.headers.get('Content-Type', ''):
+                      raise RuntimeError('R2 image is unavailable')
+                  header = response.read(12)
+                  if header[:4] != b'RIFF' or header[8:] != b'WEBP':
+                      raise RuntimeError('R2 image is not WebP')
+              print('Vercel Authentication and public R2 image delivery passed.')
+              if os.environ['SIMULATE_FAILURE'] == 'true':
+                  raise RuntimeError('intentional notification drill')
+          except Exception as exc:
+              # Do not print response bodies, cookies, or provider URLs.
+              raise SystemExit(f'Production perimeter check failed: {type(exc).__name__}')
+          PY

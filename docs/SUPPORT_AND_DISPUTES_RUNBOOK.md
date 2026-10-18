@@ -1,6 +1,6 @@
 # Support and disputes operating procedure
 
-This is the internal procedure for the owner of `sentryloot@gamestorehub.com`. Assign a named primary and backup operator before accepting real orders. The inbox and Crisp chat must be checked every day, including weekends. Do not publish response-time promises until those shifts are staffed.
+This is the internal procedure for the owner of `sentryloot@gamestorehub.com`. On 2026-10-18 the owner confirmed that they are the primary support and dispute operator. Coverage hours and a backup operator have not been assigned. Before accepting real orders, assign a backup and confirm daily inbox and Crisp chat coverage, including weekends. Do not publish response-time promises until those shifts are staffed.
 
 ## Intake and triage
 
@@ -26,4 +26,4 @@ This is the internal procedure for the owner of `sentryloot@gamestorehub.com`. A
 
 ## Launch ownership record
 
-Before opening real sales, record privately: primary operator, backup operator, coverage hours and timezone, escalation contact, provider refund authority, and the date of a successful end-to-end drill. This document does not assign those roles by assumption.
+Before opening real sales, record privately: the owner's full name as primary operator, a backup operator, coverage hours and timezone, escalation contact, provider refund authority, and the date of a successful end-to-end drill. Only the owner's role is confirmed; their name and the remaining fields have not been supplied.

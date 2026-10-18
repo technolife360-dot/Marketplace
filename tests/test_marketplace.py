@@ -347,6 +347,11 @@ class MarketplaceFlows(unittest.TestCase):
             result=self.handler.route(self.db,{'db':self.db,'uid':None,'user':None,'csrf':None},'GET','/api/cron/account-evidence-retention',{}, {})
         self.assertEqual(result['evidence_deleted'],1)
         remove.assert_called_once_with('private/expired.webp')
+        with self.assertRaises(app.HttpError) as forbidden:
+            self.route(self.other,'GET','/api/admin/operations/cron-runs')
+        self.assertEqual(forbidden.exception.status,403)
+        self.assertEqual(self.route(self.admin,'GET','/api/admin/operations/cron-runs')[0]['action'],
+                         'cron_account_evidence_retention_ok')
         self.db.execute("INSERT INTO account_review_evidence(order_id,slot,object_path) VALUES(?,1,'private/deletion.webp')",(order['id'],))
         with patch.object(app,'delete_account_evidence_object',return_value=True): app.erase_account_personal_data(self.db,self.buyer)
         self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM account_review_evidence WHERE order_id=?',(order['id'],)).fetchone()['n'],0)
@@ -364,6 +369,8 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertEqual(result['erased'],1)
         self.assertEqual(self.db.execute('SELECT email,suspended FROM users WHERE id=?',(self.buyer,)).fetchone()['email'],'deleted-'+self.buyer+'@deleted.invalid')
         self.assertEqual(self.db.execute('SELECT status,reason FROM account_deletion_requests WHERE id=?',(request_id,)).fetchone()['status'],'resolved')
+        self.assertEqual(self.route(self.admin,'GET','/api/admin/operations/cron-runs')[0]['action'],
+                         'cron_account_deletions_ok')
 
     def test_listing_moderation_requires_admin_and_publishes(self):
         draft=self.route(self.seller,'POST','/api/listings',{'game_id':'valorant','category_id':'accounts','title':'New account listing','description':'A sufficiently long listing description.','price_minor':23000,'stock':2,'accept_account_terms':True})

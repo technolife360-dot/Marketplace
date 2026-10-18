@@ -1197,6 +1197,7 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception:
                     db.execute('ROLLBACK')
                     raise
+            audit(db,None,'cron_account_deletions_ok','cron','account-deletions',{'erased':erased,'checked':len(requests)})
             return {'ok':True,'erased':erased,'checked':len(requests)}
         if path=='/api/cron/account-evidence-retention' and method=='GET':
             cron_secret=os.environ.get('CRON_SECRET','')
@@ -1213,6 +1214,8 @@ class Handler(BaseHTTPRequestHandler):
                 evidence=db.execute('SELECT slot,object_path FROM account_review_evidence WHERE order_id=?',(review['order_id'],)).fetchall()
                 if any(not delete_account_evidence_object(row['object_path']) for row in evidence): continue
                 db.execute('DELETE FROM account_review_evidence WHERE order_id=?',(review['order_id'],)); removed+=len(evidence)
+            audit(db,None,'cron_account_evidence_retention_ok','cron','account-evidence-retention',
+                  {'evidence_deleted':removed,'reviews_checked':len(reviews),'retention_days':30})
             return {'ok':True,'evidence_deleted':removed,'reviews_checked':len(reviews),'retention_days':30}
         if path=='/api/me' and method=='GET': return {'user':ctx['user'],'csrf':ctx['csrf'],'mode':MODE}
         if path=='/api/bonuses' and method=='GET':
@@ -1715,6 +1718,11 @@ class Handler(BaseHTTPRequestHandler):
             db.execute('INSERT INTO topup_inventory_events(id,package_id,actor_id,delta,reason) VALUES(?,?,?,?,?)',(ident(),package_id,aid,delta,reason))
             audit(db,aid,'topup_inventory_adjust','topup_package',package_id,{'delta':delta,'reason':reason,'stock_on_hand':next_stock})
             return {'ok':True,'stock_on_hand':next_stock,'available':next_stock-package['stock_reserved']}
+        if path=='/api/admin/operations/cron-runs' and method=='GET':
+            require_admin(ctx)
+            return [dict(row) for row in db.execute("""SELECT action,created_at,details_json FROM audit_logs
+                WHERE action IN ('cron_account_deletions_ok','cron_account_evidence_retention_ok')
+                ORDER BY created_at DESC LIMIT 20""").fetchall()]
         if path=='/api/admin/overview' and method=='GET':
             require_admin(ctx)
             return {

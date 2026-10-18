@@ -52,6 +52,7 @@ Every listed table should have RLS enabled and the two direct SELECT privileges 
 - Consider Supabase managed backups/PITR when the production plan permits. Daily logical exports cannot recover every transaction between runs.
 - Configure Vercel deployment/function failure notifications and Supabase database/storage alerts to an owner-controlled address. `/api/health` is a readiness report, not uptime monitoring.
 - Set a unique `CRON_SECRET` in Vercel Production. Verify both daily cron jobs appear in Vercel and complete successfully: account deletion and private evidence retention. Missing secrets cause cron requests to fail closed.
+- Each successful cron invocation records a non-personal audit event. An authenticated administrator can read the latest events at `/api/admin/operations/cron-runs`; missing events are a reason to inspect Vercel scheduling and logs. The audit is not an external outage alert.
 - Keep a short incident record with the date, affected users/data, containment action, owner, and follow-up. Never paste keys or screenshots containing account secrets into the record.
 - See [the dated integration and operations verification](PRODUCTION_INTEGRATION_VERIFICATION.md) for evidence, unresolved provider checks, and the exact launch-blocking dependencies. Re-run each external check after changing DNS, provider secrets, or deployment protection.
 
