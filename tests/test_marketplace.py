@@ -79,10 +79,16 @@ class MarketplaceFlows(unittest.TestCase):
             self.assertEqual(self.route(self.seller,'POST',f"/api/listings/{draft['id']}/submit",{})['status'],'pending_review')
             reviewed=self.route(self.seller,'POST','/api/listings',{**data,'submit_for_review':True})
             self.assertEqual(reviewed['status'],'pending_review')
-            with self.assertRaises(app.HttpError) as error:
-                self.route(self.admin,'POST',f"/api/admin/listings/{reviewed['id']}",{'action':'approve','note':'Reviewed for publication.'})
-            self.assertEqual(error.exception.status,503)
+            approved=self.route(self.admin,'POST',f"/api/admin/listings/{reviewed['id']}",{'action':'approve'})
+            self.assertEqual(approved['status'],'approved_private')
+            self.assertEqual(self.route(self.seller,'GET',f"/api/listings/{reviewed['id']}")['status'],'approved_private')
+            self.assertTrue(any(row['id']==reviewed['id'] for row in self.route(self.admin,'GET','/api/admin/listings')))
             self.assertFalse(any(row['id']==reviewed['id'] for row in self.route(None,'GET','/api/listings')['items']))
+            with self.assertRaises(app.HttpError) as error:
+                self.route(self.buyer,'GET',f"/api/listings/{reviewed['id']}")
+            self.assertEqual(error.exception.status,404)
+            edited=self.route(self.seller,'PATCH',f"/api/listings/{reviewed['id']}",{'title':'Updated prelaunch listing'})
+            self.assertEqual(edited['status'],'pending_review')
     def test_submitting_a_draft_without_an_admin_still_enters_review_queue(self):
         data={'game_name':'Dota 2','category_id':'items','title':'Draft without admin',
               'description':'A draft that can enter the queue without an admin account.',

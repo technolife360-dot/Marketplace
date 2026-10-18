@@ -353,7 +353,7 @@ body.profile-menu-open { overflow: hidden; }
 .listing-current-photos { padding: 13px; border: 1px solid var(--line); border-radius: 11px; }
 .listing-current-photos > b { font-size: 11px; }
 .listing-upload-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.listing-upload-slot { min-width: 0; display: grid; align-content: start; gap: 9px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); cursor: pointer; }
+.listing-upload-slot { min-width: 0; display: grid; align-content: start; gap: 9px; padding: 12px; border: 0; border-radius: 12px; background: var(--paper); cursor: pointer; }
 .listing-upload-title { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; }
 .listing-upload-title .icon { width: 16px; height: 16px; color: var(--accent-strong); }
 .listing-upload-slot input[type="file"] { width: 100%; min-width: 0; }
@@ -364,8 +364,8 @@ body.profile-menu-open { overflow: hidden; }
 .listing-photo-preview-card img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #0d1119; }
 .listing-photo-preview-card figcaption { overflow: hidden; padding: 7px 8px; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .listing-photo-count { grid-column: 1 / -1; color: var(--muted); font-size: 10px; }
-.listing-image-fields input[type="file"] { min-height: 52px; padding: 8px; border-style: dashed; background: color-mix(in srgb, var(--paper) 70%, transparent); cursor: pointer; }
-.listing-image-fields input[type="file"]::file-selector-button { min-height: 34px; margin-right: 11px; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
+.listing-image-fields input[type="file"] { min-height: 52px; padding: 8px; border: 0; background: transparent; cursor: pointer; }
+.listing-image-fields input[type="file"]::file-selector-button { min-height: 34px; margin-right: 11px; padding: 0 12px; border: 0; border-radius: 9px; background: var(--paper); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
 .listing-photo-label { display: inline-flex; align-items: center; gap: 8px; }
 .listing-photo-label .icon { width: 17px; height: 17px; color: var(--accent-strong); }
 .listing-form-security { display: flex; align-items: flex-start; gap: 10px; margin: 0 24px 17px; padding: 12px; border: 1px solid rgba(81, 139, 112, 25%); border-radius: 12px; background: rgba(81, 139, 112, 7%); }
@@ -439,7 +439,7 @@ body.profile-menu-open { overflow: hidden; }
 .data-table tr:last-child td { border-bottom: 0; }
 .status { display: inline-flex; align-items: center; padding: 5px 9px; border-radius: 99px; background: #e9ecf1; color: #39507f; font-size: 10px; font-weight: 750; text-transform: uppercase; }
 .status.pending_payment, .status.pending_review, .status.disputed { background: #fbf1df; color: #8b6227; }
-.status.completed, .status.published, .status.paid { background: #e4eaf3; color: #41506b; }
+.status.completed, .status.published, .status.approved_private, .status.paid { background: #e4eaf3; color: #41506b; }
 .status.cancelled, .status.rejected, .status.refunded { background: #faece9; color: #a64d43; }
 .order-card { margin: 13px 0; }
 .order-card h3 { margin: 0; font-size: 15px; }
@@ -701,7 +701,7 @@ body.profile-menu-open { overflow: hidden; }
 .data-table th { background: rgba(211, 219, 234, 4%); color: #94a8cf; }
 .status { background: rgba(171, 186, 213, 9%); color: #b0bfd8; }
 .status.pending_payment, .status.pending_review, .status.disputed { background: rgb(218 172 105 / 12%); color: #e2bd85; }
-.status.completed, .status.published, .status.paid { background: rgba(145, 164, 198, 12%); color: #afbed9; }
+.status.completed, .status.published, .status.approved_private, .status.paid { background: rgba(145, 164, 198, 12%); color: #afbed9; }
 .status.cancelled, .status.rejected, .status.refunded { background: rgb(202 110 93 / 12%); color: #e9a99b; }
 .order-line, .conversation-item { border-color: rgba(206, 213, 226, 9%); }
 .conversation-item:hover, .conversation-item.active { background: rgba(163, 181, 213, 6%); }
@@ -1653,7 +1653,7 @@ body:not(.home-page) .notice.warn { border-color: rgba(242,189,104,22%); backgro
 body:not(.home-page) .notice.error { border-color: rgba(239,155,153,23%); background: rgba(180,81,64,9%); color: #e7b0a4; }
 body:not(.home-page) .status { background: rgba(197,145,255,12%); color: #d4bce8; }
 body:not(.home-page) .status.pending_payment, body:not(.home-page) .status.pending_review, body:not(.home-page) .status.disputed { background: rgba(215,174,109,12%); color: #e2bd85; }
-body:not(.home-page) .status.completed, body:not(.home-page) .status.published, body:not(.home-page) .status.paid { background: rgba(165,56,244,13%); color: #d7b4f3; }
+body:not(.home-page) .status.completed, body:not(.home-page) .status.published, body:not(.home-page) .status.approved_private, body:not(.home-page) .status.paid { background: rgba(165,56,244,13%); color: #d7b4f3; }
 body:not(.home-page) .status.cancelled, body:not(.home-page) .status.rejected, body:not(.home-page) .status.refunded { background: rgba(202,110,93,12%); color: #e9a99b; }
 body:not(.home-page) .conversation-item:hover, body:not(.home-page) .conversation-item.active { background: rgba(165,56,244,10%); }
 body:not(.home-page) .chat-form { border-color: rgba(197,145,255,14%); }

@@ -1779,7 +1779,7 @@ class Handler(BaseHTTPRequestHandler):
             require_admin(ctx)
             return [blog_post_view(x) for x in db.execute('SELECT * FROM blog_posts ORDER BY updated_at DESC LIMIT 200')]
         if path=='/api/admin/listings' and method=='GET':
-            require_admin(ctx); return [listing_detail(db,x['id'],uid) for x in db.execute("SELECT id FROM listings WHERE status IN ('pending_review','rejected','published','paused') ORDER BY CASE status WHEN 'pending_review' THEN 0 WHEN 'rejected' THEN 1 WHEN 'published' THEN 2 ELSE 3 END,updated_at DESC LIMIT 200")]
+            require_admin(ctx); return [listing_detail(db,x['id'],uid) for x in db.execute("SELECT id FROM listings WHERE status IN ('pending_review','approved_private','rejected','published','paused') ORDER BY CASE status WHEN 'pending_review' THEN 0 WHEN 'approved_private' THEN 1 WHEN 'rejected' THEN 2 WHEN 'published' THEN 3 ELSE 4 END,updated_at DESC LIMIT 200")]
         if path=='/api/admin/reports' and method=='GET':
             require_admin(ctx); return [dict(x) for x in db.execute('SELECT r.*,u.email reporter_email FROM reports r JOIN users u ON u.id=r.reporter_id ORDER BY CASE r.status WHEN \'open\' THEN 0 ELSE 1 END,r.created_at DESC LIMIT 100')]
         if path=='/api/admin/sellers' and method=='GET':
@@ -1934,7 +1934,7 @@ class Handler(BaseHTTPRequestHandler):
                 target='pending_review'
                 if l['product_type']=='account' and l['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION:
                     raise HttpError(400,'Akkaunt bo‘yicha yangilangan sotuvchi shartlarini tasdiqlang.')
-            elif action=='archive' and l['status'] in ('draft','rejected','paused'): target='archived'
+            elif action=='archive' and l['status'] in ('draft','rejected','paused','approved_private'): target='archived'
             else: raise HttpError(409,'Ushbu holatda bu amalni bajarib bo‘lmaydi.')
             db.execute('UPDATE listings SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(target,lid)); audit(db,uid,'listing_'+action,'listing',lid); return {'status':target}
         m=re.fullmatch(r'/api/listings/([^/]+)/submit',path)
@@ -1984,13 +1984,13 @@ class Handler(BaseHTTPRequestHandler):
             else: attrs.pop('_risk_flags',None)
             if 'attributes' in data or 'images' in data or 'linked_accounts' in data or 'image_url' in data or any(key in data for key in ('title','description','game_name')):
                 fields['attributes_json']=json.dumps(attrs,ensure_ascii=False)
-            next_status='pending_review' if fields and l['status']=='published' or fields.get('stock',l['stock'])>0 and l['status']=='sold_out' else None
+            next_status='pending_review' if fields and l['status'] in ('published','approved_private') or fields.get('stock',l['stock'])>0 and l['status']=='sold_out' else None
             if fields:
                 assignments=[f'{k}=?' for k in fields]; values=list(fields.values())
                 if next_status: assignments.extend(['status=?',"moderation_note=''"]); values.append(next_status)
                 assignments.append('updated_at=CURRENT_TIMESTAMP')
                 db.execute(f'UPDATE listings SET {", ".join(assignments)} WHERE id=?',(*values,lid)); audit(db,uid,'listing_edit','listing',lid,{'fields':sorted(fields),'status':next_status or l['status']})
-                if l['status']=='published':
+                if l['status'] in ('published','approved_private'):
                     for admin in db.execute('SELECT user_id FROM admin_accounts').fetchall(): notify(db,admin['user_id'],'moderation','Tahrirlangan e’lon tekshiruvi',f'{l["title"]} o‘zgartirildi va vaqtincha yashirildi.','/admin')
             return listing_detail(db,lid,uid)
         m=re.fullmatch(r'/api/favorites/([^/]+)',path)
@@ -2163,7 +2163,10 @@ class Handler(BaseHTTPRequestHandler):
             status={'approve':'published','reject':'rejected','pause':'paused'}[action]; l=db.execute("SELECT * FROM listings WHERE id=? AND status IN ('pending_review','published')",(lid,)).fetchone()
             if not l: raise HttpError(404,'Tekshiriladigan e’lon topilmadi.')
             if action=='approve':
-                require_listing_allowed(db,l['game_id'],l['product_type'])
+                # Moderation can finish before launch. Only a separately gated
+                # publication may become visible or purchasable.
+                if not listing_allowed_for_production(db,l['game_id'],l['product_type']):
+                    status='approved_private'
                 if l['product_type']=='digital':
                     attributes=json.loads(l['attributes_json'] or '{}')
                     validate_listing_attributes({key:value for key,value in attributes.items() if key in LISTING_PUBLIC_ATTRIBUTES},'digital',True)
