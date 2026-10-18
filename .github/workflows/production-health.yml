@@ -37,6 +37,7 @@ jobs:
               def redirect_request(self, request, fp, code, msg, headers, newurl):
                   return None
 
+          stage = 'protected site'
           try:
               opener = build_opener(NoRedirect)
               try:
@@ -49,6 +50,7 @@ jobs:
                   if urlparse(location).hostname != 'vercel.com':
                       raise RuntimeError('unexpected authentication redirect')
 
+              stage = 'public R2 image'
               image_url = ('https://images.gamestorehub.com/780fda4ca167ac700c33/'
                            '11d8d518fe8c5328a15e5beebba7584a5180b597.webp')
               with urlopen(Request(image_url, headers={'Accept': 'image/webp'}), timeout=20) as response:
@@ -60,7 +62,9 @@ jobs:
               print('Vercel Authentication and public R2 image delivery passed.')
               if os.environ['SIMULATE_FAILURE'] == 'true':
                   raise RuntimeError('intentional notification drill')
+          except HTTPError as exc:
+              raise SystemExit(f'Production perimeter check failed at {stage}: HTTP {exc.code}')
           except Exception as exc:
               # Do not print response bodies, cookies, or provider URLs.
-              raise SystemExit(f'Production perimeter check failed: {type(exc).__name__}')
+              raise SystemExit(f'Production perimeter check failed at {stage}: {type(exc).__name__}')
           PY
