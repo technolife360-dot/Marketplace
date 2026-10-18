@@ -348,6 +348,7 @@ body.profile-menu-open { overflow: hidden; }
 .listing-form .field { margin-bottom: 0; }
 .listing-form-section[hidden], .listing-form-security[hidden], .listing-submit[hidden] { display: none !important; }
 .listing-wizard-progress[hidden] { display: none !important; }
+.account-sale-attestation[hidden] { display: none !important; }
 .listing-form-security { margin-top: 0; }
 .listing-current-photos { padding: 13px; border: 1px solid var(--line); border-radius: 11px; }
 .listing-current-photos > b { font-size: 11px; }
