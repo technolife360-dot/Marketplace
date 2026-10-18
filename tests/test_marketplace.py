@@ -484,6 +484,21 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertEqual(item['verification_status'],'verified')
         self.assertEqual(item['review_count'],0)
         self.assertIsNone(item['seller_rating'])
+        self.assertEqual(item['seller_online'],0)
+        session_token,_=app.session_create(self.db,self.seller)
+        self.handler.cookie=lambda:session_token
+        self.assertEqual(self.handler.context(self.db)['uid'],self.seller)
+        self.db.execute("INSERT INTO orders(id,reference,buyer_id,currency,subtotal_minor,commission_minor,total_minor,status,payment_mode) VALUES(?,?,?,?,?,?,?,'completed',?)",
+                        ('trust-order','TRUST-1',self.buyer,'UZS',50000,0,50000,'stripe'))
+        self.db.execute('INSERT INTO order_items(id,order_id,listing_id,seller_id,title,quantity,unit_price_minor,commission_minor,delivery_method) VALUES(?,?,?,?,?,?,?,?,?)',
+                        ('trust-item','trust-order',self.listing,self.seller,'Test item',1,50000,0,'manual'))
+        self.db.execute('INSERT INTO reviews(id,order_item_id,reviewer_id,seller_id,rating,body) VALUES(?,?,?,?,?,?)',
+                        ('trust-review','trust-item',self.buyer,self.seller,5,'Completed purchase.'))
+        item=next(row for row in self.route(None,'GET','/api/listings')['items'] if row['id']==self.listing)
+        self.assertEqual(item['seller_online'],1)
+        self.assertEqual((item['review_count'],item['seller_rating']),(1,5.0))
+        self.db.execute("UPDATE users SET last_seen_at='2020-01-01T00:00:00+00:00' WHERE id=?",(self.seller,))
+        self.assertEqual(next(row for row in self.route(None,'GET','/api/listings')['items'] if row['id']==self.listing)['seller_online'],0)
     def test_checkout_reserves_inventory_and_sandbox_webhook_action_is_idempotent(self):
         self.add_cart(self.buyer)
         order=app.checkout(self.db,self.buyer,True,True)

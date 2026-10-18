@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   suspended SMALLINT NOT NULL DEFAULT 0 CHECK (suspended IN (0, 1)),
   accepted_terms_version TEXT NOT NULL DEFAULT '',
   accepted_terms_at TEXT,
+  last_seen_at TEXT,
   created_at TEXT NOT NULL DEFAULT to_char(timezone('UTC', now()), 'YYYY-MM-DD HH24:MI:SS')
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON public.users (lower(email));
