@@ -344,7 +344,7 @@ def migrate():
             db.execute(f"UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE status='published' AND seller_id NOT IN (SELECT user_id FROM seller_profiles WHERE (verification_status='verified' AND selling_enabled=1 AND identity_status='verified' AND identity_provider='didit'){demo_listing_clause})")
             db.execute("INSERT INTO platform_config(key,value) VALUES('commission_bps','0'),('completion_window_hours','72'),('terms_version','draft-2026-10') ON CONFLICT(key) DO NOTHING")
             games=[('valorant','Valorant'),('pubg-mobile','PUBG Mobile'),('dota-2','Dota 2'),('counter-strike-2','Counter-Strike 2'),('mobile-legends','Mobile Legends')]
-            categories=[('accounts','Gaming accounts','account'),('items','Items & skins','item'),('currency','In-game currency','currency'),('services','Coaching & services','service'),('codes','Gift cards & digital codes','code')]
+            categories=[('accounts','Gaming accounts','account'),('items','Items & skins','item'),('currency','In-game currency','currency'),('services','Coaching & services','service'),('codes','Gift cards & digital codes','code'),('digital','Other digital products','digital')]
             for slug,name in games: db.execute('INSERT INTO games(id,slug,name) VALUES(?,?,?) ON CONFLICT(id) DO NOTHING',(slug,slug,name))
             for slug,name,typ in categories: db.execute('INSERT INTO categories(id,slug,name,product_type) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING',(slug,slug,name,typ))
             seed_topup_catalog(db)
@@ -418,7 +418,7 @@ def migrate():
         db.execute("INSERT OR IGNORE INTO platform_config(key,value) VALUES('completion_window_hours','72')")
         db.execute("INSERT OR IGNORE INTO platform_config(key,value) VALUES('terms_version','draft-2026-10')")
         games = [('valorant','Valorant'),('pubg-mobile','PUBG Mobile'),('dota-2','Dota 2'),('counter-strike-2','Counter-Strike 2'),('mobile-legends','Mobile Legends')]
-        categories = [('accounts','Gaming accounts','account'),('items','Items & skins','item'),('currency','In-game currency','currency'),('services','Coaching & services','service'),('codes','Gift cards & digital codes','code')]
+        categories = [('accounts','Gaming accounts','account'),('items','Items & skins','item'),('currency','In-game currency','currency'),('services','Coaching & services','service'),('codes','Gift cards & digital codes','code'),('digital','Other digital products','digital')]
         for slug, name in games: db.execute('INSERT OR IGNORE INTO games(id,slug,name) VALUES(?,?,?)',(slug,slug,name))
         for slug, name, typ in categories: db.execute('INSERT OR IGNORE INTO categories(id,slug,name,product_type) VALUES(?,?,?,?)',(slug,slug,name,typ))
         db.execute("""CREATE TABLE IF NOT EXISTS topup_packages (
@@ -774,7 +774,7 @@ def money(value):
     return value
 LINKED_ACCOUNT_PROVIDERS={'google','facebook','apple','steam','playstation','xbox','other'}
 def resolve_game_id(db, value):
-    name=clean_text(value,'O‘yin nomi',2,80)
+    name=clean_text(value,'O‘yin yoki platforma',2,80)
     existing=db.execute('SELECT id FROM games WHERE lower(name)=lower(?) OR lower(id)=lower(?) ORDER BY active DESC,id LIMIT 1',(name,name)).fetchone()
     if existing: return existing['id']
     slug='custom-'+hashlib.sha256(name.casefold().encode('utf-8')).hexdigest()[:24]
@@ -809,6 +809,38 @@ def linked_account_providers(value):
     if not isinstance(value,list) or len(value)>len(LINKED_ACCOUNT_PROVIDERS) or any(not isinstance(x,str) or x not in LINKED_ACCOUNT_PROVIDERS for x in value):
         raise HttpError(400,'Bog‘langan hisob turi noto‘g‘ri.')
     return sorted(set(value))
+LISTING_PUBLIC_ATTRIBUTES={
+    'rank','server','account_level','competitive_rank','tier','platform_binding','mmr',
+    'behavior_score','rank_medal','premier_rating','prime_status','inventory_summary',
+    'current_rank','server_id','item_name','item_variant','transfer_method','amount',
+    'unit','service_scope','service_duration','code_kind','redemption_region','expiry',
+    'product_format','access_method'
+}
+LISTING_TYPE_ATTRIBUTES={
+    'item':{'item_name','item_variant','transfer_method'},
+    'currency':{'amount','unit','transfer_method'},
+    'service':{'service_scope','service_duration'},
+    'code':{'code_kind','redemption_region','expiry'},
+    'digital':{'product_format','access_method'},
+}
+def validate_listing_attributes(attributes, product_type, require_details=False):
+    if not isinstance(attributes,dict) or len(attributes)>30: raise HttpError(400,'Atributlar noto‘g‘ri.')
+    cleaned={}
+    for key,value in attributes.items():
+        if not isinstance(key,str) or key not in LISTING_PUBLIC_ATTRIBUTES:
+            raise HttpError(400,'E’lon atributi noto‘g‘ri.')
+        cleaned[key]=clean_text(value,key,0,160)
+    if cleaned.get('amount') and not re.fullmatch(r'[1-9][0-9]{0,11}',cleaned['amount']):
+        raise HttpError(400,'Bir to‘plamdagi valyuta miqdori musbat butun son bo‘lsin.')
+    allowed=LISTING_TYPE_ATTRIBUTES.get(product_type,set())
+    for key in LISTING_TYPE_ATTRIBUTES.keys()-{product_type}:
+        if any(field in cleaned for field in LISTING_TYPE_ATTRIBUTES[key]-allowed):
+            raise HttpError(400,'E’lon turi va ma’lumotlari mos kelmaydi.')
+    if product_type!='account' and any(key in cleaned for key in ('rank','account_level','competitive_rank','tier','platform_binding','mmr','behavior_score','rank_medal','premier_rating','prime_status','inventory_summary','current_rank','server_id')):
+        raise HttpError(400,'Akkaunt ma’lumotlari boshqa mahsulot turiga mos emas.')
+    if require_details and product_type=='digital' and any(not cleaned.get(key) for key in ('product_format','access_method')):
+        raise HttpError(400,'Raqamli mahsulot formati va yetkazish tafsilotlarini kiriting.')
+    return cleaned
 def parse_json(body):
     try: return json.loads(body or b'{}')
     except Exception: raise HttpError(400,'JSON so‘rovi noto‘g‘ri.')
@@ -1860,7 +1892,7 @@ class Handler(BaseHTTPRequestHandler):
             require_verified(ctx); seller_ok(db,uid); check_rate(db,'listing_create',uid,30,3600)
             submit_for_review=data.get('submit_for_review',False)
             if not isinstance(submit_for_review,bool): raise HttpError(400,'Tekshiruvga yuborish belgisi noto‘g‘ri.')
-            game_name=clean_text(data.get('game_name') if data.get('game_name') is not None else data.get('game_id'),'O‘yin nomi',2,80); cat=clean_text(data.get('category_id'),'Kategoriya',1,80)
+            game_name=clean_text(data.get('game_name') if data.get('game_name') is not None else data.get('game_id'),'O‘yin yoki platforma',2,80); cat=clean_text(data.get('category_id'),'Kategoriya',1,80)
             if not db.execute('SELECT 1 FROM categories WHERE id=? AND active=1',(cat,)).fetchone(): raise HttpError(400,'Kategoriya topilmadi.')
             title=clean_text(data.get('title'),'Sarlavha',5,120); desc=clean_text(data.get('description'),'Tavsif',20,5000); price=money(data.get('price_minor'))
             stock=data.get('stock',1)
@@ -1868,9 +1900,7 @@ class Handler(BaseHTTPRequestHandler):
             typ=db.execute('SELECT product_type FROM categories WHERE id=?',(cat,)).fetchone()['product_type']
             if typ=='account' and data.get('accept_account_terms') is not True:
                 raise HttpError(400,'Akkaunt e’lonidan oldin egalik, noshir qoidalari va taqiqlangan holatlar bo‘yicha sotuvchi tasdig‘i kerak.')
-            attributes=data.get('attributes',{})
-            if not isinstance(attributes,dict) or len(attributes)>30: raise HttpError(400,'Atributlar noto‘g‘ri.')
-            if any(not isinstance(key,str) or key.startswith('_') for key in attributes): raise HttpError(400,'Ichki e’lon atributlarini o‘zgartirib bo‘lmaydi.')
+            attributes=validate_listing_attributes(data.get('attributes',{}),typ,submit_for_review)
             images=listing_image_urls(data.get('images',[data.get('image_url')]) if 'images' not in data and data.get('image_url') else data.get('images',[]))
             require_listing_images_on_r2(images)
             providers=linked_account_providers(data.get('linked_accounts',attributes.get('linked_accounts',[])))
@@ -1912,6 +1942,9 @@ class Handler(BaseHTTPRequestHandler):
             if l['status'] not in ('draft','rejected','paused'): raise HttpError(409,'Bu e’lon hozir moderatsiyaga yuborilmaydi.')
             if l['product_type']=='account' and l['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION:
                 raise HttpError(400,'Akkaunt e’lonini yuborishdan oldin sotuvchi shartlarini tasdiqlash kerak.')
+            if l['product_type']=='digital':
+                attributes=json.loads(l['attributes_json'] or '{}')
+                validate_listing_attributes({key:value for key,value in attributes.items() if key in LISTING_PUBLIC_ATTRIBUTES},'digital',True)
             db.execute("UPDATE listings SET status='pending_review',moderation_note='',updated_at=CURRENT_TIMESTAMP WHERE id=?",(lid,))
             for admin in db.execute('SELECT user_id FROM admin_accounts LIMIT 20').fetchall():
                 notify(db,admin['user_id'],'moderation','Yangi e’lon','Tekshirish uchun yangi e’lon yuborildi.','/admin')
@@ -1922,7 +1955,7 @@ class Handler(BaseHTTPRequestHandler):
             if not l: raise HttpError(404,'E’lon topilmadi.')
             allowed={'title','description','price_minor','platform','region','delivery_eta','requirements','stock','image_url','attributes','game_name','images','linked_accounts'}
             fields={k:data[k] for k in data if k in allowed};
-            if 'game_name' in fields: fields['game_name']=clean_text(fields['game_name'],'O‘yin nomi',2,80)
+            if 'game_name' in fields: fields['game_name']=clean_text(fields['game_name'],'O‘yin yoki platforma',2,80)
             if 'title' in fields: fields['title']=clean_text(fields['title'],'Sarlavha',5,120)
             if 'description' in fields: fields['description']=clean_text(fields['description'],'Tavsif',20,5000)
             if 'price_minor' in fields: fields['price_minor']=money(fields['price_minor'])
@@ -1937,10 +1970,7 @@ class Handler(BaseHTTPRequestHandler):
             previous_images={url for url in [l['image_url'], *(attrs.get('images') if isinstance(attrs.get('images'),list) else [])] if isinstance(url,str)}
             if 'image_url' in data and 'images' not in data: attrs['images']=[fields['image_url']] if fields.get('image_url') else []
             if 'attributes' in fields:
-                if not isinstance(fields['attributes'],dict) or len(fields['attributes'])>30: raise HttpError(400,'Atributlar noto‘g‘ri.')
-                if any(not isinstance(key,str) or key.startswith('_') or key in ('images','linked_accounts') for key in fields['attributes']):
-                    raise HttpError(400,'Ichki e’lon atributlarini o‘zgartirib bo‘lmaydi.')
-                attrs.update(fields.pop('attributes'))
+                attrs.update(validate_listing_attributes(fields.pop('attributes'),l['product_type']))
                 if 'server' in attrs: attrs['server']=clean_text(attrs['server'],'Server',0,60)
             if 'images' in fields:
                 images=listing_image_urls(fields.pop('images')); attrs['images']=images; fields['image_url']=images[0] if images else ''
@@ -2127,10 +2157,14 @@ class Handler(BaseHTTPRequestHandler):
         if m and method=='POST':
             aid=require_admin(ctx); lid=m.group(1); action=data.get('action'); note=clean_text(data.get('note',''),'Izoh',0,1000)
             if action not in ('approve','reject','pause'): raise HttpError(400,'Moderatsiya amali noto‘g‘ri.')
+            if action=='reject' and len(note)<5: raise HttpError(400,'Rad etish sababini kamida 5 belgi bilan yozing.')
             status={'approve':'published','reject':'rejected','pause':'paused'}[action]; l=db.execute("SELECT * FROM listings WHERE id=? AND status IN ('pending_review','published')",(lid,)).fetchone()
             if not l: raise HttpError(404,'Tekshiriladigan e’lon topilmadi.')
             if action=='approve':
                 require_listing_allowed(db,l['game_id'],l['product_type'])
+                if l['product_type']=='digital':
+                    attributes=json.loads(l['attributes_json'] or '{}')
+                    validate_listing_attributes({key:value for key,value in attributes.items() if key in LISTING_PUBLIC_ATTRIBUTES},'digital',True)
                 if l['product_type']=='account' and l['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION:
                     raise HttpError(400,'Sotuvchi akkaunt savdosi qoidalarini tasdiqlamagan.')
                 risk_flags=json.loads(l['attributes_json'] or '{}').get('_risk_flags',[])

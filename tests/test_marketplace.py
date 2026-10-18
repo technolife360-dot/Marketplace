@@ -92,6 +92,35 @@ class MarketplaceFlows(unittest.TestCase):
         result=self.route(self.seller,'POST',f"/api/listings/{draft['id']}/submit",{})
         self.assertEqual(result['status'],'pending_review')
         self.assertEqual(self.db.execute('SELECT status FROM listings WHERE id=?',(draft['id'],)).fetchone()['status'],'pending_review')
+    def test_other_digital_product_requires_details_and_can_be_rejected_with_reason(self):
+        base={'game_name':'Example software','category_id':'digital','title':'One-year digital license',
+              'description':'A transferable digital license with clearly described scope.',
+              'price_minor':49000,'stock':2,'submit_for_review':True}
+        with self.assertRaises(app.HttpError):
+            self.route(self.seller,'POST','/api/listings',base)
+        listing=self.route(self.seller,'POST','/api/listings',{
+            **base,'attributes':{'product_format':'License','access_method':'A license code in the protected order delivery'}})
+        self.assertEqual(listing['status'],'pending_review')
+        with self.assertRaises(app.HttpError):
+            self.route(self.admin,'POST',f"/api/admin/listings/{listing['id']}",{'action':'reject'})
+        self.route(self.admin,'POST',f"/api/admin/listings/{listing['id']}",
+                   {'action':'reject','note':'Transfer rights are not documented.'})
+        saved=self.route(self.seller,'GET',f"/api/listings/{listing['id']}")
+        self.assertEqual(saved['status'],'rejected')
+        self.assertEqual(saved['moderation_note'],'Transfer rights are not documented.')
+    def test_item_and_currency_attributes_follow_listing_type(self):
+        base={'game_name':'Example game','title':'A detailed digital listing',
+              'description':'The seller clearly describes the digital goods and delivery.',
+              'price_minor':20000,'stock':3,'submit_for_review':True}
+        item=self.route(self.seller,'POST','/api/listings',{
+            **base,'category_id':'items','attributes':{'item_name':'Rare skin','transfer_method':'In-game trade'}})
+        currency=self.route(self.seller,'POST','/api/listings',{
+            **base,'category_id':'currency','attributes':{'amount':'1000','unit':'Gold','transfer_method':'In-game gift'}})
+        self.assertEqual((item['product_type'],item['attributes']['item_name']),('item','Rare skin'))
+        self.assertEqual((currency['product_type'],currency['attributes']['amount']),('currency','1000'))
+        with self.assertRaises(app.HttpError):
+            self.route(self.seller,'POST','/api/listings',{
+                **base,'category_id':'items','attributes':{'code_kind':'Gift card'}})
     def test_seller_cannot_replace_private_risk_flags_and_edits_recompute_them(self):
         with self.assertRaises(app.HttpError) as create_error:
             self.route(self.seller,'POST','/api/listings',{
