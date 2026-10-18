@@ -438,6 +438,7 @@ class MarketplaceFlows(unittest.TestCase):
     def test_listing_owner_can_view_unpublished_listing_but_other_users_cannot(self):
         draft=self.route(self.seller,'POST','/api/listings',{'game_id':'valorant','category_id':'accounts','title':'Private draft listing','description':'A sufficiently long listing description.','price_minor':23000,'stock':2,'accept_account_terms':True})
         self.assertEqual(self.route(self.seller,'GET',f"/api/listings/{draft['id']}")['status'],'draft')
+        self.assertEqual(self.route(self.admin,'GET',f"/api/listings/{draft['id']}")['status'],'draft')
         with self.assertRaises(app.HttpError) as error:
             self.route(self.other,'GET',f"/api/listings/{draft['id']}")
         self.assertEqual(error.exception.status,404)
