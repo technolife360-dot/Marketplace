@@ -499,6 +499,14 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertEqual((item['review_count'],item['seller_rating']),(1,5.0))
         self.db.execute("UPDATE users SET last_seen_at='2020-01-01T00:00:00+00:00' WHERE id=?",(self.seller,))
         self.assertEqual(next(row for row in self.route(None,'GET','/api/listings')['items'] if row['id']==self.listing)['seller_online'],0)
+    def test_listing_api_stays_available_before_presence_schema_upgrade(self):
+        session_token,_=app.session_create(self.db,self.seller)
+        self.handler.cookie=lambda:session_token
+        with patch.object(app,'user_presence_available',return_value=False):
+            self.assertEqual(self.handler.context(self.db)['uid'],self.seller)
+            result=self.route(self.seller,'GET','/api/listings')
+        self.assertEqual(result['items'][0]['seller_online'],0)
+        self.assertEqual(result['items'][0]['id'],self.listing)
     def test_checkout_reserves_inventory_and_sandbox_webhook_action_is_idempotent(self):
         self.add_cart(self.buyer)
         order=app.checkout(self.db,self.buyer,True,True)

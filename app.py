@@ -170,6 +170,12 @@ def connect():
     db.execute('PRAGMA busy_timeout=15000')
     return db
 
+def user_presence_available(db):
+    """Older production schemas may not have the optional presence column yet."""
+    if DATABASE_URL:
+        return bool(db.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name='last_seen_at'").fetchone())
+    return any(row['name']=='last_seen_at' for row in db.execute('PRAGMA table_info(users)'))
+
 def production_marketplace_sales_enabled():
     """Fail closed until business, provider, and publisher-rule gates are satisfied."""
     if MODE != 'production': return True
@@ -1132,9 +1138,10 @@ class Handler(BaseHTTPRequestHandler):
             s=db.execute('SELECT user_id,csrf FROM sessions WHERE token_hash=? AND expires_at>?',(hash_token(raw),now_iso())).fetchone()
             if s:
                 uid,csrf=s['user_id'],s['csrf']
-                now=datetime.now(timezone.utc)
-                db.execute('UPDATE users SET last_seen_at=? WHERE id=? AND (last_seen_at IS NULL OR last_seen_at<?)',
-                           (now.isoformat(timespec='seconds'),uid,(now-timedelta(seconds=60)).isoformat(timespec='seconds')))
+                if user_presence_available(db):
+                    now=datetime.now(timezone.utc)
+                    db.execute('UPDATE users SET last_seen_at=? WHERE id=? AND (last_seen_at IS NULL OR last_seen_at<?)',
+                               (now.isoformat(timespec='seconds'),uid,(now-timedelta(seconds=60)).isoformat(timespec='seconds')))
         return {'db':db,'uid':uid,'csrf':csrf,'user':user_view(db,uid) if uid else None}
     def set_session(self, token):
         self._set_cookie=f'{COOKIE_NAME}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_DAYS*86400}' + ('; Secure' if MODE=='production' else '')
@@ -1562,8 +1569,11 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError: page=1
             limit=24
             count=db.execute(f"SELECT COUNT(*) n FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id JOIN seller_profiles s ON s.user_id=l.seller_id WHERE {' AND '.join(where)} AND l.stock>l.reserved",tuple(args)).fetchone()['n']
+            presence_ready=user_presence_available(db)
             online_since=(datetime.now(timezone.utc)-timedelta(minutes=3)).isoformat(timespec='seconds')
-            rows=db.execute(f"SELECT l.id,l.title,l.description,l.product_type,l.price_minor,l.currency,l.platform,l.region,l.attributes_json,l.delivery_eta,l.stock,l.reserved,(l.stock-l.reserved) available,l.image_url,l.created_at,g.name game_name,g.slug game_slug,c.name category_name,s.shop_name seller_name,s.verification_status,CASE WHEN s.identity_provider='didit' AND s.identity_status='verified' THEN 1 ELSE 0 END AS identity_verified,CASE WHEN u.last_seen_at>=? THEN 1 ELSE 0 END AS seller_online,EXISTS(SELECT 1 FROM favorites fv WHERE fv.user_id=? AND fv.listing_id=l.id) AS is_favorite,(SELECT COUNT(*) FROM reviews rv WHERE rv.seller_id=l.seller_id) review_count,(SELECT AVG(rating) FROM reviews rv WHERE rv.seller_id=l.seller_id) seller_rating FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id JOIN seller_profiles s ON s.user_id=l.seller_id JOIN users u ON u.id=l.seller_id WHERE {' AND '.join(where)} AND l.stock>l.reserved ORDER BY {order} LIMIT ? OFFSET ?",(online_since,uid or '',*args,limit,(page-1)*limit)).fetchall()
+            online_expression='CASE WHEN u.last_seen_at>=? THEN 1 ELSE 0 END' if presence_ready else '0'
+            online_args=(online_since,) if presence_ready else ()
+            rows=db.execute(f"SELECT l.id,l.title,l.description,l.product_type,l.price_minor,l.currency,l.platform,l.region,l.attributes_json,l.delivery_eta,l.stock,l.reserved,(l.stock-l.reserved) available,l.image_url,l.created_at,g.name game_name,g.slug game_slug,c.name category_name,s.shop_name seller_name,s.verification_status,CASE WHEN s.identity_provider='didit' AND s.identity_status='verified' THEN 1 ELSE 0 END AS identity_verified,{online_expression} AS seller_online,EXISTS(SELECT 1 FROM favorites fv WHERE fv.user_id=? AND fv.listing_id=l.id) AS is_favorite,(SELECT COUNT(*) FROM reviews rv WHERE rv.seller_id=l.seller_id) review_count,(SELECT AVG(rating) FROM reviews rv WHERE rv.seller_id=l.seller_id) seller_rating FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id JOIN seller_profiles s ON s.user_id=l.seller_id JOIN users u ON u.id=l.seller_id WHERE {' AND '.join(where)} AND l.stock>l.reserved ORDER BY {order} LIMIT ? OFFSET ?",(*online_args,uid or '',*args,limit,(page-1)*limit)).fetchall()
             items=[dict(x) for x in rows]
             for item in items:
                 try: attributes=json.loads(item.pop('attributes_json') or '{}')
