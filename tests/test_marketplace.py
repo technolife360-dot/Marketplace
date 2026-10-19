@@ -67,7 +67,9 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertEqual(self.db.execute('SELECT status FROM listings WHERE id=?',(self.listing,)).fetchone()['status'],'paused')
     def test_production_prelaunch_allows_review_but_blocks_publication(self):
         data={'game_name':'Dota 2','category_id':'items','title':'Prelaunch draft item',
-              'description':'A private draft prepared before payment launch.',
+              'description':'A private draft prepared before payment launch with complete delivery instructions and restrictions.',
+              'platform':'PC','region':'Global','requirements':'Delivered through the protected order.',
+              'attributes':{'item_name':'Prelaunch draft item'},
               'price_minor':23000,'stock':1,'submit_for_review':False}
         with patch.object(app,'MODE','production'), patch.dict(os.environ,{'MARKETPLACE_SALES_ENABLED':'false'},clear=False):
             draft=self.route(self.seller,'POST','/api/listings',data)
@@ -79,7 +81,8 @@ class MarketplaceFlows(unittest.TestCase):
             self.assertEqual(self.route(self.seller,'POST',f"/api/listings/{draft['id']}/submit",{})['status'],'pending_review')
             reviewed=self.route(self.seller,'POST','/api/listings',{**data,'submit_for_review':True})
             self.assertEqual(reviewed['status'],'pending_review')
-            approved=self.route(self.admin,'POST',f"/api/admin/listings/{reviewed['id']}",{'action':'approve'})
+            self.db.execute("UPDATE listings SET image_url='https://example.test/uploaded-fixture.webp' WHERE id=?",(reviewed['id'],))
+            approved=self.route(self.admin,'POST',f"/api/admin/listings/{reviewed['id']}",{'action':'approve','quality_confirmed':True})
             self.assertEqual(approved['status'],'approved_private')
             self.assertEqual(self.route(self.seller,'GET',f"/api/listings/{reviewed['id']}")['status'],'approved_private')
             self.assertTrue(any(row['id']==reviewed['id'] for row in self.route(self.admin,'GET','/api/admin/listings')))
@@ -92,13 +95,16 @@ class MarketplaceFlows(unittest.TestCase):
 
     def test_protected_internal_testing_publishes_approved_listings_and_uses_sandbox(self):
         data={'game_name':'Dota 2','category_id':'items','title':'Protected test item',
-              'description':'A reviewed item for the protected marketplace test.',
+              'description':'A reviewed item for the protected marketplace test, with clear product and delivery details.',
+              'platform':'PC','region':'Global','requirements':'Delivery through the protected order page.',
+              'attributes':{'item_name':'Protected test item'},
               'price_minor':23000,'stock':1,'submit_for_review':True}
         closed={'MARKETPLACE_INTERNAL_TESTING_ENABLED':'false','PAYMENT_PROVIDER':'sandbox',
                 'MARKETPLACE_SALES_ENABLED':'false'}
         with patch.object(app,'MODE','production'), patch.dict(os.environ,closed,clear=False):
             listing=self.route(self.seller,'POST','/api/listings',data)
-            result=self.route(self.admin,'POST',f"/api/admin/listings/{listing['id']}",{'action':'approve'})
+            self.db.execute("UPDATE listings SET image_url='https://example.test/uploaded-fixture.webp' WHERE id=?",(listing['id'],))
+            result=self.route(self.admin,'POST',f"/api/admin/listings/{listing['id']}",{'action':'approve','quality_confirmed':True})
             self.assertEqual(result['status'],'approved_private')
             self.assertFalse(app.production_marketplace_sales_enabled())
         enabled={**closed,'MARKETPLACE_INTERNAL_TESTING_ENABLED':'true'}

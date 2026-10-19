@@ -88,6 +88,8 @@ def profile(db, sid, uid, core):
     out['positive_percent']=round(out.pop('positive')*100/out['review_count']) if out['review_count'] else None
     out['completed_sales']=int(db.execute("SELECT COALESCE(SUM(i.quantity),0) n FROM order_items i JOIN orders o ON o.id=i.order_id WHERE i.seller_id=? AND o.status='completed'",(sid,)).fetchone()['n'])
     out['sales_history']=[{'game_name':r['game_name'],'quantity':int(r['quantity']),'last_sale_at':r['last_sale_at']} for r in db.execute("SELECT g.name game_name,SUM(oi.quantity) quantity,MAX(o.updated_at) last_sale_at FROM order_items oi JOIN orders o ON o.id=oi.order_id JOIN listings l ON l.id=oi.listing_id JOIN games g ON g.id=l.game_id WHERE oi.seller_id=? AND o.status='completed' GROUP BY g.id,g.name ORDER BY SUM(oi.quantity) DESC LIMIT 12",(sid,))]
+    import marketplace_operations
+    out['availability']=marketplace_operations.availability(db,sid)
     out['following']=bool(uid and db.execute('SELECT 1 FROM seller_follows WHERE user_id=? AND seller_id=?',(uid,sid)).fetchone())
     out['is_owner']=uid==sid
     out['online']=False
@@ -216,7 +218,11 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
             if message['id'] in attachments:
                 try:message['image_url']=core['storage_r2'].evidence_url(attachments[message['id']])
                 except Exception:message['image_unavailable']=True
-        out={'conversation':dict(conv),'messages':messages}
+        import marketplace_operations
+        other=conv['seller_id'] if uid==conv['buyer_id'] else conv['buyer_id']
+        out={'conversation':dict(conv),'messages':messages,'blocked':marketplace_operations.blocked(db,uid,other),'can_message':True}
+        try: marketplace_operations.chat_allowed(db,conv,uid,core)
+        except error: out['can_message']=False
         if conv['listing_id']:
             listing=db.execute('SELECT id,title,image_url,price_minor,currency FROM listings WHERE id=?',(conv['listing_id'],)).fetchone()
             if listing:out['listing']=dict(listing)

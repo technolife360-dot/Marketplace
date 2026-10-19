@@ -1,0 +1,41 @@
+name: Delivery deadline reminders
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sentryloot-order-deadlines
+  cancel-in-progress: false
+jobs:
+  reminders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+      SENTRYLOOT_ENV_FILE: /dev/null
+      MARKETPLACE_MODE: production
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'psycopg[binary]>=3.2,<4'
+      - name: Record due reminders without payment mutations
+        run: |
+          python - <<'PY'
+          import os, secrets
+          if not os.environ.get('DATABASE_URL'):
+              raise SystemExit('BACKUP_DATABASE_URL is required for the scheduled deadline runner.')
+          # This process never signs sessions; use a process-only signing key.
+          os.environ['SESSION_SECRET']=secrets.token_urlsafe(48)
+          import app
+          from marketplace_operations import deadline_run
+          db=app.connect()
+          try:
+              # Deployment migration must run first; do not create schema here.
+              result=deadline_run(db,vars(app))
+              print('Deadline notices recorded:',result['notices'])
+          finally: db.close()
+          PY

@@ -83,7 +83,7 @@ def _brand_html(preheader: str, title: str, name: str, paragraphs: list[str], bu
 
 
 def action_link(kind: str, token: str) -> str:
-    routes = {'verify': 'verify', 'password_reset': 'password-reset-confirm'}
+    routes = {'verify': 'verify', 'password_reset': 'password-reset-confirm','email_change':'email-change'}
     if kind not in routes:
         raise ValueError('Unsupported email action')
     base = os.environ.get('PUBLIC_BASE_URL', '').strip().rstrip('/')
@@ -101,6 +101,7 @@ def send_action_email(address: str, display_name: str, kind: str, token: str) ->
 
     copy = {
         'verify': ('Email manzilingizni tasdiqlang', 'Email manzilingizni tasdiqlash havolasi 24 soat amal qiladi.', 'Emailni tasdiqlash'),
+        'email_change': ('Yangi emailni tasdiqlash','Emailni o‘zgartirish uchun havolani oching. Havola 30 daqiqa amal qiladi.','Emailni tasdiqlash'),
         'password_reset': ('Parolni tiklash', 'Parolni yangilash uchun havolani oching. Havola 30 daqiqada tugaydi.', 'Parolni tiklash'),
     }
     if kind not in copy:
@@ -140,4 +141,15 @@ def send_order_update(address: str, display_name: str, reference: str, status: s
     message.set_content(f'Salom, {name}.\n\n{description}\nBuyurtma: {reference}\nHolat: {status}\n\nBuyurtmalarni ko‘rish: {url}\n\nXavfsizlik uchun emailda parol yoki yetkazish ma’lumotlari yuborilmaydi.')
     footer='Xavfsizlik uchun emailda parol yoki maxfiy yetkazish ma’lumotlari yuborilmaydi.'
     message.add_alternative(_brand_html(description,'Buyurtma yangilandi',name,[description],'Buyurtmalarni ko‘rish',url,footer,[('Buyurtma',reference),('Holat',status)]),subtype='html')
+    _deliver(message)
+
+
+def send_security_update(address: str, display_name: str, description: str) -> None:
+    """Security event notification. Never include passwords, OTPs or setup keys."""
+    if not is_configured(): raise RuntimeError('Transactional email is not configured')
+    message=EmailMessage()
+    message['Subject']='SentryLoot — hisob xavfsizligi'
+    message['From']=_from_address()
+    message['To']=address
+    message.set_content(f'Salom, {display_name}.\n\n{description}.\nBu amalni siz bajarmagan bo‘lsangiz, gamestorehub.com orqali yordam xizmatiga murojaat qiling.')
     _deliver(message)

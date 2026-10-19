@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/account-evidence-retention",
       "schedule": "41 2 * * *"
+    },
+    {
+      "path": "/api/cron/order-deadlines",
+      "schedule": "7 3 * * *"
     }
   ]
 }

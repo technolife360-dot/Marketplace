@@ -70,3 +70,10 @@ test('marketplace UX loads before app globals and parses multilingual delivery w
  const ux=context.window.MarketUX;
  for(const [value,minutes]of [['5 minutes',5],['1 hour',60],['24 soat',1440],['1 kun',1440],['Instant',1],['Ask seller',null]])assert.equal(ux.duration(value),minutes);
 });
+
+
+test('account tools initialize before app globals',()=>{
+ const context={window:{},encodeURIComponent};vm.createContext(context);
+ assert.doesNotThrow(()=>vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/account-operations.js'),'utf8'),context));
+ assert.equal(typeof context.window.OperationsUX.account,'function');
+});

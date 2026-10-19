@@ -2,6 +2,7 @@
 """SentryLoot marketplace server with SQLite and Supabase PostgreSQL backends."""
 from __future__ import annotations
 import marketplace_features
+import marketplace_operations
 import hashlib, hmac, html, ipaddress, json, os, re, secrets, sqlite3, time, unicodedata
 import io
 from datetime import datetime, timedelta, timezone
@@ -380,6 +381,7 @@ def migrate():
             for slug,name,typ in categories: db.execute('INSERT INTO categories(id,slug,name,product_type) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING',(slug,slug,name,typ))
             seed_topup_catalog(db)
             marketplace_features.migrate(db, True)
+            marketplace_operations.migrate(db, True)
             enforce_production_marketplace_gate(db)
             return
         db.executescript((ROOT / 'migrations/001_initial.sql').read_text())
@@ -495,6 +497,7 @@ def migrate():
         seed_topup_catalog(db)
         enforce_production_marketplace_gate(db)
         marketplace_features.migrate(db)
+        marketplace_operations.migrate(db)
     finally:
         db.close()
 
@@ -568,6 +571,7 @@ def password_ok(password, stored):
 def session_create(db, uid):
     token, csrf = create_token(), create_token()
     db.execute('INSERT INTO sessions(token_hash,user_id,csrf,expires_at) VALUES(?,?,?,?)',(hash_token(token),uid,(csrf), (datetime.now(timezone.utc)+timedelta(days=SESSION_DAYS)).isoformat()))
+    db.execute('UPDATE sessions SET mfa_verified=? WHERE token_hash=?',(0 if marketplace_operations.enabled(db,uid) else 1,hash_token(token)))
     return encode_session(token), csrf
 
 def audit(db, actor, action, kind, entity, data=None):
@@ -581,6 +585,16 @@ def erase_account_personal_data(db, uid):
     history and foreign-key integrity are retained. User-authored marketplace
     content and identity verification data are erased; active listings are hidden.
     """
+    dispute_paths=[r['object_path'] for r in db.execute('SELECT object_path FROM dispute_attachments WHERE owner_id=?',(uid,))]
+    for path in dispute_paths:
+        if not delete_account_evidence_object(path): raise HttpError(503,'Nizo dalillarini o‘chirish qayta uriniladi.')
+    db.execute('DELETE FROM dispute_attachments WHERE owner_id=?',(uid,))
+    db.execute("UPDATE dispute_entries SET body='Removed by account deletion' WHERE sender_id=?",(uid,))
+    db.execute("UPDATE support_entries SET body='Removed by account deletion' WHERE sender_id=?",(uid,))
+    db.execute("UPDATE support_tickets SET subject='Removed support request' WHERE requester_id=?",(uid,))
+    for table in ('account_security','security_recovery_codes','pending_email_changes','seller_availability'):
+        db.execute(f'DELETE FROM {table} WHERE user_id=?',(uid,))
+    db.execute('DELETE FROM user_blocks WHERE user_id=? OR blocked_id=?',(uid,uid))
     chat_paths=[r['object_path'] for r in db.execute('SELECT a.object_path FROM message_attachments a JOIN conversations c ON c.id=a.conversation_id WHERE c.buyer_id=? OR c.seller_id=?',(uid,uid))]
     for object_path in chat_paths:
         if not delete_account_evidence_object(object_path): raise HttpError(503,'Chat rasmlarini o‘chirib bo‘lmadi; qayta uriniladi.')
@@ -628,6 +642,7 @@ def blog_post_view(row):
     return post
 def event(db, oid, actor, old, new, note=''):
     db.execute('INSERT INTO order_events(id,order_id,actor_id,from_status,to_status,note) VALUES(?,?,?,?,?,?)',(ident(),oid,actor,old,new,note))
+    if new in ('paid','awaiting_delivery'): marketplace_operations.deadline_setup(db,oid)
 def user_view(db, uid):
     u = db.execute('SELECT id,email,display_name,country,language,currency,email_verified,suspended,created_at FROM users WHERE id=?',(uid,)).fetchone()
     if not u: return None
@@ -1033,6 +1048,11 @@ def order_view(db, oid, uid, admin=False):
     order['items']=[]
     for item in items:
         it=dict(item)
+        snapshot=json.loads(it.pop('snapshot_json') or '{}')
+        it['snapshot']=snapshot
+        for field in ('delivery_eta','delivery_minutes','platform','region','requirements','attributes'):
+            if field in snapshot: it[field]=snapshot[field]
+        it['delivery_overdue']=bool(it.get('delivery_due_at') and marketplace_operations.utc(it['delivery_due_at'])<datetime.now(timezone.utc) and order['status'] in ('paid','awaiting_delivery') and not db.execute('SELECT 1 FROM deliveries WHERE order_item_id=?',(it['id'],)).fetchone())
         delivery=db.execute('SELECT id,submitted_at,buyer_accessed_at,protected_payload FROM deliveries WHERE order_item_id=?',(it['id'],)).fetchone()
         if delivery and is_buyer and order['status'] in ('paid','awaiting_delivery','delivered','completed','disputed','under_review'):
             delivered=dict(delivery)
@@ -1079,6 +1099,8 @@ def checkout(db,uid,accept_terms=False,accept_account_risk=False):
         if len(currencies)!=1: raise HttpError(400,'Turli valyutadagi mahsulotlarni bitta buyurtmada xarid qilib bo‘lmaydi.')
         currency=currencies.pop(); subtotal=0; lines=[]
         for x in cart:
+            if marketplace_operations.blocked(db,uid,x['seller_id']): raise HttpError(403,'Bu sotuvchi bilan yangi savdo bloklangan.')
+            if marketplace_operations.availability(db,x['seller_id'])['vacation']: raise HttpError(409,'Sotuvchi vaqtincha yangi buyurtma qabul qilmayapti.')
             if x['seller_id']==uid: raise HttpError(400,'O‘zingizning e’loningizni xarid qila olmaysiz.')
             if x['status']!='published': raise HttpError(409,'Savatchadagi e’lonlardan biri endi mavjud emas.')
             if x['stock']-x['reserved']<x['quantity']: raise HttpError(409,'Mahsulot qoldig‘i yetarli emas.')
@@ -1096,7 +1118,9 @@ def checkout(db,uid,accept_terms=False,accept_account_risk=False):
             if ix < remainder: per_fee += 1
             reservation=db.execute('UPDATE listings SET reserved=reserved+?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND stock-reserved>=?',(x['quantity'],x['listing_id'],x['quantity']))
             if reservation.rowcount!=1: raise HttpError(409,'Mahsulot qoldig‘i band qilindi. Savatchani yangilang.')
-            db.execute('INSERT INTO order_items(id,order_id,listing_id,seller_id,title,quantity,unit_price_minor,commission_minor,delivery_method) VALUES(?,?,?,?,?,?,?,?,?)',(ident(),oid,x['listing_id'],x['seller_id'],x['title'],x['quantity'],x['price_minor'],per_fee,x['delivery_method']))
+            iid=ident()
+            db.execute('INSERT INTO order_items(id,order_id,listing_id,seller_id,title,quantity,unit_price_minor,commission_minor,delivery_method) VALUES(?,?,?,?,?,?,?,?,?)',(iid,oid,x['listing_id'],x['seller_id'],x['title'],x['quantity'],x['price_minor'],per_fee,x['delivery_method']))
+            marketplace_operations.snapshot_item(db,iid,x['listing_id'],source=x)
         db.execute('INSERT INTO payments(id,order_id,provider,amount_minor,currency,status,idempotency_key) VALUES(?,?,?,?,?,?,?)',(ident(),oid,intent.provider,intent.amount_minor,intent.currency,'pending',intent.idempotency_key))
         db.execute('DELETE FROM carts WHERE user_id=?',(uid,)); event(db,oid,uid,None,'pending_payment','Sinov to‘lovi yaratildi' if intent.provider=='sandbox' else 'To‘lov yaratildi')
         db.execute('COMMIT'); return {'id':oid,'reference':reference,'status':'pending_payment','total_minor':subtotal+commission,'currency':currency,'mode':intent.provider,'checkout_url':intent.checkout_url}
@@ -1156,28 +1180,40 @@ class Handler(BaseHTTPRequestHandler):
             if sep and k==COOKIE_NAME: return v
         return ''
     def context(self, db):
-        uid=None; csrf=None
+        uid=None; csrf=None;mfa_pending=False
         raw=decode_session(self.cookie())
         if raw:
-            s=db.execute('SELECT user_id,csrf FROM sessions WHERE token_hash=? AND expires_at>?',(hash_token(raw),now_iso())).fetchone()
+            s=db.execute('SELECT user_id,csrf,mfa_verified FROM sessions WHERE token_hash=? AND expires_at>?',(hash_token(raw),now_iso())).fetchone()
             if s:
                 uid,csrf=s['user_id'],s['csrf']
+                mfa_pending=bool(marketplace_operations.enabled(db,uid) and not s['mfa_verified'])
+                db.execute('UPDATE sessions SET last_seen_at=? WHERE token_hash=?',(now_iso(),hash_token(raw)))
                 if user_presence_available(db):
                     now=datetime.now(timezone.utc)
                     db.execute('UPDATE users SET last_seen_at=? WHERE id=? AND (last_seen_at IS NULL OR last_seen_at<?)',
                                (now.isoformat(timespec='seconds'),uid,(now-timedelta(seconds=60)).isoformat(timespec='seconds')))
-        return {'db':db,'uid':uid,'csrf':csrf,'user':user_view(db,uid) if uid else None}
+        return {'db':db,'uid':uid,'csrf':csrf,'mfa_pending':mfa_pending,'user':user_view(db,uid) if uid else None}
     def set_session(self, token):
+        raw=decode_session(token)
+        if raw:
+            meta_db=connect()
+            try:
+                address=self.client_address[0]
+                try: network=str(ipaddress.ip_network(address+('/24' if ':' not in address else '/48'),strict=False))
+                except ValueError: network=''
+                meta_db.execute('UPDATE sessions SET created_at=?,last_seen_at=?,user_agent=?,network_label=? WHERE token_hash=?',(now_iso(),now_iso(),getattr(self,'headers',{}).get('User-Agent','')[:250],network,hash_token(raw)))
+            finally:meta_db.close()
         self._set_cookie=f'{COOKIE_NAME}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_DAYS*86400}' + ('; Secure' if MODE=='production' else '')
     def dispatch(self):
         parsed=urlparse(self.path); path=parsed.path.rstrip('/') or '/'; method=self.command
         db=connect()
         try:
             ctx=self.context(db)
+            if ctx.get('mfa_pending') and path not in ('/api/me','/api/security/unlock','/api/logout'): raise HttpError(403,'Ikki bosqichli tasdiqlash kerak.')
             csrf_exempt=path=='/api/webhooks/didit'
             if method in ('POST','PATCH','DELETE') and ctx['uid'] and not csrf_exempt:
                 if not hmac.compare_digest(self.headers.get('X-CSRF-Token',''),ctx['csrf'] or ''): raise HttpError(403,'Xavfsizlik tokeni noto‘g‘ri. Sahifani yangilang.')
-            binary_evidence=method=='POST' and (re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/account-evidence/[12]',path) or re.fullmatch(r'/api/conversations/[A-Za-z0-9_-]{1,100}/photos',path))
+            binary_evidence=method=='POST' and (re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/account-evidence/[12]',path) or re.fullmatch(r'/api/conversations/[A-Za-z0-9_-]{1,100}/photos',path) or re.fullmatch(r'/api/disputes/[A-Za-z0-9_-]{1,100}/photos',path))
             raw_body=self.body(MAX_IMAGE_BODY) if method=='POST' and (path=='/api/listing-images' or binary_evidence) else self.body() if method in ('POST','PATCH','PUT') and path.startswith('/api/') else b''
             if (path=='/api/listing-images' and method=='POST') or binary_evidence: data={}
             else: data=parse_json(raw_body) if raw_body else {}
@@ -1204,8 +1240,8 @@ class Handler(BaseHTTPRequestHandler):
                 payload=public_sitemap_xml()
                 self.send_response(200); self.send_header('Content-Type','application/xml; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=300'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
             public_route=parsed.path.rstrip('/') or '/'
-            account_route=public_route[1:] if public_route[1:] in ('login','register','password-reset','account','cart','orders','seller','wallet','payout-options','my-reviews','notifications','messages','favorites','requests','compare','admin','admin-blog','top-up-admin') else None
-            if not account_route and re.fullmatch(r'/(?:order|conversation|listing-review|store)/[A-Za-z0-9_-]{1,100}',public_route): account_route=public_route[1:]
+            account_route=public_route[1:] if public_route[1:] in ('login','register','password-reset','account','cart','orders','seller','wallet','payout-options','my-reviews','notifications','messages','favorites','requests','compare','admin','admin-blog','top-up-admin','support-tickets','admin-support','catalog-readiness','security-unlock') else None
+            if not account_route and re.fullmatch(r'/(?:order|conversation|listing-review|store|support-ticket|dispute)/[A-Za-z0-9_-]{1,100}',public_route): account_route=public_route[1:]
             if account_route:
                 self.send_response(302); self.send_header('Location','/#'+account_route); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length','0'); self.secure_headers(); self.end_headers(); return
             if public_route in ('/top-up','/browse','/blog','/selling','/guide','/fees','/policies','/support','/help','/help/orders','/help/payments','/help/refunds','/help/chat','/terms','/refunds','/seller-policy','/prohibited-items','/contact'):
@@ -1227,7 +1263,7 @@ class Handler(BaseHTTPRequestHandler):
                 payload=seo_listing_html(listing_match.group(1))
                 if payload is None: self.send_error(404); return
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
-            f={'/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
+            f={'/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
             if not f: self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))
@@ -1254,6 +1290,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self): self.dispatch()
     def route(self,db,ctx,method,path,qs,data,raw_body=b''):
         uid=ctx['uid']
+        operations_result=marketplace_operations.route(self,db,ctx,method,path,qs,data,raw_body,globals())
+        if operations_result is not marketplace_operations.UNHANDLED: return operations_result
         feature_result=marketplace_features.route(self,db,ctx,method,path,qs,data,raw_body,globals())
         if feature_result is not marketplace_features.UNHANDLED: return feature_result
         if path=='/healthz' and method=='GET': return {'ok':True}
@@ -1315,10 +1353,17 @@ class Handler(BaseHTTPRequestHandler):
                 evidence=db.execute('SELECT slot,object_path FROM account_review_evidence WHERE order_id=?',(review['order_id'],)).fetchall()
                 if any(not delete_account_evidence_object(row['object_path']) for row in evidence): continue
                 db.execute('DELETE FROM account_review_evidence WHERE order_id=?',(review['order_id'],)); removed+=len(evidence)
+            closed_disputes=db.execute("""SELECT a.entry_id,a.object_path,o.updated_at FROM dispute_attachments a
+                JOIN dispute_entries e ON e.id=a.entry_id JOIN orders o ON o.id=e.order_id
+                WHERE o.status IN ('completed','refunded','cancelled') ORDER BY o.updated_at LIMIT 1000""").fetchall()
+            for attachment in closed_disputes:
+                if marketplace_operations.utc(attachment['updated_at'])>cutoff: continue
+                if not delete_account_evidence_object(attachment['object_path']): continue
+                db.execute('DELETE FROM dispute_attachments WHERE entry_id=?',(attachment['entry_id'],));removed+=1
             audit(db,None,'cron_account_evidence_retention_ok','cron','account-evidence-retention',
                   {'evidence_deleted':removed,'reviews_checked':len(reviews),'retention_days':30})
             return {'ok':True,'evidence_deleted':removed,'reviews_checked':len(reviews),'retention_days':30}
-        if path=='/api/me' and method=='GET': return {'user':ctx['user'],'csrf':ctx['csrf'],'mode':MODE}
+        if path=='/api/me' and method=='GET': return {'user':ctx['user'],'csrf':ctx['csrf'],'mode':MODE,'mfa_required':ctx.get('mfa_pending',False)}
         if path=='/api/bonuses' and method=='GET':
             require_user(ctx)
             return bonus_summary(db,uid)
@@ -1505,7 +1550,12 @@ class Handler(BaseHTTPRequestHandler):
             if not row or not password_ok(str(data.get('password','')),row['password_hash']): raise HttpError(401,'Email yoki parol noto‘g‘ri.')
             if row['suspended']: raise HttpError(403,'Hisobingiz vaqtincha cheklangan.')
             if not row['email_verified']: raise HttpError(403,'Email tasdiqlanmagan. Ro‘yxatdan o‘tishda olingan havoladan foydalaning.')
-            raw,csrf=session_create(db,row['id']); self.set_session(raw); return {'user':user_view(db,row['id']),'csrf':csrf}
+            if marketplace_operations.enabled(db,row['id']):
+                if not data.get('otp'): return {'mfa_required':True}
+                if not marketplace_operations.consume_otp(db,row['id'],data.get('otp'),globals()): raise HttpError(403,'Authenticator yoki tiklash kodi noto‘g‘ri yoki ishlatilgan.')
+            raw,csrf=session_create(db,row['id'])
+            db.execute('UPDATE sessions SET mfa_verified=1 WHERE token_hash=?',(hash_token(decode_session(raw)),))
+            self.set_session(raw); return {'user':user_view(db,row['id']),'csrf':csrf}
         if path=='/api/logout' and method=='POST':
             if uid:
                 session_token=decode_session(self.cookie())
@@ -1907,7 +1957,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/admin/operations/cron-runs' and method=='GET':
             require_admin(ctx)
             return [dict(row) for row in db.execute("""SELECT action,created_at,details_json FROM audit_logs
-                WHERE action IN ('cron_account_deletions_ok','cron_account_evidence_retention_ok')
+                WHERE action IN ('cron_account_deletions_ok','cron_account_evidence_retention_ok','cron_order_deadlines_ok')
                 ORDER BY created_at DESC LIMIT 20""").fetchall()]
         if path=='/api/admin/overview' and method=='GET':
             require_admin(ctx)
@@ -2242,6 +2292,7 @@ class Handler(BaseHTTPRequestHandler):
                 changed=db.execute("UPDATE orders SET status='disputed',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status IN ('paid','awaiting_delivery','delivered')",(oid,))
                 if changed.rowcount!=1: raise HttpError(409,'Buyurtma holati o‘zgargan; sahifani yangilang.')
                 event(db,oid,uid,o['status'],'disputed',why); db.execute('INSERT INTO reports(id,reporter_id,order_id,reason,details,evidence_url) VALUES(?,?,?,?,?,?)',(ident(),uid,oid,'order_dispute',why,evidence))
+                db.execute("UPDATE reports SET response_due_at=? WHERE order_id=? AND reason='order_dispute' AND status='open'",(marketplace_operations.iso(datetime.now(timezone.utc)+timedelta(hours=48)),oid))
                 for seller in db.execute('SELECT DISTINCT seller_id FROM order_items WHERE order_id=?',(oid,)).fetchall(): notify(db,seller['seller_id'],'dispute','Buyurtma bo‘yicha nizo ochildi',f'{o["reference"]}: moderator ko‘rib chiqadi.','/orders')
                 for admin in db.execute('SELECT user_id FROM admin_accounts').fetchall(): notify(db,admin['user_id'],'dispute','Yangi buyurtma nizosi',f'{o["reference"]} buyurtmasi ko‘rib chiqilishi kerak.','/admin')
                 db.execute('COMMIT'); return {'status':'disputed'}
@@ -2323,6 +2374,10 @@ class Handler(BaseHTTPRequestHandler):
             status={'approve':'published','reject':'rejected','pause':'paused'}[action]; l=db.execute("SELECT * FROM listings WHERE id=? AND status IN ('pending_review','published')",(lid,)).fetchone()
             if not l: raise HttpError(404,'Tekshiriladigan e’lon topilmadi.')
             if action=='approve':
+                if MODE=='production' and not internal_testing_enabled():
+                    problems=marketplace_operations.quality(l)
+                    if problems: raise HttpError(400,'E’lonni to‘ldiring: '+' '.join(problems))
+                    if data.get('quality_confirmed') is not True: raise HttpError(400,'Moderator sifat tekshiruvini tasdiqlashi kerak.')
                 # Moderation can finish before launch. Only a separately gated
                 # publication may become visible or purchasable.
                 if not listing_allowed_for_production(db,l['game_id'],l['product_type']):
@@ -2412,6 +2467,7 @@ class Handler(BaseHTTPRequestHandler):
             sellers=[x['seller_id'] for x in db.execute('SELECT DISTINCT seller_id FROM order_items WHERE order_id=?',(oid,)).fetchall()]
             if action=='request_info':
                 db.execute("UPDATE reports SET status='reviewing',resolution=? WHERE id=?",(note,report['id'])); audit(db,aid,'dispute_request_info','order',oid,{'note':note})
+                db.execute('UPDATE reports SET response_due_at=? WHERE id=?',(marketplace_operations.iso(datetime.now(timezone.utc)+timedelta(hours=48)),report['id']))
                 notify(db,report['reporter_id'],'dispute_update','Nizongiz ko‘rib chiqilmoqda',note,'/order/'+oid)
                 for seller in sellers: notify(db,seller,'dispute_update','Nizo bo‘yicha qo‘shimcha ma’lumot',note,'/order/'+oid)
                 return {'status':'reviewing','funds_moved':False}
@@ -2554,7 +2610,7 @@ class _VercelRequest(Handler):
             try: client_ip=str(ipaddress.ip_address(environ.get('REMOTE_ADDR','0.0.0.0')))
             except ValueError: client_ip='0.0.0.0'
         self.client_address=(client_ip,0)
-        body_limit=MAX_IMAGE_BODY if self.command=='POST' and (path.rstrip('/')=='/api/listing-images' or re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/account-evidence/[12]',path.rstrip('/')) or re.fullmatch(r'/api/conversations/[A-Za-z0-9_-]{1,100}/photos',path.rstrip('/'))) else MAX_BODY
+        body_limit=MAX_IMAGE_BODY if self.command=='POST' and (path.rstrip('/')=='/api/listing-images' or re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/account-evidence/[12]',path.rstrip('/')) or re.fullmatch(r'/api/conversations/[A-Za-z0-9_-]{1,100}/photos',path.rstrip('/')) or re.fullmatch(r'/api/disputes/[A-Za-z0-9_-]{1,100}/photos',path.rstrip('/'))) else MAX_BODY
         body=environ.get('wsgi.input',io.BytesIO()).read(body_limit+1)
         self.rfile=io.BytesIO(body)
         self.wfile=io.BytesIO()

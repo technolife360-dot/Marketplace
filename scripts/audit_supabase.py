@@ -19,6 +19,9 @@ REQUIRED_COLUMNS = {
     'account_review_evidence': {'object_path', 'slot'},
     'listings': {'seller_account_terms_version', 'seller_account_terms_at', 'delivery_minutes'},
     'orders': {'accepted_account_sale_terms_version', 'accepted_account_sale_terms_at'},
+    'sessions': {'mfa_verified','created_at','last_seen_at','user_agent','network_label'},
+    'order_items': {'snapshot_json','delivery_due_at'},
+    'reports': {'response_due_at'},
 }
 
 
