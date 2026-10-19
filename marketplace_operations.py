@@ -134,6 +134,9 @@ def snapshot_item(db,iid,lid,legacy=False,source=None):
     if not row:return
     attrs=json.loads(row['attributes_json'] or '{}')
     data={k:row[k] for k in ('title','description','game_id','product_type','platform','region','delivery_method','delivery_eta','delivery_minutes','requirements','price_minor','currency','image_url')}
+    import trade_workflows
+    data['after_sale_policy']=trade_workflows.policy(row['product_type']) if not legacy else {'days':0,'appeal_days':7,'legacy':True}
+    data['buyer_fields']=trade_workflows.requirements(row) if not legacy else []
     data['attributes']={k:v for k,v in attrs.items() if not k.startswith('_')};data['availability']=availability(db,row['seller_id']);data['legacy']=legacy
     db.execute("UPDATE order_items SET snapshot_json=? WHERE id=? AND snapshot_json='{}'",(json.dumps(data,ensure_ascii=False),iid))
 
@@ -150,7 +153,7 @@ def deadline_run(db,core,moment=None):
     moment=moment or datetime.now(timezone.utc);count=0
     for order in db.execute("SELECT id,reference,buyer_id FROM orders WHERE status IN ('paid','awaiting_delivery') ORDER BY created_at LIMIT 1000").fetchall():
         deadline_setup(db,order['id'])
-        for item in db.execute('SELECT i.* FROM order_items i LEFT JOIN deliveries d ON d.order_item_id=i.id WHERE i.order_id=? AND d.id IS NULL AND i.delivery_due_at IS NOT NULL',(order['id'],)).fetchall():
+        for item in db.execute('SELECT i.* FROM order_items i LEFT JOIN deliveries d ON d.order_item_id=i.id WHERE i.order_id=? AND i.delivered_quantity<i.quantity AND i.delivery_due_at IS NOT NULL',(order['id'],)).fetchall():
             due=utc(item['delivery_due_at']);remaining=(due-moment).total_seconds()
             duration=json.loads(item['snapshot_json'] or '{}').get('delivery_minutes') or 60
             kind='late' if remaining<0 else 'reminder' if remaining<=min(1800,max(60,duration*12)) else None
@@ -166,7 +169,9 @@ def deadline_run(db,core,moment=None):
             except Exception:db.execute('ROLLBACK');raise
             count+=1
     core['audit'](db,None,'cron_order_deadlines_ok','system','deadlines',{'notices':count})
-    return {'ok':True,'notices':count}
+    import trade_workflows
+    escalated=trade_workflows.escalate_due(db,core)
+    return {'ok':True,'notices':count,'cancellations_escalated':escalated}
 
 def order_member(db,oid,uid,core):
     row=db.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
@@ -274,7 +279,11 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
     if path=='/api/seller/availability' and method in ('GET','POST'):
         verified(ctx)
         if not ctx['user']['seller']:raise error(403,'Sotuvchi profili kerak.')
-        if method=='GET':return availability(db,uid)
+        if method=='GET':
+            active="('paid','awaiting_delivery','delivered','under_review','disputed')"
+            rows=[dict(r) for r in db.execute(f'SELECT DISTINCT o.id,o.reference,o.status,o.created_at FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.seller_id=? AND o.status IN {active} ORDER BY o.created_at DESC LIMIT 20',(uid,))]
+            count=db.execute(f'SELECT COUNT(DISTINCT o.id) n FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.seller_id=? AND o.status IN {active}',(uid,)).fetchone()['n']
+            return {**availability(db,uid),'active_orders':rows,'active_count':count}
         zone=text(data.get('timezone'),'Vaqt mintaqasi',1,80)
         try:ZoneInfo(zone)
         except (ZoneInfoNotFoundError,ValueError):raise error(400,'Vaqt mintaqasi noto‘g‘ri.')

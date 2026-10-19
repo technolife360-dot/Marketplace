@@ -321,6 +321,7 @@ class MarketplaceFlows(unittest.TestCase):
         self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True,True)
         self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})
         item=self.db.execute('SELECT id FROM order_items WHERE order_id=?',(order['id'],)).fetchone()['id']
+        self.route(self.buyer,'POST',f"/api/orders/{order['id']}/buyer-details",{'item_id':item,'details':{'player_id':'Recipient#1234'}})
         self.route(self.seller,'POST',f"/api/orders/{order['id']}/deliver",{'item_id':item,'delivery':'test delivery'})
         self.route(self.buyer,'POST',f"/api/orders/{order['id']}/complete",{})
         self.route(self.buyer,'POST','/api/reviews',{'item_id':item,'rating':5,'body':'Fast and as described.'})
@@ -359,12 +360,13 @@ class MarketplaceFlows(unittest.TestCase):
         self.db.execute("UPDATE listings SET product_type='item' WHERE id=?",(self.listing,))
         self.add_cart(self.buyer); order=app.checkout(self.db,self.buyer,True,True)
         item=self.db.execute('SELECT id FROM order_items WHERE order_id=?',(order['id'],)).fetchone()['id']
+        self.route(self.buyer,'POST',f"/api/orders/{order['id']}/buyer-details",{'item_id':item,'details':{'player_id':'Recipient#1234'}})
         with patch.object(app.email_service,'is_configured',return_value=True), patch.object(app.email_service,'send_order_update') as send:
             self.route(self.buyer,'POST',f"/api/orders/{order['id']}/sandbox-complete",{})
             self.route(self.seller,'POST',f"/api/orders/{order['id']}/deliver",{'item_id':item,'delivery':'Never include this secret'})
             self.route(self.buyer,'POST',f"/api/orders/{order['id']}/complete",{})
         messages=[call.args for call in send.call_args_list]
-        self.assertEqual([(x[0],x[3]) for x in messages],[("seller@test.invalid",'paid'),("buyer@test.invalid",'awaiting_delivery'),("seller@test.invalid",'completed')])
+        self.assertEqual([(x[0],x[3]) for x in messages],[("seller@test.invalid",'paid'),("buyer@test.invalid",'delivered'),("seller@test.invalid",'completed')])
         self.assertNotIn('Never include this secret',repr(messages))
     def test_dispute_queue_uses_order_id_for_actions_and_keeps_money_sandbox_only(self):
         self.add_cart(self.buyer)
@@ -390,13 +392,13 @@ class MarketplaceFlows(unittest.TestCase):
         with self.assertRaises(app.HttpError) as error:
             self.route(self.buyer,'POST',f"/api/orders/{order['id']}/complete",{})
         self.assertEqual(error.exception.status,409)
-        self.assertEqual(self.route(self.seller,'GET',f"/api/orders/{order['id']}")['status'],'awaiting_delivery')
+        self.assertEqual(self.route(self.seller,'GET',f"/api/orders/{order['id']}")['status'],'delivered')
         with patch.object(app,'upload_account_evidence',return_value=f"private/{order['id']}-1.webp"):
             self.handler.headers=app.Message(); self.handler.headers['Content-Type']='image/png'
             self.handler.route(self.db,self.ctx(self.buyer),'POST',f"/api/orders/{order['id']}/account-evidence/1",{}, {}, b'normalized in test')
         with self.assertRaises(app.HttpError):
             self.route(self.buyer,'POST',f"/api/orders/{order['id']}/account-verification/submit",{'confirm_privacy':True})
-        self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?',(order['id'],)).fetchone()['status'],'awaiting_delivery')
+        self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?',(order['id'],)).fetchone()['status'],'delivered')
         with patch.object(app,'upload_account_evidence',return_value=f"private/{order['id']}-2.webp"):
             self.handler.route(self.db,self.ctx(self.buyer),'POST',f"/api/orders/{order['id']}/account-evidence/2",{}, {}, b'normalized in test')
         with self.assertRaises(app.HttpError):
@@ -664,6 +666,7 @@ class MarketplaceFlows(unittest.TestCase):
         with self.assertRaises(app.HttpError):
             self.route(self.seller,'POST','/api/payouts',{'amount_minor':1,'currency':'UZS'})
         item=self.db.execute('SELECT id FROM order_items WHERE order_id=?',(order['id'],)).fetchone()['id']
+        self.route(self.buyer,'POST',f"/api/orders/{order['id']}/buyer-details",{'item_id':item,'details':{'player_id':'Recipient#1234'}})
         self.route(self.seller,'POST',f"/api/orders/{order['id']}/deliver",{'item_id':item,'delivery':'test delivery'})
         self.route(self.buyer,'POST',f"/api/orders/{order['id']}/complete",{})
         available=self.route(self.seller,'GET','/api/seller/summary')

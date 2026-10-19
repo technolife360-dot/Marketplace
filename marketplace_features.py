@@ -76,6 +76,8 @@ def alert_publication(db, lid, core):
     else:
         for follower in db.execute('SELECT user_id FROM seller_follows WHERE seller_id=?',(row['seller_id'],)):
             core['notify'](db,follower['user_id'],'seller_listing','Kuzatilayotgan do‘konda yangi e’lon',row['title'],'/listing/'+lid)
+    import trade_workflows
+    trade_workflows.search_alert(db,lid,core)
     db.execute('INSERT INTO listing_alert_state(listing_id,price_minor,available,published_once) VALUES(?,?,?,1) ON CONFLICT(listing_id) DO UPDATE SET price_minor=excluded.price_minor,available=excluded.available,published_once=1',(lid,row['price_minor'],available))
 
 

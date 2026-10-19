@@ -3,6 +3,7 @@
 from __future__ import annotations
 import marketplace_features
 import marketplace_operations
+import trade_workflows
 import hashlib, hmac, html, ipaddress, json, os, re, secrets, sqlite3, time, unicodedata
 import io
 from datetime import datetime, timedelta, timezone
@@ -382,6 +383,7 @@ def migrate():
             seed_topup_catalog(db)
             marketplace_features.migrate(db, True)
             marketplace_operations.migrate(db, True)
+            trade_workflows.migrate(db, True)
             enforce_production_marketplace_gate(db)
             return
         db.executescript((ROOT / 'migrations/001_initial.sql').read_text())
@@ -498,6 +500,7 @@ def migrate():
         enforce_production_marketplace_gate(db)
         marketplace_features.migrate(db)
         marketplace_operations.migrate(db)
+        trade_workflows.migrate(db)
     finally:
         db.close()
 
@@ -585,6 +588,16 @@ def erase_account_personal_data(db, uid):
     history and foreign-key integrity are retained. User-authored marketplace
     content and identity verification data are erased; active listings are hidden.
     """
+    trade_paths=[r['object_path'] for r in db.execute('SELECT object_path FROM order_artifacts WHERE owner_id=? AND object_path IS NOT NULL',(uid,))]
+    for object_path in trade_paths:
+        if not delete_account_evidence_object(object_path):raise HttpError(503,'Buyurtma dalillarini o‘chirish qayta uriniladi.')
+    db.execute("UPDATE order_artifacts SET body='Removed by account deletion',object_path=NULL WHERE owner_id=?",(uid,))
+    db.execute("UPDATE order_case_entries SET body='Removed by account deletion' WHERE sender_id=?",(uid,))
+    db.execute("UPDATE order_cases SET details='Removed by account deletion' WHERE requester_id=?",(uid,))
+    db.execute("UPDATE order_cancellations SET details='Removed by account deletion' WHERE requester_id=?",(uid,))
+    db.execute("UPDATE cancellation_replies SET note='Removed by account deletion' WHERE seller_id=?",(uid,))
+    db.execute('DELETE FROM saved_searches WHERE user_id=?',(uid,))
+    db.execute('DELETE FROM order_buyer_details WHERE order_item_id IN (SELECT i.id FROM order_items i JOIN orders o ON o.id=i.order_id WHERE o.buyer_id=?)',(uid,))
     dispute_paths=[r['object_path'] for r in db.execute('SELECT object_path FROM dispute_attachments WHERE owner_id=?',(uid,))]
     for path in dispute_paths:
         if not delete_account_evidence_object(path): raise HttpError(503,'Nizo dalillarini o‘chirish qayta uriniladi.')
@@ -643,6 +656,7 @@ def blog_post_view(row):
 def event(db, oid, actor, old, new, note=''):
     db.execute('INSERT INTO order_events(id,order_id,actor_id,from_status,to_status,note) VALUES(?,?,?,?,?,?)',(ident(),oid,actor,old,new,note))
     if new in ('paid','awaiting_delivery'): marketplace_operations.deadline_setup(db,oid)
+    if new=='completed': trade_workflows.completion(db,oid)
 def user_view(db, uid):
     u = db.execute('SELECT id,email,display_name,country,language,currency,email_verified,suspended,created_at FROM users WHERE id=?',(uid,)).fetchone()
     if not u: return None
@@ -915,6 +929,12 @@ def listing_detail(db, lid, viewer=None):
     if not r: return None
     out=dict(r)
     if out.get('seller_rating') is not None: out['seller_rating']=float(out['seller_rating'])
+    availability=marketplace_operations.availability(db,out['seller_id'])
+    out['availability']=availability
+    estimate=marketplace_features.delivery_minutes(out['delivery_eta'])
+    out['estimated_delivery_at']=marketplace_operations.iso(marketplace_operations.next_open(availability,datetime.now(timezone.utc))+timedelta(minutes=estimate)) if estimate and not availability['vacation'] else None
+    out['buyer_fields']=trade_workflows.requirements(out)
+    out['after_sale_policy']=trade_workflows.policy(out['product_type'])
     out['available']=max(0,out['stock']-out['reserved']); out['attributes']=json.loads(out.pop('attributes_json') or '{}')
     if viewer and (out['seller_id']==viewer or is_admin(db,viewer)):
         out['marketplace_visible']=bool(out['status']=='published' and out['available']>0
@@ -1050,8 +1070,10 @@ def order_view(db, oid, uid, admin=False):
         it=dict(item)
         snapshot=json.loads(it.pop('snapshot_json') or '{}')
         it['snapshot']=snapshot
-        for field in ('delivery_eta','delivery_minutes','platform','region','requirements','attributes'):
+        for field in ('product_type','delivery_eta','delivery_minutes','platform','region','requirements','attributes'):
             if field in snapshot: it[field]=snapshot[field]
+        it['has_batches']=bool(db.execute('SELECT 1 FROM delivery_batches WHERE order_item_id=?',(it['id'],)).fetchone())
+        it['buyer_fields']=snapshot.get('buyer_fields',[])
         it['delivery_overdue']=bool(it.get('delivery_due_at') and marketplace_operations.utc(it['delivery_due_at'])<datetime.now(timezone.utc) and order['status'] in ('paid','awaiting_delivery') and not db.execute('SELECT 1 FROM deliveries WHERE order_item_id=?',(it['id'],)).fetchone())
         delivery=db.execute('SELECT id,submitted_at,buyer_accessed_at,protected_payload FROM deliveries WHERE order_item_id=?',(it['id'],)).fetchone()
         if delivery and is_buyer and order['status'] in ('paid','awaiting_delivery','delivered','completed','disputed','under_review'):
@@ -1074,7 +1096,7 @@ def order_view(db, oid, uid, admin=False):
             order['account_review']={**dict(review),'evidence_slots':sorted(slots)}
     return order
 
-def checkout(db,uid,accept_terms=False,accept_account_risk=False):
+def checkout(db,uid,accept_terms=False,accept_account_risk=False,buyer_details=None):
     if not accept_terms: raise HttpError(400,'Checkoutdan oldin savdo shartlarini qabul qiling.')
     try: provider=configured_payment_provider()
     except RuntimeError as e: raise HttpError(503,'Haqiqiy to‘lov provayderi hali sozlanmagan. Ishlab chiqarish checkout’i yopiq.')
@@ -1098,6 +1120,12 @@ def checkout(db,uid,accept_terms=False,accept_account_risk=False):
         currencies={x['currency'] for x in cart}
         if len(currencies)!=1: raise HttpError(400,'Turli valyutadagi mahsulotlarni bitta buyurtmada xarid qilib bo‘lmaydi.')
         currency=currencies.pop(); subtotal=0; lines=[]
+        if buyer_details is not None and not isinstance(buyer_details,dict):raise HttpError(400,'Xaridor ma’lumotlari noto‘g‘ri.')
+        validated_details={}
+        if buyer_details is not None:
+            for line in cart:
+                fields=trade_workflows.requirements(line)
+                if fields:validated_details[line['listing_id']]=trade_workflows.clean_details(buyer_details.get(line['listing_id'],{}),fields,globals())
         for x in cart:
             if marketplace_operations.blocked(db,uid,x['seller_id']): raise HttpError(403,'Bu sotuvchi bilan yangi savdo bloklangan.')
             if marketplace_operations.availability(db,x['seller_id'])['vacation']: raise HttpError(409,'Sotuvchi vaqtincha yangi buyurtma qabul qilmayapti.')
@@ -1121,6 +1149,7 @@ def checkout(db,uid,accept_terms=False,accept_account_risk=False):
             iid=ident()
             db.execute('INSERT INTO order_items(id,order_id,listing_id,seller_id,title,quantity,unit_price_minor,commission_minor,delivery_method) VALUES(?,?,?,?,?,?,?,?,?)',(iid,oid,x['listing_id'],x['seller_id'],x['title'],x['quantity'],x['price_minor'],per_fee,x['delivery_method']))
             marketplace_operations.snapshot_item(db,iid,x['listing_id'],source=x)
+            if x['listing_id'] in validated_details:trade_workflows.store_details(db,iid,validated_details[x['listing_id']],globals())
         db.execute('INSERT INTO payments(id,order_id,provider,amount_minor,currency,status,idempotency_key) VALUES(?,?,?,?,?,?,?)',(ident(),oid,intent.provider,intent.amount_minor,intent.currency,'pending',intent.idempotency_key))
         db.execute('DELETE FROM carts WHERE user_id=?',(uid,)); event(db,oid,uid,None,'pending_payment','Sinov to‘lovi yaratildi' if intent.provider=='sandbox' else 'To‘lov yaratildi')
         db.execute('COMMIT'); return {'id':oid,'reference':reference,'status':'pending_payment','total_minor':subtotal+commission,'currency':currency,'mode':intent.provider,'checkout_url':intent.checkout_url}
@@ -1212,7 +1241,7 @@ class Handler(BaseHTTPRequestHandler):
             csrf_exempt=path=='/api/webhooks/didit'
             if method in ('POST','PATCH','DELETE') and ctx['uid'] and not csrf_exempt:
                 if not hmac.compare_digest(self.headers.get('X-CSRF-Token',''),ctx['csrf'] or ''): raise HttpError(403,'Xavfsizlik tokeni noto‘g‘ri. Sahifani yangilang.')
-            binary_evidence=method=='POST' and (re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/account-evidence/[12]',path) or re.fullmatch(r'/api/conversations/[A-Za-z0-9_-]{1,100}/photos',path) or re.fullmatch(r'/api/disputes/[A-Za-z0-9_-]{1,100}/photos',path))
+            binary_evidence=method=='POST' and (re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/account-evidence/[12]',path) or re.fullmatch(r'/api/conversations/[A-Za-z0-9_-]{1,100}/photos',path) or re.fullmatch(r'/api/disputes/[A-Za-z0-9_-]{1,100}/photos',path) or (re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/evidence',path) and self.headers.get('Content-Type','').startswith('image/')))
             raw_body=self.body(MAX_IMAGE_BODY) if method=='POST' and (path=='/api/listing-images' or binary_evidence) else self.body() if method in ('POST','PATCH','PUT') and path.startswith('/api/') else b''
             if (path=='/api/listing-images' and method=='POST') or binary_evidence: data={}
             else: data=parse_json(raw_body) if raw_body else {}
@@ -1289,6 +1318,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self): self.dispatch()
     def route(self,db,ctx,method,path,qs,data,raw_body=b''):
         uid=ctx['uid']
+        trade_result=trade_workflows.case_route(db,ctx,method,path,data,globals())
+        if trade_result is not trade_workflows.UNHANDLED:return trade_result
+        trade_result=trade_workflows.route(self,db,ctx,method,path,qs,data,raw_body,globals())
+        if trade_result is not trade_workflows.UNHANDLED:return trade_result
         operations_result=marketplace_operations.route(self,db,ctx,method,path,qs,data,raw_body,globals())
         if operations_result is not marketplace_operations.UNHANDLED: return operations_result
         feature_result=marketplace_features.route(self,db,ctx,method,path,qs,data,raw_body,globals())
@@ -1359,6 +1392,14 @@ class Handler(BaseHTTPRequestHandler):
                 if marketplace_operations.utc(attachment['updated_at'])>cutoff: continue
                 if not delete_account_evidence_object(attachment['object_path']): continue
                 db.execute('DELETE FROM dispute_attachments WHERE entry_id=?',(attachment['entry_id'],));removed+=1
+            trade_evidence=db.execute("""SELECT a.id,a.object_path,o.updated_at FROM order_artifacts a JOIN orders o ON o.id=a.order_id
+                WHERE a.object_path IS NOT NULL AND o.status IN ('completed','refunded','cancelled')
+                AND NOT EXISTS(SELECT 1 FROM order_cases c WHERE c.order_id=o.id AND c.status IN ('open','reviewing','followup'))
+                ORDER BY o.updated_at LIMIT 1000""").fetchall()
+            for attachment in trade_evidence:
+                if marketplace_operations.utc(attachment['updated_at'])>cutoff:continue
+                if not delete_account_evidence_object(attachment['object_path']):continue
+                db.execute('UPDATE order_artifacts SET object_path=NULL WHERE id=?',(attachment['id'],));removed+=1
             audit(db,None,'cron_account_evidence_retention_ok','cron','account-evidence-retention',
                   {'evidence_deleted':removed,'reviews_checked':len(reviews),'retention_days':30})
             return {'ok':True,'evidence_deleted':removed,'reviews_checked':len(reviews),'retention_days':30}
@@ -1605,6 +1646,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/listings' and method=='GET':
             promote_internal_test_listings(db)
             where=["l.status='published'"]; args=[]
+            if qs.get('_match_listing',[''])[0]:where.append('l.id=?');args.append(qs['_match_listing'][0])
             if MODE=='production' and not internal_testing_enabled():
                 if not production_marketplace_sales_enabled(): return {'items':[],'total_count':0,'page':1,'page_size':24,'has_more':False}
                 approved_games=sorted(approved_game_slugs('MARKETPLACE_APPROVED_GAME_SLUGS'))
@@ -1765,7 +1807,7 @@ class Handler(BaseHTTPRequestHandler):
             order=db.execute('SELECT * FROM orders WHERE id=? AND buyer_id=?',(oid,uid)).fetchone()
             if not order: raise HttpError(404,'Buyurtma topilmadi.')
             if order['status'] not in ('awaiting_delivery','delivered','under_review'): raise HttpError(409,'Skrinshotni buyurtma yetkazilgandan keyin yuklang.')
-            if not db.execute("SELECT 1 FROM order_items i JOIN listings l ON l.id=i.listing_id WHERE i.order_id=? AND l.product_type='account' LIMIT 1",(oid,)).fetchone(): raise HttpError(400,'Skrinshot tekshiruvi faqat akkaunt buyurtmalariga tegishli.')
+            if not trade_workflows.account_order(db,oid): raise HttpError(400,'Skrinshot tekshiruvi faqat akkaunt buyurtmalariga tegishli.')
             review=db.execute('SELECT status FROM account_reviews WHERE order_id=? AND buyer_id=?',(oid,uid)).fetchone()
             if review and review['status'] not in ('collecting','needs_info'): raise HttpError(409,'Admin ko‘rigi boshlangan; dalilni endi almashtirib bo‘lmaydi.')
             object_path=upload_account_evidence(uid,oid,slot,raw_body,self.headers.get('Content-Type',''))
@@ -1780,10 +1822,13 @@ class Handler(BaseHTTPRequestHandler):
             if data.get('confirm_privacy') is not True: raise HttpError(400,'Skrinshotlarda parol, OTP, tiklash kodi yoki begona shaxsiy ma’lumot yo‘qligini tasdiqlang.')
             db.execute('BEGIN IMMEDIATE')
             try:
+                trade_workflows.lock_order(db,oid)
                 order=db.execute('SELECT * FROM orders WHERE id=? AND buyer_id=?',(oid,uid)).fetchone()
                 if not order: raise HttpError(404,'Buyurtma topilmadi.')
+                trade_workflows.guard(db,oid,globals())
+                if db.execute('SELECT 1 FROM order_items WHERE order_id=? AND delivered_quantity<quantity',(oid,)).fetchone():raise HttpError(409,'Barcha mahsulotlar hali to‘liq yetkazilmagan.')
                 if order['status'] not in ('awaiting_delivery','delivered','under_review'): raise HttpError(409,'Buyurtma akkaunt tekshiruviga tayyor emas.')
-                if not db.execute("SELECT 1 FROM order_items i JOIN listings l ON l.id=i.listing_id WHERE i.order_id=? AND l.product_type='account' LIMIT 1",(oid,)).fetchone(): raise HttpError(400,'Bu buyurtmada akkaunt yo‘q.')
+                if not trade_workflows.account_order(db,oid): raise HttpError(400,'Bu buyurtmada akkaunt yo‘q.')
                 slots=[r['slot'] for r in db.execute('SELECT slot FROM account_review_evidence WHERE order_id=? ORDER BY slot',(oid,)).fetchall()]
                 if slots!=[1,2]: raise HttpError(400,'Davom etish uchun ikkita skrinshotni ham yuklang.')
                 review=db.execute('SELECT * FROM account_reviews WHERE order_id=? AND buyer_id=?',(oid,uid)).fetchone()
@@ -2218,13 +2263,14 @@ class Handler(BaseHTTPRequestHandler):
         m=re.fullmatch(r'/api/cart/([^/]+)',path)
         if m and method=='DELETE': require_user(ctx); db.execute('DELETE FROM carts WHERE user_id=? AND listing_id=?',(uid,m.group(1))); return {'ok':True}
         if path=='/api/checkout' and method=='POST':
-            require_verified(ctx); return 201,checkout(db,uid,data.get('accept_terms') is True,data.get('accept_account_risk') is True)
+            require_verified(ctx); return 201,checkout(db,uid,data.get('accept_terms') is True,data.get('accept_account_risk') is True,data.get('buyer_details'))
         m=re.fullmatch(r'/api/orders/([^/]+)/sandbox-complete',path)
         if m and method=='POST':
             require_verified(ctx)
             if MODE!='development' and not internal_testing_enabled(): raise HttpError(403,'Sinov to‘lovi bu muhitda ishlamaydi.')
             oid=m.group(1); db.execute('BEGIN IMMEDIATE')
             try:
+                trade_workflows.lock_order(db,oid)
                 o=db.execute('SELECT * FROM orders WHERE id=? AND buyer_id=?',(oid,uid)).fetchone()
                 if not o: raise HttpError(404,'Buyurtma topilmadi.')
                 if o['status']=='paid': db.execute('COMMIT'); return {'status':'paid','idempotent':True}
@@ -2250,26 +2296,17 @@ class Handler(BaseHTTPRequestHandler):
                 for seller in db.execute('SELECT DISTINCT seller_id FROM order_items WHERE order_id=?',(oid,)).fetchall(): email_order_update(db,seller['seller_id'],o['reference'],'paid','Buyurtma to‘lovi tasdiqlandi. Buyurtmani boshqarish uchun hisobingizga kiring.')
                 return {'status':'paid','mode':'sandbox'}
             except Exception: db.execute('ROLLBACK'); raise
-        m=re.fullmatch(r'/api/orders/([^/]+)/deliver',path)
-        if m and method=='POST':
-            require_verified(ctx); oid=m.group(1); o=db.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
-            if not o: raise HttpError(404,'Buyurtma topilmadi.')
-            if o['status'] not in ('paid','awaiting_delivery'): raise HttpError(409,'Buyurtma yetkazishga tayyor emas.')
-            iid=clean_text(data.get('item_id'),'Buyurtma mahsuloti',1,100); it=db.execute('SELECT * FROM order_items WHERE id=? AND order_id=? AND seller_id=?',(iid,oid,uid)).fetchone()
-            if not it: raise HttpError(403,'Bu mahsulotni yetkazish huquqingiz yo‘q.')
-            payload=clean_text(data.get('delivery'),'Yetkazish ma’lumoti',2,5000)
-            try: encrypted_payload=delivery_crypto.encrypt_payload(payload,iid)
-            except delivery_crypto.DeliveryCryptoError as exc: raise HttpError(503,'Maxfiy yetkazish ma’lumotini saqlash uchun DELIVERY_ENCRYPTION_KEY va cryptography paketi sozlanishi kerak.') from exc
-            db.execute('INSERT INTO deliveries(id,order_item_id,seller_id,protected_payload) VALUES(?,?,?,?) ON CONFLICT(order_item_id) DO UPDATE SET protected_payload=excluded.protected_payload,submitted_at=CURRENT_TIMESTAMP',(ident(),iid,uid,encrypted_payload))
-            old=o['status']; db.execute("UPDATE orders SET status='awaiting_delivery',updated_at=CURRENT_TIMESTAMP WHERE id=?",(oid,)); event(db,oid,uid,old,'awaiting_delivery','Sotuvchi mahsulotni yubordi'); notify(db,o['buyer_id'],'delivery','Mahsulot yetkazildi','Buyurtmangizdagi mahsulotga kirishingiz mumkin.','/orders'); email_order_update(db,o['buyer_id'],o['reference'],'awaiting_delivery','Sotuvchi buyurtmani yetkazdi. Hisobingizga kirib xavfsiz buyurtma sahifasini tekshiring.'); return {'status':'awaiting_delivery'}
         m=re.fullmatch(r'/api/orders/([^/]+)/complete',path)
         if m and method=='POST':
             require_verified(ctx); oid=m.group(1); db.execute('BEGIN IMMEDIATE')
             try:
+                trade_workflows.lock_order(db,oid)
                 o=db.execute('SELECT * FROM orders WHERE id=? AND buyer_id=?',(oid,uid)).fetchone()
                 if not o: raise HttpError(404,'Buyurtma topilmadi.')
+                trade_workflows.guard(db,oid,globals())
+                if db.execute('SELECT 1 FROM order_items WHERE order_id=? AND delivered_quantity<quantity',(oid,)).fetchone():raise HttpError(409,'Barcha mahsulotlar to‘liq yetkazilmagan.')
                 if o['status'] not in ('awaiting_delivery','delivered'): raise HttpError(409,'Bu holatda buyurtmani yakunlab bo‘lmaydi.')
-                if db.execute("SELECT 1 FROM order_items i JOIN listings l ON l.id=i.listing_id WHERE i.order_id=? AND l.product_type='account' LIMIT 1",(oid,)).fetchone():
+                if trade_workflows.account_order(db,oid):
                     raise HttpError(409,'Akkaunt xaridi ikki skrinshot va moderator tasdig‘idan keyin yakunlanadi. Buyurtma sahifasidagi “Akkauntni tekshirtirish” bo‘limidan foydalaning.')
                 count=db.execute('SELECT COUNT(*) n FROM order_items i LEFT JOIN deliveries d ON d.order_item_id=i.id WHERE i.order_id=? AND d.id IS NULL',(oid,)).fetchone()['n']
                 if count: raise HttpError(409,'Barcha mahsulotlar yetkazilmagan.')
@@ -2285,8 +2322,10 @@ class Handler(BaseHTTPRequestHandler):
         if m and method=='POST':
             require_verified(ctx); oid=m.group(1); why=clean_text(data.get('details'),'Nizo tafsiloti',10,3000); evidence=evidence_link(data.get('evidence_url')); db.execute('BEGIN IMMEDIATE')
             try:
+                trade_workflows.lock_order(db,oid)
                 o=db.execute('SELECT * FROM orders WHERE id=? AND buyer_id=?',(oid,uid)).fetchone()
                 if not o: raise HttpError(404,'Buyurtma topilmadi.')
+                trade_workflows.guard(db,oid,globals())
                 if o['status'] not in ('paid','awaiting_delivery','delivered'): raise HttpError(409,'Ushbu holatda nizoni ochib bo‘lmaydi.')
                 changed=db.execute("UPDATE orders SET status='disputed',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status IN ('paid','awaiting_delivery','delivered')",(oid,))
                 if changed.rowcount!=1: raise HttpError(409,'Buyurtma holati o‘zgargan; sahifani yangilang.')
@@ -2485,7 +2524,7 @@ class Handler(BaseHTTPRequestHandler):
                     if changed.rowcount!=1: raise HttpError(409,'Nizo allaqachon yakunlangan.')
                     refund_sandbox_escrow(db,oid,order['buyer_id']); db.execute("UPDATE payments SET status='sandbox_refunded',updated_at=CURRENT_TIMESTAMP WHERE order_id=?",(oid,)); event(db,oid,aid,'disputed','refunded',note)
                     result='refunded'; buyer_title='Sandbox qaytarimi qayd etildi'; buyer_body='Sinov buyurtmasi bekor qilindi. Bu haqiqiy pul qaytarimi emas.'; seller_title='Nizo yakunlandi'; seller_body='Sinov buyurtmasi qaytarim bilan yopildi; haqiqiy pul ko‘chirilmagan.'
-                db.execute("UPDATE reports SET status='resolved',resolution=? WHERE id=?",(note,report['id'])); audit(db,aid,'dispute_'+action,'order',oid,{'note':note,'payment_mode':'sandbox'})
+                db.execute("UPDATE reports SET status='resolved',resolution=?,resolved_at=CURRENT_TIMESTAMP WHERE id=?",(note,report['id'])); audit(db,aid,'dispute_'+action,'order',oid,{'note':note,'payment_mode':'sandbox'})
                 notify(db,order['buyer_id'],'dispute_update',buyer_title,buyer_body,'/order/'+oid)
                 for seller in sellers: notify(db,seller,'dispute_update',seller_title,seller_body,'/order/'+oid)
                 db.execute('COMMIT')

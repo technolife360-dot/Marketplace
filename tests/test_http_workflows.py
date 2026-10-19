@@ -165,7 +165,7 @@ class HTTPWorkflows(unittest.TestCase):
         self.assertEqual((status, messages['messages'][0]['body']), (200, 'Is delivery available?'))
         status, _, _ = buyer.request('POST', '/api/cart', {'listing_id': lid, 'quantity': 1})
         self.assertEqual(status, 200)
-        status, order, _ = buyer.request('POST', '/api/checkout', {'accept_terms': True})
+        status, order, _ = buyer.request('POST', '/api/checkout', {'accept_terms': True,'buyer_details':{lid:{'player_id':'HTTP-Recipient#42'}}})
         self.assertEqual(status, 201, order)
         self.assertEqual(order['mode'], 'sandbox')
         oid = order['id']
@@ -176,6 +176,12 @@ class HTTPWorkflows(unittest.TestCase):
         item = order['items'][0]['id']
         status, result, _ = self.seller.request('POST', f'/api/orders/{oid}/deliver', {'item_id': item, 'delivery': 'Private local test delivery code'})
         self.assertEqual(status, 200, result)
+        status,evidence,_=self.seller.request('POST',f'/api/orders/{oid}/evidence',{'item_id':item,'body':'Transfer completed; reference HTTP-1234.'})
+        self.assertEqual(status,201,evidence)
+        with patch.object(app,'require_private_evidence_bucket'),patch.object(app,'normalize_account_evidence',return_value=b'webp'),patch.object(app.storage_r2,'put_evidence') as put:
+            status,evidence,_=self.seller.request('POST',f'/api/orders/{oid}/evidence?item_id={item}',raw=b'photo',content_type='image/png')
+            self.assertEqual(status,201,evidence);put.assert_called_once()
+        self.assertEqual(self.guest.request('GET',f'/api/orders/{oid}/workflow')[0],401)
         status, order, _ = buyer.request('GET', '/api/orders/' + oid)
         self.assertEqual(order['items'][0]['delivery']['protected_payload'], 'Private local test delivery code')
         self.assertTrue(self.db.execute('SELECT protected_payload FROM deliveries WHERE order_item_id=?', (item,)).fetchone()['protected_payload'].startswith('enc:v1:'))
