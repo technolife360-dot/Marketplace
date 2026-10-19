@@ -106,7 +106,7 @@ const marketGameLinks=[
  ['honor-of-kings','Honor of Kings','/static/assets/market-game-honor-of-kings.png','hok'],['roblox','Roblox','/static/assets/market-game-roblox.png','roblox'],
  ['valorant','Valorant','/static/assets/market-game-valorant.png','valorant'],['genshin-impact','Genshin Impact','/static/assets/market-game-genshin-impact.png','genshin']
 ];
-function marketGameMark(game){const [,,mark,theme]=game;return `<span class="market-game-mark market-game-${theme}" aria-hidden="true"><img src="${mark}" alt="" width="52" height="38" loading="lazy" decoding="async"></span>`}
+function marketGameMark(game){const [,,mark,theme]=game;return `<span class="market-game-mark market-game-${theme}" aria-hidden="true"><img src="${mark}" alt="" width="28" height="28" loading="lazy" decoding="async"></span>`}
 function marketCard(it){
  const gameName=it.game_name||adminText('O‘yin','Игра','Game');
  const demoArt=!it.image_url&&String(it.id).startsWith('demo-')?it.game_slug==='pubg-mobile'?'market-banner-games.jpg':it.game_slug==='valorant'?'market-banner-soldier.jpg':'market-banner-worlds.jpg':'';

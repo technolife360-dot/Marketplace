@@ -2749,14 +2749,14 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
 .market-sidebar-main a:hover .icon, .market-sidebar-main a.active .icon { color:#fff; }
 .market-sidebar-games { padding:16px 0 0; border-top:1px solid #202b43; }
 .market-sidebar-games h2 { margin:0 0 10px; padding:0 12px; color:#c6d0e5; font-size:12px; font-weight:600; }
-.market-sidebar-games nav { display:grid; gap:5px; }
-.market-sidebar-games nav a { min-height:50px; display:flex; align-items:center; gap:12px; padding:5px 10px; border:1px solid transparent; border-radius:10px; color:#d6dff2; font-size:12px; font-weight:550; transition:background .18s ease,border-color .18s ease,color .18s ease; }
+.market-sidebar-games nav { display:grid; gap:3px; }
+.market-sidebar-games nav a { min-height:40px; display:flex; align-items:center; gap:12px; padding:5px 10px; border:1px solid transparent; border-radius:10px; color:#d6dff2; font-size:12px; font-weight:550; transition:background .18s ease,border-color .18s ease,color .18s ease; }
 .market-sidebar-games nav a > span:last-child { min-width:0; line-height:1.35; }
 .market-sidebar-games nav a:hover, .market-sidebar-games nav a.active { border-color:#7147b866; background:#9a62f215; color:#d7c2ff; }
 .market-sidebar-games nav a:focus-visible { outline:2px solid #b68aff; outline-offset:2px; }
 .market-all-games:hover { color:#bd9bff; }
-.market-game-mark { width:52px; height:38px; display:grid; flex:none; place-items:center; overflow:hidden; border:1px solid #344460; border-radius:7px; background:#0b1220; box-shadow:0 2px 6px #0003; }
-.market-game-mark img { display:block; width:100%; height:100%; object-fit:contain; }
+.market-game-mark { width:28px; height:28px; display:grid; flex:none; place-items:center; overflow:hidden; border:1px solid #344460; border-radius:0; background:#0b1220; box-shadow:0 2px 6px #0003; }
+.market-game-mark img { display:block; width:100%; height:100%; object-fit:cover; }
 .market-game-cs2 { background:linear-gradient(135deg,#e99b43,#4e6794); }
 .market-game-roblox { background:linear-gradient(135deg,#8491aa,#273348); }
 .market-game-valorant { background:linear-gradient(135deg,#fe5e7d,#982943); }
