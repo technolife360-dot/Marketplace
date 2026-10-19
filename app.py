@@ -874,8 +874,10 @@ def validate_listing_attributes(attributes, product_type, require_details=False)
         raise HttpError(400,'Raqamli mahsulot formati va yetkazish tafsilotlarini kiriting.')
     return cleaned
 def parse_json(body):
-    try: return json.loads(body or b'{}')
-    except Exception: raise HttpError(400,'JSON so‘rovi noto‘g‘ri.')
+    try: value=json.loads(body or b'{}')
+    except (ValueError,UnicodeError): raise HttpError(400,'JSON so‘rovi noto‘g‘ri.')
+    if not isinstance(value,dict): raise HttpError(400,'JSON so‘rovi obyekt bo‘lishi kerak.')
+    return value
 
 def listing_detail(db, lid, viewer=None):
     r=db.execute("""SELECT l.id,l.seller_id,l.game_id,l.category_id,l.title,l.description,l.product_type,l.price_minor,l.currency,l.platform,l.region,l.attributes_json,l.delivery_method,l.delivery_eta,l.requirements,l.stock,l.reserved,l.status,l.moderation_note,l.image_url,l.created_at,l.updated_at,g.name game_name,g.slug game_slug,c.name category_name,s.shop_name seller_name,s.verification_status,CASE WHEN s.identity_provider='didit' AND s.identity_status='verified' THEN 1 ELSE 0 END AS identity_verified,
@@ -886,6 +888,8 @@ def listing_detail(db, lid, viewer=None):
     if viewer and (out['seller_id']==viewer or is_admin(db,viewer)):
         out['marketplace_visible']=bool(out['status']=='published' and out['available']>0
                                         and listing_allowed_for_production(db,out['game_id'],out['product_type']))
+    if not (viewer and (out['seller_id']==viewer or is_admin(db,viewer))):
+        out.pop('moderation_note',None)
     # Risk signals are moderation metadata, never part of the public listing payload.
     risk_flags=out['attributes'].pop('_risk_flags',[])
     out['attributes'].pop('_ai_review',None)
@@ -1123,9 +1127,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('X-Content-Type-Options','nosniff'); self.send_header('X-Frame-Options','DENY'); self.send_header('Referrer-Policy','strict-origin-when-cross-origin'); self.send_header('Permissions-Policy','camera=(self "https://verify.didit.me"), microphone=(self "https://verify.didit.me"), geolocation=()'); self.send_header('Content-Security-Policy',"default-src 'self'; img-src 'self' data: https: blob: https://s3.amazonaws.com; script-src 'self' https://client.crisp.chat https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://client.crisp.chat https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' data: https://client.crisp.chat https://fonts.gstatic.com; style-src-attr 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self' https://api.frankfurter.dev https://client.crisp.chat https://storage.crisp.chat wss://client.relay.crisp.chat wss://client.relay.rescue.crisp.chat wss://stream.relay.crisp.chat; frame-src 'self' https://client.crisp.chat https://assets.crisp.chat https://*.crisp.help; media-src 'self' blob: https://client.crisp.chat; worker-src 'self' blob: https://client.crisp.chat")
         if MODE=='production': self.send_header('Strict-Transport-Security','max-age=31536000')
     def body(self, limit=MAX_BODY):
-        n=int(self.headers.get('Content-Length','0'))
+        try: n=int(self.headers.get('Content-Length','0'))
+        except (ValueError,TypeError): raise HttpError(400,'So‘rov uzunligi noto‘g‘ri.')
+        if n<0: raise HttpError(400,'So‘rov uzunligi noto‘g‘ri.')
         if n>limit: raise HttpError(413,'So‘rov hajmi cheklovdan oshdi.')
-        return self.rfile.read(n) if n else b'{}'
+        body=self.rfile.read(n) if n else b'{}'
+        if n and len(body)!=n: raise HttpError(400,'So‘rov tanasi to‘liq yuborilmagan.')
+        return body
     def cookie(self):
         for part in self.headers.get('Cookie','').split(';'):
             k,sep,v=part.strip().partition('=')
@@ -1172,6 +1180,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.path.startswith('/api/'):
             parsed=urlparse(self.path)
+            if parsed.path=='/healthz': self.dispatch(); return
             if parsed.path=='/robots.txt':
                 payload=f"User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\nSitemap: {public_site_base()}/sitemap.xml\n".encode('utf-8')
                 self.send_response(200); self.send_header('Content-Type','text/plain; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=3600'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
@@ -1179,7 +1188,8 @@ class Handler(BaseHTTPRequestHandler):
                 payload=public_sitemap_xml()
                 self.send_response(200); self.send_header('Content-Type','application/xml; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=300'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
             public_route=parsed.path.rstrip('/') or '/'
-            account_route={'/messages':'messages','/seller':'seller'}.get(public_route)
+            account_route=public_route[1:] if public_route[1:] in ('login','register','password-reset','account','cart','orders','seller','wallet','payout-options','my-reviews','notifications','messages','favorites','requests','compare','admin','admin-blog','top-up-admin') else None
+            if not account_route and re.fullmatch(r'/(?:order|conversation|listing-review)/[A-Za-z0-9_-]{1,100}',public_route): account_route=public_route[1:]
             if account_route:
                 self.send_response(302); self.send_header('Location','/#'+account_route); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length','0'); self.secure_headers(); self.end_headers(); return
             if public_route in ('/top-up','/browse','/blog','/selling','/guide','/fees','/policies','/support','/help','/help/orders','/help/payments','/help/refunds','/help/chat','/terms','/refunds','/seller-policy','/prohibited-items','/contact'):
@@ -1418,7 +1428,7 @@ class Handler(BaseHTTPRequestHandler):
             if not email_service.is_configured() and MODE!='development': raise HttpError(503,'Ro‘yxatdan o‘tish uchun xavfsiz email yuborish xizmati konfiguratsiyasi kerak.')
             check_rate(db,'register',self.client_address[0],5)
             email=clean_text(data.get('email'),'Email',3,254).lower(); name=clean_text(data.get('name'),'Ism',2,80); password=data.get('password','')
-            if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email) or len(password)<10 or len(password)>256: raise HttpError(400,'To‘g‘ri email va kamida 10 belgili parol kiriting.')
+            if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email) or not isinstance(password,str) or len(password)<10 or len(password)>256: raise HttpError(400,'To‘g‘ri email va kamida 10 belgili parol kiriting.')
             if email in (os.environ.get('SEED_ADMIN_EMAIL','').lower(),): raise HttpError(409,'Bu email administratorda ishlatiladi.')
             country=data.get('country','UZ')
             if not isinstance(country,str) or country not in ASIA_COUNTRIES: raise HttpError(400,'Osiyo mamlakatini tanlang.')
@@ -1905,7 +1915,7 @@ class Handler(BaseHTTPRequestHandler):
             fields={}
             if 'display_name' in data: fields['display_name']=clean_text(data['display_name'],'Ism',2,80)
             if 'language' in data:
-                if data['language'] not in SUPPORTED_LANGUAGES: raise HttpError(400,'Til tanlovi noto‘g‘ri.')
+                if not isinstance(data['language'],str) or data['language'] not in SUPPORTED_LANGUAGES: raise HttpError(400,'Til tanlovi noto‘g‘ri.')
                 fields['language']=data['language']
             if 'country' in data:
                 if not isinstance(data['country'],str) or data['country'] not in ASIA_COUNTRIES: raise HttpError(400,'Osiyo mamlakatini tanlang.')
@@ -1978,7 +1988,7 @@ class Handler(BaseHTTPRequestHandler):
             if not db.execute('SELECT 1 FROM categories WHERE id=? AND active=1',(cat,)).fetchone(): raise HttpError(400,'Kategoriya topilmadi.')
             title=clean_text(data.get('title'),'Sarlavha',5,120); desc=clean_text(data.get('description'),'Tavsif',20,5000); price=money(data.get('price_minor'))
             stock=data.get('stock',1)
-            if not isinstance(stock,int) or stock<0 or stock>10000: raise HttpError(400,'Qoldiq miqdori noto‘g‘ri.')
+            if isinstance(stock,bool) or not isinstance(stock,int) or stock<0 or stock>10000: raise HttpError(400,'Qoldiq miqdori noto‘g‘ri.')
             typ=db.execute('SELECT product_type FROM categories WHERE id=?',(cat,)).fetchone()['product_type']
             if typ=='account' and data.get('accept_account_terms') is not True:
                 raise HttpError(400,'Akkaunt e’lonidan oldin egalik, noshir qoidalari va taqiqlangan holatlar bo‘yicha sotuvchi tasdig‘i kerak.')
@@ -2081,7 +2091,7 @@ class Handler(BaseHTTPRequestHandler):
         if m and method=='DELETE': require_user(ctx); db.execute('DELETE FROM favorites WHERE user_id=? AND listing_id=?',(uid,m.group(1))); return {'saved':False}
         if path=='/api/cart' and method=='POST':
             require_user(ctx); lid=clean_text(data.get('listing_id'),'E’lon',1,100); qty=data.get('quantity',1)
-            if not isinstance(qty,int) or qty<1 or qty>100: raise HttpError(400,'Miqdor 1–100 orasida bo‘lishi kerak.')
+            if isinstance(qty,bool) or not isinstance(qty,int) or qty<1 or qty>100: raise HttpError(400,'Miqdor 1–100 orasida bo‘lishi kerak.')
             l=db.execute("SELECT * FROM listings WHERE id=? AND status='published'",(lid,)).fetchone()
             if not l: raise HttpError(404,'E’lon topilmadi.')
             if l['seller_id']==uid: raise HttpError(400,'O‘zingizning e’loningizni savatchaga qo‘sha olmaysiz.')
@@ -2221,7 +2231,7 @@ class Handler(BaseHTTPRequestHandler):
                 WHERE r.reviewer_id=? ORDER BY r.created_at DESC LIMIT 100''',(uid,)).fetchall()]
         if path=='/api/reviews' and method=='POST':
             require_verified(ctx); iid=clean_text(data.get('item_id'),'Buyurtma mahsuloti',1,100); rating=data.get('rating'); body=clean_text(data.get('body'),'Sharh',5,1500)
-            if not isinstance(rating,int) or rating<1 or rating>5: raise HttpError(400,'Baho 1 dan 5 gacha bo‘lsin.')
+            if isinstance(rating,bool) or not isinstance(rating,int) or rating<1 or rating>5: raise HttpError(400,'Baho 1 dan 5 gacha bo‘lsin.')
             it=db.execute("SELECT i.*,o.status,o.buyer_id FROM order_items i JOIN orders o ON o.id=i.order_id WHERE i.id=?",(iid,)).fetchone()
             if not it or it['buyer_id']!=uid or it['status']!='completed': raise HttpError(403,'Sharh faqat tugallangan xarid uchun mumkin.')
             rid=ident(); db.execute('INSERT INTO reviews(id,order_item_id,reviewer_id,seller_id,rating,body) VALUES(?,?,?,?,?,?)',(rid,iid,uid,it['seller_id'],rating,body)); return 201,{'id':rid}
@@ -2361,7 +2371,7 @@ class Handler(BaseHTTPRequestHandler):
                 db.execute('ROLLBACK'); raise
         if path=='/api/admin/config' and method=='POST':
             aid=require_admin(ctx); bps=data.get('commission_bps')
-            if not isinstance(bps,int) or bps<0 or bps>3000: raise HttpError(400,'Komissiya 0–3000 bps bo‘lishi kerak.')
+            if isinstance(bps,bool) or not isinstance(bps,int) or bps<0 or bps>3000: raise HttpError(400,'Komissiya 0–3000 bps bo‘lishi kerak.')
             db.execute("INSERT INTO platform_config(key,value) VALUES('commission_bps',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP",(str(bps),)); audit(db,aid,'config_update','platform_config','commission_bps',{'commission_bps':bps}); return {'commission_bps':bps}
         if path=='/api/admin/blog' and method=='POST':
             aid=require_admin(ctx)
@@ -2534,7 +2544,7 @@ class VercelWSGIApplication:
         request=_VercelRequest(environ)
         method=request.command
         if method=='HEAD':
-            request.do_GET()
+            request.do_HEAD()
         elif method in ('GET','POST','PATCH','DELETE'):
             getattr(request,'do_'+method)()
         else:

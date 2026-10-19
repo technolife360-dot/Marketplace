@@ -13,8 +13,6 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install -r requirements.txt
       - name: Syntax checks
-        run: |
-          python -m py_compile app.py payment_providers.py seed.py
-          node --check static/app.js
+        run: npm run build
       - name: Business workflow tests
-        run: python -m unittest discover -s tests -v
+        run: npm test

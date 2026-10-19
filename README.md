@@ -32,6 +32,8 @@ Account-purchase evidence uses the separate **private** R2 bucket: do not attach
 
 Local secrets are kept in `~/Desktop/SentryLoot-Secrets/.env`, outside the repository. The application checks that path before falling back to a project `.env`; both are ignored by Git. Restrict file permissions and do not share or sync this folder publicly.
 
+`npm test` runs frontend regressions and Python workflows, including an isolated WSGI test from registration and email verification through moderation, messages, sandbox checkout, encrypted delivery and reviews. It also checks CSRF/session access, account deep links, static assets and invalid request bodies. These tests use temporary SQLite data and do not charge money or send external emails. Live provider delivery and deployment settings still need separate verification.
+
 The app uses small browser-side Node packages for analytics and support. `package.json` also provides npm aliases: `npm run build` checks frontend and Python syntax, and `npm start` runs the Python server.
 
 ## Development accounts and seed data
