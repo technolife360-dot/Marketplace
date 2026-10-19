@@ -1584,7 +1584,39 @@ class Handler(BaseHTTPRequestHandler):
             lid=path.split('/')[-1]; item=listing_detail(db,lid,uid)
             if not item or (item['status']!='published' and item['seller_id']!=uid and not (uid and is_admin(db,uid))): raise HttpError(404,'E’lon topilmadi.')
             if item['status']=='published' and not listing_allowed_for_production(db,item['game_id'],item['product_type']): raise HttpError(404,'E’lon topilmadi.')
-            item.pop('seller_id',None)
+            seller_id=item.pop('seller_id',None)
+            profile=db.execute('SELECT bio,created_at FROM seller_profiles WHERE user_id=?',(seller_id,)).fetchone()
+            online=False
+            if user_presence_available(db):
+                presence=db.execute('SELECT last_seen_at FROM users WHERE id=?',(seller_id,)).fetchone()
+                online=bool(presence and presence['last_seen_at'] and presence['last_seen_at']>=(datetime.now(timezone.utc)-timedelta(minutes=3)).isoformat(timespec='seconds'))
+            positive=db.execute('SELECT COUNT(*) n FROM reviews WHERE seller_id=? AND rating>=4',(seller_id,)).fetchone()['n']
+            reply_samples=[]
+            reply_rows=db.execute("""SELECT first_message.sent_at first_buyer,MIN(reply.created_at) first_reply
+                FROM (SELECT c.id,MIN(m.created_at) sent_at FROM conversations c
+                      JOIN messages m ON m.conversation_id=c.id AND m.sender_id=c.buyer_id
+                      WHERE c.seller_id=? GROUP BY c.id ORDER BY MAX(c.created_at) DESC LIMIT 100) first_message
+                JOIN messages reply ON reply.conversation_id=first_message.id AND reply.sender_id=? AND reply.created_at>=first_message.sent_at
+                GROUP BY first_message.id,first_message.sent_at""",(seller_id,seller_id))
+            for reply in reply_rows:
+                first_buyer,first_reply=reply['first_buyer'],reply['first_reply']
+                try:
+                    sent=datetime.fromisoformat(first_buyer.replace('Z','+00:00'))
+                    replied=datetime.fromisoformat(first_reply.replace('Z','+00:00'))
+                    if sent.tzinfo is None: sent=sent.replace(tzinfo=timezone.utc)
+                    if replied.tzinfo is None: replied=replied.replace(tzinfo=timezone.utc)
+                    reply_samples.append(max(0,(replied-sent).total_seconds()))
+                except (ValueError,TypeError): continue
+            item['seller']={
+                'avg_reply_seconds':round(sum(reply_samples)/len(reply_samples)) if reply_samples else None,
+                'bio':profile['bio'] if profile else '',
+                'member_since':profile['created_at'] if profile else None,
+                'online':online,
+                'positive_percent':round(100*positive/item['review_count']) if item['review_count'] else None,
+                'total_sales':db.execute("SELECT COALESCE(SUM(oi.quantity),0) n FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE oi.seller_id=? AND o.status='completed'",(seller_id,)).fetchone()['n'],
+                'active_listings':db.execute("SELECT COUNT(*) n FROM listings WHERE seller_id=? AND status='published' AND stock>reserved",(seller_id,)).fetchone()['n'],
+            }
+            item['reviews']=[dict(row) for row in db.execute('SELECT r.rating,r.body,r.created_at,u.display_name reviewer_name FROM reviews r JOIN users u ON u.id=r.reviewer_id WHERE r.seller_id=? ORDER BY r.created_at DESC,r.id DESC LIMIT 20',(seller_id,))]
             item['related']=[dict(x) for x in db.execute('SELECT id,title,price_minor,currency FROM listings WHERE game_id=? AND status=\'published\' AND id<>? ORDER BY created_at DESC LIMIT 4',(item['game_id'],lid))]
             return item
         if path=='/api/cart' and method=='GET':
