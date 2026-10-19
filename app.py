@@ -1585,6 +1585,7 @@ class Handler(BaseHTTPRequestHandler):
             if not item or (item['status']!='published' and item['seller_id']!=uid and not (uid and is_admin(db,uid))): raise HttpError(404,'E’lon topilmadi.')
             if item['status']=='published' and not listing_allowed_for_production(db,item['game_id'],item['product_type']): raise HttpError(404,'E’lon topilmadi.')
             seller_id=item.pop('seller_id',None)
+            item['is_owner']=bool(uid and seller_id==uid)
             profile=db.execute('SELECT bio,created_at FROM seller_profiles WHERE user_id=?',(seller_id,)).fetchone()
             online=False
             if user_presence_available(db):
@@ -2187,8 +2188,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not conv:
                     cid=ident();db.execute('INSERT INTO conversations(id,buyer_id,seller_id) VALUES(?,?,?)',(cid,uid,seller));conv={'id':cid}
                 return {'id':conv['id']}
-            lid=clean_text(data.get('listing_id'),'E’lon',1,100); l=db.execute("SELECT * FROM listings WHERE id=? AND status='published'",(lid,)).fetchone()
-            if not l or l['seller_id']==uid: raise HttpError(404,'E’lon topilmadi.')
+            lid=clean_text(data.get('listing_id'),'E’lon',1,100); l=db.execute('SELECT seller_id,status FROM listings WHERE id=?',(lid,)).fetchone()
+            if not l: raise HttpError(404,'E’lon topilmadi.')
+            if l['seller_id']==uid: raise HttpError(400,'O‘z e’loningiz bo‘yicha o‘zingiz bilan suhbat boshlay olmaysiz.')
+            if l['status']!='published': raise HttpError(409,'Bu e’lon endi faol emas. Bozor sahifasini yangilang.')
             cid=ident(); db.execute('INSERT OR IGNORE INTO conversations(id,buyer_id,seller_id,listing_id) VALUES(?,?,?,?)',(cid,uid,l['seller_id'],lid)); conv=db.execute('SELECT * FROM conversations WHERE buyer_id=? AND seller_id=? AND listing_id=?',(uid,l['seller_id'],lid)).fetchone(); return {'id':conv['id']}
         m=re.fullmatch(r'/api/conversations/([^/]+)/messages',path)
         if m and method=='POST':

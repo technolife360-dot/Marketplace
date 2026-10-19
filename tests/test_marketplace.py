@@ -689,6 +689,38 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM sessions WHERE token_hash=?',(app.hash_token(raw),)).fetchone()['n'],0)
 
 
+    def test_listing_conversation_can_be_created_reused_and_read_only_by_participants(self):
+        path='/api/conversations'
+        data={'listing_id':self.listing}
+        conv=self.route(self.buyer,'POST',path,data)
+        self.assertEqual(self.route(self.buyer,'POST',path,data)['id'],conv['id'])
+        self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM conversations WHERE listing_id=?',(self.listing,)).fetchone()['n'],1)
+        self.route(self.buyer,'POST',f"{path}/{conv['id']}/messages",{'body':'Is this listing available?'})
+        for uid in (self.buyer,self.seller):
+            result=self.route(uid,'GET',f"{path}/{conv['id']}")
+            self.assertEqual(result['messages'][0]['body'],'Is this listing available?')
+        with self.assertRaises(app.HttpError) as error:
+            self.route(self.other,'GET',f"{path}/{conv['id']}")
+        self.assertEqual(error.exception.status,404)
+    def test_own_listing_is_identified_and_cannot_create_self_conversation(self):
+        self.assertTrue(self.route(self.seller,'GET',f'/api/listings/{self.listing}')['is_owner'])
+        for uid in (None,self.buyer,self.admin):
+            self.assertFalse(self.route(uid,'GET',f'/api/listings/{self.listing}')['is_owner'])
+        with self.assertRaises(app.HttpError) as error:
+            self.route(self.seller,'POST','/api/conversations',{'listing_id':self.listing})
+        self.assertEqual(error.exception.status,400)
+        self.assertIn('O‘z e’loningiz',error.exception.message)
+        self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM conversations').fetchone()['n'],0)
+    def test_listing_conversation_distinguishes_missing_and_inactive_listings(self):
+        with self.assertRaises(app.HttpError) as error:
+            self.route(self.buyer,'POST','/api/conversations',{'listing_id':'missing-listing'})
+        self.assertEqual(error.exception.status,404)
+        self.db.execute("UPDATE listings SET status='paused' WHERE id=?",(self.listing,))
+        with self.assertRaises(app.HttpError) as error:
+            self.route(self.buyer,'POST','/api/conversations',{'listing_id':self.listing})
+        self.assertEqual(error.exception.status,409)
+        self.assertIn('faol emas',error.exception.message)
+        self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM conversations').fetchone()['n'],0)
     def test_wanted_request_replies_are_private_and_requester_can_start_conversation(self):
         request=self.route(self.buyer,'POST','/api/requests',{'game_id':'valorant','category_id':'accounts','title':'Looking for ranked account','description':'Need a ranked account in the Asia region.','budget_minor':100000})
         self.route(self.seller,'POST',f"/api/requests/{request['id']}/respond",{'message':'I can help; please message me for details.'})

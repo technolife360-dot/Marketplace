@@ -462,6 +462,8 @@ Object.assign(window.BOZOR_COPY,{
   'Atributlar noto‘g‘ri.':['Некорректные атрибуты.','Invalid attributes.'],
   'Rasm havolasi http yoki https bilan boshlanishi kerak.':['Ссылка на изображение должна начинаться с http или https.','Image URL must start with http or https.'],
   'Yetkazish turi noto‘g‘ri.':['Некорректный способ доставки.','Invalid delivery method.'],
+  'O‘z e’loningiz bo‘yicha o‘zingiz bilan suhbat boshlay olmaysiz.':['Нельзя начать разговор с собой по собственному объявлению.','You cannot contact yourself about your own listing.'],
+  'Bu e’lon endi faol emas. Bozor sahifasini yangilang.':['Это объявление больше не активно. Обновите страницу маркета.','This listing is no longer active. Refresh the marketplace page.'],
   'E’lon topilmadi.':['Объявление не найдено.','Listing not found.'],
   'Ushbu holatda bu amalni bajarib bo‘lmaydi.':['Это действие недоступно в текущем статусе.','This action is unavailable in the current status.'],
   'Bu e’lon hozir moderatsiyaga yuborilmaydi.':['Это объявление сейчас нельзя отправить на модерацию.','This listing cannot be submitted for moderation now.'],
