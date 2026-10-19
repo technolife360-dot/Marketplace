@@ -153,3 +153,28 @@ def send_security_update(address: str, display_name: str, description: str) -> N
     message['To']=address
     message.set_content(f'Salom, {display_name}.\n\n{description}.\nBu amalni siz bajarmagan bo‘lsangiz, gamestorehub.com orqali yordam xizmatiga murojaat qiling.')
     _deliver(message)
+
+
+def send_marketplace_alert(address: str, display_name: str, title: str) -> None:
+    """Opt-in discovery/chat alert. Never email private chat bodies or delivery codes."""
+    if not is_configured():raise RuntimeError('Transactional email is not configured')
+    base=os.environ.get('PUBLIC_BASE_URL','').strip().rstrip('/')
+    parsed=urlsplit(base)
+    if parsed.scheme not in ('https','http') or not parsed.netloc or parsed.username or parsed.password:raise ValueError('PUBLIC_BASE_URL must be an absolute URL')
+    if os.environ.get('MARKETPLACE_MODE','development').lower()=='production' and parsed.scheme!='https':raise ValueError('HTTPS is required')
+    message=EmailMessage();message['Subject']='SentryLoot — '+title;message['From']=_from_address();message['To']=address
+    url=base+'/#notifications';description='Hisobingizda yangi bildirishnoma bor. Tafsilotlarni sayt ichida ko‘ring. Bildirishnomalarni profil sozlamalarida o‘chirishingiz mumkin.'
+    message.set_content(title+'\n\n'+description+'\n'+url)
+    message.add_alternative(_brand_html(description,title,display_name,[description],'Bildirishnomalarni ko‘rish',url,'Email xabarlari foydalanuvchi roziligi bilan yuboriladi.'),subtype='html');_deliver(message)
+
+
+def send_monitor_alert(address: str, workflow: str, run_url: str) -> None:
+    """Operational alert with a fixed repository run URL; no logs, secrets or customer data."""
+    if not is_configured():raise RuntimeError('Monitor email delivery is not configured')
+    if address!='sentryloot@gamestorehub.com':raise ValueError('Unexpected monitor recipient')
+    if not run_url.startswith('https://github.com/technolife360-dot/Marketplace/actions/runs/') or not run_url.rsplit('/',1)[-1].isdigit():raise ValueError('Unexpected monitor URL')
+    workflow=' '.join(workflow.split())[:120]
+    message=EmailMessage();message['Subject']='SentryLoot monitoring — '+workflow;message['From']=_from_address();message['To']=address
+    description='Monitoring tekshiruvi xato bilan yakunlandi. Sababni GitHub run sahifasida tekshiring. Bu xabarda mijoz ma’lumotlari yoki maxfiy kalitlar yo‘q.'
+    message.set_content(description+'\n\nWorkflow: '+workflow+'\n'+run_url)
+    message.add_alternative(_brand_html(description,'Monitoring tekshiruvi',address,[description,workflow],'Tekshiruvni ochish',run_url,'Bu operatsion monitoring xabari.'),subtype='html');_deliver(message)

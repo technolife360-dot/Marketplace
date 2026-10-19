@@ -1,0 +1,44 @@
+name: Opt-in marketplace email alerts
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sentryloot-discovery-emails
+  cancel-in-progress: false
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SENTRYLOOT_ENV_FILE: /dev/null
+      DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+      MARKETPLACE_MODE: production
+      PUBLIC_BASE_URL: https://gamestorehub.com
+      EMAIL_PROVIDER: resend
+      EMAIL_FROM: SentryLoot <alerts@mail.gamestorehub.com>
+      RESEND_API_KEY: ${{ secrets.MONITOR_RESEND_API_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt
+      - name: Deliver consented notifications without private message content
+        run: |
+          python - <<'PY'
+          import os,secrets
+          os.environ['SESSION_SECRET']=secrets.token_urlsafe(48)
+          import app
+          from catalogue_experience import dispatch_emails
+          db=app.connect()
+          try:
+              result=dispatch_emails(db,vars(app))
+              if not result['configured']:
+                  raise SystemExit('Email provider is not configured; nothing was sent.')
+              print('Delivered opt-in notifications:',result['sent'])
+              if result.get('failed'):raise SystemExit('Email provider rejected one or more alerts; inspect outbox status.')
+          finally:db.close()
+          PY

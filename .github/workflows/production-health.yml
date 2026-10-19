@@ -25,6 +25,7 @@ jobs:
     env:
       SIMULATE_FAILURE: ${{ inputs.simulate_failure || 'false' }}
     steps:
+      - uses: actions/checkout@v7
       - name: Check protected site and public R2 delivery
         run: |
           python - <<'PY'
@@ -72,3 +73,13 @@ jobs:
               # Do not print response bodies, cookies, or provider URLs.
               raise SystemExit(f'Production perimeter check failed at {stage}: {type(exc).__name__}')
           PY
+
+      - name: Email monitoring failure to support
+        if: failure()
+        env:
+          EMAIL_PROVIDER: resend
+          EMAIL_FROM: SentryLoot Monitoring <alerts@mail.gamestorehub.com>
+          RESEND_API_KEY: ${{ secrets.MONITOR_RESEND_API_KEY }}
+          PUBLIC_BASE_URL: https://gamestorehub.com
+          MARKETPLACE_MODE: production
+        run: python scripts/send_monitor_alert.py --workflow "Production perimeter monitor" --run-url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"

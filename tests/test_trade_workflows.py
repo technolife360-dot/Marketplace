@@ -120,6 +120,7 @@ class TradeWorkflows(unittest.TestCase):
                 self.handler.headers={'Content-Type':'image/png'}
                 trade.route(self.handler,self.db,self.ctx(self.seller),'POST',f'/api/orders/{oid}/evidence',{'item_id':[iid]}, {},b'photo',vars(app))
                 put.assert_called_once()
+                app.storage_r2._key(put.call_args.args[0])
                 w=self.route(self.buyer,'GET',f'/api/orders/{oid}/workflow');self.assertEqual(len(w['artifacts']),2);self.assertNotIn('object_path',w['artifacts'][1])
 
     def test_after_sale_window_and_policy_are_enforced_and_case_is_tracked(self):

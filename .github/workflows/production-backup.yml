@@ -68,3 +68,13 @@ jobs:
       - name: Retain 35 days of encrypted backups
         if: success()
         run: python scripts/backup_postgres_r2.py prune --days 35
+
+      - name: Email monitoring failure to support
+        if: failure()
+        env:
+          EMAIL_PROVIDER: resend
+          EMAIL_FROM: SentryLoot Monitoring <alerts@mail.gamestorehub.com>
+          RESEND_API_KEY: ${{ secrets.MONITOR_RESEND_API_KEY }}
+          PUBLIC_BASE_URL: https://gamestorehub.com
+          MARKETPLACE_MODE: production
+        run: python scripts/send_monitor_alert.py --workflow "Production database backup and restore" --run-url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"

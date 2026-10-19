@@ -19,7 +19,7 @@ class BrowserClient:
         self.cookie = ''
         self.csrf = ''
 
-    def request(self, method, url, data=None, *, csrf=True, raw=None, length=None, content_type="application/json"):
+    def request(self, method, url, data=None, *, csrf=True, raw=None, length=None, content_type="application/json", headers=None):
         parsed = urlsplit(url)
         body = raw if raw is not None else json.dumps(data).encode() if data is not None else b''
         environ = {'REQUEST_METHOD': method, 'PATH_INFO': parsed.path, 'QUERY_STRING': parsed.query,
@@ -28,6 +28,7 @@ class BrowserClient:
             environ.update(CONTENT_TYPE=content_type, CONTENT_LENGTH=str(len(body)) if length is None else length)
             if csrf and self.csrf:
                 environ['HTTP_X_CSRF_TOKEN'] = self.csrf
+        for key,value in (headers or {}).items():environ['HTTP_'+key.upper().replace('-','_')]=value
         response = {}
         def start_response(status, headers):
             response.update(status=int(status.split()[0]), headers=dict(headers))
@@ -250,7 +251,7 @@ class HTTPWorkflows(unittest.TestCase):
                 status, _, _ = self.guest.request('GET', path)
                 self.assertEqual(status, 200)
                 self.assertEqual(self.guest.request('HEAD', path)[0], 200)
-        for route in ('login', 'register', 'password-reset', 'account', 'cart', 'orders', 'seller', 'wallet', 'payout-options', 'my-reviews', 'notifications', 'messages', 'favorites', 'requests', 'compare', 'admin', 'admin-blog', 'top-up-admin', 'order/test-order', 'conversation/test-chat', 'listing-review/test-listing', 'store/test-store'):
+        for route in ('login', 'register', 'password-reset', 'account', 'cart', 'orders', 'seller', 'wallet', 'payout-options', 'my-reviews', 'notifications', 'messages', 'favorites', 'requests', 'compare', 'admin', 'admin-blog', 'top-up-admin', 'order/test-order', 'conversation/test-chat', 'listing-review/test-listing'):
             with self.subTest(route=route):
                 status, _, headers = self.guest.request('GET', '/' + route)
                 self.assertEqual(status, 302)
@@ -263,6 +264,31 @@ class HTTPWorkflows(unittest.TestCase):
                 self.assertEqual(self.guest.request('GET', path)[0], 200)
         self.assertEqual(self.guest.request('GET', '/unknown-page')[0], 404)
         self.assertEqual(self.guest.request('GET', '/static/../app.py')[0], 404)
+
+
+    def test_experience_raw_import_and_store_routes_at_wsgi_boundary(self):
+        import csv
+        out=io.StringIO();writer=csv.DictWriter(out,fieldnames=['game_name','category_id','title','description','price_minor','stock','item_name'])
+        writer.writeheader();writer.writerow({'game_name':'Counter-Strike 2','category_id':'items','title':'HTTP import preview item','description':'A complete listing description for preview boundary validation.','price_minor':'10000','stock':'2','item_name':'Karambit'})
+        status,result,_=self.seller.request('POST','/api/seller/import/preview?format=csv',raw=out.getvalue().encode(),content_type='text/csv')
+        self.assertEqual(status,200,result);self.assertEqual(len(result['rows']),1)
+        self.assertEqual(self.guest.request('POST','/api/seller/import/preview?format=csv',raw=out.getvalue().encode(),content_type='text/csv')[0],401)
+        status,body,_=self.guest.request('GET','/store/'+self.seller_id)
+        self.assertEqual(status,200);self.assertIn(b'HTTP Test Shop',body)
+        self.assertEqual(self.guest.request('GET','/store/not-present')[0],404)
+        self.assertEqual(self.guest.request('GET','/games/counter-strike-2/items')[0],200)
+
+
+    def test_static_compression_preserves_content_and_respects_opt_out(self):
+        import gzip
+        status,plain,_=self.guest.request('GET','/static/experience.js')
+        self.assertEqual(status,200)
+        status,encoded,headers=self.guest.request('GET','/static/experience.js',headers={'Accept-Encoding':'gzip, br'})
+        self.assertEqual(status,200);self.assertEqual(headers['Content-Encoding'],'gzip')
+        self.assertEqual(gzip.decompress(encoded),plain);self.assertLess(len(encoded),len(plain)//2)
+        self.assertEqual(headers['Vary'],'Accept-Encoding')
+        status,opted_out,headers=self.guest.request('GET','/static/experience.js',headers={'Accept-Encoding':'gzip;q=0, br'})
+        self.assertNotIn('Content-Encoding',headers);self.assertEqual(opted_out,plain)
 
 
 if __name__ == '__main__':

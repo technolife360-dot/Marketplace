@@ -28,7 +28,7 @@ SCHEMA=(
  "CREATE INDEX IF NOT EXISTS idx_order_cases_queue ON order_cases(status,updated_at)",
 )
 COLUMNS={'orders':{'completed_at':'TEXT','protection_until':'TEXT'},'order_items':{'delivered_quantity':'INTEGER NOT NULL DEFAULT 0'},'reports':{'resolved_at':'TEXT'},'delivery_batches':{'delivered_total':'INTEGER NOT NULL DEFAULT 0'}}
-FILTERS={'q','game','category','type','seller','min','max','platform','region','server','rank','item_type','condition','item_variant','rarity','float_min','float_max','delivery','online','verified'}
+FILTERS={'q','game','category','type','seller','min','max','platform','region','server','rank','item_type','condition','item_variant','rarity','float_min','float_max','delivery','online','verified','account_level','redemption_region','code_kind','unit'}
 REASONS={'changed_mind','wrong_details','seller_unavailable','late_delivery','other'}
 CASE_REASONS={'account_reclaimed','not_as_described','invalid_code','missing_items','service_issue','new_evidence'}
 
@@ -288,7 +288,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         if not buyer and not admin and not iid and not case_id:raise err(400,'Dalil uchun o‘zingizning mahsulotingizni tanlang.')
         key=None
         if raw and handler.headers.get('Content-Type','').startswith('image/'):
-            core['require_private_evidence_bucket']();image=core['normalize_account_evidence'](raw,handler.headers.get('Content-Type',''));key='trade/'+secrets.token_hex(16)+'/'+secrets.token_hex(20)+'.webp'
+            core['require_private_evidence_bucket']();image=core['normalize_account_evidence'](raw,handler.headers.get('Content-Type',''));key=secrets.token_hex(12)+'/'+secrets.token_hex(24)+'.webp'
             try:core['storage_r2'].put_evidence(key,image)
             except Exception as exc:raise err(503,'Dalil rasmi saqlanmadi; qayta urinib ko‘ring.') from exc
             body='Yetkazish / murojaat dalili'

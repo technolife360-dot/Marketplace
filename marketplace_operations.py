@@ -135,6 +135,8 @@ def snapshot_item(db,iid,lid,legacy=False,source=None):
     attrs=json.loads(row['attributes_json'] or '{}')
     data={k:row[k] for k in ('title','description','game_id','product_type','platform','region','delivery_method','delivery_eta','delivery_minutes','requirements','price_minor','currency','image_url')}
     import trade_workflows
+    for key in ('min_quantity','unit_label','automatic_delivery'):
+        if key in row.keys():data[key]=row[key]
     data['after_sale_policy']=trade_workflows.policy(row['product_type']) if not legacy else {'days':0,'appeal_days':7,'legacy':True}
     data['buyer_fields']=trade_workflows.requirements(row) if not legacy else []
     data['attributes']={k:v for k,v in attrs.items() if not k.startswith('_')};data['availability']=availability(db,row['seller_id']);data['legacy']=legacy

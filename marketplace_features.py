@@ -6,6 +6,7 @@ second database connection or bypasses the existing authorization/sales gates.
 import json
 import re
 import secrets
+import marketplace_operations
 from datetime import datetime, timezone
 from difflib import get_close_matches
 
@@ -76,6 +77,8 @@ def alert_publication(db, lid, core):
     else:
         for follower in db.execute('SELECT user_id FROM seller_follows WHERE seller_id=?',(row['seller_id'],)):
             core['notify'](db,follower['user_id'],'seller_listing','Kuzatilayotgan do‘konda yangi e’lon',row['title'],'/listing/'+lid)
+    import catalogue_experience
+    catalogue_experience.price_alerts(db,lid,core)
     import trade_workflows
     trade_workflows.search_alert(db,lid,core)
     db.execute('INSERT INTO listing_alert_state(listing_id,price_minor,available,published_once) VALUES(?,?,?,1) ON CONFLICT(listing_id) DO UPDATE SET price_minor=excluded.price_minor,available=excluded.available,published_once=1',(lid,row['price_minor'],available))
@@ -117,12 +120,18 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         if len(query)<2: return {'games':[],'items':[]}
         games=[dict(r) for r in db.execute('SELECT slug,name FROM games ORDER BY name')]
         normalized=re.sub(r'[^a-z0-9]','',query)
+        import catalogue_experience as experience
+        game_alias=experience.game_query(query)
         aliases={'csgo':'counter-strike-2','cs2':'counter-strike-2','counterstrike':'counter-strike-2','counterstrike2':'counter-strike-2','pubg':'pubg-mobile','mlbb':'mobile-legends','dota':'dota-2'}
-        selected=[g for g in games if query in g['name'].lower() or query in g['slug'] or g['slug']==aliases.get(normalized)]
+        selected=[g for g in games if query in g['name'].lower() or query in g['slug'] or g['slug']==(game_alias or aliases.get(normalized))]
         if not selected:
             names={g['name'].lower():g for g in games};selected=[names[n] for n in get_close_matches(query,list(names),n=4,cutoff=.45)]
-        rows=db.execute("SELECT l.id,l.title,l.price_minor,l.currency,l.game_id,l.product_type FROM listings l WHERE l.status='published' AND l.stock>l.reserved AND lower(l.title) LIKE ? ORDER BY l.created_at DESC LIMIT 6",('%'+query+'%',))
-        items=[dict(r) for r in rows if core['listing_allowed_for_production'](db,r['game_id'],r['product_type'])]
+        def matching(term):
+            return [dict(r) for r in db.execute("SELECT l.id,l.title,l.price_minor,l.currency,l.game_id,l.product_type FROM listings l WHERE l.status='published' AND l.stock>l.reserved AND (lower(l.title) LIKE ? OR l.game_id IN (SELECT id FROM games WHERE slug=?)) ORDER BY l.created_at DESC LIMIT 12",('%'+term+'%',game_alias or '')) if core['listing_allowed_for_production'](db,r['game_id'],r['product_type'])][:6]
+        items=matching(query)
+        if not items:
+            corrected=experience.correction(db,query)
+            if corrected:items=matching(corrected)
         return {'games':selected[:5],'items':items}
     match=re.fullmatch(r'/api/stores/([^/]+)(/reviews|/follow)?',path)
     if match:
@@ -139,6 +148,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
             if param('sentiment')=='positive':where.append('r.rating>=4')
             if param('sentiment')=='negative':where.append('r.rating<=3')
             if param('game'):where.append('g.slug=?');args.append(param('game'))
+            if param('product_type'):where.append('l.product_type=?');args.append(param('product_type'))
             try: page=max(1,min(10000,int(param('page','1'))))
             except ValueError: raise error(400,'Sahifa noto‘g‘ri.')
             joins='FROM reviews r JOIN users u ON u.id=r.reviewer_id JOIN order_items oi ON oi.id=r.order_item_id JOIN listings l ON l.id=oi.listing_id JOIN games g ON g.id=l.game_id LEFT JOIN review_replies rr ON rr.review_id=r.id'
@@ -146,7 +156,8 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
             order={'oldest':'r.created_at ASC,r.id ASC','rating_desc':'r.rating DESC,r.created_at DESC','rating_asc':'r.rating ASC,r.created_at DESC'}.get(param('sort'),'r.created_at DESC,r.id DESC')
             rows=[dict(r) for r in db.execute(f"SELECT r.id,r.rating,r.body,r.created_at,u.display_name reviewer_name,g.name game_name,g.slug game_slug,rr.body reply,rr.updated_at replied_at {joins} WHERE {' AND '.join(where)} ORDER BY {order} LIMIT 12 OFFSET ?",(*args,(page-1)*12))]
             games=[dict(r) for r in db.execute('SELECT DISTINCT g.slug,g.name FROM reviews r JOIN order_items oi ON oi.id=r.order_item_id JOIN listings l ON l.id=oi.listing_id JOIN games g ON g.id=l.game_id WHERE r.seller_id=? ORDER BY g.name',(sid,))]
-            return {'items':rows,'games':games,'total_count':count,'page':page,'has_more':page*12<count,'can_reply':uid==sid}
+            types=[dict(r) for r in db.execute('SELECT l.product_type,AVG(r.rating) rating,COUNT(*) count FROM reviews r JOIN order_items oi ON oi.id=r.order_item_id JOIN listings l ON l.id=oi.listing_id WHERE r.seller_id=? GROUP BY l.product_type',(sid,))]
+            return {'items':rows,'games':games,'types':types,'total_count':count,'page':page,'has_more':page*12<count,'can_reply':uid==sid}
         if method=='GET' and sub is None:return store
     if path=='/api/following' and method=='GET':
         require_user(ctx)
@@ -195,6 +206,8 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         conv=db.execute('SELECT * FROM conversations WHERE id=?',(cid,)).fetchone()
         if not conv or uid not in (conv['buyer_id'],conv['seller_id']):raise error(404,'Suhbat topilmadi.')
         if method=='POST':
+            other=conv['seller_id'] if uid==conv['buyer_id'] else conv['buyer_id']
+            if marketplace_operations.blocked(db,uid,other):raise error(403,'Bloklangan suhbatga rasm yuborib bo‘lmaydi.')
             require_verified(ctx);core['check_rate'](db,'chat_photo',uid,20,3600)
             normalized=core['normalize_account_evidence'](raw,handler.headers.get('Content-Type',''))
             core['require_private_evidence_bucket']()
@@ -206,23 +219,33 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
                 db.execute('BEGIN IMMEDIATE')
                 db.execute("INSERT INTO messages(id,conversation_id,sender_id,body) VALUES(?,?,?,'📷 Photo')",(mid,cid,uid))
                 db.execute('INSERT INTO message_attachments(message_id,conversation_id,owner_id,object_path) VALUES(?,?,?,?)',(mid,cid,uid,key))
-                core['notify'](db,conv['seller_id'] if uid==conv['buyer_id'] else conv['buyer_id'],'message','Yangi rasm','Suhbatda yangi rasm bor.','/conversation/'+cid)
+                muted=db.execute('SELECT muted FROM conversation_preferences WHERE user_id=? AND conversation_id=?',(other,cid)).fetchone()
+                if not muted or not muted['muted']:core['notify'](db,other,'message','Yangi rasm','Suhbatda yangi rasm bor.','/conversation/'+cid)
                 db.execute('COMMIT')
             except Exception:
                 db.execute('ROLLBACK');core['storage_r2'].delete_evidence(key);raise
             return 201,{'id':mid}
-        db.execute('UPDATE messages SET read_at=CURRENT_TIMESTAMP WHERE conversation_id=? AND sender_id<>? AND read_at IS NULL',(cid,uid))
-        sequence='id' if core['DATABASE_URL'] else 'rowid'
-        messages=[dict(r) for r in db.execute(f'SELECT * FROM (SELECT id,sender_id,body,created_at,read_at,{sequence} sequence FROM messages WHERE conversation_id=? ORDER BY created_at DESC,{sequence} DESC LIMIT 200) recent ORDER BY created_at,sequence',(cid,))]
-        for message in messages: message.pop('sequence',None)
+        conditions=['conversation_id=?'];args=[cid];sequence='id' if core['DATABASE_URL'] else 'rowid'
+        before=param('before');query=param('q').strip()[:120]
+        if before:
+            cursor=db.execute(f'SELECT created_at,{sequence} sequence FROM messages WHERE id=? AND conversation_id=?',(before,cid)).fetchone()
+            if not cursor:raise error(400,'Xabar kursori noto‘g‘ri.')
+            conditions.append(f'(created_at<? OR (created_at=? AND {sequence}<?))');args.extend([cursor['created_at'],cursor['created_at'],cursor['sequence']])
+        if query:conditions.append('lower(body) LIKE ?');args.append('%'+query.lower()+'%')
+        fetched=[dict(r) for r in db.execute(f"SELECT id,sender_id,body,created_at,read_at,{sequence} sequence FROM messages WHERE {' AND '.join(conditions)} ORDER BY created_at DESC,{sequence} DESC LIMIT 51",tuple(args))]
+        has_more=len(fetched)>50;messages=list(reversed(fetched[:50]))
+        if messages:
+            marks=','.join('?' for _ in messages);db.execute(f'UPDATE messages SET read_at=CURRENT_TIMESTAMP WHERE id IN ({marks}) AND sender_id<>? AND read_at IS NULL',(*[m['id'] for m in messages],uid))
+        for message in messages:
+            message.pop('sequence',None)
+            if message['sender_id']!=uid and not message['read_at']:message['read_at']=core['now_iso']()
         attachments={r['message_id']:r['object_path'] for r in db.execute('SELECT message_id,object_path FROM message_attachments WHERE conversation_id=?',(cid,))}
         for message in messages:
             if message['id'] in attachments:
                 try:message['image_url']=core['storage_r2'].evidence_url(attachments[message['id']])
                 except Exception:message['image_unavailable']=True
-        import marketplace_operations
         other=conv['seller_id'] if uid==conv['buyer_id'] else conv['buyer_id']
-        out={'conversation':dict(conv),'messages':messages,'blocked':marketplace_operations.blocked(db,uid,other),'can_message':True}
+        out={'conversation':dict(conv),'messages':messages,'blocked':marketplace_operations.blocked(db,uid,other),'can_message':True,'has_more':has_more,'next_before':messages[0]['id'] if messages else None}
         try: marketplace_operations.chat_allowed(db,conv,uid,core)
         except error: out['can_message']=False
         if conv['listing_id']:

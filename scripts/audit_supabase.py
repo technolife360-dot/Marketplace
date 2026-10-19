@@ -17,7 +17,7 @@ REQUIRED_COLUMNS = {
     'topup_orders': {'inventory_quantity', 'supplier_quantity', 'payment_reference'},
     'account_reviews': {'buyer_attested_at', 'reviewed_by', 'status'},
     'account_review_evidence': {'object_path', 'slot'},
-    'listings': {'seller_account_terms_version', 'seller_account_terms_at', 'delivery_minutes'},
+    'listings': {'seller_account_terms_version', 'seller_account_terms_at', 'delivery_minutes','min_quantity','unit_label','automatic_delivery','corrections_json'},
     'orders': {'accepted_account_sale_terms_version', 'accepted_account_sale_terms_at','completed_at','protection_until'},
     'sessions': {'mfa_verified','created_at','last_seen_at','user_agent','network_label'},
     'order_items': {'snapshot_json','delivery_due_at','delivered_quantity'},
