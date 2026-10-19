@@ -3030,3 +3030,27 @@ body:not(.home-page) .listing-detail-page .panel,body:not(.home-page) .listing-d
 body:not(.home-page) .listing-detail-page .listing-buy-button { border-color:#983fff; background:linear-gradient(110deg,#8723f1,#882aef); }
 body:not(.home-page) .listing-detail-page .listing-buy-button:hover { background:linear-gradient(110deg,#9739ff,#9e43ff); }
 .listing-detail-page .detail-gallery-image { object-fit:cover; }
+
+/* Frosted glass controls over listing photos and the full-screen gallery. */
+.listing-detail-page .detail-gallery-arrow,
+.listing-gallery-expand,
+.listing-lightbox .detail-gallery-arrow,
+.listing-lightbox-close {
+  border:1px solid rgba(255,255,255,.32);
+  background:linear-gradient(135deg,rgba(255,255,255,.2),rgba(255,255,255,.06));
+  color:#fff;
+  -webkit-backdrop-filter:blur(16px) saturate(160%);
+  backdrop-filter:blur(16px) saturate(160%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 4px 16px rgba(0,0,0,.18);
+  transition:background .18s ease,border-color .18s ease,box-shadow .18s ease;
+}
+.listing-lightbox-close { display:grid; width:36px; height:36px; padding:0; place-items:center; border-radius:9px; line-height:1; }
+.listing-detail-page .detail-gallery-arrow:hover,
+.listing-gallery-expand:hover,
+.listing-lightbox .detail-gallery-arrow:hover,
+.listing-lightbox-close:hover {
+  border-color:rgba(255,255,255,.55);
+  background:linear-gradient(135deg,rgba(255,255,255,.3),rgba(255,255,255,.13));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 5px 20px rgba(0,0,0,.24);
+}
+.listing-gallery-expand .icon { color:inherit; }
