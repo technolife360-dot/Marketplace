@@ -1456,7 +1456,7 @@ class Handler(BaseHTTPRequestHandler):
                 db.execute('INSERT INTO users(id,email,password_hash,display_name,country,language,currency,email_verified,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,1,?,?)',(user_id,email,password_hash(create_token()),name,oauth_country,'en',ASIA_COUNTRY_CURRENCIES[oauth_country],terms,now_iso()))
                 db.execute('INSERT INTO oauth_identities(provider,subject,user_id) VALUES(?,?,?)',(provider,subject,user_id))
             session_token,csrf=session_create(db,user_id); self.set_session(session_token,db)
-            return 302,{'ok':True},{'Location':'/#account','Set-Cookie':[clear]}
+            return 302,{'ok':True},{'Location':'/#home','Set-Cookie':[clear]}
         if path=='/api/webhooks/didit' and method=='POST':
             payload=identity_service.verify_webhook(raw_body,self.headers.get('X-Signature-V2',''),self.headers.get('X-Timestamp',''))
             if payload is None: raise HttpError(401,'Didit webhook imzosi yoki vaqti noto‘g‘ri.')
