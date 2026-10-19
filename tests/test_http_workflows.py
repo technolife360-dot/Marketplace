@@ -19,13 +19,13 @@ class BrowserClient:
         self.cookie = ''
         self.csrf = ''
 
-    def request(self, method, url, data=None, *, csrf=True, raw=None, length=None):
+    def request(self, method, url, data=None, *, csrf=True, raw=None, length=None, content_type="application/json"):
         parsed = urlsplit(url)
         body = raw if raw is not None else json.dumps(data).encode() if data is not None else b''
         environ = {'REQUEST_METHOD': method, 'PATH_INFO': parsed.path, 'QUERY_STRING': parsed.query,
                    'REMOTE_ADDR': '127.0.0.1', 'wsgi.input': io.BytesIO(body), 'HTTP_COOKIE': self.cookie}
         if method in ('POST', 'PATCH', 'DELETE'):
-            environ.update(CONTENT_TYPE='application/json', CONTENT_LENGTH=str(len(body)) if length is None else length)
+            environ.update(CONTENT_TYPE=content_type, CONTENT_LENGTH=str(len(body)) if length is None else length)
             if csrf and self.csrf:
                 environ['HTTP_X_CSRF_TOKEN'] = self.csrf
         response = {}
@@ -186,13 +186,30 @@ class HTTPWorkflows(unittest.TestCase):
         lid = self.published_item()
         self.assertEqual(buyer.request('POST', '/api/cart', {'listing_id': lid, 'quantity': True})[0], 400)
 
+    def test_store_follow_discovery_and_private_photo_guards_through_http(self):
+        buyer=self.registered_buyer();lid=self.published_item()
+        status,listing,_=buyer.request('GET','/api/listings/'+lid)
+        sid=listing['store_id']
+        self.assertEqual(self.guest.request('GET','/api/stores/'+sid)[0],200)
+        self.assertEqual(buyer.request('POST','/api/stores/'+sid+'/follow',{},csrf=False)[0],403)
+        self.assertEqual(buyer.request('POST','/api/stores/'+sid+'/follow',{})[0],200)
+        self.assertEqual(buyer.request('GET','/api/following')[1][0]['id'],sid)
+        self.assertEqual(self.guest.request('GET','/api/listings?delivery=5&seller='+sid)[1]['items'][0]['id'],lid)
+        self.assertEqual(self.guest.request('GET','/api/search/suggestions?q=CSGO')[1]['games'][0]['slug'],'counter-strike-2')
+        cid=buyer.request('POST','/api/conversations',{'listing_id':lid})[1]['id']
+        self.assertEqual(buyer.request('POST','/api/conversations/'+cid+'/photos',raw=b'not-png',content_type='image/png')[0],400)
+        self.assertEqual(self.guest.request('POST','/api/conversations/'+cid+'/photos',raw=b'not-png',content_type='image/png')[0],401)
+        self.assertEqual(buyer.request('POST','/api/conversations/'+cid+'/photos',raw=b'',length=str(app.MAX_IMAGE_BODY+1),content_type='image/png')[0],413)
+        self.assertEqual(self.seller.request('POST','/api/listings/'+lid+'/duplicate',{})[0],201)
+        self.assertEqual(self.seller.request('POST','/api/seller/listings/bulk-pause',{'ids':[lid]})[0],200)
+
     def test_public_pages_static_assets_and_account_deep_links(self):
         for path in ('/', '/browse', '/blog', '/selling', '/guide', '/fees', '/policies', '/support', '/help/orders', '/help/payments', '/help/refunds', '/help/chat', '/terms', '/refunds', '/seller-policy', '/prohibited-items', '/contact', '/privacy-policy', '/data-deletion', '/top-up', '/robots.txt', '/sitemap.xml', '/healthz'):
             with self.subTest(path=path):
                 status, _, _ = self.guest.request('GET', path)
                 self.assertEqual(status, 200)
                 self.assertEqual(self.guest.request('HEAD', path)[0], 200)
-        for route in ('login', 'register', 'password-reset', 'account', 'cart', 'orders', 'seller', 'wallet', 'payout-options', 'my-reviews', 'notifications', 'messages', 'favorites', 'requests', 'compare', 'admin', 'admin-blog', 'top-up-admin', 'order/test-order', 'conversation/test-chat', 'listing-review/test-listing'):
+        for route in ('login', 'register', 'password-reset', 'account', 'cart', 'orders', 'seller', 'wallet', 'payout-options', 'my-reviews', 'notifications', 'messages', 'favorites', 'requests', 'compare', 'admin', 'admin-blog', 'top-up-admin', 'order/test-order', 'conversation/test-chat', 'listing-review/test-listing', 'store/test-store'):
             with self.subTest(route=route):
                 status, _, headers = self.guest.request('GET', '/' + route)
                 self.assertEqual(status, 302)

@@ -4,7 +4,7 @@
   "private": true,
   "description": "Asia-wide gaming marketplace with an English-default multilingual interface",
   "scripts": {
-    "build": "node --check static/locales.js && node --check static/locale-extra.js && node --check static/asia-markets-data.js && node --check static/info-pages.js && node --check static/legal-translations.js && node --check static/legal-locale.js && node --check static/crisp-loader.js && node --check static/app.js && node --check static/topup.js && python3 -m py_compile app.py email_service.py oauth_service.py storage_r2.py asia_markets.py identity_service.py payment_providers.py seagm_supplier.py delivery_crypto.py seed.py scripts/backup_sqlite.py scripts/backup_postgres_r2.py scripts/encrypt_delivery_payloads.py scripts/audit_supabase.py scripts/migrate_listing_images_to_r2.py",
+    "build": "node --check static/locales.js && node --check static/locale-extra.js && node --check static/asia-markets-data.js && node --check static/info-pages.js && node --check static/legal-translations.js && node --check static/legal-locale.js && node --check static/crisp-loader.js && node --check static/marketplace-ux.js && node --check static/app.js && node --check static/topup.js && python3 -m py_compile marketplace_features.py app.py email_service.py oauth_service.py storage_r2.py asia_markets.py identity_service.py payment_providers.py seagm_supplier.py delivery_crypto.py seed.py scripts/backup_sqlite.py scripts/backup_postgres_r2.py scripts/encrypt_delivery_payloads.py scripts/audit_supabase.py scripts/migrate_listing_images_to_r2.py",
     "start": "python3 app.py",
     "dev": "python3 app.py",
     "seed": "python3 seed.py",

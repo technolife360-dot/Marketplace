@@ -63,3 +63,10 @@ test('SQLite and PostgreSQL dates keep their timezone and render the same instan
   assert.equal(context.parseServerDate('2026-10-19').toISOString(), '2026-10-19T00:00:00.000Z');
   assert.ok(Number.isNaN(+context.parseServerDate(null)));
 });
+
+test('marketplace UX loads before app globals and parses multilingual delivery windows',()=>{
+ const context={window:{},encodeURIComponent,console};vm.createContext(context);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/marketplace-ux.js'),'utf8'),context);
+ const ux=context.window.MarketUX;
+ for(const [value,minutes]of [['5 minutes',5],['1 hour',60],['24 soat',1440],['1 kun',1440],['Instant',1],['Ask seller',null]])assert.equal(ux.duration(value),minutes);
+});

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """SentryLoot marketplace server with SQLite and Supabase PostgreSQL backends."""
 from __future__ import annotations
+import marketplace_features
 import hashlib, hmac, html, ipaddress, json, os, re, secrets, sqlite3, time, unicodedata
 import io
 from datetime import datetime, timedelta, timezone
@@ -378,6 +379,7 @@ def migrate():
             for slug,name in games: db.execute('INSERT INTO games(id,slug,name) VALUES(?,?,?) ON CONFLICT(id) DO NOTHING',(slug,slug,name))
             for slug,name,typ in categories: db.execute('INSERT INTO categories(id,slug,name,product_type) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING',(slug,slug,name,typ))
             seed_topup_catalog(db)
+            marketplace_features.migrate(db, True)
             enforce_production_marketplace_gate(db)
             return
         db.executescript((ROOT / 'migrations/001_initial.sql').read_text())
@@ -492,6 +494,7 @@ def migrate():
         db.execute('CREATE INDEX IF NOT EXISTS idx_bonus_entries_user ON bonus_entries(user_id,created_at DESC)')
         seed_topup_catalog(db)
         enforce_production_marketplace_gate(db)
+        marketplace_features.migrate(db)
     finally:
         db.close()
 
@@ -578,6 +581,11 @@ def erase_account_personal_data(db, uid):
     history and foreign-key integrity are retained. User-authored marketplace
     content and identity verification data are erased; active listings are hidden.
     """
+    chat_paths=[r['object_path'] for r in db.execute('SELECT a.object_path FROM message_attachments a JOIN conversations c ON c.id=a.conversation_id WHERE c.buyer_id=? OR c.seller_id=?',(uid,uid))]
+    for object_path in chat_paths:
+        if not delete_account_evidence_object(object_path): raise HttpError(503,'Chat rasmlarini o‘chirib bo‘lmadi; qayta uriniladi.')
+    db.execute('DELETE FROM seller_follows WHERE user_id=? OR seller_id=?',(uid,uid))
+    db.execute('DELETE FROM review_replies WHERE seller_id=?',(uid,))
     evidence_paths=[row['object_path'] for row in db.execute('SELECT e.object_path FROM account_review_evidence e JOIN account_reviews ar ON ar.order_id=e.order_id WHERE ar.buyer_id=?',(uid,)).fetchall()]
     if any(not delete_account_evidence_object(object_path) for object_path in evidence_paths):
         raise HttpError(503,'Hisob dalillarini maxfiy Storage’dan o‘chirib bo‘lmadi; o‘chirish qayta uriniladi.')
@@ -849,12 +857,13 @@ LISTING_PUBLIC_ATTRIBUTES={
     'product_format','access_method'
 }
 LISTING_TYPE_ATTRIBUTES={
-    'item':{'item_name','item_variant','transfer_method'},
+    'item':{'item_name','item_variant','transfer_method','item_type','condition','float_value','rarity','pattern'},
     'currency':{'amount','unit','transfer_method'},
     'service':{'service_scope','service_duration'},
     'code':{'code_kind','redemption_region','expiry'},
     'digital':{'product_format','access_method'},
 }
+LISTING_PUBLIC_ATTRIBUTES.update({'item_type','condition','float_value','rarity','pattern'})
 def validate_listing_attributes(attributes, product_type, require_details=False):
     if not isinstance(attributes,dict) or len(attributes)>30: raise HttpError(400,'Atributlar noto‘g‘ri.')
     cleaned={}
@@ -864,6 +873,11 @@ def validate_listing_attributes(attributes, product_type, require_details=False)
         cleaned[key]=clean_text(value,key,0,160)
     if cleaned.get('amount') and not re.fullmatch(r'[1-9][0-9]{0,11}',cleaned['amount']):
         raise HttpError(400,'Bir to‘plamdagi valyuta miqdori musbat butun son bo‘lsin.')
+    if cleaned.get('float_value'):
+        try:
+            if not 0<=float(cleaned['float_value'])<=1: raise ValueError()
+            cleaned['float_value']=str(float(cleaned['float_value']))
+        except ValueError: raise HttpError(400,'Float qiymati 0–1 orasida bo‘lsin.')
     allowed=LISTING_TYPE_ATTRIBUTES.get(product_type,set())
     for key in LISTING_TYPE_ATTRIBUTES.keys()-{product_type}:
         if any(field in cleaned for field in LISTING_TYPE_ATTRIBUTES[key]-allowed):
@@ -884,7 +898,9 @@ def listing_detail(db, lid, viewer=None):
       (SELECT COUNT(*) FROM reviews rv WHERE rv.seller_id=l.seller_id) review_count,(SELECT AVG(rating) FROM reviews rv WHERE rv.seller_id=l.seller_id) seller_rating
       FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id LEFT JOIN seller_profiles s ON s.user_id=l.seller_id WHERE l.id=?""",(lid,)).fetchone()
     if not r: return None
-    out=dict(r); out['available']=max(0,out['stock']-out['reserved']); out['attributes']=json.loads(out.pop('attributes_json') or '{}')
+    out=dict(r)
+    if out.get('seller_rating') is not None: out['seller_rating']=float(out['seller_rating'])
+    out['available']=max(0,out['stock']-out['reserved']); out['attributes']=json.loads(out.pop('attributes_json') or '{}')
     if viewer and (out['seller_id']==viewer or is_admin(db,viewer)):
         out['marketplace_visible']=bool(out['status']=='published' and out['available']>0
                                         and listing_allowed_for_production(db,out['game_id'],out['product_type']))
@@ -1005,7 +1021,7 @@ def order_view(db, oid, uid, admin=False):
     q=db.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
     if not q: return None
     order=dict(q)
-    items=db.execute('SELECT oi.*,l.game_id,l.category_id,l.product_type FROM order_items oi LEFT JOIN listings l ON l.id=oi.listing_id WHERE oi.order_id=?',(oid,)).fetchall()
+    items=db.execute('SELECT oi.*,l.game_id,l.category_id,l.product_type,l.delivery_eta,l.delivery_minutes FROM order_items oi LEFT JOIN listings l ON l.id=oi.listing_id WHERE oi.order_id=?',(oid,)).fetchall()
     is_buyer=order['buyer_id']==uid
     if not admin and not is_buyer and not any(i['seller_id']==uid for i in items): raise HttpError(403,'Bu buyurtmaga ruxsatingiz yo‘q.')
     if not admin and not is_buyer:
@@ -1027,7 +1043,7 @@ def order_view(db, oid, uid, admin=False):
             it['delivery']=delivered
         else:
             it['delivery']={'submitted_at':delivery['submitted_at']} if delivery else None
-        it.pop('seller_id',None)
+        it['store_id']=it.pop('seller_id',None)
         order['items'].append(it)
     order['events']=[dict(x) for x in db.execute('SELECT to_status,note,created_at FROM order_events WHERE order_id=? ORDER BY created_at',(oid,)).fetchall()]
     order['payment']=rowdict(db.execute('SELECT provider,status,amount_minor,currency,created_at FROM payments WHERE order_id=?',(oid,)).fetchone())
@@ -1161,7 +1177,7 @@ class Handler(BaseHTTPRequestHandler):
             csrf_exempt=path=='/api/webhooks/didit'
             if method in ('POST','PATCH','DELETE') and ctx['uid'] and not csrf_exempt:
                 if not hmac.compare_digest(self.headers.get('X-CSRF-Token',''),ctx['csrf'] or ''): raise HttpError(403,'Xavfsizlik tokeni noto‘g‘ri. Sahifani yangilang.')
-            binary_evidence=method=='POST' and re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/account-evidence/[12]',path)
+            binary_evidence=method=='POST' and (re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/account-evidence/[12]',path) or re.fullmatch(r'/api/conversations/[A-Za-z0-9_-]{1,100}/photos',path))
             raw_body=self.body(MAX_IMAGE_BODY) if method=='POST' and (path=='/api/listing-images' or binary_evidence) else self.body() if method in ('POST','PATCH','PUT') and path.startswith('/api/') else b''
             if (path=='/api/listing-images' and method=='POST') or binary_evidence: data={}
             else: data=parse_json(raw_body) if raw_body else {}
@@ -1189,7 +1205,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(200); self.send_header('Content-Type','application/xml; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=300'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
             public_route=parsed.path.rstrip('/') or '/'
             account_route=public_route[1:] if public_route[1:] in ('login','register','password-reset','account','cart','orders','seller','wallet','payout-options','my-reviews','notifications','messages','favorites','requests','compare','admin','admin-blog','top-up-admin') else None
-            if not account_route and re.fullmatch(r'/(?:order|conversation|listing-review)/[A-Za-z0-9_-]{1,100}',public_route): account_route=public_route[1:]
+            if not account_route and re.fullmatch(r'/(?:order|conversation|listing-review|store)/[A-Za-z0-9_-]{1,100}',public_route): account_route=public_route[1:]
             if account_route:
                 self.send_response(302); self.send_header('Location','/#'+account_route); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length','0'); self.secure_headers(); self.end_headers(); return
             if public_route in ('/top-up','/browse','/blog','/selling','/guide','/fees','/policies','/support','/help','/help/orders','/help/payments','/help/refunds','/help/chat','/terms','/refunds','/seller-policy','/prohibited-items','/contact'):
@@ -1211,7 +1227,7 @@ class Handler(BaseHTTPRequestHandler):
                 payload=seo_listing_html(listing_match.group(1))
                 if payload is None: self.send_error(404); return
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
-            f={'/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
+            f={'/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
             if not f: self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))
@@ -1238,6 +1254,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self): self.dispatch()
     def route(self,db,ctx,method,path,qs,data,raw_body=b''):
         uid=ctx['uid']
+        feature_result=marketplace_features.route(self,db,ctx,method,path,qs,data,raw_body,globals())
+        if feature_result is not marketplace_features.UNHANDLED: return feature_result
         if path=='/healthz' and method=='GET': return {'ok':True}
         if path=='/api/health' and method=='GET':
             try: payment_state=configured_payment_provider().name
@@ -1564,8 +1582,42 @@ class Handler(BaseHTTPRequestHandler):
             if server:
                 server_expression="COALESCE(l.attributes_json::jsonb->>'server',l.attributes_json::jsonb->>'server_id','')" if DATABASE_URL else "COALESCE(json_extract(l.attributes_json,'$.server'),json_extract(l.attributes_json,'$.server_id'),'')"
                 where.append(f'(lower({server_expression}) LIKE ? OR lower(l.region) LIKE ?)'); args.extend([f'%{server.lower()}%',f'%{server.lower()}%'])
+            seller=qs.get('seller',[''])[0]
+            if seller: where.append('l.seller_id=?'); args.append(seller)
+            if qs.get('online',[''])[0]=='1':
+                if user_presence_available(db):
+                    where.append('EXISTS(SELECT 1 FROM users presence WHERE presence.id=l.seller_id AND presence.last_seen_at>=?)'); args.append((datetime.now(timezone.utc)-timedelta(minutes=3)).isoformat(timespec='seconds'))
+                else: where.append('1=0')
+            if qs.get('verified',[''])[0]=='1': where.append("s.identity_status='verified' AND s.identity_provider='didit'")
+            for attribute in ('item_type','condition','item_variant','rarity'):
+                value=qs.get(attribute,[''])[0].strip()
+                if value:
+                    expression=f"l.attributes_json::jsonb->>'{attribute}'" if DATABASE_URL else f"json_extract(l.attributes_json,'$.{attribute}')"
+                    where.append(f"lower(COALESCE({expression},'')) LIKE ?");args.append('%'+value.lower()+'%')
+            for key,operator in (('float_min','>='),('float_max','<=')):
+                value=qs.get(key,[''])[0]
+                if value:
+                    try:
+                        number=float(value)
+                        if not 0<=number<=1: raise ValueError()
+                    except ValueError: raise HttpError(400,'Float filtri 0–1 orasida bo‘lsin.')
+                    if DATABASE_URL:
+                        raw_float="l.attributes_json::jsonb->>'float_value'"
+                        expression=f"CASE WHEN {raw_float} ~ '^[+]?[0-9]+([.][0-9]+)?([eE][-+]?[0-9]+)?$' THEN CAST({raw_float} AS NUMERIC) END"
+                    else:
+                        expression="CASE WHEN json_extract(l.attributes_json,'$.float_value') IS NOT NULL THEN CAST(json_extract(l.attributes_json,'$.float_value') AS REAL) END"
+                    where.append(f'({expression}){operator}?');args.append(number)
+            delivery_expr="l.delivery_minutes"
+            delivery=qs.get('delivery',[''])[0]
+            if delivery:
+                try: minutes=int(delivery)
+                except ValueError: raise HttpError(400,'Yetkazish muddati noto‘g‘ri.')
+                if minutes not in (5,60,360,1440): raise HttpError(400,'Yetkazish muddati noto‘g‘ri.')
+                where.append('l.delivery_minutes<=?');args.append(minutes)
             search=qs.get('q',[''])[0].strip()
             if search:
+                alias=re.sub(r'[^a-z0-9]','',search.lower())
+                search={'csgo':'Counter-Strike 2','cs2':'Counter-Strike 2','counterstrike':'Counter-Strike 2','counterstrike2':'Counter-Strike 2','mlbb':'Mobile Legends'}.get(alias,search)
                 phrase='"'+search.replace('"','""')+'"'
                 qlike=f'%{search.lower()}%'
                 if DATABASE_URL:
@@ -1577,7 +1629,14 @@ class Handler(BaseHTTPRequestHandler):
                 if low: where.append('l.price_minor>=?'); args.append(max(0,int(low)))
                 if high: where.append('l.price_minor<=?'); args.append(max(0,int(high)))
             except ValueError: raise HttpError(400,'Narx filtri butun son bo‘lishi kerak.')
-            sort=qs.get('sort',['newest'])[0]; order={'newest':'l.created_at DESC','price_asc':'l.price_minor ASC','price_desc':'l.price_minor DESC','popular':'(SELECT COUNT(*) FROM order_items oi WHERE oi.listing_id=l.id) DESC,l.created_at DESC'}.get(sort,'l.created_at DESC')
+            sort=qs.get('sort',['recommended'])[0]; order={'newest':'l.created_at DESC','price_asc':'l.price_minor ASC','price_desc':'l.price_minor DESC','popular':"(SELECT COALESCE(SUM(oi.quantity),0) FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE oi.listing_id=l.id AND o.status='completed') DESC,l.created_at DESC",'rating':"COALESCE((SELECT AVG(rv.rating) FROM reviews rv WHERE rv.seller_id=l.seller_id),0) DESC,l.created_at DESC",'delivery':'CASE WHEN l.delivery_minutes IS NULL THEN 1 ELSE 0 END,l.delivery_minutes ASC,l.created_at DESC','recommended':"(COALESCE((SELECT AVG(rv.rating)*COUNT(*)/(COUNT(*)+5.0) FROM reviews rv WHERE rv.seller_id=l.seller_id),0)*20 + (SELECT COUNT(*) FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE oi.seller_id=l.seller_id AND o.status='completed')*2 + CASE WHEN l.delivery_minutes<=60 THEN 5 ELSE 0 END) DESC,l.created_at DESC"}.get(sort,'l.created_at DESC')
+            if sort=='recommended':
+                elapsed=lambda later,earlier: f"EXTRACT(EPOCH FROM ({later}::timestamptz-{earlier}::timestamptz))/60.0" if DATABASE_URL else f"(julianday({later})-julianday({earlier}))*1440.0"
+                reply_minutes=f"(SELECT AVG({elapsed('reply.created_at','buyer.created_at')}) FROM conversations cv JOIN messages buyer ON buyer.conversation_id=cv.id AND buyer.sender_id=cv.buyer_id JOIN messages reply ON reply.conversation_id=cv.id AND reply.sender_id=cv.seller_id WHERE cv.seller_id=l.seller_id AND buyer.id=(SELECT bm.id FROM messages bm WHERE bm.conversation_id=cv.id AND bm.sender_id=cv.buyer_id ORDER BY bm.created_at,bm.id LIMIT 1) AND reply.id=(SELECT rm.id FROM messages rm WHERE rm.conversation_id=cv.id AND rm.sender_id=cv.seller_id AND rm.created_at>=buyer.created_at ORDER BY rm.created_at,rm.id LIMIT 1))"
+                fulfillment_minutes=f"(SELECT AVG({elapsed('d.submitted_at','o.created_at')}) FROM deliveries d JOIN order_items oi ON oi.id=d.order_item_id JOIN orders o ON o.id=oi.order_id WHERE oi.seller_id=l.seller_id AND o.status='completed')"
+                # No response/delivery samples earn no bonus. All scores use actual order/message events.
+                score=order.split(' DESC,l.created_at DESC')[0]
+                order=f"({score}+COALESCE(10.0/(1.0+{reply_minutes}/60.0),0)+COALESCE(10.0/(1.0+{fulfillment_minutes}/60.0),0)) DESC,l.created_at DESC"
             try: page=max(1,min(10000,int(qs.get('page',['1'])[0])))
             except ValueError: page=1
             limit=24
@@ -1589,6 +1648,7 @@ class Handler(BaseHTTPRequestHandler):
             rows=db.execute(f"SELECT l.id,l.title,l.description,l.product_type,l.price_minor,l.currency,l.platform,l.region,l.attributes_json,l.delivery_eta,l.stock,l.reserved,(l.stock-l.reserved) available,l.image_url,l.created_at,g.name game_name,g.slug game_slug,c.name category_name,s.shop_name seller_name,s.verification_status,CASE WHEN s.identity_provider='didit' AND s.identity_status='verified' THEN 1 ELSE 0 END AS identity_verified,{online_expression} AS seller_online,EXISTS(SELECT 1 FROM favorites fv WHERE fv.user_id=? AND fv.listing_id=l.id) AS is_favorite,(SELECT COUNT(*) FROM reviews rv WHERE rv.seller_id=l.seller_id) review_count,(SELECT AVG(rating) FROM reviews rv WHERE rv.seller_id=l.seller_id) seller_rating FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id JOIN seller_profiles s ON s.user_id=l.seller_id JOIN users u ON u.id=l.seller_id WHERE {' AND '.join(where)} AND l.stock>l.reserved ORDER BY {order} LIMIT ? OFFSET ?",(*online_args,uid or '',*args,limit,(page-1)*limit)).fetchall()
             items=[dict(x) for x in rows]
             for item in items:
+                if item.get('seller_rating') is not None: item['seller_rating']=float(item['seller_rating'])
                 try: attributes=json.loads(item.pop('attributes_json') or '{}')
                 except (TypeError,ValueError): attributes={}
                 item['attributes']={key:value for key,value in attributes.items() if isinstance(key,str) and not key.startswith('_')} if isinstance(attributes,dict) else {}
@@ -1598,6 +1658,7 @@ class Handler(BaseHTTPRequestHandler):
             if not item or (item['status']!='published' and item['seller_id']!=uid and not (uid and is_admin(db,uid))): raise HttpError(404,'E’lon topilmadi.')
             if item['status']=='published' and not listing_allowed_for_production(db,item['game_id'],item['product_type']): raise HttpError(404,'E’lon topilmadi.')
             seller_id=item.pop('seller_id',None)
+            item['store_id']=seller_id
             item['is_owner']=bool(uid and seller_id==uid)
             profile=db.execute('SELECT bio,created_at FROM seller_profiles WHERE user_id=?',(seller_id,)).fetchone()
             online=False
@@ -1630,6 +1691,7 @@ class Handler(BaseHTTPRequestHandler):
                 'total_sales':db.execute("SELECT COALESCE(SUM(oi.quantity),0) n FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE oi.seller_id=? AND o.status='completed'",(seller_id,)).fetchone()['n'],
                 'active_listings':db.execute("SELECT COUNT(*) n FROM listings WHERE seller_id=? AND status='published' AND stock>reserved",(seller_id,)).fetchone()['n'],
             }
+            item['seller']['total_sales']=int(item['seller']['total_sales'])
             item['reviews']=[dict(row) for row in db.execute('SELECT r.rating,r.body,r.created_at,u.display_name reviewer_name FROM reviews r JOIN users u ON u.id=r.reviewer_id WHERE r.seller_id=? ORDER BY r.created_at DESC,r.id DESC LIMIT 20',(seller_id,))]
             item['related']=[dict(x) for x in db.execute('SELECT id,title,price_minor,currency FROM listings WHERE game_id=? AND status=\'published\' AND id<>? ORDER BY created_at DESC LIMIT 4',(item['game_id'],lid))]
             return item
@@ -2010,6 +2072,7 @@ class Handler(BaseHTTPRequestHandler):
             if risk_flags: attributes['_risk_flags']=risk_flags
             lid=ident(); db.execute('INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,platform,region,attributes_json,delivery_method,delivery_eta,requirements,stock,image_url,status,seller_account_terms_version,seller_account_terms_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                 (lid,uid,game,cat,title,desc,typ,price,platform,region,json.dumps(attributes,ensure_ascii=False),data.get('delivery_method','manual'),delivery_eta,requirements,stock,image_url,'pending_review' if submit_for_review else 'draft',account_terms,account_terms_at))
+            db.execute('UPDATE listings SET delivery_minutes=? WHERE id=?',(marketplace_features.delivery_minutes(delivery_eta),lid))
             if submit_for_review:
                 admin=db.execute('SELECT user_id FROM admin_accounts LIMIT 1').fetchone()
                 if admin: notify(db,admin['user_id'],'moderation','Yangi e’lon','Tekshirish uchun yangi e’lon yuborildi.','/admin')
@@ -2051,7 +2114,7 @@ class Handler(BaseHTTPRequestHandler):
             if 'title' in fields: fields['title']=clean_text(fields['title'],'Sarlavha',5,120)
             if 'description' in fields: fields['description']=clean_text(fields['description'],'Tavsif',20,5000)
             if 'price_minor' in fields: fields['price_minor']=money(fields['price_minor'])
-            if 'stock' in fields and (not isinstance(fields['stock'],int) or fields['stock']<l['reserved'] or fields['stock']>10000): raise HttpError(400,'Qoldiq 0–10000 bo‘lishi va band mahsulotlardan kam bo‘lmasligi kerak.')
+            if 'stock' in fields and (isinstance(fields['stock'],bool) or not isinstance(fields['stock'],int) or fields['stock']<l['reserved'] or fields['stock']>10000): raise HttpError(400,'Qoldiq 0–10000 bo‘lishi va band mahsulotlardan kam bo‘lmasligi kerak.')
             for key,label,minimum,maximum in (('platform','Platforma',0,60),('region','Hudud',0,60),('delivery_eta','Yetkazish muddati',2,60),('requirements','Talablar',0,1000)):
                 if key in fields: fields[key]=clean_text(fields[key],label,minimum,maximum)
             if 'image_url' in fields:
@@ -2074,6 +2137,8 @@ class Handler(BaseHTTPRequestHandler):
             else: attrs.pop('_risk_flags',None)
             if 'attributes' in data or 'images' in data or 'linked_accounts' in data or 'image_url' in data or any(key in data for key in ('title','description','game_name')):
                 fields['attributes_json']=json.dumps(attrs,ensure_ascii=False)
+            if l['stock']-l['reserved']<=0:
+                db.execute('UPDATE listing_alert_state SET available=0 WHERE listing_id=?',(lid,))
             next_status='pending_review' if fields and l['status'] in ('published','approved_private') or fields.get('stock',l['stock'])>0 and l['status']=='sold_out' else None
             if fields:
                 assignments=[f'{k}=?' for k in fields]; values=list(fields.values())
@@ -2082,12 +2147,15 @@ class Handler(BaseHTTPRequestHandler):
                 db.execute(f'UPDATE listings SET {", ".join(assignments)} WHERE id=?',(*values,lid)); audit(db,uid,'listing_edit','listing',lid,{'fields':sorted(fields),'status':next_status or l['status']})
                 if l['status'] in ('published','approved_private'):
                     for admin in db.execute('SELECT user_id FROM admin_accounts').fetchall(): notify(db,admin['user_id'],'moderation','Tahrirlangan e’lon tekshiruvi',f'{l["title"]} o‘zgartirildi va vaqtincha yashirildi.','/admin')
+            if 'delivery_eta' in fields: db.execute('UPDATE listings SET delivery_minutes=? WHERE id=?',(marketplace_features.delivery_minutes(fields['delivery_eta']),lid))
             return listing_detail(db,lid,uid)
         m=re.fullmatch(r'/api/favorites/([^/]+)',path)
         if m and method=='POST':
             require_user(ctx); lid=m.group(1)
             if not db.execute("SELECT 1 FROM listings WHERE id=? AND status='published'",(lid,)).fetchone(): raise HttpError(404,'E’lon topilmadi.')
-            db.execute('INSERT OR IGNORE INTO favorites(user_id,listing_id) VALUES(?,?)',(uid,lid)); return {'saved':True}
+            db.execute('INSERT OR IGNORE INTO favorites(user_id,listing_id) VALUES(?,?)',(uid,lid))
+            db.execute("INSERT INTO listing_alert_state(listing_id,price_minor,available,published_once) SELECT id,price_minor,stock-reserved,1 FROM listings WHERE id=? ON CONFLICT(listing_id) DO UPDATE SET available=excluded.available",(lid,))
+            return {'saved':True}
         if m and method=='DELETE': require_user(ctx); db.execute('DELETE FROM favorites WHERE user_id=? AND listing_id=?',(uid,m.group(1))); return {'saved':False}
         if path=='/api/cart' and method=='POST':
             require_user(ctx); lid=clean_text(data.get('listing_id'),'E’lon',1,100); qty=data.get('quantity',1)
@@ -2272,7 +2340,9 @@ class Handler(BaseHTTPRequestHandler):
                     if risk_flags:
                         note+=' Tekshiruv signallari: '+', '.join(str(flag) for flag in risk_flags)+'.'
                     note=note[:1000]
-            db.execute('UPDATE listings SET status=?,moderation_note=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(status,note,lid)); audit(db,aid,'listing_'+action,'listing',lid,{'note':note}); notify(db,l['seller_id'],'moderation','Moderatsiya natijasi',f'E’loningiz holati: {status}. {note}','/seller'); return {'status':status}
+            db.execute('UPDATE listings SET status=?,moderation_note=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(status,note,lid))
+            marketplace_features.alert_publication(db,lid,globals())
+            audit(db,aid,'listing_'+action,'listing',lid,{'note':note}); notify(db,l['seller_id'],'moderation','Moderatsiya natijasi',f'E’loningiz holati: {status}. {note}','/seller'); return {'status':status}
         m=re.fullmatch(r'/api/admin/sellers/([^/]+)',path)
         if m and method=='POST':
             aid=require_admin(ctx); target=m.group(1); action=data.get('action'); note=clean_text(data.get('note'),'Tekshiruv izohi',5,1000)
@@ -2484,7 +2554,7 @@ class _VercelRequest(Handler):
             try: client_ip=str(ipaddress.ip_address(environ.get('REMOTE_ADDR','0.0.0.0')))
             except ValueError: client_ip='0.0.0.0'
         self.client_address=(client_ip,0)
-        body_limit=MAX_IMAGE_BODY if self.command=='POST' and (path.rstrip('/')=='/api/listing-images' or re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/account-evidence/[12]',path.rstrip('/'))) else MAX_BODY
+        body_limit=MAX_IMAGE_BODY if self.command=='POST' and (path.rstrip('/')=='/api/listing-images' or re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/account-evidence/[12]',path.rstrip('/')) or re.fullmatch(r'/api/conversations/[A-Za-z0-9_-]{1,100}/photos',path.rstrip('/'))) else MAX_BODY
         body=environ.get('wsgi.input',io.BytesIO()).read(body_limit+1)
         self.rfile=io.BytesIO(body)
         self.wfile=io.BytesIO()
