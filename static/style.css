@@ -3054,3 +3054,5 @@ body:not(.home-page) .listing-detail-page .listing-buy-button:hover { background
   box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 5px 20px rgba(0,0,0,.24);
 }
 .listing-gallery-expand .icon { color:inherit; }
+
+.detail-gallery-arrow .gallery-chevron { display:block; width:20px; height:20px; margin:0; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; pointer-events:none; }
