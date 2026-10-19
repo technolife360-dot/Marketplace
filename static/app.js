@@ -154,7 +154,7 @@ function setupMarketBanner(){
  const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;let active=0;
  const show=index=>{active=(index+images.length)%images.length;images.forEach((image,i)=>image.classList.toggle('active',i===active));dots.forEach((dot,i)=>dot.setAttribute('aria-current',String(i===active)))};
  dots.forEach(dot=>dot.addEventListener('click',()=>show(Number(dot.dataset.marketSlide))));
- if(!reduced)marketBannerTimer=setInterval(()=>{if(!banner.isConnected){clearInterval(marketBannerTimer);return}if(!document.hidden&&!banner.matches(':hover,:focus-within'))show(active+1)},6000);
+ if(!reduced)marketBannerTimer=setInterval(()=>{if(!banner.isConnected){clearInterval(marketBannerTimer);return}if(!document.hidden)show(active+1)},4000);
 }
 function marketGameTabsMarkup(filters={}){return `<nav class="market-game-tabs" aria-label="${adminText('O‘yin bo‘yicha ko‘rish','Просмотр по игре','Browse by game')}"><a href="/browse" class="${!filters.game?'active':''}" ${!filters.game?'aria-current="page"':''}>${adminText('Barchasi','Все','All')}</a>${marketGameLinks.slice(0,7).map(game=>`<a href="/browse?game=${game[0]}" class="${filters.game===game[0]?'active':''}" ${filters.game===game[0]?'aria-current="page"':''}>${esc(game[1])}</a>`).join('')}</nav>`}
 async function renderBrowsePage(filters={}){
