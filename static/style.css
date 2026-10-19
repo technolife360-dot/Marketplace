@@ -2755,8 +2755,8 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
 .market-sidebar-games nav a:hover, .market-sidebar-games nav a.active { border-color:#7147b866; background:#9a62f215; color:#d7c2ff; }
 .market-sidebar-games nav a:focus-visible { outline:2px solid #b68aff; outline-offset:2px; }
 .market-all-games:hover { color:#bd9bff; }
-.market-game-mark { width:28px; height:28px; display:grid; flex:none; place-items:center; overflow:hidden; border:1px solid #344460; border-radius:0; background:#0b1220; box-shadow:0 2px 6px #0003; }
-.market-game-mark img { display:block; width:100%; height:100%; object-fit:cover; }
+.market-game-mark { position:relative; width:28px; height:28px; display:block; flex:0 0 28px; aspect-ratio:1; overflow:hidden; border:1px solid #344460; border-radius:0; background:#0b1220; box-shadow:0 2px 6px #0003; }
+.market-game-mark img { position:absolute; inset:0; display:block; width:100%; height:100%; max-width:none; max-height:none; margin:0; padding:0; border:0; border-radius:inherit; object-fit:cover; object-position:center; }
 .market-game-cs2 { background:linear-gradient(135deg,#e99b43,#4e6794); }
 .market-game-roblox { background:linear-gradient(135deg,#8491aa,#273348); }
 .market-game-valorant { background:linear-gradient(135deg,#fe5e7d,#982943); }
