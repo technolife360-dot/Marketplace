@@ -133,7 +133,7 @@ def snapshot_item(db,iid,lid,legacy=False,source=None):
     row=source if source is not None else db.execute('SELECT * FROM listings WHERE id=?',(lid,)).fetchone()
     if not row:return
     attrs=json.loads(row['attributes_json'] or '{}')
-    data={k:row[k] for k in ('title','description','game_id','product_type','platform','region','delivery_method','delivery_eta','delivery_minutes','requirements','price_minor','currency')}
+    data={k:row[k] for k in ('title','description','game_id','product_type','platform','region','delivery_method','delivery_eta','delivery_minutes','requirements','price_minor','currency','image_url')}
     data['attributes']={k:v for k,v in attrs.items() if not k.startswith('_')};data['availability']=availability(db,row['seller_id']);data['legacy']=legacy
     db.execute("UPDATE order_items SET snapshot_json=? WHERE id=? AND snapshot_json='{}'",(json.dumps(data,ensure_ascii=False),iid))
 

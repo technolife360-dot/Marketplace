@@ -78,11 +78,11 @@ class OperationsFlows(unittest.TestCase):
         self.db.execute('INSERT INTO carts(user_id,listing_id,quantity) VALUES(?,?,1)',(self.buyer,self.listing))
         return self.route(self.buyer,'POST','/api/checkout',{'accept_terms':True,'accept_account_risk':True})['id']
     def test_immutable_snapshot_deadline_and_idempotent_server_notices(self):
-        self.db.execute("UPDATE listings SET delivery_eta='1 hour',delivery_minutes=60,requirements='Original terms' WHERE id=?",(self.listing,))
+        self.db.execute("UPDATE listings SET delivery_eta='1 hour',delivery_minutes=60,requirements='Original terms',description='Original product description' WHERE id=?",(self.listing,))
         oid=self.make_order();self.route(self.buyer,'POST','/api/orders/'+oid+'/sandbox-complete',{})
-        self.db.execute("UPDATE listings SET delivery_eta='7 days',delivery_minutes=10080,requirements='Changed later' WHERE id=?",(self.listing,))
+        self.db.execute("UPDATE listings SET delivery_eta='7 days',delivery_minutes=10080,requirements='Changed later',description='Changed product description' WHERE id=?",(self.listing,))
         order=self.route(self.buyer,'GET','/api/orders/'+oid);item=order['items'][0]
-        self.assertEqual(item['delivery_eta'],'1 hour');self.assertEqual(item['requirements'],'Original terms');self.assertFalse(item['snapshot']['legacy'])
+        self.assertEqual(item['snapshot']['description'],'Original product description');self.assertEqual(item['delivery_eta'],'1 hour');self.assertEqual(item['requirements'],'Original terms');self.assertFalse(item['snapshot']['legacy'])
         due=ops.utc(item['delivery_due_at']);r=ops.deadline_run(self.db,vars(app),due+timedelta(minutes=1));self.assertEqual(r['notices'],1)
         self.assertEqual(ops.deadline_run(self.db,vars(app),due+timedelta(minutes=2))['notices'],0)
         self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?',(oid,)).fetchone()['status'],'paid')
