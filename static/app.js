@@ -150,13 +150,11 @@ function marketBannerMarkup(){const images=['market-banner-soldier.jpg','market-
 let marketBannerTimer=0;
 function setupMarketBanner(){
  clearInterval(marketBannerTimer);const banner=$('.market-banner,.home-intro',app);if(!banner)return;
- const images=$$('.market-banner-image,.home-intro-image',banner),dots=$$('[data-market-slide]',banner),toggle=$('[data-banner-toggle]',banner);
- const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;let active=0,playing=!reduced;
+ const images=$$('.market-banner-image,.home-intro-image',banner),dots=$$('[data-market-slide]',banner);
+ const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;let active=0;
  const show=index=>{active=(index+images.length)%images.length;images.forEach((image,i)=>image.classList.toggle('active',i===active));dots.forEach((dot,i)=>dot.setAttribute('aria-current',String(i===active)))};
  dots.forEach(dot=>dot.addEventListener('click',()=>show(Number(dot.dataset.marketSlide))));
- const sync=()=>{if(!toggle)return;toggle.hidden=reduced;toggle.textContent=playing?'Ⅱ':'▶';toggle.setAttribute('aria-label',playing?adminText('Rasmlar almashishini to‘xtatish','Приостановить слайд-шоу','Pause slideshow'):adminText('Rasmlar almashishini davom ettirish','Продолжить слайд-шоу','Play slideshow'));toggle.setAttribute('aria-pressed',String(!playing))};
- if(toggle)toggle.addEventListener('click',()=>{playing=!playing;sync()});sync();
- if(!reduced)marketBannerTimer=setInterval(()=>{if(!banner.isConnected){clearInterval(marketBannerTimer);return}if(playing&&!document.hidden&&!banner.matches(':hover,:focus-within'))show(active+1)},6000);
+ if(!reduced)marketBannerTimer=setInterval(()=>{if(!banner.isConnected){clearInterval(marketBannerTimer);return}if(!document.hidden&&!banner.matches(':hover,:focus-within'))show(active+1)},6000);
 }
 function marketGameTabsMarkup(filters={}){return `<nav class="market-game-tabs" aria-label="${adminText('O‘yin bo‘yicha ko‘rish','Просмотр по игре','Browse by game')}"><a href="/browse" class="${!filters.game?'active':''}" ${!filters.game?'aria-current="page"':''}>${adminText('Barchasi','Все','All')}</a>${marketGameLinks.slice(0,7).map(game=>`<a href="/browse?game=${game[0]}" class="${filters.game===game[0]?'active':''}" ${filters.game===game[0]?'aria-current="page"':''}>${esc(game[1])}</a>`).join('')}</nav>`}
 async function renderBrowsePage(filters={}){
@@ -347,7 +345,7 @@ async function renderHome(filters={}){
     <p>${t('Akkauntlar, skinlar va o‘yin xizmatlarini bir joyda toping.','Находите аккаунты, скины и игровые услуги в одном месте.','Discover accounts, skins, and game services in one place.')}</p>
     <a class="home-intro-link" href="/browse">${t('Bozorga o‘tish','Открыть маркет','Explore marketplace')} ${icon('arrow-up-right')}</a>
    </div>
-   <div class="home-banner-controls"><div class="market-banner-dots">${[0,1,2].map(index=>`<button type="button" data-market-slide="${index}" aria-label="${t(`${index+1}-rasm`,`Изображение ${index+1}`,`Image ${index+1}`)}" aria-current="${index===0?'true':'false'}"></button>`).join('')}</div><button type="button" class="home-banner-toggle" data-banner-toggle></button></div>
+   <div class="home-banner-controls"><div class="market-banner-dots">${[0,1,2].map(index=>`<button type="button" data-market-slide="${index}" aria-label="${t(`${index+1}-rasm`,`Изображение ${index+1}`,`Image ${index+1}`)}" aria-current="${index===0?'true':'false'}"></button>`).join('')}</div></div>
   </section>
   <div data-home-status></div>
   <form id="hero-search-form" class="hero-search home-search" role="search">
