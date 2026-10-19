@@ -93,6 +93,41 @@ class HTTPWorkflows(unittest.TestCase):
         self.assertIn('SameSite=Lax', headers['Set-Cookie'])
         return client
 
+    def test_login_and_verification_reuse_the_request_database_connection(self):
+        original_connect=app.connect
+        leased=False
+        borrows=0
+        class Lease:
+            def __init__(self, db): self.db=db
+            def execute(self, *args): return self.db.execute(*args)
+            def close(self):
+                nonlocal leased
+                self.db.close()
+                leased=False
+        def borrow():
+            nonlocal leased,borrows
+            if leased:
+                raise AssertionError('The request cannot borrow a second pooled connection.')
+            leased=True
+            borrows+=1
+            return Lease(original_connect())
+        with patch.object(app,'connect',side_effect=borrow):
+            buyer=self.registered_buyer()
+            self.assertFalse(leased)
+            self.assertEqual(buyer.request('POST','/api/logout',{})[0],200)
+            status,result,headers=buyer.request('POST','/api/login',{
+                'email':'buyer@http.test','password':'HTTP-buyer-password-123'})
+            self.assertEqual(status,200,result)
+            self.assertIn('HttpOnly',headers['Set-Cookie'])
+            self.assertFalse(leased)
+            self.assertEqual(borrows,4)
+            status,security,_=buyer.request('GET','/api/security')
+            self.assertEqual(status,200,security)
+            current=next(s for s in security['sessions'] if s['current'])
+            self.assertEqual(current['network_label'],'127.0.0.0/24')
+            self.assertTrue(current['created_at'])
+            self.assertTrue(current['last_seen_at'])
+
     def published_item(self):
         status, result, _ = self.seller.request('POST', '/api/listings', {
             'game_name': 'Counter-Strike 2', 'category_id': 'items', 'title': 'HTTP workflow test item',

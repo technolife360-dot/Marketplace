@@ -1193,16 +1193,15 @@ class Handler(BaseHTTPRequestHandler):
                     db.execute('UPDATE users SET last_seen_at=? WHERE id=? AND (last_seen_at IS NULL OR last_seen_at<?)',
                                (now.isoformat(timespec='seconds'),uid,(now-timedelta(seconds=60)).isoformat(timespec='seconds')))
         return {'db':db,'uid':uid,'csrf':csrf,'mfa_pending':mfa_pending,'user':user_view(db,uid) if uid else None}
-    def set_session(self, token):
+    def set_session(self, token, db):
         raw=decode_session(token)
         if raw:
-            meta_db=connect()
-            try:
-                address=self.client_address[0]
-                try: network=str(ipaddress.ip_network(address+('/24' if ':' not in address else '/48'),strict=False))
-                except ValueError: network=''
-                meta_db.execute('UPDATE sessions SET created_at=?,last_seen_at=?,user_agent=?,network_label=? WHERE token_hash=?',(now_iso(),now_iso(),getattr(self,'headers',{}).get('User-Agent','')[:250],network,hash_token(raw)))
-            finally:meta_db.close()
+            # The request already holds the only pooled PostgreSQL connection.
+            # Reuse it: borrowing again here waits for this request to finish.
+            address=self.client_address[0]
+            try: network=str(ipaddress.ip_network(address+('/24' if ':' not in address else '/48'),strict=False))
+            except ValueError: network=''
+            db.execute('UPDATE sessions SET created_at=?,last_seen_at=?,user_agent=?,network_label=? WHERE token_hash=?',(now_iso(),now_iso(),getattr(self,'headers',{}).get('User-Agent','')[:250],network,hash_token(raw)))
         self._set_cookie=f'{COOKIE_NAME}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_DAYS*86400}' + ('; Secure' if MODE=='production' else '')
     def dispatch(self):
         parsed=urlparse(self.path); path=parsed.path.rstrip('/') or '/'; method=self.command
@@ -1456,7 +1455,7 @@ class Handler(BaseHTTPRequestHandler):
                 user_id=ident()
                 db.execute('INSERT INTO users(id,email,password_hash,display_name,country,language,currency,email_verified,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,1,?,?)',(user_id,email,password_hash(create_token()),name,oauth_country,'en',ASIA_COUNTRY_CURRENCIES[oauth_country],terms,now_iso()))
                 db.execute('INSERT INTO oauth_identities(provider,subject,user_id) VALUES(?,?,?)',(provider,subject,user_id))
-            session_token,csrf=session_create(db,user_id); self.set_session(session_token)
+            session_token,csrf=session_create(db,user_id); self.set_session(session_token,db)
             return 302,{'ok':True},{'Location':'/#account','Set-Cookie':[clear]}
         if path=='/api/webhooks/didit' and method=='POST':
             payload=identity_service.verify_webhook(raw_body,self.headers.get('X-Signature-V2',''),self.headers.get('X-Timestamp',''))
@@ -1522,7 +1521,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/verify' and method=='POST':
             token=clean_text(data.get('token'),'Token',20,200); tok=db.execute("SELECT * FROM email_tokens WHERE token_hash=? AND purpose='verify' AND consumed_at IS NULL AND expires_at>?",(hash_token(token),now_iso())).fetchone()
             if not tok: raise HttpError(400,'Tasdiqlash havolasi noto‘g‘ri yoki muddati o‘tgan.')
-            db.execute("UPDATE email_tokens SET consumed_at=CURRENT_TIMESTAMP WHERE user_id=? AND purpose='verify' AND consumed_at IS NULL",(tok['user_id'],)); db.execute('UPDATE users SET email_verified=1 WHERE id=?',(tok['user_id'],)); raw,csrf=session_create(db,tok['user_id']); self.set_session(raw)
+            db.execute("UPDATE email_tokens SET consumed_at=CURRENT_TIMESTAMP WHERE user_id=? AND purpose='verify' AND consumed_at IS NULL",(tok['user_id'],)); db.execute('UPDATE users SET email_verified=1 WHERE id=?',(tok['user_id'],)); raw,csrf=session_create(db,tok['user_id']); self.set_session(raw,db)
             return {'user':user_view(db,tok['user_id']),'csrf':csrf}
         if path=='/api/password-reset' and method=='POST':
             if not email_service.is_configured() and MODE!='development': raise HttpError(503,'Parolni tiklash uchun xavfsiz email yuborish xizmati konfiguratsiyasi kerak.')
@@ -1555,7 +1554,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not marketplace_operations.consume_otp(db,row['id'],data.get('otp'),globals()): raise HttpError(403,'Authenticator yoki tiklash kodi noto‘g‘ri yoki ishlatilgan.')
             raw,csrf=session_create(db,row['id'])
             db.execute('UPDATE sessions SET mfa_verified=1 WHERE token_hash=?',(hash_token(decode_session(raw)),))
-            self.set_session(raw); return {'user':user_view(db,row['id']),'csrf':csrf}
+            self.set_session(raw,db); return {'user':user_view(db,row['id']),'csrf':csrf}
         if path=='/api/logout' and method=='POST':
             if uid:
                 session_token=decode_session(self.cookie())
