@@ -101,12 +101,12 @@ function card(it){
  return `<article class="product-card">${favorite}<a class="product-card-link" href="/listing/${encodeURIComponent(it.id)}">${cover(it)}<div class="product-card-body"><div class="product-card-header"><span class="product-game" title="${esc(it.game_name||'Game')}">${esc(it.game_name||'Game')}</span><span class="product-type" title="${esc(categoryLabel(it.category_name||it.product_type||'Digital'))}">${esc(categoryLabel(it.category_name||it.product_type||'Digital'))}</span></div><h3 class="product-title">${esc(it.title)}</h3>${facts.length?`<div class="product-facts">${facts.map(x=>`<span>${esc(x)}</span>`).join('')}</div>`:''}${seller}<div class="card-bottom"><b class="price">${fmt(it.price_minor,it.currency)}</b>${stock}</div></div></a><div class="product-card-actions"><button class="button-secondary compare-listing-button" data-action="compare-listing" data-id="${esc(it.id)}">${comparisonIds.includes(it.id)?adminText('Taqqoslashda','В сравнении','In comparison'):adminText('Taqqoslash','Сравнить','Compare')}</button></div></article>`
 }
 const marketGameLinks=[
- ['counter-strike-2','CS2','CS','cs2'],['pubg-mobile','PUBG Mobile','/static/assets/topup-pubg-mobile.svg','pubg'],
- ['mobile-legends','Mobile Legends','/static/assets/topup-mobile-legends.svg','ml'],['free-fire','Free Fire','/static/assets/topup-free-fire.svg','ff'],
- ['honor-of-kings','Honor of Kings','/static/assets/topup-honor-of-kings.svg','hok'],['roblox','Roblox','R','roblox'],
- ['valorant','Valorant','V','valorant'],['genshin-impact','Genshin Impact','G','genshin']
+ ['counter-strike-2','CS2','/static/assets/market-game-cs2.png','cs2'],['pubg-mobile','PUBG Mobile','/static/assets/market-game-pubg-mobile.png','pubg'],
+ ['mobile-legends','Mobile Legends','/static/assets/market-game-mobile-legends.png','ml'],['free-fire','Free Fire','/static/assets/market-game-free-fire.png','ff'],
+ ['honor-of-kings','Honor of Kings','/static/assets/market-game-honor-of-kings.png','hok'],['roblox','Roblox','/static/assets/market-game-roblox.png','roblox'],
+ ['valorant','Valorant','/static/assets/market-game-valorant.png','valorant'],['genshin-impact','Genshin Impact','/static/assets/market-game-genshin-impact.png','genshin']
 ];
-function marketGameMark(game){const [,name,mark,theme]=game;return `<span class="market-game-mark market-game-${theme}" aria-hidden="true">${mark.startsWith('/')?`<img src="${mark}" alt="" loading="lazy">`:esc(mark)}</span>`}
+function marketGameMark(game){const [,,mark,theme]=game;return `<span class="market-game-mark market-game-${theme}" aria-hidden="true"><img src="${mark}" alt="" width="52" height="38" loading="lazy" decoding="async"></span>`}
 function marketCard(it){
  const gameName=it.game_name||adminText('O‘yin','Игра','Game');
  const demoArt=!it.image_url&&String(it.id).startsWith('demo-')?it.game_slug==='pubg-mobile'?'market-banner-games.jpg':it.game_slug==='valorant'?'market-banner-soldier.jpg':'market-banner-worlds.jpg':'';
