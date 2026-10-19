@@ -290,7 +290,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
     match=re.fullmatch(r'/api/catalogue/offers/([^/]+)',path)
     if match and method=='GET':
         lid=match.group(1);it=core['listing_detail'](db,lid,uid)
-        if not it or it['status']!='published' or not core['listing_allowed_for_production'](db,it['game_id'],it['product_type']):raise error(404,'Mahsulot topilmadi.')
+        if not it or it['status'] not in core['PUBLIC_LISTING_STATES'] or not core['listing_allowed_for_production'](db,it['game_id'],it['product_type']):raise error(404,'Mahsulot topilmadi.')
         candidates=db.execute("SELECT * FROM listings WHERE game_id=? AND product_type=? AND status='published' AND stock>reserved ORDER BY price_minor LIMIT 1000",(it['game_id'],it['product_type'])).fetchall();key=signature(it);rows=[]
         for row in candidates:
             if signature(dict(row))!=key:continue
@@ -313,9 +313,11 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
             if not isinstance(ids,list) or len(ids)>limit or any(not isinstance(i,str) for i in ids):raise error(400,'Ro‘yxat noto‘g‘ri.')
             db.execute('BEGIN IMMEDIATE')
             try:
-                db.execute('UPDATE users SET last_seen_at=last_seen_at WHERE id=?',(uid,));db.execute('DELETE FROM account_collections WHERE user_id=? AND kind=?',(uid,kind))
+                # Serialize collection/preferences writes using a base-schema column;
+                # presence tracking is optional on existing production databases.
+                db.execute('UPDATE users SET display_name=display_name WHERE id=?',(uid,));db.execute('DELETE FROM account_collections WHERE user_id=? AND kind=?',(uid,kind))
                 for n,lid in enumerate(dict.fromkeys(ids)):
-                    if db.execute("SELECT id FROM listings WHERE id=? AND status='published'",(lid,)).fetchone():db.execute('INSERT INTO account_collections(user_id,kind,listing_id,updated_at) VALUES(?,?,?,?)',(uid,kind,lid,ops.iso(now-timedelta(seconds=n))))
+                    if db.execute("SELECT id FROM listings WHERE id=? AND status IN ('published','sold_out')",(lid,)).fetchone():db.execute('INSERT INTO account_collections(user_id,kind,listing_id,updated_at) VALUES(?,?,?,?)',(uid,kind,lid,ops.iso(now-timedelta(seconds=n))))
                 prefs=settings(db,uid);prefs['collections_initialized']=list(set(prefs.get('collections_initialized',[])+[kind]))
                 db.execute('INSERT INTO experience_preferences(user_id,settings_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET settings_json=excluded.settings_json',(uid,json.dumps(prefs)))
                 db.execute('COMMIT')

@@ -55,6 +55,19 @@ class ExperienceFlows(unittest.TestCase):
         self.route(self.buyer,'POST','/api/experience/settings',{'favorite':False});self.db.execute('UPDATE listings SET price_minor=30000 WHERE id=?',(self.listing,));ex.price_alerts(self.db,self.listing,vars(app))
         self.assertEqual(self.db.execute("SELECT COUNT(*) n FROM notifications WHERE user_id=? AND kind='favorite'",(self.buyer,)).fetchone()['n'],1)
         with self.assertRaises(app.HttpError):self.route(self.other,'POST','/api/price-watches/'+self.listing,{'target_minor':True})
+    def test_collections_work_without_optional_presence_column(self):
+        self.db.execute('ALTER TABLE users DROP COLUMN last_seen_at')
+        self.route(self.buyer,'POST','/api/experience/settings',{'message':False})
+        for kind in ('recent','compare'):
+            result=self.route(self.buyer,'POST','/api/collections/'+kind,{'ids':[self.listing,self.listing,'missing-listing']})
+            self.assertEqual(result,{'initialized':True,'ids':[self.listing]})
+            self.assertEqual(self.route(self.other,'GET','/api/collections/'+kind),{'initialized':False,'ids':[]})
+        self.assertEqual(self.route(self.buyer,'POST','/api/collections/recent',{'ids':[]}),{'initialized':True,'ids':[]})
+        self.assertEqual(self.route(self.buyer,'GET','/api/collections/compare')['ids'],[self.listing])
+        prefs=self.route(self.buyer,'GET','/api/experience/settings')
+        self.assertFalse(prefs['message'])
+        self.assertEqual(set(prefs['collections_initialized']),{'recent','compare'})
+
     def test_collections_are_account_scoped_capped_and_replaceable(self):
         self.route(self.buyer,'POST','/api/collections/compare',{'ids':[self.listing]})
         self.assertEqual(self.route(self.buyer,'GET','/api/collections/compare')['ids'],[self.listing]);self.assertEqual(self.route(self.other,'GET','/api/collections/compare')['ids'],[])

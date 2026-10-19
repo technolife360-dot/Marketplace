@@ -8,3 +8,5 @@
 @media(max-width:800px){.listing-right-column>.ex-panel{order:6}.listing-right-column>.ex-price-watch{order:7}}
 
 .ex-toggle[hidden],.field[hidden]{display:none!important}
+
+.ex-quantity[hidden]{display:none}

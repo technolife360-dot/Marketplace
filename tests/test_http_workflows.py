@@ -291,5 +291,27 @@ class HTTPWorkflows(unittest.TestCase):
         self.assertNotIn('Content-Encoding',headers);self.assertEqual(opted_out,plain)
 
 
+    def test_sold_out_listing_remains_readable_without_allowing_another_purchase(self):
+        lid=self.published_item();buyer=self.registered_buyer()
+        self.db.execute("UPDATE listings SET status='sold_out',stock=0,reserved=0 WHERE id=?",(lid,))
+        status,item,_=self.guest.request('GET','/api/listings/'+lid)
+        self.assertEqual(status,200,item);self.assertEqual(item['status'],'sold_out');self.assertEqual(item['available'],0);self.assertIsNone(item['estimated_delivery_at'])
+        self.assertEqual(self.guest.request('GET','/listing/'+lid)[0],200)
+        self.assertNotIn(lid,[i['id'] for i in self.guest.request('GET','/api/listings')[1]['items']])
+        self.assertEqual(self.guest.request('GET','/api/catalogue/offers/'+lid)[0],200)
+        self.assertEqual(buyer.request('POST','/api/cart',{'listing_id':lid,'quantity':1})[0],404)
+        self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM carts WHERE listing_id=?',(lid,)).fetchone()['n'],0)
+        self.assertEqual(buyer.request('POST','/api/favorites/'+lid,{})[0],200)
+        self.assertEqual(buyer.request('POST','/api/collections/recent',{'ids':[lid]})[1]['ids'],[lid])
+        with patch.object(app,'listing_allowed_for_production',return_value=False):
+            for path in ('/api/listings/'+lid,'/listing/'+lid,'/api/catalogue/offers/'+lid):
+                self.assertEqual(self.guest.request('GET',path)[0],404,path)
+        for private in ('draft','pending_review','rejected','paused','archived'):
+            self.db.execute('UPDATE listings SET status=? WHERE id=?',(private,lid))
+            for path in ('/api/listings/'+lid,'/listing/'+lid,'/api/catalogue/offers/'+lid):
+                self.assertEqual(self.guest.request('GET',path)[0],404,(private,path))
+        self.assertEqual(self.guest.request('GET','/api/listings/actually-missing')[0],404)
+
+
 if __name__ == '__main__':
     unittest.main()

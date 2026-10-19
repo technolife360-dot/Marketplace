@@ -39,6 +39,7 @@ for _line in _env_path.read_text().splitlines() if _env_path.is_file() else []:
         _key,_value=_line.split('=',1); os.environ.setdefault(_key.strip(),_value.strip().strip('\"').strip("'"))
 import delivery_crypto
 MODE = os.environ.get('MARKETPLACE_MODE', 'development').lower()
+PUBLIC_LISTING_STATES=frozenset(('published','sold_out'))
 DB_PATH = os.environ.get('DATABASE_PATH', str(ROOT / 'marketplace.sqlite3'))
 DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
 try:
@@ -1025,7 +1026,7 @@ def listing_detail(db, lid, viewer=None):
     availability=marketplace_operations.availability(db,out['seller_id'])
     out['availability']=availability
     estimate=marketplace_features.delivery_minutes(out['delivery_eta'])
-    out['estimated_delivery_at']=marketplace_operations.iso(marketplace_operations.next_open(availability,datetime.now(timezone.utc))+timedelta(minutes=estimate)) if estimate and not availability['vacation'] else None
+    out['estimated_delivery_at']=marketplace_operations.iso(marketplace_operations.next_open(availability,datetime.now(timezone.utc))+timedelta(minutes=estimate)) if estimate and not availability['vacation'] and out['status']=='published' and out['stock']>out['reserved'] else None
     out['buyer_fields']=trade_workflows.requirements(out)
     out['after_sale_policy']=trade_workflows.policy(out['product_type'])
     out['available']=max(0,out['stock']-out['reserved']); out['attributes']=json.loads(out.pop('attributes_json') or '{}')
@@ -1064,7 +1065,7 @@ def seo_listing_html(listing_id):
     db=connect()
     try:
         item=listing_detail(db,listing_id)
-        if (not item or item['status']!='published'
+        if (not item or item['status'] not in PUBLIC_LISTING_STATES
                 or not listing_allowed_for_production(db,item['game_id'],item['product_type'])):
             return None
     finally:
@@ -1798,8 +1799,8 @@ class Handler(BaseHTTPRequestHandler):
             return {'items':items,'total_count':count,'page':page,'page_size':limit,'has_more':page*limit<count}
         if path.startswith('/api/listings/') and method=='GET':
             lid=path.split('/')[-1]; item=listing_detail(db,lid,uid)
-            if not item or (item['status']!='published' and item['seller_id']!=uid and not (uid and is_admin(db,uid))): raise HttpError(404,'E’lon topilmadi.')
-            if item['status']=='published' and not listing_allowed_for_production(db,item['game_id'],item['product_type']): raise HttpError(404,'E’lon topilmadi.')
+            if not item or (item['status'] not in PUBLIC_LISTING_STATES and item['seller_id']!=uid and not (uid and is_admin(db,uid))): raise HttpError(404,'E’lon topilmadi.')
+            if item['status'] in PUBLIC_LISTING_STATES and not listing_allowed_for_production(db,item['game_id'],item['product_type']): raise HttpError(404,'E’lon topilmadi.')
             seller_id=item.pop('seller_id',None)
             item['store_id']=seller_id
             item['is_owner']=bool(uid and seller_id==uid)
@@ -2302,7 +2303,8 @@ class Handler(BaseHTTPRequestHandler):
         m=re.fullmatch(r'/api/favorites/([^/]+)',path)
         if m and method=='POST':
             require_user(ctx); lid=m.group(1)
-            if not db.execute("SELECT 1 FROM listings WHERE id=? AND status='published'",(lid,)).fetchone(): raise HttpError(404,'E’lon topilmadi.')
+            item=db.execute("SELECT game_id,product_type FROM listings WHERE id=? AND status IN ('published','sold_out')",(lid,)).fetchone()
+            if not item or not listing_allowed_for_production(db,item['game_id'],item['product_type']):raise HttpError(404,'E’lon topilmadi.')
             changed=db.execute('INSERT OR IGNORE INTO favorites(user_id,listing_id) VALUES(?,?)',(uid,lid))
             if changed.rowcount:catalogue_experience.insight(db,lid,'favorite')
             db.execute("INSERT INTO listing_alert_state(listing_id,price_minor,available,published_once) SELECT id,price_minor,stock-reserved,1 FROM listings WHERE id=? ON CONFLICT(listing_id) DO UPDATE SET available=excluded.available",(lid,))
