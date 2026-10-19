@@ -1179,6 +1179,9 @@ class Handler(BaseHTTPRequestHandler):
                 payload=public_sitemap_xml()
                 self.send_response(200); self.send_header('Content-Type','application/xml; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=300'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
             public_route=parsed.path.rstrip('/') or '/'
+            account_route={'/messages':'messages','/seller':'seller'}.get(public_route)
+            if account_route:
+                self.send_response(302); self.send_header('Location','/#'+account_route); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length','0'); self.secure_headers(); self.end_headers(); return
             if public_route in ('/top-up','/browse','/blog','/selling','/guide','/fees','/policies','/support','/help','/help/orders','/help/payments','/help/refunds','/help/chat','/terms','/refunds','/seller-policy','/prohibited-items','/contact'):
                 payload=seo_page_html(public_route)
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return

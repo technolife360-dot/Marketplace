@@ -265,6 +265,23 @@ class MarketplaceFlows(unittest.TestCase):
         self.assertIn('<title>Valorant account lvl 50 | Valorant | SentryLoot</title>',html)
         self.assertIn('<link rel="canonical" href="http://localhost:8000/listing/'+self.listing+'">',html)
         self.assertIn('A test listing with enough descriptive text.',html)
+    def test_direct_messages_and_seller_urls_redirect_to_existing_account_routes(self):
+        application=app.VercelWSGIApplication()
+        application._startup_complete=True
+        for path,target in (('/messages','messages'),('/messages/','messages'),('/seller','seller')):
+            for method in ('GET','HEAD'):
+                with self.subTest(path=path,method=method):
+                    response={}
+                    def start_response(status,headers):
+                        response.update(status=status,headers=dict(headers))
+                    body=b''.join(application({'REQUEST_METHOD':method,'PATH_INFO':path,'wsgi.input':app.io.BytesIO()},start_response))
+                    self.assertEqual(response['status'],'302 Found')
+                    self.assertEqual(response['headers']['Location'],'/#'+target)
+                    self.assertEqual(response['headers']['Cache-Control'],'no-store')
+                    self.assertEqual(body,b'')
+        request=app._VercelRequest({'REQUEST_METHOD':'GET','PATH_INFO':'/not-a-real-page','wsgi.input':app.io.BytesIO()})
+        request.do_GET()
+        self.assertEqual(request._status,404)
     def test_public_content_routes_have_crawlable_copy_canonical_and_sitemap_entries(self):
         with patch.dict(os.environ,{'PUBLIC_BASE_URL':'http://localhost:8000'},clear=False):
             help_page=app.seo_page_html('/help').decode()
