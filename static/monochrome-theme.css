@@ -166,4 +166,20 @@ body :is(.header-search, .home-search):focus-within {
   outline: 2px solid #AAAAAA;
   outline-offset: 2px;
 }
+/* Sidebar rows stay frameless; only the icon keeps a compact outlined tile. */
+body .market-sidebar-main>a,
+body .market-sidebar-main>a:is(:hover, :active, [aria-current='page']) {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+body .market-sidebar-main .market-nav-icon {
+  border: 1px solid #3A3A3A !important;
+  border-radius: 8px;
+  background: #111111 !important;
+}
+body .market-sidebar-main>a:is(:hover, :focus-visible) .market-nav-icon {
+  border-color: #777777 !important;
+  background: #222222 !important;
+}
 }
