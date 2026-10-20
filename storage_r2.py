@@ -84,6 +84,11 @@ def put_evidence(key, body):
     _client().put_object(Bucket=bucket, Key=key, Body=body, ContentType='image/webp',
                          CacheControl='private, no-store')
 
+def put_video_evidence(key,body):
+    key=_key(key)
+    _,_,_,_,bucket,_=_settings()
+    _client().put_object(Bucket=bucket,Key=key,Body=body,ContentType='video/mp4',CacheControl='private, no-store',ContentDisposition='inline; filename="evidence.mp4"')
+
 
 def evidence_url(key):
     key = _key(key)

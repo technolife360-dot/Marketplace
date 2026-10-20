@@ -94,9 +94,9 @@ def reauthenticate(db,uid,data,core):
 
 def security_notice(db,uid,title,core,address=None):
     core['notify'](db,uid,'security',title,'Bu amalni siz bajarmagan bo‘lsangiz, yordam xizmatiga murojaat qiling.','/account')
-    row=db.execute('SELECT email,display_name FROM users WHERE id=?',(uid,)).fetchone()
+    row=db.execute('SELECT email,display_name,language FROM users WHERE id=?',(uid,)).fetchone()
     if row and core['email_service'].is_configured():
-        try:core['email_service'].send_security_update(address or row['email'],row['display_name'],title)
+        try:core['email_service'].send_security_update(address or row['email'],row['display_name'],title,language=row['language'])
         except Exception:core['audit'](db,uid,'security_email_failed','user',uid)
 
 def blocked(db,a,b):return bool(db.execute('SELECT 1 FROM user_blocks WHERE (user_id=? AND blocked_id=?) OR (user_id=? AND blocked_id=?)',(a,b,b,a)).fetchone())
@@ -135,6 +135,8 @@ def snapshot_item(db,iid,lid,legacy=False,source=None):
     attrs=json.loads(row['attributes_json'] or '{}')
     data={k:row[k] for k in ('title','description','game_id','product_type','platform','region','delivery_method','delivery_eta','delivery_minutes','requirements','price_minor','currency','image_url')}
     import trade_workflows
+    import launch_readiness
+    data['service_plan']=launch_readiness.config(db,'service_plan:'+lid,[]) if row['product_type']=='service' and not legacy else []
     for key in ('min_quantity','unit_label','automatic_delivery'):
         if key in row.keys():data[key]=row[key]
     data['after_sale_policy']=trade_workflows.policy(row['product_type']) if not legacy else {'days':0,'appeal_days':7,'legacy':True}
@@ -186,6 +188,8 @@ def quality(item):
     if len(item['description'].strip())<60:problems.append('Tavsifni kamida 60 belgi bilan aniq yozing.')
     attrs=json.loads(item['attributes_json'] or '{}')
     if item['product_type']=='item' and not attrs.get('item_name'):problems.append('Buyumning aniq nomini kiriting.')
+    if item['product_type']=='item' and attrs.get('item_name') and not any(c.isalpha() for c in str(attrs['item_name'])):problems.append('Buyum nomi faqat raqamlardan iborat bo‘lmasin.')
+    if item['product_type']=='item' and str(attrs.get('item_variant','')).casefold() in ('active','published','draft','pending'):problems.append('Variant o‘rniga e’lon holatini yozmang; mahsulotning haqiqiy variantini kiriting.')
     if not item['platform'] or not item['region']:problems.append('Platforma va hududni tanlang.')
     if not item['requirements'].strip():problems.append('Nima yetkazilishi va xaridorga kerakli shartlarni kiriting.')
     if not item['image_url']:problems.append('Mahsulotning haqiqiy rasmini qo‘shing.')
@@ -261,7 +265,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         if core['MODE']!='development' and not core['email_service'].is_configured():raise error(503,'Tasdiqlash xatini yuborish xizmati tayyor emas.')
         token=core['create_token']();db.execute('DELETE FROM pending_email_changes WHERE user_id=?',(uid,));db.execute('INSERT INTO pending_email_changes(token_hash,user_id,new_email,expires_at) VALUES(?,?,?,?)',(core['hash_token'](token),uid,address,iso(now+timedelta(minutes=30))))
         if core['email_service'].is_configured():
-            try:core['email_service'].send_action_email(address,ctx['user']['display_name'],'email_change',token)
+            try:core['email_service'].send_action_email(address,ctx['user']['display_name'],'email_change',token,language=ctx['user'].get('language','en'))
             except Exception as exc:raise error(503,'Tasdiqlash xati yuborilmadi. Qayta urinib ko‘ring.') from exc
         result={'ok':True,'message':'Yangi emailga tasdiqlash havolasi yuborildi. Amaldagi email hozircha o‘zgarmadi.'}
         if core['MODE']=='development' and not core['email_service'].is_configured():result['confirmation_token']=token
@@ -337,7 +341,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         rows=db.execute("SELECT l.*,g.name game_name FROM listings l JOIN games g ON g.id=l.game_id WHERE l.status IN ('draft','pending_review','published','approved_private') ORDER BY l.updated_at DESC LIMIT 200").fetchall()
         return {'items':[{'id':r['id'],'title':r['title'],'game_name':r['game_name'],'status':r['status'],'issues':quality(r)} for r in rows],'games':[dict(r) for r in db.execute("SELECT g.name,g.slug,COUNT(l.id) listings FROM games g LEFT JOIN listings l ON l.game_id=g.id AND l.status='published' GROUP BY g.id,g.name,g.slug ORDER BY COUNT(l.id),g.name")]}
     if path=='/api/support/tickets' and method in ('GET','POST'):
-        require(ctx);admin=core['is_admin'](db,uid)
+        require(ctx);admin=core['is_admin'](db,uid) or core['launch_readiness'].staff_allowed(db,uid,'support')
         if method=='GET':
             admin_queue=admin and qs.get('queue',[''])[0]=='1'
             return [dict(r) for r in db.execute('SELECT t.id,t.subject,t.category,t.status,t.order_id,t.created_at,t.updated_at FROM support_tickets t'+('' if admin_queue else ' WHERE t.requester_id=?')+' ORDER BY t.updated_at DESC,t.id DESC LIMIT 100',() if admin_queue else (uid,))]
@@ -356,7 +360,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         return 201,{'id':tid}
     match=re.fullmatch(r'/api/support/tickets/([^/]+)',path)
     if match and method in ('GET','POST'):
-        require(ctx);tid=match.group(1);ticket=db.execute('SELECT * FROM support_tickets WHERE id=?',(tid,)).fetchone();admin=core['is_admin'](db,uid)
+        require(ctx);tid=match.group(1);ticket=db.execute('SELECT * FROM support_tickets WHERE id=?',(tid,)).fetchone();admin=core['is_admin'](db,uid) or core['launch_readiness'].staff_allowed(db,uid,'support')
         if not ticket or not (uid==ticket['requester_id'] or admin):raise error(404,'Murojaat topilmadi.')
         if method=='GET':return {'ticket':dict(ticket),'can_manage':admin,'entries':[{**dict(r),'is_support':r['sender_id']!=ticket['requester_id']} for r in db.execute('SELECT id,sender_id,body,created_at FROM support_entries WHERE ticket_id=? ORDER BY created_at,id',(tid,))]}
         verified(ctx);core['check_rate'](db,'support_reply',uid,30,3600);body=text(data.get('body'),'Javob',2,5000);state=data.get('status','waiting_customer' if admin else 'open')
@@ -382,7 +386,9 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
                     attachment=attachments[entry['id']]
                     if attachment['owner_id']!=uid and not admin:
                         entry['image_private']=True;continue
-                    try:entry['image_url']=core['storage_r2'].evidence_url(attachment['object_path'])
+                    try:
+                        entry['image_url']=core['storage_r2'].evidence_url(attachment['object_path'])
+                        entry['media_type']='video' if attachment['object_path'].endswith('.mp4') else 'image'
                     except Exception:entry['image_unavailable']=True
             return {'order':{'id':oid,'reference':order['reference'],'status':order['status']},'report':dict(report) if report else None,'entries':entries,'can_reply':order['status']=='disputed','can_manage':core['is_admin'](db,uid)}
         verified(ctx);core['check_rate'](db,'dispute_reply',uid,30,3600)

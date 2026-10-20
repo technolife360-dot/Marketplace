@@ -95,7 +95,8 @@ def action_link(kind: str, token: str) -> str:
     return f'{base}/#{routes[kind]}/{quote(token, safe="")}'
 
 
-def send_action_email(address: str, display_name: str, kind: str, token: str) -> None:
+def send_action_email(address: str, display_name: str, kind: str, token: str, language: str = 'uz') -> None:
+    if language in ('en','ru'):return _localized_email(address,display_name,language,kind,token=token)
     if not is_configured():
         raise RuntimeError('Transactional email is not configured')
 
@@ -121,7 +122,8 @@ def send_action_email(address: str, display_name: str, kind: str, token: str) ->
     _deliver(message)
 
 
-def send_order_update(address: str, display_name: str, reference: str, status: str, description: str) -> None:
+def send_order_update(address: str, display_name: str, reference: str, status: str, description: str, language: str = 'uz') -> None:
+    if language in ('en','ru'):return _localized_email(address,display_name,language,'order',reference=reference,status=status)
     """Send a minimal order status email; never include credentials or delivery secrets."""
     if not is_configured():
         raise RuntimeError('Transactional email is not configured')
@@ -144,7 +146,8 @@ def send_order_update(address: str, display_name: str, reference: str, status: s
     _deliver(message)
 
 
-def send_security_update(address: str, display_name: str, description: str) -> None:
+def send_security_update(address: str, display_name: str, description: str, language: str = 'uz') -> None:
+    if language in ('en','ru'):return _localized_email(address,display_name,language,'security')
     """Security event notification. Never include passwords, OTPs or setup keys."""
     if not is_configured(): raise RuntimeError('Transactional email is not configured')
     message=EmailMessage()
@@ -155,7 +158,8 @@ def send_security_update(address: str, display_name: str, description: str) -> N
     _deliver(message)
 
 
-def send_marketplace_alert(address: str, display_name: str, title: str) -> None:
+def send_marketplace_alert(address: str, display_name: str, title: str, language: str = 'uz') -> None:
+    if language in ('en','ru'):return _localized_email(address,display_name,language,'notification')
     """Opt-in discovery/chat alert. Never email private chat bodies or delivery codes."""
     if not is_configured():raise RuntimeError('Transactional email is not configured')
     base=os.environ.get('PUBLIC_BASE_URL','').strip().rstrip('/')
@@ -167,6 +171,42 @@ def send_marketplace_alert(address: str, display_name: str, title: str) -> None:
     message.set_content(title+'\n\n'+description+'\n'+url)
     message.add_alternative(_brand_html(description,title,display_name,[description],'Bildirishnomalarni ko‘rish',url,'Email xabarlari foydalanuvchi roziligi bilan yuboriladi.'),subtype='html');_deliver(message)
 
+
+def _localized_email(address,name,language,kind,token='',reference='',status=''):
+    """English/Russian service copy, without private order/chat contents."""
+    if not is_configured():raise RuntimeError('Transactional email is not configured')
+    ru=language=='ru'
+    copy={
+        'verify':('Подтвердите адрес электронной почты','Ссылка действует 24 часа.','Подтвердить email') if ru else ('Confirm your email address','This verification link is valid for 24 hours.','Confirm email'),
+        'password_reset':('Сброс пароля','Откройте ссылку для изменения пароля. Она действует 30 минут.','Сбросить пароль') if ru else ('Reset your password','Open the link to change your password. It expires in 30 minutes.','Reset password'),
+        'email_change':('Подтвердите новый email','Ссылка для подтверждения нового адреса действует 30 минут.','Подтвердить email') if ru else ('Confirm your new email','The link to confirm your new address expires in 30 minutes.','Confirm email'),
+        'order':('Заказ обновлён','Статус заказа изменился. Проверьте текущие условия и следующий шаг на сайте.','Открыть заказы') if ru else ('Order updated','Your order status changed. Review its current terms and next step on the site.','View orders'),
+        'security':('Безопасность аккаунта','Настройки безопасности аккаунта изменились. Если это были не вы, обратитесь в поддержку. Подробности доступны в аккаунте.','Открыть аккаунт') if ru else ('Account security','An account security setting changed. Contact support if this was not you. Review details in your account.','Open account'),
+        'notification':('Новое уведомление','В аккаунте новое уведомление. Подробности доступны на сайте. Вы можете изменить настройки уведомлений в аккаунте.','Открыть уведомления') if ru else ('New notification','You have a new account notification. Open the site for details. You can change notification preferences in your account.','View notifications'),
+    }
+    if kind not in copy:raise ValueError('Unsupported email action')
+    title,description,button=copy[kind]
+    if kind in ('verify','password_reset','email_change'):url=action_link(kind,token)
+    else:
+        # Reuse the same validated origin handling as actionable email links.
+        base=action_link('verify','origin-check').split('/#verify/')[0]
+        url=base+{'order':'/#orders','security':'/#account','notification':'/#notifications'}[kind]
+    greeting='Здравствуйте' if ru else 'Hello'
+    footer=('Если вы не запрашивали эту ссылку, проигнорируйте письмо.' if ru else 'If you did not request this link, ignore this email.') if token else ('Пароли и секретные данные доставки не отправляются по email.' if ru else 'Passwords and private delivery details are never sent by email.')
+    statuses={'pending_payment':('Ожидается оплата','Awaiting payment'),'paid':('Оплачено','Paid'),'awaiting_delivery':('Ожидается доставка','Awaiting delivery'),'delivered':('Доставлено','Delivered'),'completed':('Завершено','Completed'),'cancelled':('Отменено','Cancelled'),'refunded':('Возвращено','Refunded'),'disputed':('Спор','Disputed'),'under_review':('Проверяется','Under review')}
+    facts=[(('Заказ' if ru else 'Order'),reference),(('Статус' if ru else 'Status'),statuses.get(status,(status,status))[0 if ru else 1])] if reference else None
+    rendered=_brand_html(description,title,name,[description],button,url,footer,facts)
+    replacements={
+        'Salom, ':greeting+', ',
+        'SentryLoot · Xavfsiz o‘yin bozori':'SentryLoot · '+('Игровая торговая площадка' if ru else 'Gaming marketplace'),
+        'Agar tugma ishlamasa, ushbu manzilni brauzeringizga nusxalang:':'Если кнопка не работает, скопируйте адрес в браузер:' if ru else 'If the button does not work, copy this address into your browser:',
+        'Bu avtomatik xizmat xabari. Javob berish shart emas.':'Автоматическое сервисное сообщение. Ответ не требуется.' if ru else 'Automated service message. No reply is required.',
+        '<html>':'<html lang="'+language+'">',
+    }
+    for old,new in replacements.items():rendered=rendered.replace(old,new)
+    message=EmailMessage();message['Subject']='SentryLoot — '+title+(' · '+reference if reference else '');message['From']=_from_address();message['To']=address
+    message.set_content(greeting+', '+name+'.\n\n'+description+'\n'+('\n'.join(k+': '+v for k,v in facts)+'\n' if facts else '')+'\n'+url+'\n\n'+footer)
+    message.add_alternative(rendered,subtype='html');_deliver(message)
 
 def send_monitor_alert(address: str, workflow: str, run_url: str) -> None:
     """Operational alert with a fixed repository run URL; no logs, secrets or customer data."""

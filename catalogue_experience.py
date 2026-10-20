@@ -293,18 +293,19 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         if not it or it['status'] not in core['PUBLIC_LISTING_STATES'] or not core['listing_allowed_for_production'](db,it['game_id'],it['product_type']):raise error(404,'Mahsulot topilmadi.')
         candidates=db.execute("SELECT * FROM listings WHERE game_id=? AND product_type=? AND status='published' AND stock>reserved ORDER BY price_minor LIMIT 1000",(it['game_id'],it['product_type'])).fetchall();key=signature(it);rows=[]
         for row in candidates:
+            if core['MODE']=='production' and core['launch_readiness'].test_listing(db,row['id']):continue
             if signature(dict(row))!=key:continue
             seller=db.execute('SELECT shop_name FROM seller_profiles WHERE user_id=?',(row['seller_id'],)).fetchone()
             rows.append({'id':row['id'],'seller_name':seller['shop_name'] if seller else '', 'store_id':row['seller_id'],'price_minor':row['price_minor'],'currency':row['currency'],'delivery_eta':row['delivery_eta'],'available':row['stock']-row['reserved'],'min_quantity':row['min_quantity'],'unit_label':row['unit_label']})
         return {'items':rows[:30],'matched_attributes':key[1:]}
     if path=='/api/experience/settings' and method in ('GET','POST'):
         require(ctx)
-        if method=='GET':return settings(db,uid)
+        if method=='GET':return {k:v for k,v in settings(db,uid).items() if k!='push_devices'}
         allowed={'order','message','favorite','seller_listing','saved_search','email','browser'}
         if set(data)-allowed or any(type(v) is not bool for v in data.values()):raise error(400,'Bildirishnoma sozlamalarini tekshiring.')
         if data.get('email') and not ctx['user']['email_verified']:raise error(403,'Avval emailni tasdiqlang.')
-        value={**settings(db,uid),**data};db.execute('INSERT INTO experience_preferences(user_id,settings_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET settings_json=excluded.settings_json',(uid,json.dumps(value)))
-        return value
+        value=core['launch_readiness'].save_preferences(db,uid,lambda prefs:prefs.update(data),core)
+        return {k:v for k,v in settings(db,uid).items() if k!='push_devices'}
     match=re.fullmatch(r'/api/collections/(recent|compare)',path)
     if match and method in ('GET','POST'):
         require(ctx);kind=match.group(1);limit=20 if kind=='recent' else 3
@@ -449,13 +450,13 @@ def dispatch_emails(db,core):
     if not core['email_service'].is_configured():return {'sent':0,'configured':False}
     sent=0;failed=0
     for row in db.execute("SELECT q.notification_id,q.user_id,n.title,n.kind FROM notification_outbox q JOIN notifications n ON n.id=q.notification_id WHERE q.status='pending' AND q.attempts<3 ORDER BY q.created_at LIMIT 50").fetchall():
-        user=db.execute('SELECT email,display_name,email_verified,suspended FROM users WHERE id=?',(row['user_id'],)).fetchone()
+        user=db.execute('SELECT email,display_name,email_verified,suspended,language FROM users WHERE id=?',(row['user_id'],)).fetchone()
         if not user or not user['email_verified'] or user['suspended'] or not settings(db,row['user_id'])['email'] or not notification_allowed(db,row['user_id'],row['kind']):
             db.execute("UPDATE notification_outbox SET status='skipped' WHERE notification_id=?",(row['notification_id'],));continue
         # Claim once. A crash leaves an unknown send outcome for operator review rather than double emailing.
         if not db.execute("UPDATE notification_outbox SET status='sending',attempts=attempts+1 WHERE notification_id=? AND status='pending'",(row['notification_id'],)).rowcount:continue
         try:
-            core['email_service'].send_marketplace_alert(user['email'],user['display_name'],row['title'])
+            core['email_service'].send_marketplace_alert(user['email'],user['display_name'],row['title'],language=user['language'])
             db.execute("UPDATE notification_outbox SET status='sent' WHERE notification_id=?",(row['notification_id'],));sent+=1
         except Exception:
             db.execute("UPDATE notification_outbox SET status='failed' WHERE notification_id=?",(row['notification_id'],));failed+=1

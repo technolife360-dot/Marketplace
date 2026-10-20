@@ -1,0 +1,33 @@
+name: Consented background Web Push
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sentryloot-web-push
+  cancel-in-progress: false
+jobs:
+  dispatch:
+    if: vars.WEB_PUSH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      PUSH_DISPATCH_TOKEN: ${{ secrets.PUSH_DISPATCH_TOKEN }}
+    steps:
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Deliver generic updates to consenting devices
+        run: |
+          python - <<'PY'
+          import os,json
+          from urllib.request import Request,urlopen
+          token=os.environ.get('PUSH_DISPATCH_TOKEN','')
+          if not token:raise SystemExit('Scoped push dispatcher token is missing.')
+          request=Request('https://gamestorehub.com/api/cron/push-delivery',data=b'{}',headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'},method='POST')
+          with urlopen(request,timeout=90) as response:result=json.load(response)
+          print('Push accepted:',result.get('sent',0),'Failed:',result.get('failed',0))
+          if result.get('failed'):raise SystemExit('A push provider rejected a delivery; retry on the next run.')
+          PY

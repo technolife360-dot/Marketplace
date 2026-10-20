@@ -5,6 +5,9 @@ import marketplace_features
 import marketplace_operations
 import trade_workflows
 import catalogue_experience
+import launch_readiness
+import web_push
+import marketplace_growth
 import hashlib, hmac, html, ipaddress, json, os, re, secrets, sqlite3, time, unicodedata
 import io, gzip
 from datetime import datetime, timedelta, timezone
@@ -251,7 +254,7 @@ def public_sitemap_xml():
     db=connect()
     try:
         for listing in db.execute("SELECT id,game_id,product_type FROM listings WHERE status='published' AND stock>reserved ORDER BY updated_at DESC").fetchall():
-            if listing_allowed_for_production(db,listing['game_id'],listing['product_type']):
+            if listing_allowed_for_production(db,listing['game_id'],listing['product_type']) and not launch_readiness.test_listing(db,listing['id']):
                 urls.append(base+'/listing/'+urlquote(str(listing['id']),safe=''))
         for post in db.execute("SELECT slug FROM blog_posts WHERE status='published' ORDER BY published_at DESC").fetchall():
             if re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',str(post['slug'])):
@@ -307,9 +310,9 @@ def seed_topup_catalog(db):
             VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING''',
             ('pubg-mobile-'+slug,'pubg-mobile','PUBG Mobile',slug,currency,1))
 
-def topup_public_package(row):
+def topup_public_package(row,db=None):
     available=int(row['stock_on_hand'])-int(row['stock_reserved'])>0
-    return {**topup_package_metadata(row),'id':row['id'],'game_slug':row['game_slug'],'game_name':row['game_name'],'url_slug':row['url_slug'],
+    return {**topup_package_metadata(row),**launch_readiness.package_metadata(row,db),'id':row['id'],'game_slug':row['game_slug'],'game_name':row['game_name'],'url_slug':row['url_slug'],
             'currency':row['currency'],'amount':row['amount'],'price_minor':row['price_minor'],
             'coming_soon':bool(row['coming_soon']),'available':available,
             'priced':int(row['price_minor'])>0,'purchasable':False,'payment_ready':False}
@@ -613,6 +616,7 @@ def erase_account_personal_data(db, uid):
     """
     for table in ('experience_preferences','account_collections','conversation_preferences','seller_quick_replies','price_watches'):
         db.execute(f'DELETE FROM {table} WHERE user_id=?',(uid,))
+    db.execute('DELETE FROM platform_config WHERE key IN (?,?)',('staff_capabilities:'+uid,'referral_attribution:'+uid))
     db.execute('DELETE FROM message_retry_keys WHERE sender_id=?',(uid,))
     db.execute('DELETE FROM listing_imports WHERE seller_id=?',(uid,))
     db.execute('DELETE FROM seller_code_inventory WHERE seller_id=? AND order_item_id IS NULL',(uid,))
@@ -675,9 +679,9 @@ def notify(db, uid, kind, title, body, href='/'):
         db.execute('INSERT INTO notification_outbox(notification_id,user_id) VALUES(?,?)',(nid,uid))
 def email_order_update(db, uid, reference, status, description):
     if not uid or not email_service.is_configured() or not catalogue_experience.settings(db,uid)['order']: return
-    user=db.execute('SELECT email,display_name,email_verified,suspended FROM users WHERE id=?',(uid,)).fetchone()
+    user=db.execute('SELECT email,display_name,email_verified,suspended,language FROM users WHERE id=?',(uid,)).fetchone()
     if not user or not user['email_verified'] or user['suspended']: return
-    try: email_service.send_order_update(user['email'],user['display_name'],reference,status,description)
+    try: email_service.send_order_update(user['email'],user['display_name'],reference,status,description,language=user['language'])
     except Exception as exc: print('transactional email delivery failed:',type(exc).__name__)
 def blog_post_view(row):
     post=dict(row)
@@ -693,6 +697,7 @@ def user_view(db, uid):
     if not u: return None
     out = dict(u)
     # Admin status is an immutable role marker created by the local bootstrap command.
+    out['staff_capabilities']=launch_readiness.capabilities(db,uid)
     out['is_admin'] = db.execute('SELECT 1 FROM admin_accounts WHERE user_id=?',(uid,)).fetchone() is not None
     out['seller'] = rowdict(db.execute("SELECT shop_name,bio,verification_status,selling_enabled,CASE WHEN identity_provider='didit' THEN identity_status ELSE 'not_started' END AS identity_status,identity_provider FROM seller_profiles WHERE user_id=?",(uid,)).fetchone())
     return out
@@ -720,7 +725,7 @@ def require_verified(ctx):
     return uid
 def require_admin(ctx):
     uid=require_user(ctx)
-    if not is_admin(ctx['db'],uid): raise HttpError(403,'Administrator ruxsati kerak.')
+    if not is_admin(ctx['db'],uid) and not (ctx.get('required_capability') and launch_readiness.staff_allowed(ctx['db'],uid,ctx['required_capability'])): raise HttpError(403,'Administrator ruxsati kerak.')
     return uid
 def seller_ok(db,uid):
     p=db.execute('SELECT * FROM seller_profiles WHERE user_id=?',(uid,)).fetchone()
@@ -955,6 +960,7 @@ def parse_json(body):
 
 def catalogue_predicates(db,qs,uid=None):
     where=["l.status='published'"]; args=[]
+    if MODE=='production':where.append(launch_readiness.TEST_SQL)
     if qs.get('_match_listing',[''])[0]:where.append('l.id=?');args.append(qs['_match_listing'][0])
     if MODE=='production' and not internal_testing_enabled():
         if not production_marketplace_sales_enabled(): return ['1=0'],[]
@@ -1038,6 +1044,7 @@ def listing_detail(db, lid, viewer=None):
       (SELECT COUNT(*) FROM reviews rv WHERE rv.seller_id=l.seller_id) review_count,(SELECT AVG(rating) FROM reviews rv WHERE rv.seller_id=l.seller_id) seller_rating
       FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id LEFT JOIN seller_profiles s ON s.user_id=l.seller_id WHERE l.id=?""",(lid,)).fetchone()
     if not r: return None
+    if MODE=='production' and launch_readiness.test_listing(db,lid) and viewer!=r['seller_id'] and not (viewer and is_admin(db,viewer)):return None
     out=dict(r)
     out['corrections']=json.loads(out.pop('corrections_json') or '{}') if viewer==out['seller_id'] or (viewer and is_admin(db,viewer)) else {}
     if out.get('seller_rating') is not None: out['seller_rating']=float(out['seller_rating'])
@@ -1045,6 +1052,8 @@ def listing_detail(db, lid, viewer=None):
     out['availability']=availability
     estimate=marketplace_features.delivery_minutes(out['delivery_eta'])
     out['estimated_delivery_at']=marketplace_operations.iso(marketplace_operations.next_open(availability,datetime.now(timezone.utc))+timedelta(minutes=estimate)) if estimate and not availability['vacation'] and out['status']=='published' and out['stock']>out['reserved'] else None
+    out['service_plan']=launch_readiness.config(db,'service_plan:'+lid,[]) if out['product_type']=='service' else []
+    out['price_tiers']=launch_readiness.config(db,'listing_tiers:'+lid,[])
     out['buyer_fields']=trade_workflows.requirements(out)
     out['after_sale_policy']=trade_workflows.policy(out['product_type'])
     out['available']=max(0,out['stock']-out['reserved']); out['attributes']=json.loads(out.pop('attributes_json') or '{}')
@@ -1119,7 +1128,7 @@ def seo_page_html(path, slug=None):
         '/guide':('Buying and safety guide','Learn how to use SentryLoot safely and review marketplace rules.'),
         '/fees':('Marketplace fees and payments','Current payment and fee information for SentryLoot.'),
         '/policies':('SentryLoot marketplace policies','Marketplace, publisher, and account-transfer policies.'),
-        '/support':('Crisp Support and FAQ','Help with payments, orders, refunds, and disputes.'),
+        '/support':('Help center','Help with payments, orders, refunds, and disputes.'),
         '/terms':('Terms of Service — SentryLoot','Terms for using the SentryLoot marketplace.'),
         '/refunds':('Refund and Dispute Policy — SentryLoot','How to request help with an order or report a dispute.'),
         '/seller-policy':('Seller Policy — SentryLoot','Rules and responsibilities for SentryLoot sellers.'),
@@ -1210,7 +1219,7 @@ def order_view(db, oid, uid, admin=False):
             order['account_review']={**dict(review),'evidence_slots':sorted(slots)}
     return order
 
-def checkout(db,uid,accept_terms=False,accept_account_risk=False,buyer_details=None,buyer_context=None):
+def checkout(db,uid,accept_terms=False,accept_account_risk=False,buyer_details=None,buyer_context=None,coupon_code=None):
     if not accept_terms: raise HttpError(400,'Checkoutdan oldin savdo shartlarini qabul qiling.')
     try: provider=configured_payment_provider()
     except RuntimeError as e: raise HttpError(503,'Haqiqiy to‘lov provayderi hali sozlanmagan. Ishlab chiqarish checkout’i yopiq.')
@@ -1224,7 +1233,7 @@ def checkout(db,uid,accept_terms=False,accept_account_risk=False,buyer_details=N
             db.execute("UPDATE orders SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=?",(x['id'],))
             db.execute("UPDATE payments SET status='expired',updated_at=CURRENT_TIMESTAMP WHERE order_id=?",(x['id'],))
             event(db,x['id'],None,'pending_payment','cancelled','To‘lov muddati tugadi')
-        cart=db.execute('SELECT c.listing_id,c.quantity,l.* FROM carts c JOIN listings l ON l.id=c.listing_id WHERE c.user_id=?',(uid,)).fetchall()
+        cart=[dict(r) for r in db.execute('SELECT c.listing_id,c.quantity,l.* FROM carts c JOIN listings l ON l.id=c.listing_id WHERE c.user_id=? ORDER BY l.id'+(' FOR UPDATE OF l' if DATABASE_URL else ''),(uid,)).fetchall()]
         if not cart: raise HttpError(400,'Savatchangiz bo‘sh.')
         account_lines=[x for x in cart if x['product_type']=='account']
         if account_lines and not accept_account_risk:
@@ -1253,7 +1262,11 @@ def checkout(db,uid,accept_terms=False,accept_account_risk=False,buyer_details=N
             if x['seller_id']==uid: raise HttpError(400,'O‘zingizning e’loningizni xarid qila olmaysiz.')
             if x['status']!='published': raise HttpError(409,'Savatchadagi e’lonlardan biri endi mavjud emas.')
             if x['stock']-x['reserved']<x['quantity']: raise HttpError(409,'Mahsulot qoldig‘i yetarli emas.')
+            x['base_price_minor']=x['price_minor']; x['price_minor']=launch_readiness.unit_price(db,x['listing_id'],x['price_minor'],x['quantity'])
             subtotal += x['price_minor']*x['quantity']; lines.append(x)
+        if coupon_code:
+            marketplace_growth.discount(db,coupon_code,uid,lines,globals(),lock=True)
+            subtotal=sum(line['price_minor']*line['quantity'] for line in lines)
         config=db.execute("SELECT value FROM platform_config WHERE key='commission_bps'").fetchone()
         bps=int(config['value']) if config else 0
         commission=(subtotal*bps)//10000
@@ -1272,6 +1285,7 @@ def checkout(db,uid,accept_terms=False,accept_account_risk=False,buyer_details=N
             marketplace_operations.snapshot_item(db,iid,x['listing_id'],source=x)
             if x['listing_id'] in validated_details:trade_workflows.store_details(db,iid,validated_details[x['listing_id']],globals())
         db.execute('INSERT INTO payments(id,order_id,provider,amount_minor,currency,status,idempotency_key) VALUES(?,?,?,?,?,?,?)',(ident(),oid,intent.provider,intent.amount_minor,intent.currency,'pending',intent.idempotency_key))
+        if coupon_code:db.execute('INSERT INTO platform_config(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',('coupon_use:'+coupon_code+':'+uid,oid))
         db.execute('DELETE FROM carts WHERE user_id=?',(uid,)); event(db,oid,uid,None,'pending_payment','Sinov to‘lovi yaratildi' if intent.provider=='sandbox' else 'To‘lov yaratildi')
         db.execute('COMMIT'); return {'id':oid,'reference':reference,'status':'pending_payment','total_minor':subtotal+commission,'currency':currency,'mode':intent.provider,'checkout_url':intent.checkout_url}
     except Exception:
@@ -1308,13 +1322,17 @@ class Handler(BaseHTTPRequestHandler):
         # Do not log raw paths or query strings from application requests.
         return
     def send_json(self, code, data, headers=None):
+        self._request_status=code
+        if hasattr(self,'_request_id'):headers={**(headers or {}),'X-Request-ID':self._request_id}
         payload=json.dumps(data,ensure_ascii=False,separators=(',',':')).encode()
         self.send_response(code); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.send_header('Pragma','no-cache'); self.send_header('Vary','Cookie'); self.secure_headers()
         for k,v in (headers or {}).items():
             for value in (v if isinstance(v,(list,tuple)) else [v]): self.send_header(k,value)
         self.end_headers(); self.wfile.write(payload)
     def secure_headers(self):
-        self.send_header('X-Content-Type-Options','nosniff'); self.send_header('X-Frame-Options','DENY'); self.send_header('Referrer-Policy','strict-origin-when-cross-origin'); self.send_header('Permissions-Policy','camera=(self "https://verify.didit.me"), microphone=(self "https://verify.didit.me"), geolocation=()'); self.send_header('Content-Security-Policy',"default-src 'self'; img-src 'self' data: https: blob: https://s3.amazonaws.com; script-src 'self' https://client.crisp.chat https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://client.crisp.chat https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' data: https://client.crisp.chat https://fonts.gstatic.com; style-src-attr 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self' https://api.frankfurter.dev https://client.crisp.chat https://storage.crisp.chat wss://client.relay.crisp.chat wss://client.relay.rescue.crisp.chat wss://stream.relay.crisp.chat; frame-src 'self' https://client.crisp.chat https://assets.crisp.chat https://*.crisp.help; media-src 'self' blob: https://client.crisp.chat; worker-src 'self' blob: https://client.crisp.chat")
+        self.send_header('X-Content-Type-Options','nosniff');
+        if MODE=='production' and not production_marketplace_sales_enabled():self.send_header('X-Robots-Tag','noindex, nofollow')
+        self.send_header('X-Frame-Options','DENY'); self.send_header('Referrer-Policy','strict-origin-when-cross-origin'); self.send_header('Permissions-Policy','camera=(self "https://verify.didit.me"), microphone=(self "https://verify.didit.me"), geolocation=()'); self.send_header('Content-Security-Policy',"default-src 'self'; img-src 'self' data: https: blob: https://s3.amazonaws.com; script-src 'self' https://client.crisp.chat https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://client.crisp.chat https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' data: https://client.crisp.chat https://fonts.gstatic.com; style-src-attr 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self' https://api.frankfurter.dev https://client.crisp.chat https://storage.crisp.chat wss://client.relay.crisp.chat wss://client.relay.rescue.crisp.chat wss://stream.relay.crisp.chat; frame-src 'self' https://client.crisp.chat https://assets.crisp.chat https://*.crisp.help; media-src 'self' blob: https://client.crisp.chat https://*.r2.cloudflarestorage.com; worker-src 'self' blob: https://client.crisp.chat")
         if MODE=='production': self.send_header('Strict-Transport-Security','max-age=31536000')
     def body(self, limit=MAX_BODY):
         try: n=int(self.headers.get('Content-Length','0'))
@@ -1355,14 +1373,16 @@ class Handler(BaseHTTPRequestHandler):
         self._set_cookie=f'{COOKIE_NAME}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_DAYS*86400}' + ('; Secure' if MODE=='production' else '')
     def dispatch(self):
         parsed=urlparse(self.path); path=parsed.path.rstrip('/') or '/'; method=self.command
-        db=connect()
+        self._request_id=secrets.token_hex(12);self._request_status=500;started=time.monotonic()
+        db=None
         try:
+            db=connect()
             ctx=self.context(db)
             if ctx.get('mfa_pending') and path not in ('/api/me','/api/security/unlock','/api/logout'): raise HttpError(403,'Ikki bosqichli tasdiqlash kerak.')
             csrf_exempt=path=='/api/webhooks/didit'
             if method in ('POST','PATCH','DELETE') and ctx['uid'] and not csrf_exempt:
                 if not hmac.compare_digest(self.headers.get('X-CSRF-Token',''),ctx['csrf'] or ''): raise HttpError(403,'Xavfsizlik tokeni noto‘g‘ri. Sahifani yangilang.')
-            binary_evidence=method=='POST' and (re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/account-evidence/[12]',path) or re.fullmatch(r'/api/conversations/[A-Za-z0-9_-]{1,100}/photos',path) or re.fullmatch(r'/api/disputes/[A-Za-z0-9_-]{1,100}/photos',path) or (re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/evidence',path) and self.headers.get('Content-Type','').startswith('image/')))
+            binary_evidence=method=='POST' and (re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/account-evidence/[12]',path) or re.fullmatch(r'/api/conversations/[A-Za-z0-9_-]{1,100}/photos',path) or re.fullmatch(r'/api/disputes/[A-Za-z0-9_-]{1,100}/(?:photos|videos)',path) or (re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/evidence',path) and self.headers.get('Content-Type','').startswith('image/')))
             raw_body=self.body(MAX_IMAGE_BODY) if method=='POST' and (path in ('/api/listing-images','/api/seller/import/preview') or binary_evidence) else self.body() if method in ('POST','PATCH','PUT') and path.startswith('/api/') else b''
             if (path in ('/api/listing-images','/api/seller/import/preview') and method=='POST') or binary_evidence: data={}
             else: data=parse_json(raw_body) if raw_body else {}
@@ -1376,14 +1396,17 @@ class Handler(BaseHTTPRequestHandler):
         except DB_INTEGRITY_ERRORS as e: self.send_json(409,{'error':'Ma’lumotlar to‘qnashuvi yuz berdi. Kiritilgan qiymatlarni tekshiring.'})
         except Exception as e:
             print('request error:',type(e).__name__)
-            self.send_json(500,{'error':'Ichki xatolik yuz berdi.'})
-        finally: db.close()
+            self.send_json(503 if db is None else 500,{'error':'Xizmat vaqtincha mavjud emas. Qayta urinib ko‘ring.' if db is None else 'Ichki xatolik yuz berdi.'})
+        finally:
+            if db is not None:db.close()
+            metric_route=re.sub(r'/[A-Za-z0-9_-]{12,}(?=/|$)','/:id',path)
+            print(json.dumps({'event':'api_request','request_id':self._request_id,'route':metric_route,'method':method,'status':self._request_status,'duration_ms':round((time.monotonic()-started)*1000)}))
     def do_GET(self):
         if not self.path.startswith('/api/'):
             parsed=urlparse(self.path)
             if parsed.path=='/healthz': self.dispatch(); return
             if parsed.path=='/robots.txt':
-                payload=f"User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\nSitemap: {public_site_base()}/sitemap.xml\n".encode('utf-8')
+                payload=f"User-agent: *\n{'Disallow: /' if MODE=='production' and not production_marketplace_sales_enabled() else 'Allow: /'}\nDisallow: /api/\nDisallow: /admin\nSitemap: {public_site_base()}/sitemap.xml\n".encode('utf-8')
                 self.send_response(200); self.send_header('Content-Type','text/plain; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','public, max-age=3600'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
             if parsed.path=='/sitemap.xml':
                 payload=public_sitemap_xml()
@@ -1416,7 +1439,7 @@ class Handler(BaseHTTPRequestHandler):
                 payload=seo_listing_html(listing_match.group(1))
                 if payload is None: self.send_error(404); return
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
-            f={'/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/qa-vitals.js':'qa-vitals.js','/static/vendor/web-vitals.iife.js':'vendor/web-vitals.iife.js','/static/experience.js':'experience.js','/static/experience.css':'experience.css','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup-detail.js':'topup-detail.js','/static/topup-detail.css':'topup-detail.css','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-uc-660.png':'assets/topup-uc-660.png','/static/assets/topup-uc-1800.png':'assets/topup-uc-1800.png','/static/assets/topup-uc-3850.png':'assets/topup-uc-3850.png','/static/assets/topup-uc-8100.png':'assets/topup-uc-8100.png','/static/assets/topup-uc-60.png':'assets/topup-uc-60.png','/static/assets/topup-uc-325.png':'assets/topup-uc-325.png','/static/assets/topup-weekly-deal-1.png':'assets/topup-weekly-deal-1.png','/static/assets/topup-weekly-deal-2.png':'assets/topup-weekly-deal-2.png','/static/assets/topup-weekly-mythic.png':'assets/topup-weekly-mythic.png','/static/assets/topup-elite-pass.png':'assets/topup-elite-pass.png','/static/assets/topup-pubg-banner.jpg':'assets/topup-pubg-banner.jpg','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.webp':'assets/market-banner-soldier.webp','/static/assets/market-banner-games.webp':'assets/market-banner-games.webp','/static/assets/market-banner-worlds.webp':'assets/market-banner-worlds.webp','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
+            f={'/push-worker.js':'push-worker.js','/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/qa-vitals.js':'qa-vitals.js','/static/vendor/web-vitals.iife.js':'vendor/web-vitals.iife.js','/static/launch-readiness.js':'launch-readiness.js','/static/launch-readiness.css':'launch-readiness.css','/static/experience.js':'experience.js','/static/experience.css':'experience.css','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup-detail.js':'topup-detail.js','/static/topup-detail.css':'topup-detail.css','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-uc-660.png':'assets/topup-uc-660.png','/static/assets/topup-uc-1800.png':'assets/topup-uc-1800.png','/static/assets/topup-uc-3850.png':'assets/topup-uc-3850.png','/static/assets/topup-uc-8100.png':'assets/topup-uc-8100.png','/static/assets/topup-uc-60.png':'assets/topup-uc-60.png','/static/assets/topup-uc-325.png':'assets/topup-uc-325.png','/static/assets/topup-weekly-deal-1.png':'assets/topup-weekly-deal-1.png','/static/assets/topup-weekly-deal-2.png':'assets/topup-weekly-deal-2.png','/static/assets/topup-weekly-mythic.png':'assets/topup-weekly-mythic.png','/static/assets/topup-elite-pass.png':'assets/topup-elite-pass.png','/static/assets/topup-pubg-banner.jpg':'assets/topup-pubg-banner.jpg','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.webp':'assets/market-banner-soldier.webp','/static/assets/market-banner-games.webp':'assets/market-banner-games.webp','/static/assets/market-banner-worlds.webp':'assets/market-banner-worlds.webp','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
             if not f: self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/webp' if f.endswith('.webp') else 'image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))
@@ -1450,6 +1473,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self): self.dispatch()
     def route(self,db,ctx,method,path,qs,data,raw_body=b''):
         uid=ctx['uid']
+        ctx={**ctx,'required_capability':launch_readiness.route_capability(path)}
+        push_result=web_push.route(self,db,ctx,method,path,data,globals())
+        if push_result is not launch_readiness.UNHANDLED:return push_result
+        growth_result=marketplace_growth.route(db,ctx,method,path,data,globals())
+        if growth_result is not launch_readiness.UNHANDLED:return growth_result
+        launch_result=launch_readiness.route(self,db,ctx,method,path,qs,data,raw_body,globals())
+        if launch_result is not launch_readiness.UNHANDLED:return launch_result
         experience_result=catalogue_experience.route(self,db,ctx,method,path,qs,data,raw_body,globals())
         if experience_result is not catalogue_experience.UNHANDLED:return experience_result
         trade_result=trade_workflows.case_route(db,ctx,method,path,data,globals())
@@ -1670,10 +1700,12 @@ class Handler(BaseHTTPRequestHandler):
             country=data.get('country','UZ')
             if not isinstance(country,str) or country not in ASIA_COUNTRIES: raise HttpError(400,'Osiyo mamlakatini tanlang.')
             currency=ASIA_COUNTRY_CURRENCIES[country]
-            user=ident(); terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']; db.execute('INSERT INTO users(id,email,password_hash,display_name,country,language,currency,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,?,?)',(user,email,password_hash(password),name,country,'en',currency,terms,now_iso()))
+            language=data.get('language','en')
+            if language not in ('uz','en','ru'): raise HttpError(400,'Invalid language.')
+            user=ident(); terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']; db.execute('INSERT INTO users(id,email,password_hash,display_name,country,language,currency,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,?,?)',(user,email,password_hash(password),name,country,language,currency,terms,now_iso()))
             raw=create_token(); db.execute('INSERT INTO email_tokens(token_hash,user_id,purpose,expires_at) VALUES(?,?,?,?)',(hash_token(raw),user,'verify',(datetime.now(timezone.utc)+timedelta(hours=24)).isoformat()))
             if email_service.is_configured():
-                try: email_service.send_action_email(email,name,'verify',raw)
+                try: email_service.send_action_email(email,name,'verify',raw,language=language)
                 except Exception: raise HttpError(503,'Hisob yaratildi, ammo tasdiqlash xati yuborilmadi. Birozdan so‘ng yangi xat so‘rang.')
                 return 201,{'message':'Hisob yaratildi. Emailingizga tasdiqlash havolasini yubordik.'}
             return 201,{'message':'Hisob yaratildi. Email provider sozlanmaganligi sabab development tokeni ko‘rsatilmoqda.','verification_token':raw}
@@ -1682,13 +1714,13 @@ class Handler(BaseHTTPRequestHandler):
             check_rate(db,'verification_resend_ip',self.client_address[0],4)
             email=clean_text(data.get('email'),'Email',3,254).lower()
             check_rate(db,'verification_resend_email',email,3,3600)
-            row=db.execute('SELECT id,display_name FROM users WHERE email=? AND email_verified=0 AND suspended=0',(email,)).fetchone()
+            row=db.execute('SELECT id,display_name,language FROM users WHERE email=? AND email_verified=0 AND suspended=0',(email,)).fetchone()
             raw=None
             if row:
                 db.execute("UPDATE email_tokens SET consumed_at=CURRENT_TIMESTAMP WHERE user_id=? AND purpose='verify' AND consumed_at IS NULL",(row['id'],))
                 raw=create_token(); db.execute('INSERT INTO email_tokens(token_hash,user_id,purpose,expires_at) VALUES(?,?,?,?)',(hash_token(raw),row['id'],'verify',(datetime.now(timezone.utc)+timedelta(hours=24)).isoformat()))
                 if email_service.is_configured():
-                    try: email_service.send_action_email(email,row['display_name'],'verify',raw)
+                    try: email_service.send_action_email(email,row['display_name'],'verify',raw,language=row['language'])
                     except Exception: raise HttpError(503,'Tasdiqlash xati yuborilmadi. Keyinroq qayta urinib ko‘ring.')
             result={'message':'Agar bu email tasdiqlanmagan hisobga tegishli bo‘lsa, yangi havola yuborildi.'}
             if MODE=='development' and not email_service.is_configured() and raw: result['verification_token']=raw
@@ -1701,12 +1733,12 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/password-reset' and method=='POST':
             if not email_service.is_configured() and MODE!='development': raise HttpError(503,'Parolni tiklash uchun xavfsiz email yuborish xizmati konfiguratsiyasi kerak.')
             check_rate(db,'password_reset',self.client_address[0],5)
-            email=clean_text(data.get('email'),'Email',3,254).lower(); row=db.execute('SELECT id,display_name FROM users WHERE email=?',(email,)).fetchone(); raw=None
+            email=clean_text(data.get('email'),'Email',3,254).lower(); row=db.execute('SELECT id,display_name,language FROM users WHERE email=?',(email,)).fetchone(); raw=None
             if row:
                 db.execute("UPDATE email_tokens SET consumed_at=CURRENT_TIMESTAMP WHERE user_id=? AND purpose='password_reset' AND consumed_at IS NULL",(row['id'],))
                 raw=create_token(); db.execute('INSERT INTO email_tokens(token_hash,user_id,purpose,expires_at) VALUES(?,?,?,?)',(hash_token(raw),row['id'],'password_reset',(datetime.now(timezone.utc)+timedelta(minutes=30)).isoformat()))
                 if email_service.is_configured():
-                    try: email_service.send_action_email(email,row['display_name'],'password_reset',raw)
+                    try: email_service.send_action_email(email,row['display_name'],'password_reset',raw,language=row['language'])
                     except Exception: raise HttpError(503,'Tiklash xati yuborilmadi. Keyinroq qayta urinib ko‘ring.')
             result={'message':'Agar email ro‘yxatdan o‘tgan bo‘lsa, tiklash havolasi yuborildi.'}
             if MODE=='development' and not email_service.is_configured(): result['reset_token']=raw
@@ -1768,7 +1800,7 @@ class Handler(BaseHTTPRequestHandler):
                 if row['game_slug'] not in by_slug:
                     game={'slug':row['game_slug'],'name':row['game_name'],'currency':row['currency'],'packages':[]}
                     games.append(game); by_slug[row['game_slug']]=game
-                item=topup_public_package(row)
+                item=topup_public_package(row,db)
                 by_slug[row['game_slug']]['packages'].append(item)
             return games
         topup_match=re.fullmatch(r'/api/top-up/packages/([a-z0-9-]+)/([a-z0-9-]+)',path)
@@ -1776,7 +1808,7 @@ class Handler(BaseHTTPRequestHandler):
             seed_topup_catalog(db)
             row=db.execute('SELECT * FROM topup_packages WHERE game_slug=? AND url_slug=? AND enabled=1',(topup_match.group(1),topup_match.group(2))).fetchone()
             if not row: raise HttpError(404,'Top Up mahsuloti topilmadi.')
-            return topup_public_package(row)
+            return topup_public_package(row,db)
         if path=='/api/listings' and method=='GET':
             promote_internal_test_listings(db)
             where,args=catalogue_predicates(db,qs,uid)
@@ -1864,7 +1896,8 @@ class Handler(BaseHTTPRequestHandler):
             items=[]
             for x in db.execute('SELECT c.listing_id,c.quantity FROM carts c WHERE c.user_id=?',(uid,)):
                 v=listing_detail(db,x['listing_id'],uid)
-                if v and v['status']=='published': v['quantity']=x['quantity']; items.append(v)
+                if v and v['status']=='published':
+                    v['quantity']=x['quantity'];v['base_price_minor']=v['price_minor'];v['price_minor']=launch_readiness.unit_price(db,v['id'],v['price_minor'],v['quantity']);items.append(v)
             return {'items':items,'subtotal_minor':sum(x['price_minor']*x['quantity'] for x in items)}
         if path=='/api/orders' and method=='GET':
             require_user(ctx)
@@ -1963,7 +1996,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/notifications' and method=='GET':
             require_user(ctx); return [dict(x) for x in db.execute('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 50',(uid,))]
         if path=='/api/favorites' and method=='GET':
-            require_user(ctx); return [listing_detail(db,x['listing_id'],uid) for x in db.execute('SELECT listing_id FROM favorites WHERE user_id=? ORDER BY created_at DESC',(uid,))]
+            require_user(ctx); return [item for x in db.execute('SELECT listing_id FROM favorites WHERE user_id=? ORDER BY created_at DESC',(uid,)) if (item:=listing_detail(db,x['listing_id'],uid))]
         if path=='/api/admin/top-up' and method=='GET':
             require_admin(ctx)
             seed_topup_catalog(db)
@@ -2344,7 +2377,7 @@ class Handler(BaseHTTPRequestHandler):
         m=re.fullmatch(r'/api/cart/([^/]+)',path)
         if m and method=='DELETE': require_user(ctx); db.execute('DELETE FROM carts WHERE user_id=? AND listing_id=?',(uid,m.group(1))); return {'ok':True}
         if path=='/api/checkout' and method=='POST':
-            require_verified(ctx); return 201,checkout(db,uid,data.get('accept_terms') is True,data.get('accept_account_risk') is True,data.get('buyer_details'),data.get('buyer_context'))
+            require_verified(ctx); return 201,checkout(db,uid,data.get('accept_terms') is True,data.get('accept_account_risk') is True,data.get('buyer_details'),data.get('buyer_context'),data.get('coupon_code'))
         m=re.fullmatch(r'/api/orders/([^/]+)/sandbox-complete',path)
         if m and method=='POST':
             require_verified(ctx)
@@ -2386,6 +2419,7 @@ class Handler(BaseHTTPRequestHandler):
                 trade_workflows.lock_order(db,oid)
                 o=db.execute('SELECT * FROM orders WHERE id=? AND buyer_id=?',(oid,uid)).fetchone()
                 if not o: raise HttpError(404,'Buyurtma topilmadi.')
+                if o and not launch_readiness.milestones_complete(db,oid):raise HttpError(409,'Accept all agreed service milestones before completing the order.')
                 trade_workflows.guard(db,oid,globals())
                 if db.execute('SELECT 1 FROM order_items WHERE order_id=? AND delivered_quantity<quantity',(oid,)).fetchone():raise HttpError(409,'Barcha mahsulotlar to‘liq yetkazilmagan.')
                 if o['status'] not in ('awaiting_delivery','delivered'): raise HttpError(409,'Bu holatda buyurtmani yakunlab bo‘lmaydi.')

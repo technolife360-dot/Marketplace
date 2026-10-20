@@ -45,6 +45,20 @@ class ResendEmailTests(unittest.TestCase):
         self.assertIn('SL-123',html)
         self.assertIn('max-width:600px',html)
 
+    def test_english_and_russian_email_templates_follow_account_language(self):
+        for language,subject in [('en','Confirm your email'),('ru','Подтвердите')]:
+            with self.subTest(language=language), patch.object(email_service,'_deliver') as deliver:
+                email_service.send_action_email('buyer@example.test','<Buyer>','verify','private-token',language=language)
+                message=deliver.call_args.args[0]
+                html=message.get_body(preferencelist=('html',)).get_content()
+                self.assertIn(subject,str(message['Subject']))
+                self.assertIn('private-token',html)
+                self.assertIn('&lt;Buyer&gt;',html)
+                self.assertIn('lang="'+language+'"',html)
+                self.assertNotIn('Salom,',html)
+                self.assertNotIn('Xavfsiz o‘yin bozori',html)
+                self.assertNotIn('Bu avtomatik xizmat xabari',html)
+
     def test_resend_not_configured_without_server_side_key(self):
         with patch.dict(os.environ,{'RESEND_API_KEY':'','EMAIL_API_KEY':''}):
             self.assertFalse(email_service.is_configured())
