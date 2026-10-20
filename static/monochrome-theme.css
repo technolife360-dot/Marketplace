@@ -184,4 +184,38 @@ body .market-sidebar-main>a:is(:hover, :focus-visible) .market-nav-icon {
   border-color: #777777 !important;
   background: #222222 !important;
 }
+/* Counter badges start at one; hidden also overrides their grid display. */
+body .count[hidden] { display: none !important; }
+/* Cart and notifications share the white glyph / red badge treatment. */
+body :is(#cart-button, #notifications-button) {
+  position: relative !important;
+  width: 38px !important;
+  min-width: 38px !important;
+  height: 38px !important;
+  padding: 7px !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+body :is(#cart-button, #notifications-button) .icon {
+  width: 24px !important;
+  height: 24px !important;
+  color: #FFFFFF !important;
+}
+body :is(#cart-button, #notifications-button) .count {
+  top: -4px !important;
+  right: -5px !important;
+  min-width: 22px !important;
+  height: 22px !important;
+  padding: 0 4px !important;
+  border: 3px solid #39000A !important;
+  border-radius: 999px !important;
+  background: #E6002D !important;
+  color: #FFFFFF !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+body #home-category { appearance: none; -webkit-appearance: none; }
 }
