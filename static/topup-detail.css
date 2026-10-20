@@ -16,3 +16,6 @@
 @media(prefers-reduced-motion:reduce){.topup-product-page *{scroll-behavior:auto!important;transition:none!important}}
 .tu-named-packages{grid-template-columns:repeat(2,minmax(0,1fr))}.tu-named-packages>button{min-height:65px;align-items:center}.tu-named-packages b{white-space:normal;font-size:11px;line-height:1.45}.tu-named-packages .icon{width:25px;height:25px;flex:0 0 25px;color:#c2a0ff}.tu-named-art>b{font-size:clamp(22px,3.2vw,42px);padding:12px 15%;text-align:center;line-height:1.35}.tu-named-art>.icon{width:70px;height:70px;color:#c7a2ff}.tu-thumbnails .tu-named-art>b{font-size:8px;padding:3px 6px;line-height:1.25}.tu-thumbnails .tu-named-art>.icon{width:20px;height:20px}.tu-checklist li:before{content:'✓'}
 @media(max-width:480px){.tu-named-packages b{font-size:10px}.tu-named-packages>button{gap:9px;padding:10px}.tu-named-art>b{font-size:22px}.tu-named-art>.icon{width:45px;height:45px}}
+
+.tu-pass-icon{display:block;object-fit:contain;flex-shrink:0}.tu-packages .tu-pass-icon-pack{width:29px;height:32px;flex-basis:29px;filter:drop-shadow(0 2px 3px #0005)}.tu-pack-art>.tu-pass-icon-gallery{width:29%;height:48%;object-fit:contain;max-width:220px}.tu-thumbnails .tu-pack-art>.tu-pass-icon-gallery{width:26px;height:28px;max-height:28px}
+@media(max-width:480px){.tu-packages .tu-pass-icon-pack{width:26px;height:29px;flex-basis:26px}}
