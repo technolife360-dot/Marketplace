@@ -1,0 +1,86 @@
+/* Shared site palette. Product artwork and social brand marks keep their colours. */
+@font-face {
+  font-family: Roboto;
+  src: url('/static/assets/roboto-variable.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+:root {
+  color-scheme: dark;
+  --bg: #000000;
+  --paper: #000000;
+  --paper-soft: #000000;
+  --deep: #000000;
+  --ink: #F1F1F1;
+  --muted: #AAAAAA;
+  --muted-strong: #AAAAAA;
+  --ex-muted: #AAAAAA;
+  --line: #262626;
+  --ex-border: #262626;
+  --shadow: none;
+  --shadow-soft: none;
+}
+html, body, body.home-page, body:has(.listing-detail-page) {
+  background: #000000 !important;
+  color: #F1F1F1;
+  font-family: Roboto, Arial, sans-serif;
+}
+/* Transparent nested content prevents coloured patches inside the black surfaces. */
+body :where(:not(svg):not(svg *):not(.crisp-client):not(.crisp-client *)) {
+  background-color: transparent !important;
+  background-image: none !important;
+  color: #F1F1F1 !important;
+  font-family: Roboto, Arial, sans-serif !important;
+  box-shadow: none !important;
+}
+body :where(:not(.crisp-client):not(.crisp-client *)):is(header, footer, main, aside, nav, section, article, dialog, input, textarea, select, option, button,
+  [role='dialog'], [role='menu'], [role='listbox'], .panel, .detail-panel, .product-card,
+  .market-sidebar, .profile-menu, .language-menu, .modal, .modal-card, .modal-content,
+  .message-layout, .message-thread, .tu-gallery, .tu-information, .tu-purchase, .tu-seller,
+  .topbar, .mobile-bottom-nav, .toast, .autocomplete-results, .search-suggestions) {
+  background-color: #000000 !important;
+}
+body :where(:not(.crisp-client):not(.crisp-client *))::before, body :where(:not(.crisp-client):not(.crisp-client *))::after {
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+dialog::backdrop { background: #000000cc; }
+body :where(:not(.crisp-client):not(.crisp-client *)):is(.panel, .detail-panel, .product-card, .form-card, .stat, .table-wrap, .message-layout,
+  .tu-gallery, .tu-information, .tu-purchase, .tu-seller, .market-sidebar, dialog, input, textarea, select, button) {
+  border-color: #262626 !important;
+}
+body :where(:not(.crisp-client):not(.crisp-client *)):is(.button-primary, button[type='submit'], [aria-selected='true'], button[aria-pressed='true']) {
+  border-color: #777777 !important;
+}
+body :where(:not(.crisp-client):not(.crisp-client *)):is(button, a, input, textarea, select):focus-visible { outline: 2px solid #F1F1F1; outline-offset: 3px; }
+body :where(:not(.crisp-client):not(.crisp-client *)):is(button, a):hover { border-color: #777777 !important; }
+body :where(:not(.crisp-client):not(.crisp-client *)):is(.market-view-all, .section-link, .view-all, .ux-text-button, .help, .muted,
+  .footer-links a, .footer-links p, .footer-bottom a, .footer p, .footer small,
+  small, time, dt, .tu-subtitle, .tu-specs small, .market-section-head>a) {
+  color: #AAAAAA !important;
+}
+body input::placeholder, body textarea::placeholder { color: #AAAAAA !important; opacity: 1; }
+body .footer-social { border-color: #262626; }
+body .footer-social[aria-label='TikTok'] { color: #F1F1F1 !important; }
+.footer-social[aria-label='TikTok'] svg { filter: drop-shadow(-1px -1px 0 #25F4EE) drop-shadow(1px 1px 0 #FE2C55); }
+body .footer-social[aria-label='Instagram'] { color: #E1306C !important; }
+.footer-social[aria-label='Instagram'] svg :is(rect, circle:not(:last-child)) { stroke: url('#footer-instagram-gradient'); }
+.footer-social[aria-label='Instagram'] svg circle:last-child { fill: url('#footer-instagram-gradient'); }
+body .footer-social[aria-label='Facebook'] { color: #0866FF !important; }
+body .footer-social[aria-label='YouTube'] { color: #FF0000 !important; }
+body .footer-social[aria-label='WhatsApp'] { color: #25D366 !important; }
+body .footer-social svg { color: inherit; }
+progress::-webkit-progress-value { background: #AAAAAA !important; }
+progress::-moz-progress-bar { background: #AAAAAA !important; }
+body :where(:not(.crisp-client):not(.crisp-client *)):is(.market-all-games, .market-all-games *, .home-section-heading>a, .home-section-heading>a *,
+  .home-guide-heading a, .home-guide-heading a *, .section-heading>a, .section-heading>a *) {
+  color: #AAAAAA !important;
+}
+/* Neutral overlays keep artwork captions readable without tinted surfaces. */
+body .home-intro::after { background-image: linear-gradient(90deg, #000000eb, #000000b3 37%, #00000000 85%) !important; }
+body .market-banner-dots button { background: #777777 !important; }
+body .market-banner-dots button[aria-current='true'] { background: #F1F1F1 !important; }
+body .home-guide a { color: #AAAAAA !important; }
+body input { accent-color: #AAAAAA; }
