@@ -163,8 +163,13 @@ body :is(.header-search, .home-search) input {
 }
 body :is(.header-search, .home-search):focus-within {
   border-color: #AAAAAA !important;
-  outline: 2px solid #AAAAAA;
-  outline-offset: 2px;
+  outline: none !important;
+  box-shadow: none !important;
+}
+/* The wrapper is the single keyboard-focus indicator for grouped search controls. */
+body :is(.header-search, .home-search) :is(input, select, button):focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 /* Sidebar rows stay frameless; only the icon keeps a compact outlined tile. */
 body .market-sidebar-main>a,
