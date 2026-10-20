@@ -16,8 +16,8 @@
   --muted: #AAAAAA;
   --muted-strong: #AAAAAA;
   --ex-muted: #AAAAAA;
-  --line: #262626;
-  --ex-border: #262626;
+  --line: #000000;
+  --ex-border: #000000;
   --shadow: none;
   --shadow-soft: none;
 }
@@ -33,6 +33,7 @@ body :where(:not(svg):not(svg *):not(.crisp-client):not(.crisp-client *)) {
   color: #F1F1F1 !important;
   font-family: Roboto, Arial, sans-serif !important;
   box-shadow: none !important;
+  border-color: #000000 !important;
 }
 body :where(:not(.crisp-client):not(.crisp-client *)):is(header, footer, main, aside, nav, section, article, dialog, input, textarea, select, option, button,
   [role='dialog'], [role='menu'], [role='listbox'], .panel, .detail-panel, .product-card,
@@ -49,20 +50,20 @@ body :where(:not(.crisp-client):not(.crisp-client *))::before, body :where(:not(
 dialog::backdrop { background: #000000cc; }
 body :where(:not(.crisp-client):not(.crisp-client *)):is(.panel, .detail-panel, .product-card, .form-card, .stat, .table-wrap, .message-layout,
   .tu-gallery, .tu-information, .tu-purchase, .tu-seller, .market-sidebar, dialog, input, textarea, select, button) {
-  border-color: #262626 !important;
+  border-color: #000000 !important;
 }
 body :where(:not(.crisp-client):not(.crisp-client *)):is(.button-primary, button[type='submit'], [aria-selected='true'], button[aria-pressed='true']) {
-  border-color: #777777 !important;
+  border-color: #000000 !important;
 }
 body :where(:not(.crisp-client):not(.crisp-client *)):is(button, a, input, textarea, select):focus-visible { outline: 2px solid #F1F1F1; outline-offset: 3px; }
-body :where(:not(.crisp-client):not(.crisp-client *)):is(button, a):hover { border-color: #777777 !important; }
+body :where(:not(.crisp-client):not(.crisp-client *)):is(button, a):hover { border-color: #000000 !important; }
 body :where(:not(.crisp-client):not(.crisp-client *)):is(.market-view-all, .section-link, .view-all, .ux-text-button, .help, .muted,
   .footer-links a, .footer-links p, .footer-bottom a, .footer p, .footer small,
   small, time, dt, .tu-subtitle, .tu-specs small, .market-section-head>a) {
   color: #AAAAAA !important;
 }
 body input::placeholder, body textarea::placeholder { color: #AAAAAA !important; opacity: 1; }
-body .footer-social { border-color: #262626; }
+body .footer-social { border-color: #000000 !important; }
 body .footer-social[aria-label='TikTok'] { color: #F1F1F1 !important; }
 .footer-social[aria-label='TikTok'] svg { filter: drop-shadow(-1px -1px 0 #25F4EE) drop-shadow(1px 1px 0 #FE2C55); }
 body .footer-social[aria-label='Instagram'] { color: #E1306C !important; }
@@ -84,3 +85,21 @@ body .market-banner-dots button { background: #777777 !important; }
 body .market-banner-dots button[aria-current='true'] { background: #F1F1F1 !important; }
 body .home-guide a { color: #AAAAAA !important; }
 body input { accent-color: #AAAAAA; }
+
+/* Black edges throughout; selection stays visible through type rather than tinted frames. */
+body :where(:not(svg):not(svg *):not(.crisp-client):not(.crisp-client *)):is(a, button, input, textarea, select):is(:hover, :focus, :active) {
+  border-color: #000000 !important;
+  box-shadow: none !important;
+}
+body :where(:not(.crisp-client):not(.crisp-client *)):is(button[aria-pressed='true'], [role='tab'][aria-selected='true'], .market-sidebar-main a.active) {
+  text-decoration: underline;
+  text-underline-offset: 5px;
+  text-decoration-color: #AAAAAA;
+  font-weight: 700;
+}
+body :where(:not(.crisp-client):not(.crisp-client *)):is(input, textarea, select):focus-visible {
+  outline: 2px solid #AAAAAA !important;
+  outline-offset: 3px;
+}
+/* Interface glyphs stay neutral; footer social marks retain their brand palette. */
+body .icon, body .gallery-chevron { color: #F1F1F1 !important; }
