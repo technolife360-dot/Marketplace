@@ -36,7 +36,6 @@ body :where(:not(svg):not(svg *):not(.crisp-client):not(.crisp-client *)) {
 }
 body :where(:not(.crisp-client):not(.crisp-client *))::before, body :where(:not(.crisp-client):not(.crisp-client *))::after {
   background-color: transparent !important;
-  background-image: none !important;
   box-shadow: none !important;
 }
 body :where(:not(.crisp-client):not(.crisp-client *)):is(.topbar, .footer, .market-sidebar, .mobile-bottom-nav, main) {
