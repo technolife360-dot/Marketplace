@@ -26,15 +26,12 @@
 html, body, body.home-page, body:has(.listing-detail-page) {
   background: #000000 !important;
   color: #F1F1F1;
-  font-family: Roboto, Arial, sans-serif;
 }
 /* Remove old tinted paints; explicit surface rules below restore visual hierarchy. */
 body :where(:not(svg):not(svg *):not(.crisp-client):not(.crisp-client *)) {
   background-color: transparent !important;
-  background-image: none !important;
   border-color: var(--line) !important;
   color: #F1F1F1 !important;
-  font-family: Roboto, Arial, sans-serif !important;
   box-shadow: none !important;
 }
 body :where(:not(.crisp-client):not(.crisp-client *))::before, body :where(:not(.crisp-client):not(.crisp-client *))::after {
@@ -83,7 +80,7 @@ body select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23AAAAAA' stroke-width='2'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E") !important;
   background-repeat: no-repeat;
   background-position: right 10px center;
-  background-size: 14px;
+  background-size: 18px;
   padding-inline-end: 30px;
 }
 body option { background: #151515 !important; }
