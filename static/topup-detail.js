@@ -13,10 +13,14 @@ function renderTopUpDetail(game, initialPackage) {
   const art=game.slug==='pubg-mobile'?'/static/assets/topup-pubg-banner.jpg':TOPUP_OFFICIAL_GAME_ART[game.slug]||'/static/assets/topup-'+game.slug+'.svg';
   const fallback='/static/assets/topup-'+game.slug+'.svg';
   const packLabel=pack=>pack.product_kind&&pack.product_kind!=='currency'?pack.product_name:Number(pack.amount).toLocaleString(localeTag())+' '+pack.currency;
-  const passIcon=variant=>'<img class="tu-pass-icon tu-pass-icon-'+variant+'" src="/static/assets/topup-elite-pass.png" alt="Elite Pass" decoding="async">';
-  const packageArt=pack=>'<div class="tu-pack-art'+(pack.product_kind&&pack.product_kind!=='currency'?' tu-named-art':'')+'"><span>'+esc(game.name)+'</span><b>'+esc(packLabel(pack))+'</b>'+(pack.product_kind==='pass'?passIcon('gallery'):pack.product_kind==='weekly'?icon('box'):topupCurrencyImage(game,'gallery'))+'</div>';
+  const packageIcon=(pack,variant)=>{
+    const mythic=game.slug==='pubg-mobile'&&pack.url_slug==='weekly-mythic-emblem-value-pack';
+    if(mythic||pack.product_kind==='pass')return '<img class="tu-product-icon tu-product-icon-'+variant+'" src="'+(mythic?'/static/assets/topup-weekly-mythic.png':'/static/assets/topup-elite-pass.png')+'" alt="'+(mythic?'Weekly Mythic Emblem Value Pack':'Elite Pass')+'" decoding="async">';
+    return pack.product_kind==='weekly'?icon('box'):topupCurrencyImage(game,variant);
+  };
+  const packageArt=pack=>'<div class="tu-pack-art'+(pack.product_kind&&pack.product_kind!=='currency'?' tu-named-art':'')+'"><span>'+esc(game.name)+'</span><b>'+esc(packLabel(pack))+'</b>'+(packageIcon(pack,'gallery'))+'</div>';
   const info=(iconName,label,value)=>'<div>'+icon(iconName)+'<span><small>'+label+'</small><b>'+value+'</b></span></div>';
-  const packButton=pack=>`<button type="button" data-tu-package="${esc(pack.url_slug)}" aria-pressed="false">${pack.product_kind==='pass'?passIcon('pack'):pack.product_kind==='weekly'?icon('box'):topupCurrencyImage(game,'pack')}<span><b>${esc(packLabel(pack))}</b><small>${topupDetailPrice(pack)}</small></span></button>`;
+  const packButton=pack=>`<button type="button" data-tu-package="${esc(pack.url_slug)}" aria-pressed="false">${packageIcon(pack,'pack')}<span><b>${esc(packLabel(pack))}</b><small>${topupDetailPrice(pack)}</small></span></button>`;
   const packageGroups=[['currency',t('Paketni tanlang','Выберите пакет','Select package')],['pass','Elite Pass'],['weekly',t('Haftalik paketlar','Еженедельные наборы','Weekly packs')]].map(([kind,label])=>{const items=packages.filter(p=>(p.product_kind||'currency')===kind);return items.length?`<h2 class="tu-select-label">${label}</h2><div class="tu-packages ${kind!=='currency'?'tu-named-packages':''}">${items.map(packButton).join('')}</div>`:'';}).join('');
   const noCheckout=t('Xaridlar hozircha yopiq. To‘lov va Top Up xizmati hali ishga tushmagan.','Покупки пока закрыты. Оплата и сервис Top Up ещё не запущены.','Purchases are not open yet. Payments and the top-up service are not connected.');
   const wishlistKey='sentryloot:topup:wishlist:'+String(me?.id||'guest');
