@@ -153,23 +153,20 @@ body input:-webkit-autofill {
   box-shadow: 0 0 0 1000px #151515 inset !important;
 }
 
-/* Search wrappers provide one continuous field instead of a small nested frame. */
-body :is(.header-search, .home-search) input {
-  background: transparent !important;
+/* A grouped search has exactly one frame, owned by the form. */
+body :is(#search-form.header-search, #hero-search-form.home-search) {
+  border: 1px solid var(--line) !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+body :is(#search-form.header-search, #hero-search-form.home-search) :is(input, select, button) {
+  background-color: transparent !important;
   border: 0 !important;
-  border-radius: 0;
   outline: none !important;
   box-shadow: none !important;
 }
-body :is(.header-search, .home-search):focus-within {
+body :is(#search-form.header-search, #hero-search-form.home-search):focus-within {
   border-color: #AAAAAA !important;
-  outline: none !important;
-  box-shadow: none !important;
-}
-/* The wrapper is the single keyboard-focus indicator for grouped search controls. */
-body :is(.header-search, .home-search) :is(input, select, button):focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
 }
 /* Sidebar rows stay frameless; only the icon keeps a compact outlined tile. */
 body .market-sidebar-main>a,
