@@ -356,7 +356,7 @@ async function renderHome(filters={}){
   <div data-home-status></div>
   <form id="hero-search-form" class="hero-search home-search" role="search">
    <label class="sr-only" for="hero-search-input">${t('E’lonlarni qidirish','Поиск объявлений','Search listings')}</label>
-   ${icon('search','hero-search-icon')}<input id="hero-search-input" name="q" type="search" value="${esc(filters.q||'')}" placeholder="${t('O‘yin yoki mahsulot qidiring…','Найдите игру или товар…','Search a game or item…')}">
+   <input id="hero-search-input" name="q" type="search" value="${esc(filters.q||'')}" placeholder="${t('O‘yin yoki mahsulot qidiring…','Найдите игру или товар…','Search a game or item…')}">
    <label class="sr-only" for="home-category">${t('Kategoriya','Категория','Category')}</label>
    <select id="home-category" name="category"><option value="">${t('Barcha kategoriyalar','Все категории','All categories')}</option>${categories.map(c=>`<option value="${esc(c.slug)}" ${filters.category===c.slug?'selected':''}>${esc(categoryLabel(c.name))}</option>`).join('')}</select>
    <button type="submit" aria-label="${t('Qidirish','Поиск','Search')}">${icon('search')}</button>
