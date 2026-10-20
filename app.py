@@ -279,6 +279,19 @@ TOPUP_CATALOG = (
     ('free-fire','Free Fire','Diamonds',(100,200,300,310,520,830,1060)),
     ('honor-of-kings','Honor of Kings','Tokens',(16,80,240,400,560,830,1245)),
 )
+TOPUP_NAMED_PACKAGES = {
+    'elite-pass-lv1-100': ('ELITE PASS (LV1-100)', 'Pass', 'pass'),
+    'elite-pass-plus-lv1-100': ('ELITE PASS PLUS (LV1-100)', 'Pass', 'pass'),
+    'weekly-mythic-emblem-value-pack': ('Weekly Mythic Emblem Value Pack', 'Pack', 'weekly'),
+    'weekly-deal-pack-2': ('Weekly Deal Pack 2', 'Pack', 'weekly'),
+    'weekly-deal-pack-1': ('Weekly Deal Pack 1', 'Pack', 'weekly'),
+}
+
+def topup_package_metadata(row):
+    named=TOPUP_NAMED_PACKAGES.get(row['url_slug']) if row['game_slug']=='pubg-mobile' else None
+    return {'product_name':named[0] if named else f"{row['amount']} {row['currency']}",
+            'product_kind':named[2] if named else 'currency',
+            'sort_order':list(TOPUP_NAMED_PACKAGES).index(row['url_slug']) if named else row['amount']}
 
 def seed_topup_catalog(db):
     """Seed stable package identities; prices and stock intentionally need admin setup."""
@@ -289,10 +302,14 @@ def seed_topup_catalog(db):
             db.execute('''INSERT INTO topup_packages(id,game_slug,game_name,url_slug,currency,amount)
                 VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING''',
                 (package_id,game_slug,game_name,suffix,currency,amount))
+    for slug,(_,currency,_) in TOPUP_NAMED_PACKAGES.items():
+        db.execute('''INSERT INTO topup_packages(id,game_slug,game_name,url_slug,currency,amount)
+            VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING''',
+            ('pubg-mobile-'+slug,'pubg-mobile','PUBG Mobile',slug,currency,1))
 
 def topup_public_package(row):
     available=int(row['stock_on_hand'])-int(row['stock_reserved'])>0
-    return {'id':row['id'],'game_slug':row['game_slug'],'game_name':row['game_name'],'url_slug':row['url_slug'],
+    return {**topup_package_metadata(row),'id':row['id'],'game_slug':row['game_slug'],'game_name':row['game_name'],'url_slug':row['url_slug'],
             'currency':row['currency'],'amount':row['amount'],'price_minor':row['price_minor'],
             'coming_soon':bool(row['coming_soon']),'available':available,
             'priced':int(row['price_minor'])>0,'purchasable':False,'payment_ready':False}
@@ -300,6 +317,7 @@ def topup_public_package(row):
 def topup_admin_row(row):
     """Normalize PostgreSQL timestamp values before returning admin API rows as JSON."""
     result=dict(row)
+    if 'game_slug' in result and 'url_slug' in result:result.update(topup_package_metadata(row))
     for key,value in result.items():
         if isinstance(value,datetime): result[key]=value.isoformat()
     return result
@@ -1114,14 +1132,16 @@ def seo_page_html(path, slug=None):
         parts=slug.split('/')
         db=connect()
         try:
+            seed_topup_catalog(db)
             if len(parts)==1:
                 game=db.execute('SELECT game_name FROM topup_packages WHERE game_slug=? AND enabled=1 LIMIT 1',(parts[0],)).fetchone()
                 if not game: return None
                 title=str(game['game_name'])+' Top Up | SentryLoot'; description='Browse '+str(game['game_name'])+' game currency packages.'; canonical=base+'/top-up/'+urlquote(parts[0],safe='')
             elif len(parts)==2:
-                package=db.execute('SELECT game_name,amount,currency FROM topup_packages WHERE game_slug=? AND url_slug=? AND enabled=1',(parts[0],parts[1])).fetchone()
+                package=db.execute('SELECT game_slug,url_slug,game_name,amount,currency FROM topup_packages WHERE game_slug=? AND url_slug=? AND enabled=1',(parts[0],parts[1])).fetchone()
                 if not package: return None
-                title=f"{package['amount']} {package['currency']} {package['game_name']} Top Up | SentryLoot"; description=f"Top up {package['amount']} {package['currency']} for {package['game_name']} on SentryLoot."; canonical=base+'/top-up/'+urlquote(parts[0],safe='')+'/'+urlquote(parts[1],safe='')
+                name=topup_package_metadata(package)['product_name']
+                title=f"{name} {package['game_name']} Top Up | SentryLoot"; description=f"{name} for {package['game_name']} on SentryLoot. Purchases are not open yet."; canonical=base+'/top-up/'+urlquote(parts[0],safe='')+'/'+urlquote(parts[1],safe='')
             else: return None
         finally: db.close()
         body='<section class="page"><h1>'+html.escape(title)+'</h1><p>'+html.escape(description)+'</p></section>'
@@ -1396,7 +1416,7 @@ class Handler(BaseHTTPRequestHandler):
                 payload=seo_listing_html(listing_match.group(1))
                 if payload is None: self.send_error(404); return
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
-            f={'/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/qa-vitals.js':'qa-vitals.js','/static/vendor/web-vitals.iife.js':'vendor/web-vitals.iife.js','/static/experience.js':'experience.js','/static/experience.css':'experience.css','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.webp':'assets/market-banner-soldier.webp','/static/assets/market-banner-games.webp':'assets/market-banner-games.webp','/static/assets/market-banner-worlds.webp':'assets/market-banner-worlds.webp','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
+            f={'/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/qa-vitals.js':'qa-vitals.js','/static/vendor/web-vitals.iife.js':'vendor/web-vitals.iife.js','/static/experience.js':'experience.js','/static/experience.css':'experience.css','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup-detail.js':'topup-detail.js','/static/topup-detail.css':'topup-detail.css','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-pubg-banner.jpg':'assets/topup-pubg-banner.jpg','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.webp':'assets/market-banner-soldier.webp','/static/assets/market-banner-games.webp':'assets/market-banner-games.webp','/static/assets/market-banner-worlds.webp':'assets/market-banner-worlds.webp','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
             if not f: self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/webp' if f.endswith('.webp') else 'image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))
@@ -1741,7 +1761,7 @@ class Handler(BaseHTTPRequestHandler):
             # Keep the public catalog recoverable if a deployment started against a
             # database whose schema migration ran without the app startup seeder.
             seed_topup_catalog(db)
-            packages=db.execute('SELECT * FROM topup_packages WHERE enabled=1 ORDER BY game_name,amount').fetchall()
+            packages=db.execute("SELECT * FROM topup_packages WHERE enabled=1 ORDER BY game_name,CASE WHEN currency='UC' THEN 0 ELSE 1 END,amount,url_slug").fetchall()
             games=[]
             by_slug={}
             for row in packages:
@@ -1946,6 +1966,7 @@ class Handler(BaseHTTPRequestHandler):
             require_user(ctx); return [listing_detail(db,x['listing_id'],uid) for x in db.execute('SELECT listing_id FROM favorites WHERE user_id=? ORDER BY created_at DESC',(uid,))]
         if path=='/api/admin/top-up' and method=='GET':
             require_admin(ctx)
+            seed_topup_catalog(db)
             packages=[]
             for row in db.execute('SELECT p.*,COALESCE((SELECT SUM(o.quantity) FROM topup_orders o WHERE o.package_id=p.id),0) order_count FROM topup_packages p ORDER BY p.game_name,p.amount'):
                 package=topup_admin_row(row)

@@ -77,3 +77,14 @@ test('account tools initialize before app globals',()=>{
  assert.doesNotThrow(()=>vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/account-operations.js'),'utf8'),context));
  assert.equal(typeof context.window.OperationsUX.account,'function');
 });
+
+
+test('top-up totals reject invalid quantities and never invent an unset price', () => {
+  const context={adminText:(_uz,_ru,en)=>en,fmt:(amount,currency)=>amount+' '+currency};
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/topup-detail.js'),'utf8'),context);
+  for(const invalid of ['',0,-1,1.5,100,'abc',Infinity])assert.equal(context.topupQuantity(invalid),null);
+  assert.equal(context.topupQuantity('1'),1);assert.equal(context.topupQuantity('99'),99);
+  assert.equal(context.topupDetailPrice({price_minor:125000},3),'375000 UZS');
+  assert.equal(context.topupDetailPrice({price_minor:0},3),'Price not set');
+});

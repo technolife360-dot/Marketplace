@@ -422,6 +422,11 @@ body.profile-menu-open { overflow: hidden; }
 .field-control[data-control-kind="multiline"] .field-control-icon { top: 14px; transform: none; }
 .field-control[data-control-kind="select"]::after { position: absolute; top: calc(50% - 3px); right: 15px; width: 7px; height: 7px; border-right: 1.5px solid #8795ad; border-bottom: 1.5px solid #8795ad; content: ""; pointer-events: none; transform: rotate(45deg); }
 .field-control:focus-within .field-control-icon { color: var(--accent-strong); }
+.field-control[data-control-kind="input"], .field-control[data-control-kind="select"] { display: grid; grid-template-columns: minmax(0,1fr); }
+.field-control[data-control-kind="input"] > input, .field-control[data-control-kind="select"] > select { grid-area: 1 / 1; }
+.field-control[data-control-kind="input"] > .field-control-icon, .field-control[data-control-kind="select"] > .field-control-icon { position: relative; grid-area: 1 / 1; align-self: center; top: auto; transform: none; }
+.field-control[data-control-kind="select"]::after { position: relative; grid-area: 1 / 1; align-self: center; justify-self: end; top: auto; right: 15px; pointer-events: none; }
+.field-control > .ex-native-error, .field-control > .ex-form-error { grid-column: 1; }
 .field input:focus, .field textarea:focus, .field select:focus, .filters input:focus, .filters select:focus { border-color: #8394b1; background: #f1f4f9; box-shadow: 0 0 0 4px rgba(155, 171, 199, 17%); }
 .field textarea { min-height: 112px; resize: vertical; line-height: 1.55; }
 .field input[type="checkbox"] { width: 16px; min-height: 16px; accent-color: var(--accent-strong); }

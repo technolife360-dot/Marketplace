@@ -256,7 +256,7 @@ class HTTPWorkflows(unittest.TestCase):
                 status, _, headers = self.guest.request('GET', '/' + route)
                 self.assertEqual(status, 302)
                 self.assertEqual(headers['Location'], '/#' + route)
-        sources = '\n'.join((app.ROOT / 'static' / name).read_text() for name in ('index.html', 'app.js', 'topup.js'))
+        sources = '\n'.join((app.ROOT / 'static' / name).read_text() for name in ('index.html', 'app.js', 'topup.js', 'topup-detail.js'))
         urls = set(re.findall(r'''["'](/static/[A-Za-z0-9_./-]+(?:\?[^"']*)?)["']''', sources))
         for path in sorted(urls):
             if Path(urlsplit(path).path).suffix not in ('.js','.css','.svg','.png','.jpg','.webp','.json'): continue
@@ -290,6 +290,34 @@ class HTTPWorkflows(unittest.TestCase):
         status,opted_out,headers=self.guest.request('GET','/static/experience.js',headers={'Accept-Encoding':'gzip;q=0, br'})
         self.assertNotIn('Content-Encoding',headers);self.assertEqual(opted_out,plain)
 
+
+    def test_topup_currency_passes_and_weekly_packs_are_real_catalogue_rows(self):
+        status,games,_=self.guest.request('GET','/api/top-up/catalog')
+        self.assertEqual(status,200)
+        packages=next(game for game in games if game['slug']=='pubg-mobile')['packages']
+        self.assertEqual([p['amount'] for p in packages if p['product_kind']=='currency'],[60,325,660,1800,3850,8100])
+        self.assertEqual({p['url_slug'] for p in packages if p['product_kind']!='currency'},set(app.TOPUP_NAMED_PACKAGES))
+        count=self.db.execute('SELECT COUNT(*) n FROM topup_orders').fetchone()['n']
+        for package in packages:
+            with self.subTest(package=package['url_slug']):
+                path='/top-up/pubg-mobile/'+package['url_slug']
+                detail=self.guest.request('GET','/api'+path.replace('/top-up/','/top-up/packages/'))
+                self.assertEqual(detail[0],200)
+                self.assertEqual(detail[1]['product_name'],package['product_name'])
+                self.assertFalse(detail[1]['purchasable']);self.assertFalse(detail[1]['payment_ready'])
+                page=self.guest.request('GET',path)
+                self.assertEqual(page[0],200)
+                self.assertIn(package['product_name'],page[1].decode() if isinstance(page[1],bytes) else page[1])
+        admin=self.admin.request('GET','/api/admin/top-up')
+        self.assertEqual(admin[0],200)
+        self.assertEqual({p['product_name'] for p in admin[1]['packages'] if p.get('product_kind')=='pass'},{'ELITE PASS (LV1-100)','ELITE PASS PLUS (LV1-100)'})
+        named=next(p for p in packages if p['product_kind']=='pass')
+        self.db.execute('UPDATE topup_packages SET price_minor=125000,stock_on_hand=3 WHERE id=?',(named['id'],))
+        refreshed=self.guest.request('GET','/api/top-up/catalog')[1]
+        saved=next(p for game in refreshed for p in game['packages'] if p['id']==named['id'])
+        self.assertEqual(saved['price_minor'],125000);self.assertTrue(saved['available']);self.assertFalse(saved['purchasable'])
+        self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM topup_orders').fetchone()['n'],count)
+        self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM topup_packages WHERE id=?',(named['id'],)).fetchone()['n'],1)
 
     def test_sold_out_listing_remains_readable_without_allowing_another_purchase(self):
         lid=self.published_item();buyer=self.registered_buyer()
