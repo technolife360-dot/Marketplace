@@ -333,4 +333,57 @@ body #hero-search-form.home-search > button {
     align-self: center !important;
   }
 }
+/* Center the compact search between the catalog title and its view-all link. */
+body .home-catalog > .home-section-heading {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 420px) minmax(0, 1fr) !important;
+  align-items: center;
+  gap: 18px;
+}
+body .home-catalog > .home-section-heading > a {
+  justify-self: end;
+  margin-inline-end: 20px !important;
+}
+body #hero-search-form.home-search {
+  display: flex !important;
+  width: 100% !important;
+  max-width: 420px !important;
+  min-height: 40px !important;
+  margin: 0 !important;
+  padding: 3px 5px 3px 14px !important;
+  gap: 4px !important;
+  border-radius: 50px !important;
+  box-sizing: border-box;
+}
+body #hero-search-form.home-search > input {
+  min-width: 0 !important;
+  padding-block: 4px !important;
+}
+body #hero-search-form.home-search #home-category {
+  min-height: 30px !important;
+  padding: 4px 25px 4px 9px !important;
+  max-width: 48% !important;
+  border-radius: 50px !important;
+  background-position: right 8px center !important;
+}
+body #hero-search-form.home-search > button {
+  width: 30px !important;
+  min-width: 30px !important;
+  flex: 0 0 30px !important;
+  height: 30px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+}
+@media(max-width:1100px) {
+  body .home-catalog > .home-section-heading {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+  }
+  body #hero-search-form.home-search {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: center;
+  }
+}
+body .home-intro { min-height: 330px !important; }
+
 }

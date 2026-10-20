@@ -354,15 +354,15 @@ async function renderHome(filters={}){
    <div class="home-banner-controls"><div class="market-banner-dots">${[0,1,2].map(index=>`<button type="button" data-market-slide="${index}" aria-label="${t(`${index+1}-rasm`,`Изображение ${index+1}`,`Image ${index+1}`)}" aria-current="${index===0?'true':'false'}"></button>`).join('')}</div></div>
   </section>
   <div data-home-status></div>
-  <form id="hero-search-form" class="hero-search home-search" role="search">
+
+  <section class="home-mobile-games" aria-labelledby="home-games-title"><div class="home-section-heading"><h2 id="home-games-title">${t('O‘yinni tanlang','Выберите игру','Choose your game')}</h2><a href="/browse">${t('Barchasi','Все','View all')} →</a></div><nav>${marketGameLinks.map(game=>`<a href="/browse?game=${encodeURIComponent(game[0])}">${marketGameMark(game)}<span>${esc(game[1])}</span></a>`).join('')}</nav></section>
+  <section class="home-catalog" aria-labelledby="home-listings-title"><div class="home-section-heading"><div><h2 id="home-listings-title">${filters.q?t('Qidiruv natijalari','Результаты поиска','Search results'):t('Yangi e’lonlar','Новые объявления','Latest listings')}</h2><p>${t('Narx, yetkazish muddati va sotuvchini solishtiring.','Сравните цену, сроки доставки и продавца.','Compare prices, delivery times, and sellers.')}</p></div>  <form id="hero-search-form" class="hero-search home-search" role="search">
    <label class="sr-only" for="hero-search-input">${t('E’lonlarni qidirish','Поиск объявлений','Search listings')}</label>
    <input id="hero-search-input" name="q" type="search" value="${esc(filters.q||'')}" placeholder="${t('O‘yin yoki mahsulot qidiring…','Найдите игру или товар…','Search a game or item…')}">
    <label class="sr-only" for="home-category">${t('Kategoriya','Категория','Category')}</label>
    <select id="home-category" name="category"><option value="">${t('Barcha kategoriyalar','Все категории','All categories')}</option>${categories.map(c=>`<option value="${esc(c.slug)}" ${filters.category===c.slug?'selected':''}>${esc(categoryLabel(c.name))}</option>`).join('')}</select>
    <button type="submit" aria-label="${t('Qidirish','Поиск','Search')}">${icon('search')}</button>
-  </form>
-  <section class="home-mobile-games" aria-labelledby="home-games-title"><div class="home-section-heading"><h2 id="home-games-title">${t('O‘yinni tanlang','Выберите игру','Choose your game')}</h2><a href="/browse">${t('Barchasi','Все','View all')} →</a></div><nav>${marketGameLinks.map(game=>`<a href="/browse?game=${encodeURIComponent(game[0])}">${marketGameMark(game)}<span>${esc(game[1])}</span></a>`).join('')}</nav></section>
-  <section class="home-catalog" aria-labelledby="home-listings-title"><div class="home-section-heading"><div><h2 id="home-listings-title">${filters.q?t('Qidiruv natijalari','Результаты поиска','Search results'):t('Yangi e’lonlar','Новые объявления','Latest listings')}</h2><p>${t('Narx, yetkazish muddati va sotuvchini solishtiring.','Сравните цену, сроки доставки и продавца.','Compare prices, delivery times, and sellers.')}</p></div><a href="/browse">${t('Barchasini ko‘rish','Смотреть все','View all listings')} →</a></div>
+  </form><a href="/browse">${t('Barchasini ko‘rish','Смотреть все','View all listings')} →</a></div>
    ${items.length?`<div class="product-grid home-listing-grid">${items.slice(0,8).map(marketCard).join('')}</div>`:`<div class="empty home-empty"><span>${icon('box')}</span><h3>${t('Yangi e’lonlar tez orada','Новые предложения скоро появятся','New listings are on the way')}</h3><p>${t('Tasdiqlangan mahsulotlar shu yerda paydo bo‘ladi.','Одобренные товары появятся здесь.','Approved products will appear here.')}</p><a class="text-link" href="/browse">${t('Bozorni ko‘rish','Открыть маркет','Browse marketplace')} →</a></div>`}
   </section>
   <div class="home-recent-slot"></div>
