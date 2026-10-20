@@ -501,6 +501,9 @@ body.profile-menu-open { overflow: hidden; }
 .footer p { max-width: 300px; margin: 9px 0 0; color: #889eca; font-size: 12px; line-height: 1.55; }
 .footer .footer-status { margin-top: 12px; color: #d4c0ec; font-weight: 650; }
 .footer .footer-email { display: inline-block; margin-top: 12px; color: #c9d8f3; font-size: 12px; overflow-wrap: anywhere; text-underline-offset: 3px; }
+.footer-socials { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 18px; }
+.footer-social { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 36px; width: 36px; height: 36px; border: 1px solid rgba(197, 180, 218, .2); border-radius: 10px; background: rgba(197, 180, 218, .05); color: #c5b4da; }
+.footer-social svg { display: block; width: 19px; height: 19px; fill: currentColor; }
 .footer .brand { font-size: 18px; }
 .footer .brand-mark { width: 29px; height: 29px; border-radius: 10px; }
 .footer-links { display: grid; align-content: start; justify-items: start; gap: 9px; color: #b2c0dd; font-size: 12px; }
