@@ -1,3 +1,5 @@
+/* Layered important paints override legacy page-specific themes consistently. */
+@layer sentryloot-theme {
 /* Shared site palette. Product artwork and social brand marks keep their colours. */
 @font-face {
   font-family: Roboto;
@@ -6,64 +8,128 @@
   font-weight: 100 900;
   font-display: swap;
 }
-:root {
+:root, body {
   color-scheme: dark;
-  --bg: #000000;
-  --paper: #000000;
-  --paper-soft: #000000;
-  --deep: #000000;
-  --ink: #F1F1F1;
-  --muted: #AAAAAA;
-  --muted-strong: #AAAAAA;
-  --ex-muted: #AAAAAA;
-  --line: #000000;
-  --ex-border: #000000;
-  --shadow: none;
-  --shadow-soft: none;
+  --bg: #000000 !important;
+  --paper: #0B0B0B !important;
+  --paper-soft: #141414 !important;
+  --deep: #000000 !important;
+  --ink: #F1F1F1 !important;
+  --muted: #AAAAAA !important;
+  --muted-strong: #AAAAAA !important;
+  --ex-muted: #AAAAAA !important;
+  --line: #292929 !important;
+  --ex-border: #292929 !important;
+  --shadow: 0 16px 40px #00000080 !important;
+  --shadow-soft: 0 4px 16px #00000040 !important;
 }
 html, body, body.home-page, body:has(.listing-detail-page) {
   background: #000000 !important;
   color: #F1F1F1;
   font-family: Roboto, Arial, sans-serif;
 }
-/* Transparent nested content prevents coloured patches inside the black surfaces. */
+/* Remove old tinted paints; explicit surface rules below restore visual hierarchy. */
 body :where(:not(svg):not(svg *):not(.crisp-client):not(.crisp-client *)) {
   background-color: transparent !important;
   background-image: none !important;
+  border-color: var(--line) !important;
   color: #F1F1F1 !important;
   font-family: Roboto, Arial, sans-serif !important;
   box-shadow: none !important;
-  border-color: #000000 !important;
-}
-body :where(:not(.crisp-client):not(.crisp-client *)):is(header, footer, main, aside, nav, section, article, dialog, input, textarea, select, option, button,
-  [role='dialog'], [role='menu'], [role='listbox'], .panel, .detail-panel, .product-card,
-  .market-sidebar, .profile-menu, .language-menu, .modal, .modal-card, .modal-content,
-  .message-layout, .message-thread, .tu-gallery, .tu-information, .tu-purchase, .tu-seller,
-  .topbar, .mobile-bottom-nav, .toast, .autocomplete-results, .search-suggestions) {
-  background-color: #000000 !important;
 }
 body :where(:not(.crisp-client):not(.crisp-client *))::before, body :where(:not(.crisp-client):not(.crisp-client *))::after {
   background-color: transparent !important;
   background-image: none !important;
   box-shadow: none !important;
 }
+body :where(:not(.crisp-client):not(.crisp-client *)):is(.topbar, .footer, .market-sidebar, .mobile-bottom-nav, main) {
+  background-color: #000000 !important;
+}
+body :where(:not(.crisp-client):not(.crisp-client *)):is(.panel, .detail-panel, .product-card, .market-product-card, .form-card, .stat,
+  .table-wrap, .message-layout, .message-thread, .tu-gallery, .tu-information, .tu-purchase,
+  .tu-seller, .tu-specs, .profile-account-card, .auth-card, .auth-form-panel, .home-search,
+  .header-search, .launch-saved>a) {
+  background-color: var(--paper) !important;
+  border-color: var(--line) !important;
+}
+body :where(:not(.crisp-client):not(.crisp-client *)):is(dialog, [role='dialog'], [role='menu'], [role='listbox'], .modal, .modal-card,
+  .modal-content, .profile-dropdown, .profile-shell, .language-menu, .toast,
+  .autocomplete-results, .search-suggestions) {
+  background-color: #101010 !important;
+  border: 1px solid #363636 !important;
+  box-shadow: 0 18px 48px #00000099 !important;
+}
 dialog::backdrop { background: #000000cc; }
-body :where(:not(.crisp-client):not(.crisp-client *)):is(.panel, .detail-panel, .product-card, .form-card, .stat, .table-wrap, .message-layout,
-  .tu-gallery, .tu-information, .tu-purchase, .tu-seller, .market-sidebar, dialog, input, textarea, select, button) {
-  border-color: #000000 !important;
-}
-body :where(:not(.crisp-client):not(.crisp-client *)):is(.button-primary, button[type='submit'], [aria-selected='true'], button[aria-pressed='true']) {
-  border-color: #000000 !important;
-}
-body :where(:not(.crisp-client):not(.crisp-client *)):is(button, a, input, textarea, select):focus-visible { outline: 2px solid #F1F1F1; outline-offset: 3px; }
-body :where(:not(.crisp-client):not(.crisp-client *)):is(button, a):hover { border-color: #000000 !important; }
-body :where(:not(.crisp-client):not(.crisp-client *)):is(.market-view-all, .section-link, .view-all, .ux-text-button, .help, .muted,
-  .footer-links a, .footer-links p, .footer-bottom a, .footer p, .footer small,
-  small, time, dt, .tu-subtitle, .tu-specs small, .market-section-head>a) {
-  color: #AAAAAA !important;
+body .profile-backdrop { background: #00000099 !important; border: 0 !important; }
+/* Fields have their own fill and visible edge on both black and raised panels. */
+body :where(:not(.crisp-client):not(.crisp-client *)):is(input, textarea, select):where(:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='hidden'])) {
+  background-color: #151515 !important;
+  border: 1px solid #414141 !important;
+  border-radius: 10px;
+  color: #F1F1F1 !important;
+  caret-color: #F1F1F1;
 }
 body input::placeholder, body textarea::placeholder { color: #AAAAAA !important; opacity: 1; }
-body .footer-social { border-color: #000000 !important; }
+body input { accent-color: #AAAAAA; }
+body :where(:not(.crisp-client):not(.crisp-client *)):is(input, textarea, select):where(:not([type='checkbox']):not([type='radio']):not([type='range'])):hover:not(:focus) { border-color: #646464 !important; }
+body :where(:not(.crisp-client):not(.crisp-client *)):is(input, textarea, select):focus-visible {
+  border-color: #AAAAAA !important;
+  outline: 2px solid #AAAAAA !important;
+  outline-offset: 3px;
+}
+body :where(:not(.crisp-client):not(.crisp-client *)):is(input, textarea, select)[aria-invalid='true'] { border-style: dashed !important; border-color: #AAAAAA !important; }
+body :where(:not(.crisp-client):not(.crisp-client *)):is(input, textarea, select):disabled { background-color: #0D0D0D !important; color: #888888 !important; cursor: not-allowed; }
+body select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23AAAAAA' stroke-width='2'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px;
+  padding-inline-end: 30px;
+}
+body option { background: #151515 !important; }
+body :where(:not(.crisp-client):not(.crisp-client *)):is(button, .button-primary, .button-secondary, .button-danger, .button-ghost, [role='button']) {
+  background-color: #171717 !important;
+  border: 1px solid #3A3A3A !important;
+  color: #F1F1F1 !important;
+  border-radius: 10px;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+body :where(:not(.crisp-client):not(.crisp-client *)):is(.button-primary, button[type='submit']) {
+  background-color: #2B2B2B !important;
+  border-color: #747474 !important;
+  font-weight: 700;
+}
+body :where(:not(.crisp-client):not(.crisp-client *)):is(button, .button-primary, .button-secondary, .button-danger, .button-ghost, [role='button']):not(:disabled):not([aria-disabled='true']):hover {
+  background-color: #292929 !important;
+  border-color: #929292 !important;
+}
+body :where(:not(.crisp-client):not(.crisp-client *)):is(button, .button-primary, .button-secondary, [role='button']):not(:disabled):active { background-color: #333333 !important; }
+body :where(:not(.crisp-client):not(.crisp-client *)):is(button, a):focus-visible { outline: 2px solid #AAAAAA !important; outline-offset: 3px; }
+body :where(:not(.crisp-client):not(.crisp-client *)):is(button, .button-primary, .button-secondary):is(:disabled, [aria-disabled='true']) {
+  background-color: #0C0C0C !important;
+  border-color: #282828 !important;
+  color: #888888 !important;
+  opacity: .65;
+  cursor: not-allowed;
+}
+body :where(:not(.crisp-client):not(.crisp-client *)):is(button[aria-pressed='true'], [role='tab'][aria-selected='true'], [role='radio'][aria-checked='true'], [role='checkbox'][aria-checked='true'], .market-sidebar-main a.active) {
+  background-color: #242424 !important;
+  border-color: #AAAAAA !important;
+  font-weight: 700;
+}
+body [role='tab'][aria-selected='true'] { text-decoration: underline; text-underline-offset: 6px; }
+body :where(:not(.crisp-client):not(.crisp-client *)):is(.market-view-all, .section-link, .view-all, .ux-text-button, .help, .muted,
+  .footer-links a, .footer-links p, .footer-bottom a, .footer p, .footer small,
+  small, time, dt, .tu-subtitle, .tu-specs small, .market-section-head>a,
+  .market-all-games, .market-all-games *, .home-section-heading>a, .home-section-heading>a *,
+  .home-guide a, .section-heading>a, .section-heading>a *) { color: #AAAAAA !important; }
+body .home-intro::after { background-image: linear-gradient(90deg, #000000eb, #000000b3 37%, #00000000 85%) !important; }
+body .market-banner-dots button { background: #666666 !important; border: 0 !important; }
+body .market-banner-dots button[aria-current='true'] { background: #F1F1F1 !important; }
+body .icon, body .gallery-chevron { color: #F1F1F1 !important; }
+body .footer-social { background: #111111 !important; border: 1px solid #333333 !important; }
+progress::-webkit-progress-value { background: #AAAAAA !important; }
+progress::-moz-progress-bar { background: #AAAAAA !important; }
 body .footer-social[aria-label='TikTok'] { color: #F1F1F1 !important; }
 .footer-social[aria-label='TikTok'] svg { filter: drop-shadow(-1px -1px 0 #25F4EE) drop-shadow(1px 1px 0 #FE2C55); }
 body .footer-social[aria-label='Instagram'] { color: #E1306C !important; }
@@ -73,33 +139,31 @@ body .footer-social[aria-label='Facebook'] { color: #0866FF !important; }
 body .footer-social[aria-label='YouTube'] { color: #FF0000 !important; }
 body .footer-social[aria-label='WhatsApp'] { color: #25D366 !important; }
 body .footer-social svg { color: inherit; }
-progress::-webkit-progress-value { background: #AAAAAA !important; }
-progress::-moz-progress-bar { background: #AAAAAA !important; }
-body :where(:not(.crisp-client):not(.crisp-client *)):is(.market-all-games, .market-all-games *, .home-section-heading>a, .home-section-heading>a *,
-  .home-guide-heading a, .home-guide-heading a *, .section-heading>a, .section-heading>a *) {
-  color: #AAAAAA !important;
+/* Native file and autofill controls use the same dark palette. */
+body input::file-selector-button {
+  background: #242424 !important;
+  color: #F1F1F1 !important;
+  border: 1px solid #555555 !important;
+  border-radius: 8px;
+  font-family: Roboto, Arial, sans-serif;
 }
-/* Neutral overlays keep artwork captions readable without tinted surfaces. */
-body .home-intro::after { background-image: linear-gradient(90deg, #000000eb, #000000b3 37%, #00000000 85%) !important; }
-body .market-banner-dots button { background: #777777 !important; }
-body .market-banner-dots button[aria-current='true'] { background: #F1F1F1 !important; }
-body .home-guide a { color: #AAAAAA !important; }
-body input { accent-color: #AAAAAA; }
+body input:-webkit-autofill {
+  -webkit-text-fill-color: #F1F1F1 !important;
+  caret-color: #F1F1F1;
+  box-shadow: 0 0 0 1000px #151515 inset !important;
+}
 
-/* Black edges throughout; selection stays visible through type rather than tinted frames. */
-body :where(:not(svg):not(svg *):not(.crisp-client):not(.crisp-client *)):is(a, button, input, textarea, select):is(:hover, :focus, :active) {
-  border-color: #000000 !important;
+/* Search wrappers provide one continuous field instead of a small nested frame. */
+body :is(.header-search, .home-search) input {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0;
+  outline: none !important;
   box-shadow: none !important;
 }
-body :where(:not(.crisp-client):not(.crisp-client *)):is(button[aria-pressed='true'], [role='tab'][aria-selected='true'], .market-sidebar-main a.active) {
-  text-decoration: underline;
-  text-underline-offset: 5px;
-  text-decoration-color: #AAAAAA;
-  font-weight: 700;
+body :is(.header-search, .home-search):focus-within {
+  border-color: #AAAAAA !important;
+  outline: 2px solid #AAAAAA;
+  outline-offset: 2px;
 }
-body :where(:not(.crisp-client):not(.crisp-client *)):is(input, textarea, select):focus-visible {
-  outline: 2px solid #AAAAAA !important;
-  outline-offset: 3px;
 }
-/* Interface glyphs stay neutral; footer social marks retain their brand palette. */
-body .icon, body .gallery-chevron { color: #F1F1F1 !important; }
