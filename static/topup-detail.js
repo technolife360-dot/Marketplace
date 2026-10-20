@@ -14,8 +14,8 @@ function renderTopUpDetail(game, initialPackage) {
   const fallback='/static/assets/topup-'+game.slug+'.svg';
   const packLabel=pack=>pack.product_kind&&pack.product_kind!=='currency'?pack.product_name:Number(pack.amount).toLocaleString(localeTag())+' '+pack.currency;
   const packageIcon=(pack,variant)=>{
-    const ucGalleryArt={'60-uc':'/static/assets/topup-uc-60.png','325-uc':'/static/assets/topup-uc-325.png'};
-    if(game.slug==='pubg-mobile'&&variant==='gallery'&&ucGalleryArt[pack.url_slug])return '<img class="topup-currency-image topup-currency-image-gallery" src="'+ucGalleryArt[pack.url_slug]+'" alt="'+esc(packLabel(pack))+'" decoding="async">';
+    const ucGalleryArt={'60-uc':'/static/assets/topup-uc-60.png','325-uc':'/static/assets/topup-uc-325.png','660-uc':'/static/assets/topup-uc-660.png','1800-uc':'/static/assets/topup-uc-1800.png','3850-uc':'/static/assets/topup-uc-3850.png','8100-uc':'/static/assets/topup-uc-8100.png'};
+    if(game.slug==='pubg-mobile'&&ucGalleryArt[pack.url_slug])return '<img class="topup-currency-image topup-currency-image-'+variant+'" src="'+ucGalleryArt[pack.url_slug]+'" alt="'+esc(packLabel(pack))+'" decoding="async">';
     const weeklyArt={
       'weekly-mythic-emblem-value-pack':'/static/assets/topup-weekly-mythic.png',
       'weekly-deal-pack-2':'/static/assets/topup-weekly-deal-2.png',
