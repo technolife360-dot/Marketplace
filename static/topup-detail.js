@@ -14,13 +14,19 @@ function renderTopUpDetail(game, initialPackage) {
   const fallback='/static/assets/topup-'+game.slug+'.svg';
   const packLabel=pack=>pack.product_kind&&pack.product_kind!=='currency'?pack.product_name:Number(pack.amount).toLocaleString(localeTag())+' '+pack.currency;
   const packageIcon=(pack,variant)=>{
-    const mythic=game.slug==='pubg-mobile'&&pack.url_slug==='weekly-mythic-emblem-value-pack';
-    if(mythic||pack.product_kind==='pass')return '<img class="tu-product-icon tu-product-icon-'+variant+'" src="'+(mythic?'/static/assets/topup-weekly-mythic.png':'/static/assets/topup-elite-pass.png')+'" alt="'+(mythic?'Weekly Mythic Emblem Value Pack':'Elite Pass')+'" decoding="async">';
+    const weeklyArt={
+      'weekly-mythic-emblem-value-pack':'/static/assets/topup-weekly-mythic.png',
+      'weekly-deal-pack-2':'/static/assets/topup-weekly-deal-2.png'
+    };
+    const source=game.slug==='pubg-mobile'?weeklyArt[pack.url_slug]:null;
+    if(source||pack.product_kind==='pass')return '<img class="tu-product-icon tu-product-icon-'+variant+'" src="'+(source||'/static/assets/topup-elite-pass.png')+'" alt="'+esc(source?pack.product_name:'Elite Pass')+'" decoding="async">';
     return pack.product_kind==='weekly'?icon('box'):topupCurrencyImage(game,variant);
   };
-  const packageArt=pack=>'<div class="tu-pack-art'+(pack.product_kind&&pack.product_kind!=='currency'?' tu-named-art':'')+'"><span>'+esc(game.name)+'</span><b>'+esc(packLabel(pack))+'</b>'+(packageIcon(pack,'gallery'))+'</div>';
+  const packageContents=pack=>game.slug==='pubg-mobile'&&pack.url_slug==='weekly-deal-pack-2'?[['Premium',2],['Classic',4],['Supply',6],['UC',60]]:[];
+  const contentsMarkup=pack=>{const items=packageContents(pack);return items.length?'<div class="tu-gallery-contents" aria-label="'+t('Paket tarkibi','Состав набора','Package contents')+'">'+items.map(([name,count])=>'<span><b>'+count+'</b> '+esc(name)+(name==='UC'?'':' '+t('kupon','купон','coupon'))+'</span>').join('')+'</div>':'';};
+  const packageArt=pack=>'<div class="tu-pack-art'+(pack.product_kind&&pack.product_kind!=='currency'?' tu-named-art':'')+'"><span>'+esc(game.name)+'</span><b>'+esc(packLabel(pack))+'</b>'+(packageIcon(pack,'gallery'))+contentsMarkup(pack)+'</div>';
   const info=(iconName,label,value)=>'<div>'+icon(iconName)+'<span><small>'+label+'</small><b>'+value+'</b></span></div>';
-  const packButton=pack=>`<button type="button" data-tu-package="${esc(pack.url_slug)}" aria-pressed="false">${packageIcon(pack,'pack')}<span><b>${esc(packLabel(pack))}</b><small>${topupDetailPrice(pack)}</small></span></button>`;
+  const packButton=pack=>`<button type="button" data-tu-package="${esc(pack.url_slug)}" aria-pressed="false">${packageIcon(pack,'pack')}<span><b>${esc(packLabel(pack))}</b>${packageContents(pack).length?`<small class="tu-pack-includes">${packageContents(pack).map(([name,count])=>`${count} ${name}`).join(' · ')}</small>`:''}<small>${topupDetailPrice(pack)}</small></span></button>`;
   const packageGroups=[['currency',t('Paketni tanlang','Выберите пакет','Select package')],['pass','Elite Pass'],['weekly',t('Haftalik paketlar','Еженедельные наборы','Weekly packs')]].map(([kind,label])=>{const items=packages.filter(p=>(p.product_kind||'currency')===kind);return items.length?`<h2 class="tu-select-label">${label}</h2><div class="tu-packages ${kind!=='currency'?'tu-named-packages':''}">${items.map(packButton).join('')}</div>`:'';}).join('');
   const noCheckout=t('Xaridlar hozircha yopiq. To‘lov va Top Up xizmati hali ishga tushmagan.','Покупки пока закрыты. Оплата и сервис Top Up ещё не запущены.','Purchases are not open yet. Payments and the top-up service are not connected.');
   const wishlistKey='sentryloot:topup:wishlist:'+String(me?.id||'guest');
