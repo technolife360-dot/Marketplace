@@ -767,4 +767,17 @@ body .auth-country-popup .auth-country-search {
   }
 }
 
+/* Align the auth introduction with the form fields below it. */
+body .auth-page .auth-heading {
+  width: 100% !important;
+  max-width: none !important;
+  margin-inline: 0 !important;
+  text-align: left !important;
+  align-items: flex-start !important;
+}
+body .auth-page .auth-heading :is(.auth-eyebrow, .page-title, .auth-subtitle) {
+  text-align: left !important;
+  margin-inline: 0 !important;
+}
+
 }
