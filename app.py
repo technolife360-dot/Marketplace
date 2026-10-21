@@ -2143,27 +2143,48 @@ class Handler(BaseHTTPRequestHandler):
                 ORDER BY created_at DESC LIMIT 20""").fetchall()]
         if path=='/api/admin/overview' and method=='GET':
             require_admin(ctx)
-            return {
-                'pending_listings':db.execute("SELECT COUNT(*) n FROM listings WHERE status='pending_review'").fetchone()['n'],
-                'open_reports':db.execute("SELECT COUNT(*) n FROM reports WHERE status='open' AND reason!='order_dispute'").fetchone()['n'],
-                'open_disputes':db.execute("SELECT COUNT(*) n FROM reports WHERE reason='order_dispute' AND status IN ('open','reviewing')").fetchone()['n'],
-                'pending_payouts':db.execute("SELECT COUNT(*) n FROM payout_requests WHERE status IN ('pending','approved')").fetchone()['n'],
-                'pending_sellers':db.execute("SELECT COUNT(*) n FROM seller_profiles WHERE verification_status!='verified' OR selling_enabled=0").fetchone()['n'],
-                'active_listings':db.execute("SELECT COUNT(*) n FROM listings WHERE status='published'").fetchone()['n'],
-                'today_orders':db.execute("SELECT COUNT(*) n FROM orders WHERE created_at::date=CURRENT_DATE" if DATABASE_URL else "SELECT COUNT(*) n FROM orders WHERE date(created_at)=date('now')").fetchone()['n'],
-                'completed_orders':db.execute("SELECT COUNT(*) n FROM orders WHERE status='completed'").fetchone()['n'],
-                'sandbox_volume_minor':int(db.execute("SELECT COALESCE(SUM(amount_minor),0) n FROM payments WHERE provider='sandbox' AND status='succeeded'").fetchone()['n']),
+            today="created_at::date=CURRENT_DATE" if DATABASE_URL else "date(created_at)=date('now')"
+            # One round trip for counters; no per-counter network query.
+            summary=dict(db.execute(f"""SELECT
+                (SELECT COUNT(*) FROM listings WHERE status='pending_review') pending_listings,
+                (SELECT COUNT(*) FROM reports WHERE status='open' AND reason!='order_dispute') open_reports,
+                (SELECT COUNT(*) FROM reports WHERE reason='order_dispute' AND status IN ('open','reviewing')) open_disputes,
+                (SELECT COUNT(*) FROM payout_requests WHERE status IN ('pending','approved')) pending_payouts,
+                (SELECT COUNT(*) FROM seller_profiles WHERE verification_status!='verified' OR selling_enabled=0 OR identity_status!='verified' OR identity_provider!='didit') pending_sellers,
+                (SELECT COUNT(*) FROM account_reviews WHERE status='pending') pending_account_reviews,
+                (SELECT COUNT(*) FROM listings WHERE status='published') active_listings,
+                (SELECT COUNT(*) FROM orders WHERE {today}) today_orders,
+                (SELECT COUNT(*) FROM orders WHERE status='completed') completed_orders,
+                (SELECT COALESCE(SUM(amount_minor),0) FROM payments WHERE provider='sandbox' AND status='succeeded') sandbox_volume_minor,
+                (SELECT COUNT(*) FROM users) users""").fetchone())
+            summary.update({
+                'sandbox_volume_minor':int(summary['sandbox_volume_minor']),
                 'daily_orders':[dict(x) for x in db.execute("SELECT to_char(created_at::date,'YYYY-MM-DD') AS day,COUNT(*) AS count FROM orders WHERE created_at::date>=CURRENT_DATE-6 GROUP BY created_at::date ORDER BY created_at::date" if DATABASE_URL else "SELECT date(created_at) AS day,COUNT(*) AS count FROM orders WHERE date(created_at)>=date('now','-6 day') GROUP BY date(created_at) ORDER BY date(created_at)").fetchall()],
                 'orders':[dict(x) for x in db.execute('SELECT status,COUNT(*) n FROM orders GROUP BY status').fetchall()],
-                'users':db.execute('SELECT COUNT(*) n FROM users').fetchone()['n'],
+                'recent_orders':[dict(x) for x in db.execute('SELECT o.*,u.email buyer_email FROM orders o JOIN users u ON u.id=o.buyer_id ORDER BY o.created_at DESC LIMIT 7')],
                 'mode':MODE,
-                'config':{r['key']:r['value'] for r in db.execute('SELECT key,value FROM platform_config')}
-            }
+                'config':{r['key']:r['value'] for r in db.execute("SELECT key,value FROM platform_config WHERE key IN ('commission_bps','completion_window_hours','terms_version')")}
+            })
+            return summary
         if path=='/api/admin/blog' and method=='GET':
             require_admin(ctx)
             return [blog_post_view(x) for x in db.execute('SELECT * FROM blog_posts ORDER BY updated_at DESC LIMIT 200')]
         if path=='/api/admin/listings' and method=='GET':
-            require_admin(ctx); return [listing_detail(db,x['id'],uid) for x in db.execute("SELECT id FROM listings WHERE status IN ('pending_review','approved_private','rejected','published','paused') ORDER BY CASE status WHEN 'pending_review' THEN 0 WHEN 'approved_private' THEN 1 WHEN 'rejected' THEN 2 WHEN 'published' THEN 3 ELSE 4 END,updated_at DESC LIMIT 200")]
+            require_admin(ctx)
+            if qs.get('summary',[''])[0]=='1':
+                # Moderation cards need no storefront reviews, availability or tiers.
+                rows=db.execute("""SELECT l.id,l.seller_id,l.title,l.description,l.product_type,l.price_minor,l.currency,l.status,l.created_at,l.attributes_json,
+                    g.name game_name,c.name category_name,s.shop_name seller_name
+                    FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id
+                    LEFT JOIN seller_profiles s ON s.user_id=l.seller_id
+                    WHERE l.status IN ('pending_review','approved_private','rejected','published','paused')
+                    ORDER BY CASE l.status WHEN 'pending_review' THEN 0 WHEN 'approved_private' THEN 1 WHEN 'rejected' THEN 2 WHEN 'published' THEN 3 ELSE 4 END,l.updated_at DESC LIMIT 200""").fetchall()
+                result=[]
+                for row in rows:
+                    item=dict(row);attributes=json.loads(item.pop('attributes_json') or '{}')
+                    item['risk_flags']=attributes.get('_risk_flags',[]);result.append(item)
+                return result
+            return [listing_detail(db,x['id'],uid) for x in db.execute("SELECT id FROM listings WHERE status IN ('pending_review','approved_private','rejected','published','paused') ORDER BY CASE status WHEN 'pending_review' THEN 0 WHEN 'approved_private' THEN 1 WHEN 'rejected' THEN 2 WHEN 'published' THEN 3 ELSE 4 END,updated_at DESC LIMIT 200")]
         if path=='/api/admin/reports' and method=='GET':
             require_admin(ctx); return [dict(x) for x in db.execute('SELECT r.*,u.email reporter_email FROM reports r JOIN users u ON u.id=r.reporter_id ORDER BY CASE r.status WHEN \'open\' THEN 0 ELSE 1 END,r.created_at DESC LIMIT 100')]
         if path=='/api/admin/sellers' and method=='GET':

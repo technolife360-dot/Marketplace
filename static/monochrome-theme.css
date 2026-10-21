@@ -1802,3 +1802,14 @@ body #app .topup-admin-page .topup-supplier-map.topup-admin-settings { margin-to
 @layer sentryloot-theme {
 body #app .topup-admin-page .topup-admin-form-error { grid-column:1 / -1 !important; margin:0 !important; padding:12px 14px !important; border:1px solid #643232 !important; border-radius:9px !important; background:#241414 !important; color:#FCA5A5 !important; font-size:13px !important; line-height:1.6 !important; }
 }
+
+/* Reserve a count column so admin queue badges cannot move icons or labels. */
+body #app .admin-nav :is([data-admin-view-target],[data-go]) {
+ display:grid !important; grid-template-columns:minmax(0,1fr) 28px 24px !important;
+ align-items:center !important; gap:8px !important;
+}
+body #app .admin-nav :is([data-admin-view-target],[data-go])>span { display:contents !important; }
+body #app .admin-nav :is([data-admin-view-target],[data-go]) b { grid-column:1 !important; grid-row:1 !important; min-width:0 !important; text-align:left !important; }
+body #app .admin-nav :is([data-admin-view-target],[data-go]) .icon { grid-column:3 !important; grid-row:1 !important; width:24px !important; height:24px !important; justify-self:center !important; }
+body #app .admin-nav [data-admin-count] { grid-column:2 !important; grid-row:1 !important; display:inline-flex !important; align-items:center !important; justify-content:center !important; width:28px !important; min-width:28px !important; height:22px !important; padding:0 !important; border-radius:7px !important; font-size:10px !important; font-variant-numeric:tabular-nums; line-height:1 !important; }
+body #app .admin-nav [data-admin-count][hidden] { display:none !important; }

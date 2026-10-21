@@ -249,3 +249,33 @@ test('home bootstrap does not wait for account collections before showing the pa
  sessionResolve({user:null,csrf:''});
  await loading;
 });
+
+test('admin loads only the requested section and deduplicates pending requests',async()=>{
+ const start=source.indexOf('const adminViewRequests=');
+ const end=source.indexOf('\nasync function renderAdmin(){',start);
+ const panels=new Map(['overview','listings','settings','users','reports'].map(name=>[name,{innerHTML:'',setAttribute(){},querySelector:()=>({})}]));
+ const root={isConnected:true,querySelector:selector=>panels.get(selector.match(/"([a-z-]+)"/)[1]),querySelectorAll:()=>[]};
+ const requests=[];const pending=[];
+ const context={Promise,Map,adminPage:{root,data:{},loaded:new Set(),pending:new Map(),resources:new Map()},
+  api:path=>{requests.push(path);return new Promise((resolve,reject)=>pending.push({resolve,reject}))},
+  adminLoadingMarkup:()=>'<p>Loading</p>',adminViewMarkup:name=>'<p>'+name+'</p>',
+  bindAdminForms(){},localizeDOM(){},window:{},esc:String,adminText:(uz,ru,en)=>en};
+ vm.createContext(context);vm.runInContext(source.slice(start,end),context);
+ const first=context.loadAdminView('overview'),second=context.loadAdminView('overview');
+ assert.strictEqual(first,second);
+ assert.deepEqual(requests,['/admin/overview']);
+ pending[0].resolve({mode:'production'});await first;
+ await context.loadAdminView('settings');
+ assert.equal(requests.length,1,'settings must reuse overview within this portal visit');
+ const listing=context.loadAdminView('listings');
+ assert.deepEqual(requests,['/admin/overview','/admin/listings?summary=1']);
+ pending[1].resolve([]);await listing;
+ await context.loadAdminView('listings');assert.equal(requests.length,2);
+ const reports=context.loadAdminView('reports');pending[2].reject(new Error('Temporary failure'));await reports;
+ assert.match(panels.get('reports').innerHTML,/Temporary failure/);
+ const retry=context.loadAdminView('reports',true);pending[3].resolve([]);await retry;
+ assert.match(panels.get('reports').innerHTML,/reports/);
+ const users=context.loadAdminView('users');root.isConnected=false;
+ pending[4].resolve([]);pending[5].resolve([]);await users;
+ assert.equal(panels.get('users').innerHTML,'<p>Loading</p>','late responses cannot fill a replaced page');
+});

@@ -43,6 +43,35 @@ class MarketplaceFlows(unittest.TestCase):
         result=self.handler.route(self.db,self.ctx(uid),method,path,{},data or {})
         return result[1] if isinstance(result,tuple) else result
     def add_cart(self,uid,qty=1): self.db.execute('INSERT INTO carts(user_id,listing_id,quantity) VALUES(?,?,?)',(uid,self.listing,qty))
+    def test_admin_overview_is_bounded_and_excludes_unrelated_private_configuration(self):
+        self.db.execute("INSERT INTO platform_config(key,value) VALUES('private_test_key','not-for-overview')")
+        self.add_cart(self.buyer);order=app.checkout(self.db,self.buyer,True,True)
+        queries=[];self.db.set_trace_callback(queries.append)
+        try: result=self.route(self.admin,'GET','/api/admin/overview')
+        finally:self.db.set_trace_callback(None)
+        self.assertEqual(result['users'],4)
+        self.assertEqual(result['today_orders'],1)
+        self.assertEqual(result['recent_orders'][0]['id'],order['id'])
+        self.assertEqual(result['config']['commission_bps'],'1000')
+        self.assertNotIn('private_test_key',result['config'])
+        self.assertIn('pending_account_reviews',result)
+        self.assertLessEqual(sum(q.lstrip().upper().startswith('SELECT') for q in queries),12)
+        with self.assertRaises(app.HttpError):self.route(self.other,'GET','/api/admin/overview')
+
+    def test_admin_listing_summaries_preserve_review_flags_without_per_listing_queries(self):
+        self.db.execute("UPDATE listings SET status='pending_review',attributes_json=? WHERE id=?",(json.dumps({'_risk_flags':['off_platform_contact_or_payment'],'_ai_review':'obsolete'}),self.listing))
+        context=self.ctx(self.admin);queries=[];self.db.set_trace_callback(queries.append)
+        try:
+            with patch.object(app,'listing_detail',side_effect=AssertionError('summary must not expand each listing')):
+                result=self.handler.route(self.db,context,'GET','/api/admin/listings',{'summary':['1']},{})
+        finally:self.db.set_trace_callback(None)
+        item=next(item for item in result if item['id']==self.listing)
+        self.assertEqual(item['risk_flags'],['off_platform_contact_or_payment'])
+        self.assertEqual(item['seller_name'],'Seller Shop')
+        self.assertNotIn('attributes_json',item)
+        self.assertLessEqual(sum(q.lstrip().upper().startswith('SELECT') for q in queries),4)
+        with self.assertRaises(app.HttpError):self.handler.route(self.db,self.ctx(self.other),'GET','/api/admin/listings',{'summary':['1']},{})
+
     def test_rate_limit_is_atomic_and_rejects_requests_after_the_limit(self):
         for _ in range(3): app.check_rate(self.db,'test_atomic_rate','client',limit=3,period=300)
         with self.assertRaises(app.HttpError) as error:
