@@ -1,0 +1,16 @@
+---
+description: Keep every storefront and admin select consistent with the compact country picker
+globs: static/**/*.js,static/**/*.css,static/**/*.html
+alwaysApply: false
+---
+
+# Select menu standard
+
+- Use `static/select-menu.js` and the shared `.auth-country-trigger` appearance for all native select fields, including profile, checkout, seller, filters and admin forms.
+- Open the list immediately below its field, at the field width. Keep the list compact (maximum 180px), scrollable, and searchable when there are more than eight options.
+- Keep native select values, change events, validation and FormData working. Support labels, keyboard navigation, Escape, outside click, disabled options and form reset.
+- Keep one leading icon and one dropdown chevron. Never repeat arrow backgrounds or add a second border.
+- Preserve header SVG dimensions at 24×24 and the rendered `use` artwork at 18×18.
+- Visually verify the shared menu in Chrome before considering a dropdown change complete.
+
+- Home search keeps its current production/Vercel appearance, but its menu must always open directly below `#home-category`, anchored to that field. Never open above or detach it. Use an anchored popup if native select positioning cannot guarantee this, without changing the field appearance or search layout.

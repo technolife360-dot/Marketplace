@@ -88,3 +88,50 @@ test('top-up totals reject invalid quantities and never invent an unset price', 
   assert.equal(context.topupDetailPrice({price_minor:125000},3),'375000 UZS');
   assert.equal(context.topupDetailPrice({price_minor:0},3),'Price not set');
 });
+
+function sidebarMarkup(user) {
+  const context = {me: user, adminText: (_uz, _ru, en) => en, icon: name => `<svg data-icon="${name}"></svg>`};
+  vm.createContext(context);
+  const start = source.indexOf('function marketSidebarMarkup(');
+  vm.runInContext(source.slice(start, source.indexOf('\nfunction marketBannerMarkup(', start)), context);
+  return context.marketSidebarMarkup({});
+}
+
+test('sidebar shows guests a sign-in route without personal or seller links', () => {
+  const html = sidebarMarkup(null);
+  assert.match(html, /href="\/#login"/);
+  assert.doesNotMatch(html, /href="\/#(?:messages|orders|wallet|payout-options|admin)"/);
+  assert.doesNotMatch(html, /market-sidebar-games/);
+});
+
+test('buyer sidebar exposes conversations and purchases using the primary navigation component', () => {
+  const html = sidebarMarkup({id: 'buyer', seller: null, is_admin: false});
+  for (const route of ['messages', 'orders', 'favorites', 'my-reviews', 'requests']) {
+    assert.ok(html.includes(`href="/#${route}"`), `Missing ${route} route`);
+  }
+  assert.match(html, /class="market-sidebar-main market-sidebar-personal"/);
+  assert.doesNotMatch(html, /href="\/#(?:seller|wallet|payout-options|admin)"/);
+});
+
+test('seller tools remain role-specific and admin navigation is absent from the sidebar', () => {
+  const seller = sidebarMarkup({seller: {id: 'seller'}, is_admin: false});
+  assert.match(seller, /href="\/#wallet"/);
+  assert.match(seller, /href="\/#payout-options"/);
+  assert.doesNotMatch(seller, /href="\/#admin"/);
+  assert.doesNotMatch(sidebarMarkup({seller: null, is_admin: true}), /href="\/#(?:seller|admin)"/);
+});
+
+test('home product cards show verified product scores and omit empty or seller-only ratings', () => {
+  const start = source.indexOf('function marketCard(');
+  const context = {
+    adminText: (_uz, _ru, en) => en, esc: value => String(value ?? ''),
+    icon: name => `<svg data-icon="${name}"></svg>`, fmt: value => String(value), categoryLabel: value => value,
+  };
+  vm.createContext(context);
+  vm.runInContext(source.slice(start, source.indexOf('\nfunction setupMarketSidebarToggle(', start)), context);
+  const item = {id: 'listing', title: 'Game item', available: 1, stock: 1, reserved: 0, status: 'published', attributes: {}, seller_rating: 4.9, review_count: 200};
+  assert.doesNotMatch(context.marketCard(item), /market-seller-stats/);
+  const rated = context.marketCard({...item, product_review_count: 3, product_rating: 4.3});
+  assert.match(rated, /4\.3 <small>\(3\)<\/small>/);
+  assert.doesNotMatch(rated, /4\.9/);
+});

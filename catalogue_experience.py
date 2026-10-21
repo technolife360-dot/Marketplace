@@ -150,7 +150,7 @@ def quality(db,sid,days=30):
         stamp=db.execute('SELECT submitted_at FROM deliveries WHERE order_item_id=?',(r['id'],)).fetchone()
         if stamp:timed+=1;on_time+=int(ops.utc(stamp['submitted_at'])<=ops.utc(r['delivery_due_at']))
     orders={r['order_id'] for r in eligible};cancelled={r['order_id'] for r in eligible if r['status'] in ('cancelled','refunded')};disputes={r['order_id'] for r in eligible if db.execute("SELECT 1 FROM reports WHERE order_id=? AND reason='order_dispute'",(r['order_id'],)).fetchone()}
-    reviews=[dict(r) for r in db.execute('SELECT l.product_type,COUNT(*) count,AVG(r.rating) rating FROM reviews r JOIN order_items i ON i.id=r.order_item_id JOIN listings l ON l.id=i.listing_id WHERE r.seller_id=? GROUP BY l.product_type',(sid,))]
+    reviews=[dict(r) for r in db.execute('SELECT l.product_type,COUNT(*) count,AVG(r.rating) rating FROM visible_reviews r JOIN order_items i ON i.id=r.order_item_id JOIN listings l ON l.id=i.listing_id WHERE r.seller_id=? GROUP BY l.product_type',(sid,))]
     for r in reviews:r['rating']=float(r['rating']) if r['rating'] is not None else None
     return {'days':days,'orders':len(orders),'delivered':len(delivered),'on_time_percent':round(on_time*100/timed) if timed else None,'timed_deliveries':timed,'cancellations':len(cancelled),'disputes':len(disputes),'cancellation_percent':round(len(cancelled)*100/len(orders),1) if orders else None,'dispute_percent':round(len(disputes)*100/len(orders),1) if orders else None,'ratings_by_type':reviews}
 

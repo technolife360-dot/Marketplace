@@ -4,20 +4,24 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#000000"><link rel="icon" type="image/png" sizes="500x500" href="https://images.gamestorehub.com/site-assets/sentryloot-favicon.png?v=1"><link rel="apple-touch-icon" sizes="500x500" href="https://images.gamestorehub.com/site-assets/sentryloot-favicon.png?v=1"><meta name="description" content="A marketplace for permitted game items and digital services. Marketplace sales are currently restricted to approved games and products.">
 <link rel="canonical" href="https://gamestorehub.com/"><meta property="og:type" content="website"><meta property="og:site_name" content="SentryLoot"><meta property="og:title" content="SentryLoot — Game Marketplace"><meta property="og:description" content="A marketplace for permitted game items and digital services. Marketplace sales are currently restricted to approved games and products."><meta property="og:url" content="https://gamestorehub.com/"><meta property="og:image" content="https://images.gamestorehub.com/site-assets/sentryloot-logo-full.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="896"><meta property="og:image:alt" content="SentryLoot GameStore logo"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://images.gamestorehub.com/site-assets/sentryloot-logo-full.jpg">
-<title>SentryLoot — Game Marketplace</title><link rel="stylesheet" href="/static/style.css?v=177">
+<title>SentryLoot — Game Marketplace</title><link rel="stylesheet" href="/static/style.css?v=182">
 <script src="/static/vercel-insights.js?v=2" defer></script>
-<script src="/static/crisp-loader.js?v=4" defer></script>
-<link rel="stylesheet" href="/static/marketplace-ux.css?v=20">
-<link rel="stylesheet" href="/static/account-operations.css?v=8">
+<script src="/static/crisp-loader.js?v=7" defer></script>
+<link rel="stylesheet" href="/static/marketplace-ux.css?v=24">
+<link rel="stylesheet" href="/static/account-operations.css?v=11">
 <link rel="stylesheet" href="/static/experience.css?v=6">
 <link rel="stylesheet" href="/static/launch-readiness.css?v=3">
 <link rel="stylesheet" href="/static/topup-detail.css?v=7">
-<link rel="stylesheet" href="/static/monochrome-theme.css?v=47">
+<link rel="stylesheet" href="/static/monochrome-theme.css?v=115">
 </head>
 <body>
 <a class="skip-link" href="#app" data-skip-to-content>Skip to main content</a>
 <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
 <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></symbol>
+<symbol id="i-header-globe" viewBox="3 3 18 18" preserveAspectRatio="none"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3c2.2 2.4 3.3 5.4 3.3 9s-1.1 6.6-3.3 9c-2.2-2.4-3.3-5.4-3.3-9S9.8 5.4 12 3Z"/></symbol>
+<symbol id="i-header-shield" viewBox="4 3 16 18" preserveAspectRatio="none"><path d="M12 3 20 6v5.2c0 4.6-3.1 8.1-8 9.8-4.9-1.7-8-5.2-8-9.8V6l8-3Z"/><path d="m8.7 11.8 2.1 2.1 4.6-4.7"/></symbol>
+<symbol id="i-header-bell" viewBox="3 3 18 18" preserveAspectRatio="none"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></symbol>
+<symbol id="i-header-cart" viewBox="3 4 18 16.4" preserveAspectRatio="none"><path d="M3 4h2l2.1 10.1a2 2 0 0 0 2 1.6h8.8a2 2 0 0 0 1.9-1.5L21 8H6"/><circle cx="9.5" cy="19.2" r="1.2"/><circle cx="17.4" cy="19.2" r="1.2"/></symbol>
 <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 4h2l2.1 10.1a2 2 0 0 0 2 1.6h8.8a2 2 0 0 0 1.9-1.5L21 8H6"/><circle cx="9.5" cy="19.2" r="1.2"/><circle cx="17.4" cy="19.2" r="1.2"/></symbol>
 <symbol id="i-message" viewBox="0 0 24 24"><path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.7 8.7 0 0 1-3.6-.8L4 20l1.3-3.7A7.1 7.1 0 0 1 4 12c0-4.4 3.6-8 8-8s8 3.1 8 7.5Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></symbol>
 <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></symbol>
@@ -44,9 +48,9 @@
 <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.8 20v-1.4A5.2 5.2 0 0 1 8 13.4h2a5.2 5.2 0 0 1 5.2 5.2V20M16 4.8a3.5 3.5 0 0 1 0 6.8M17 14h.7a4.5 4.5 0 0 1 4.5 4.5V20"/></symbol>
 <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="m19.4 15 .1.1 1.1 1.9-1.6 2.7-2.2-.5a8.2 8.2 0 0 1-1.5.9l-.6 2h-3.2l-.6-2a8.2 8.2 0 0 1-1.5-.9l-2.2.5-1.6-2.7 1.1-1.9a8 8 0 0 1 0-1.8l-1.1-1.9 1.6-2.7 2.2.5a8.2 8.2 0 0 1 1.5-.9l.6-2h3.2l.6 2a8.2 8.2 0 0 1 1.5.9l2.2-.5 1.6 2.7-1.1 1.9a8 8 0 0 1 0 1.8Z" transform="translate(-1 -1) scale(1.08)"/></symbol>
 </svg>
-<header class="site-header"><div class="topbar"><a class="brand" href="/#home" aria-label="SentryLoot — GameStoreHub marketplace" title="SentryLoot · gamestorehub.com"><span class="brand-mark"><img src="https://images.gamestorehub.com/site-assets/sentryloot-logo-crest.jpg?v=1" alt=""></span><span>Sentry<span class="brand-dot">Loot</span></span></a>
+<header class="site-header"><div class="topbar"><div class="header-start"><button id="market-sidebar-toggle" class="market-sidebar-toggle" type="button" aria-label="Toggle sidebar" aria-controls="market-sidebar" aria-expanded="true" hidden><svg data-slot="geist-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true"><path d="M.5 1.5h15v11a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-11ZM5.5 1.5v13" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button><a class="brand" href="/#home" aria-label="SentryLoot — GameStoreHub marketplace" title="SentryLoot · gamestorehub.com"><span class="brand-mark"><img src="https://images.gamestorehub.com/site-assets/sentryloot-logo-crest.jpg?v=1" alt=""></span><span>Sentry<span class="brand-dot">Loot</span></span></a></div>
 <form id="search-form" class="header-search"><label class="sr-only" for="global-search">E’lon qidirish</label><svg class="icon search-icon" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-search"/></svg><input id="global-search" name="q" placeholder="O‘yin, buyum yoki xizmat qidiring…"><button type="submit" aria-label="Qidirish"><svg class="icon" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-arrow-up-right"/></svg></button></form>
-<div class="top-actions"><button id="sell-item-button" class="sell-item-button" data-go="seller">E’lon joylash</button><button id="cart-button" class="icon-button" data-go="cart" aria-label="Savatcha"><svg class="icon" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-cart"/></svg><span id="cart-count" class="count" hidden>0</span></button><button id="notifications-button" class="icon-button" data-go="notifications" aria-label="Bildirishnomalar"><svg class="icon" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-bell"/></svg><span id="notification-count" class="count" hidden>0</span></button><a id="admin-nav-link" class="icon-button" href="/#admin" aria-label="Admin paneli" title="Admin paneli" hidden><svg class="icon" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-shield"/></svg></a><div class="language-control"><button id="language-toggle" class="language-toggle icon-button" type="button" aria-label="Tilni tanlash" aria-expanded="false" aria-controls="language-menu"><svg class="icon globe-icon" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-globe"/></svg></button><div id="language-menu" class="language-menu" role="menu" aria-label="Language" hidden><button type="button" role="menuitemradio" data-language="en" aria-checked="true"><span>English</span><small>EN</small></button><button type="button" role="menuitemradio" data-language="uz" aria-checked="false"><span>O‘zbekcha</span><small>UZ</small></button><button type="button" role="menuitemradio" data-language="ru" aria-checked="false"><span>Русский</span><small>RU</small></button></div></div><button id="account-button" class="account-button" aria-label="Kirish" aria-expanded="false" aria-controls="profile-menu-root">Kirish</button></div>
+<div class="top-actions"><button id="sell-item-button" class="sell-item-button" data-go="seller">E’lon joylash</button><button id="cart-button" class="icon-button" data-go="cart" aria-label="Savatcha"><svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-cart"/></svg><span id="cart-count" class="count" hidden>0</span></button><button id="notifications-button" class="icon-button" data-go="notifications" aria-label="Bildirishnomalar"><svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-bell"/></svg><span id="notification-count" class="count" hidden>0</span></button><a id="admin-nav-link" class="icon-button" href="/#admin" aria-label="Admin paneli" title="Admin paneli" hidden><svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-shield"/></svg></a><div class="language-control"><button id="language-toggle" class="language-toggle icon-button" type="button" aria-label="Tilni tanlash" aria-expanded="false" aria-controls="language-menu"><svg class="icon globe-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-globe"/></svg></button><div id="language-menu" class="language-menu" role="menu" aria-label="Language" hidden><button type="button" role="menuitemradio" data-language="en" aria-checked="true"><span>English</span><small>EN</small></button><button type="button" role="menuitemradio" data-language="uz" aria-checked="false"><span>O‘zbekcha</span><small>UZ</small></button><button type="button" role="menuitemradio" data-language="ru" aria-checked="false"><span>Русский</span><small>RU</small></button></div></div><button id="account-button" class="account-button" aria-label="Kirish" aria-expanded="false" aria-controls="profile-menu-root">Kirish</button></div>
  </div></header>
 <div id="profile-menu-root" hidden></div>
 <nav id="route-back" class="route-back" aria-label="Back navigation" hidden><a id="route-back-link" href="/"><span aria-hidden="true">←</span><span id="route-back-label">Marketplace</span></a></nav>
@@ -93,17 +97,19 @@
   </nav>
   <div class="footer-bottom"><small>© 2026 SentryLoot · gamestorehub.com. <span data-footer-rights>All rights reserved.</span></small><a href="/data-deletion">Ma’lumotlarni o‘chirish</a></div>
 </footer>
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
 <script src="/static/locales.js?v=19" defer></script>
 <script src="/static/asia-markets-data.js?v=2" defer></script>
 <script src="/static/info-pages.js?v=2" defer></script>
 <script src="/static/legal-translations.js?v=4" defer></script>
-<script src="/static/account-operations.js?v=12" defer></script>
-<script src="/static/marketplace-ux.js?v=13" defer></script>
-<script src="/static/experience.js?v=12" defer></script>
-<script src="/static/launch-readiness.js?v=3" defer></script>
+<script src="/static/account-operations.js?v=15" defer></script>
+<script src="/static/marketplace-ux.js?v=16" defer></script>
+<script src="/static/experience.js?v=14" defer></script>
+<script src="/static/launch-readiness.js?v=6" defer></script>
 <script src="/static/qa-vitals.js?v=2" defer></script>
-<script src="/static/topup-detail.js?v=12" defer></script>
-<script src="/static/topup.js?v=22" defer></script>
-<script src="/static/app.js?v=203" defer></script>
+<script src="/static/topup-detail.js?v=33" defer></script>
+<script src="/static/topup.js?v=29" defer></script>
+<script src="/static/select-menu.js?v=5" defer></script>
+<script src="/static/purchase-reviews.js?v=7" defer></script>
+<script src="/static/app.js?v=220" defer></script>
 </body></html>

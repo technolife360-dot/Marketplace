@@ -88,7 +88,7 @@ def profile(db, sid, uid, core):
     row=db.execute("SELECT s.user_id id,s.shop_name,s.bio,s.created_at,s.verification_status,CASE WHEN s.identity_provider='didit' AND s.identity_status='verified' THEN 1 ELSE 0 END identity_verified FROM seller_profiles s JOIN users u ON u.id=s.user_id WHERE s.user_id=? AND u.suspended=0",(sid,)).fetchone()
     if not row: raise core['HttpError'](404,'Do‘kon topilmadi.')
     out=dict(row)
-    stats=db.execute('SELECT COUNT(*) review_count,AVG(rating) rating,COALESCE(SUM(CASE WHEN rating>=4 THEN 1 ELSE 0 END),0) positive FROM reviews WHERE seller_id=?',(sid,)).fetchone()
+    stats=db.execute('SELECT COUNT(*) review_count,AVG(rating) rating,COALESCE(SUM(CASE WHEN rating>=4 THEN 1 ELSE 0 END),0) positive FROM visible_reviews WHERE seller_id=?',(sid,)).fetchone()
     out.update(dict(stats));out['rating']=float(out['rating']) if out['rating'] is not None else None
     out['positive_percent']=round(out.pop('positive')*100/out['review_count']) if out['review_count'] else None
     out['completed_sales']=int(db.execute("SELECT COALESCE(SUM(i.quantity),0) n FROM order_items i JOIN orders o ON o.id=i.order_id WHERE i.seller_id=? AND o.status='completed'",(sid,)).fetchone()['n'])
@@ -151,12 +151,12 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
             if param('product_type'):where.append('l.product_type=?');args.append(param('product_type'))
             try: page=max(1,min(10000,int(param('page','1'))))
             except ValueError: raise error(400,'Sahifa noto‘g‘ri.')
-            joins='FROM reviews r JOIN users u ON u.id=r.reviewer_id JOIN order_items oi ON oi.id=r.order_item_id JOIN listings l ON l.id=oi.listing_id JOIN games g ON g.id=l.game_id LEFT JOIN review_replies rr ON rr.review_id=r.id'
+            joins='FROM visible_reviews r JOIN users u ON u.id=r.reviewer_id JOIN order_items oi ON oi.id=r.order_item_id JOIN listings l ON l.id=oi.listing_id JOIN games g ON g.id=l.game_id LEFT JOIN review_replies rr ON rr.review_id=r.id'
             count=db.execute(f"SELECT COUNT(*) n {joins} WHERE {' AND '.join(where)}",tuple(args)).fetchone()['n']
             order={'oldest':'r.created_at ASC,r.id ASC','rating_desc':'r.rating DESC,r.created_at DESC','rating_asc':'r.rating ASC,r.created_at DESC'}.get(param('sort'),'r.created_at DESC,r.id DESC')
             rows=[dict(r) for r in db.execute(f"SELECT r.id,r.rating,r.body,r.created_at,u.display_name reviewer_name,g.name game_name,g.slug game_slug,rr.body reply,rr.updated_at replied_at {joins} WHERE {' AND '.join(where)} ORDER BY {order} LIMIT 12 OFFSET ?",(*args,(page-1)*12))]
-            games=[dict(r) for r in db.execute('SELECT DISTINCT g.slug,g.name FROM reviews r JOIN order_items oi ON oi.id=r.order_item_id JOIN listings l ON l.id=oi.listing_id JOIN games g ON g.id=l.game_id WHERE r.seller_id=? ORDER BY g.name',(sid,))]
-            types=[dict(r) for r in db.execute('SELECT l.product_type,AVG(r.rating) rating,COUNT(*) count FROM reviews r JOIN order_items oi ON oi.id=r.order_item_id JOIN listings l ON l.id=oi.listing_id WHERE r.seller_id=? GROUP BY l.product_type',(sid,))]
+            games=[dict(r) for r in db.execute('SELECT DISTINCT g.slug,g.name FROM visible_reviews r JOIN order_items oi ON oi.id=r.order_item_id JOIN listings l ON l.id=oi.listing_id JOIN games g ON g.id=l.game_id WHERE r.seller_id=? ORDER BY g.name',(sid,))]
+            types=[dict(r) for r in db.execute('SELECT l.product_type,AVG(r.rating) rating,COUNT(*) count FROM visible_reviews r JOIN order_items oi ON oi.id=r.order_item_id JOIN listings l ON l.id=oi.listing_id WHERE r.seller_id=? GROUP BY l.product_type',(sid,))]
             return {'items':rows,'games':games,'types':types,'total_count':count,'page':page,'has_more':page*12<count,'can_reply':uid==sid}
         if method=='GET' and sub is None:return store
     if path=='/api/following' and method=='GET':
@@ -165,7 +165,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
     match=re.fullmatch(r'/api/reviews/([^/]+)/reply',path)
     if match and method=='POST':
         require_verified(ctx);core['check_rate'](db,'review_reply',uid,30,3600)
-        review=db.execute('SELECT seller_id,reviewer_id FROM reviews WHERE id=?',(match.group(1),)).fetchone()
+        review=db.execute('SELECT seller_id,reviewer_id FROM visible_reviews WHERE id=?',(match.group(1),)).fetchone()
         if not review or review['seller_id']!=uid:raise error(404,'Sharh topilmadi.')
         body=text(data.get('body'),'Javob',2,1500)
         db.execute('INSERT INTO review_replies(review_id,seller_id,body) VALUES(?,?,?) ON CONFLICT(review_id) DO UPDATE SET body=excluded.body,updated_at=CURRENT_TIMESTAMP',(match.group(1),uid,body))

@@ -82,7 +82,10 @@ def personal_export(db,uid):
     profile=dict(db.execute('SELECT id,display_name,email,country,language,currency,created_at FROM users WHERE id=?',(uid,)).fetchone())
     queries={
         'orders':('SELECT id,reference,status,currency,total_minor,created_at FROM orders WHERE buyer_id=?',(uid,)),
-        'reviews':('SELECT rating,body,created_at FROM reviews WHERE reviewer_id=?',(uid,)),
+        'reviews':('SELECT rating,body,created_at,hidden FROM reviews WHERE reviewer_id=?',(uid,)),
+        'topup_reviews':('SELECT rating,body,created_at,hidden FROM topup_reviews WHERE reviewer_id=?',(uid,)),
+        'review_helpful_votes':('SELECT kind,review_id,created_at FROM purchase_review_helpful WHERE user_id=?',(uid,)),
+        'review_reports':('SELECT kind,review_id,reason,status,created_at FROM purchase_review_reports WHERE reporter_id=?',(uid,)),
         'support_requests':('SELECT id,subject,category,status,created_at FROM support_tickets WHERE requester_id=?',(uid,)),
         'saved_listings':('SELECT listing_id FROM favorites WHERE user_id=?',(uid,)),
         'collections':('SELECT kind,listing_id,updated_at FROM account_collections WHERE user_id=?',(uid,)),
@@ -102,7 +105,7 @@ def unit_price(db,lid,base,quantity):
 def reputation(db,sid):
     # Sandbox orders never create a public reputation tier.
     row=db.execute("SELECT COUNT(DISTINCT o.id) n FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.seller_id=? AND o.status='completed' AND o.payment_mode NOT IN ('sandbox','disabled')",(sid,)).fetchone()
-    reviews=db.execute("SELECT COUNT(*) n,AVG(r.rating) rating FROM reviews r JOIN order_items i ON i.id=r.order_item_id JOIN orders o ON o.id=i.order_id WHERE r.seller_id=? AND o.payment_mode NOT IN ('sandbox','disabled')",(sid,)).fetchone()
+    reviews=db.execute("SELECT COUNT(*) n,AVG(r.rating) rating FROM visible_reviews r JOIN order_items i ON i.id=r.order_item_id JOIN orders o ON o.id=i.order_id WHERE r.seller_id=? AND o.payment_mode NOT IN ('sandbox','disabled')",(sid,)).fetchone()
     sales=row['n'];rating=float(reviews['rating']) if reviews['rating'] is not None else None
     tier='established' if sales>=100 and reviews['n']>=20 and rating>=4.7 else 'experienced' if sales>=20 and reviews['n']>=5 and rating>=4.5 else 'new'
     return {'tier':tier,'real_completed_orders':sales,'verified_review_count':reviews['n'],'rating':rating,'criteria':{'experienced':{'orders':20,'reviews':5,'rating':4.5},'established':{'orders':100,'reviews':20,'rating':4.7}},'sample':'completed non-sandbox orders only'}

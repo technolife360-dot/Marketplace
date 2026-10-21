@@ -2,6 +2,7 @@
 """SentryLoot marketplace server with SQLite and Supabase PostgreSQL backends."""
 from __future__ import annotations
 import marketplace_features
+import purchase_reviews
 import marketplace_operations
 import trade_workflows
 import catalogue_experience
@@ -405,6 +406,7 @@ def migrate():
             for slug,name in games: db.execute('INSERT INTO games(id,slug,name) VALUES(?,?,?) ON CONFLICT(id) DO NOTHING',(slug,slug,name))
             for slug,name,typ in categories: db.execute('INSERT INTO categories(id,slug,name,product_type) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING',(slug,slug,name,typ))
             seed_topup_catalog(db)
+            purchase_reviews.migrate(db, True)
             marketplace_features.migrate(db, True)
             marketplace_operations.migrate(db, True)
             trade_workflows.migrate(db, True)
@@ -524,6 +526,7 @@ def migrate():
         db.execute('CREATE INDEX IF NOT EXISTS idx_bonus_entries_user ON bonus_entries(user_id,created_at DESC)')
         seed_topup_catalog(db)
         enforce_production_marketplace_gate(db)
+        purchase_reviews.migrate(db)
         marketplace_features.migrate(db)
         marketplace_operations.migrate(db)
         trade_workflows.migrate(db)
@@ -663,6 +666,10 @@ def erase_account_personal_data(db, uid):
     db.execute('DELETE FROM request_responses WHERE seller_id=? OR request_id IN (SELECT id FROM product_requests WHERE requester_id=?)',(uid,uid))
     db.execute('DELETE FROM product_requests WHERE requester_id=?',(uid,))
     db.execute('DELETE FROM reviews WHERE reviewer_id=?',(uid,))
+    db.execute('DELETE FROM topup_reviews WHERE reviewer_id=?',(uid,))
+    db.execute('DELETE FROM purchase_review_reports WHERE reporter_id=?',(uid,))
+    db.execute('DELETE FROM purchase_review_helpful WHERE user_id=?',(uid,))
+    db.execute("UPDATE topup_reviews SET reply='',replied_by=NULL,replied_at=NULL WHERE replied_by=?",(uid,))
     db.execute('DELETE FROM reports WHERE reporter_id=?',(uid,))
     db.execute("UPDATE listings SET status='archived',title='Removed listing',description='',requirements='',moderation_note='',image_url='',attributes_json='{}',corrections_json='{}',unit_label='item',stock=0,reserved=0,updated_at=CURRENT_TIMESTAMP WHERE seller_id=?",(uid,))
     db.execute('DELETE FROM seller_profiles WHERE user_id=?',(uid,))
@@ -692,7 +699,10 @@ def blog_post_view(row):
 def event(db, oid, actor, old, new, note=''):
     db.execute('INSERT INTO order_events(id,order_id,actor_id,from_status,to_status,note) VALUES(?,?,?,?,?,?)',(ident(),oid,actor,old,new,note))
     if new in ('paid','awaiting_delivery'): marketplace_operations.deadline_setup(db,oid)
-    if new=='completed': trade_workflows.completion(db,oid)
+    if new=='completed':
+        trade_workflows.completion(db,oid)
+        buyer=db.execute('SELECT buyer_id FROM orders WHERE id=?',(oid,)).fetchone()
+        if buyer and old!='completed':notify(db,buyer['buyer_id'],'review','Xaridingizni baholang','Yakunlangan xaridingiz uchun baho va izoh qoldirishingiz mumkin.','/#my-reviews')
 def user_view(db, uid):
     u = db.execute('SELECT id,email,display_name,country,language,currency,email_verified,suspended,created_at FROM users WHERE id=?',(uid,)).fetchone()
     if not u: return None
@@ -1042,7 +1052,7 @@ def catalogue_predicates(db,qs,uid=None):
 
 def listing_detail(db, lid, viewer=None):
     r=db.execute("""SELECT l.id,l.seller_id,l.game_id,l.category_id,l.title,l.description,l.product_type,l.price_minor,l.currency,l.platform,l.region,l.attributes_json,l.delivery_method,l.delivery_eta,l.requirements,l.min_quantity,l.unit_label,l.automatic_delivery,l.corrections_json,l.stock,l.reserved,l.status,l.moderation_note,l.image_url,l.created_at,l.updated_at,g.name game_name,g.slug game_slug,c.name category_name,s.shop_name seller_name,s.verification_status,CASE WHEN s.identity_provider='didit' AND s.identity_status='verified' THEN 1 ELSE 0 END AS identity_verified,
-      (SELECT COUNT(*) FROM reviews rv WHERE rv.seller_id=l.seller_id) review_count,(SELECT AVG(rating) FROM reviews rv WHERE rv.seller_id=l.seller_id) seller_rating
+      (SELECT COUNT(*) FROM visible_reviews rv WHERE rv.seller_id=l.seller_id) review_count,(SELECT AVG(rating) FROM visible_reviews rv WHERE rv.seller_id=l.seller_id) seller_rating
       FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id LEFT JOIN seller_profiles s ON s.user_id=l.seller_id WHERE l.id=?""",(lid,)).fetchone()
     if not r: return None
     if MODE=='production' and launch_readiness.test_listing(db,lid) and viewer!=r['seller_id'] and not (viewer and is_admin(db,viewer)):return None
@@ -1068,6 +1078,7 @@ def listing_detail(db, lid, viewer=None):
     out['attributes'].pop('_ai_review',None)
     if viewer and is_admin(db,viewer):
         out['risk_flags']=risk_flags
+    purchase_reviews.add_listing_scores(db,[out])
     out['is_favorite']=bool(viewer and db.execute('SELECT 1 FROM favorites WHERE user_id=? AND listing_id=?',(viewer,lid)).fetchone())
     return out
 
@@ -1443,7 +1454,7 @@ class Handler(BaseHTTPRequestHandler):
                 payload=seo_listing_html(listing_match.group(1))
                 if payload is None: self.send_error(404); return
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
-            f={'/static/monochrome-theme.css':'monochrome-theme.css','/static/assets/roboto-variable.ttf':'assets/roboto-variable.ttf','/static/assets/roboto-OFL.txt':'assets/roboto-OFL.txt','/push-worker.js':'push-worker.js','/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/qa-vitals.js':'qa-vitals.js','/static/vendor/web-vitals.iife.js':'vendor/web-vitals.iife.js','/static/launch-readiness.js':'launch-readiness.js','/static/launch-readiness.css':'launch-readiness.css','/static/experience.js':'experience.js','/static/experience.css':'experience.css','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup-detail.js':'topup-detail.js','/static/topup-detail.css':'topup-detail.css','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-uc-660.png':'assets/topup-uc-660.png','/static/assets/topup-uc-1800.png':'assets/topup-uc-1800.png','/static/assets/topup-uc-3850.png':'assets/topup-uc-3850.png','/static/assets/topup-uc-8100.png':'assets/topup-uc-8100.png','/static/assets/topup-uc-60.png':'assets/topup-uc-60.png','/static/assets/topup-uc-325.png':'assets/topup-uc-325.png','/static/assets/topup-weekly-deal-1.png':'assets/topup-weekly-deal-1.png','/static/assets/topup-weekly-deal-2.png':'assets/topup-weekly-deal-2.png','/static/assets/topup-weekly-mythic.png':'assets/topup-weekly-mythic.png','/static/assets/topup-elite-pass.png':'assets/topup-elite-pass.png','/static/assets/topup-pubg-banner.jpg':'assets/topup-pubg-banner.jpg','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.webp':'assets/market-banner-soldier.webp','/static/assets/market-banner-games.webp':'assets/market-banner-games.webp','/static/assets/market-banner-worlds.webp':'assets/market-banner-worlds.webp','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
+            f={'/static/purchase-reviews.js':'purchase-reviews.js','/static/assets/pubg-uid-guide.png':'assets/pubg-uid-guide.png','/static/select-menu.js':'select-menu.js','/static/monochrome-theme.css':'monochrome-theme.css','/static/assets/roboto-variable.ttf':'assets/roboto-variable.ttf','/static/assets/roboto-OFL.txt':'assets/roboto-OFL.txt','/push-worker.js':'push-worker.js','/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/qa-vitals.js':'qa-vitals.js','/static/vendor/web-vitals.iife.js':'vendor/web-vitals.iife.js','/static/launch-readiness.js':'launch-readiness.js','/static/launch-readiness.css':'launch-readiness.css','/static/experience.js':'experience.js','/static/experience.css':'experience.css','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup-detail.js':'topup-detail.js','/static/topup-detail.css':'topup-detail.css','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-uc-660.png':'assets/topup-uc-660.png','/static/assets/topup-uc-1800.png':'assets/topup-uc-1800.png','/static/assets/topup-uc-3850.png':'assets/topup-uc-3850.png','/static/assets/topup-uc-8100.png':'assets/topup-uc-8100.png','/static/assets/topup-uc-60.png':'assets/topup-uc-60.png','/static/assets/topup-uc-325.png':'assets/topup-uc-325.png','/static/assets/topup-weekly-deal-1.png':'assets/topup-weekly-deal-1.png','/static/assets/topup-weekly-deal-2.png':'assets/topup-weekly-deal-2.png','/static/assets/topup-weekly-mythic.png':'assets/topup-weekly-mythic.png','/static/assets/topup-elite-pass.png':'assets/topup-elite-pass.png','/static/assets/topup-pubg-banner.jpg':'assets/topup-pubg-banner.jpg','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.webp':'assets/market-banner-soldier.webp','/static/assets/market-banner-games.webp':'assets/market-banner-games.webp','/static/assets/market-banner-worlds.webp':'assets/market-banner-worlds.webp','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
             if not f: self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/webp' if f.endswith('.webp') else 'image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))
@@ -1494,6 +1505,8 @@ class Handler(BaseHTTPRequestHandler):
         if trade_result is not trade_workflows.UNHANDLED:return trade_result
         operations_result=marketplace_operations.route(self,db,ctx,method,path,qs,data,raw_body,globals())
         if operations_result is not marketplace_operations.UNHANDLED: return operations_result
+        review_result=purchase_reviews.route(db,ctx,method,path,qs,data,globals())
+        if review_result is not purchase_reviews.UNHANDLED:return review_result
         feature_result=marketplace_features.route(self,db,ctx,method,path,qs,data,raw_body,globals())
         if feature_result is not marketplace_features.UNHANDLED: return feature_result
         if path=='/healthz' and method=='GET': return {'ok':True}
@@ -1808,6 +1821,8 @@ class Handler(BaseHTTPRequestHandler):
                     games.append(game); by_slug[row['game_slug']]=game
                 item=topup_public_package(row,db)
                 by_slug[row['game_slug']]['packages'].append(item)
+            scores=purchase_reviews.topup_scores(db)
+            for game in games:game['review_summary']=scores.get(game['slug'],{'count':0,'rating':None})
             return games
         topup_match=re.fullmatch(r'/api/top-up/packages/([a-z0-9-]+)/([a-z0-9-]+)',path)
         if topup_match and method=='GET':
@@ -1818,7 +1833,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/listings' and method=='GET':
             promote_internal_test_listings(db)
             where,args=catalogue_predicates(db,qs,uid)
-            sort=qs.get('sort',['recommended'])[0]; order={'newest':'l.created_at DESC','price_asc':'l.price_minor ASC','price_desc':'l.price_minor DESC','popular':"(SELECT COALESCE(SUM(oi.quantity),0) FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE oi.listing_id=l.id AND o.status='completed') DESC,l.created_at DESC",'rating':"COALESCE((SELECT AVG(rv.rating) FROM reviews rv WHERE rv.seller_id=l.seller_id),0) DESC,l.created_at DESC",'delivery':'CASE WHEN l.delivery_minutes IS NULL THEN 1 ELSE 0 END,l.delivery_minutes ASC,l.created_at DESC','recommended':"(COALESCE((SELECT AVG(rv.rating)*COUNT(*)/(COUNT(*)+5.0) FROM reviews rv WHERE rv.seller_id=l.seller_id),0)*20 + (SELECT COUNT(*) FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE oi.seller_id=l.seller_id AND o.status='completed')*2 + CASE WHEN l.delivery_minutes<=60 THEN 5 ELSE 0 END) DESC,l.created_at DESC"}.get(sort,'l.created_at DESC')
+            sort=qs.get('sort',['recommended'])[0]; order={'newest':'l.created_at DESC','price_asc':'l.price_minor ASC','price_desc':'l.price_minor DESC','popular':"(SELECT COALESCE(SUM(oi.quantity),0) FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE oi.listing_id=l.id AND o.status='completed') DESC,l.created_at DESC",'rating':"COALESCE((SELECT AVG(rv.rating) FROM visible_reviews rv WHERE rv.seller_id=l.seller_id),0) DESC,l.created_at DESC",'delivery':'CASE WHEN l.delivery_minutes IS NULL THEN 1 ELSE 0 END,l.delivery_minutes ASC,l.created_at DESC','recommended':"(COALESCE((SELECT AVG(rv.rating)*COUNT(*)/(COUNT(*)+5.0) FROM visible_reviews rv WHERE rv.seller_id=l.seller_id),0)*20 + (SELECT COUNT(*) FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE oi.seller_id=l.seller_id AND o.status='completed')*2 + CASE WHEN l.delivery_minutes<=60 THEN 5 ELSE 0 END) DESC,l.created_at DESC"}.get(sort,'l.created_at DESC')
             if sort=='recommended':
                 elapsed=lambda later,earlier: f"EXTRACT(EPOCH FROM ({later}::timestamptz-{earlier}::timestamptz))/60.0" if DATABASE_URL else f"(julianday({later})-julianday({earlier}))*1440.0"
                 reply_minutes=f"(SELECT AVG({elapsed('reply.created_at','buyer.created_at')}) FROM conversations cv JOIN messages buyer ON buyer.conversation_id=cv.id AND buyer.sender_id=cv.buyer_id JOIN messages reply ON reply.conversation_id=cv.id AND reply.sender_id=cv.seller_id WHERE cv.seller_id=l.seller_id AND buyer.id=(SELECT bm.id FROM messages bm WHERE bm.conversation_id=cv.id AND bm.sender_id=cv.buyer_id ORDER BY bm.created_at,bm.id LIMIT 1) AND reply.id=(SELECT rm.id FROM messages rm WHERE rm.conversation_id=cv.id AND rm.sender_id=cv.seller_id AND rm.created_at>=buyer.created_at ORDER BY rm.created_at,rm.id LIMIT 1))"
@@ -1847,13 +1862,14 @@ class Handler(BaseHTTPRequestHandler):
             online_since=(datetime.now(timezone.utc)-timedelta(minutes=3)).isoformat(timespec='seconds')
             online_expression='CASE WHEN u.last_seen_at>=? THEN 1 ELSE 0 END' if presence_ready else '0'
             online_args=(online_since,) if presence_ready else ()
-            rows=db.execute(f"SELECT l.id,l.title,l.description,l.product_type,l.price_minor,l.currency,l.platform,l.region,l.attributes_json,l.delivery_eta,l.min_quantity,l.unit_label,l.stock,l.reserved,(l.stock-l.reserved) available,l.image_url,l.created_at,g.name game_name,g.slug game_slug,c.name category_name,s.shop_name seller_name,s.verification_status,CASE WHEN s.identity_provider='didit' AND s.identity_status='verified' THEN 1 ELSE 0 END AS identity_verified,{online_expression} AS seller_online,EXISTS(SELECT 1 FROM favorites fv WHERE fv.user_id=? AND fv.listing_id=l.id) AS is_favorite,(SELECT COUNT(*) FROM reviews rv WHERE rv.seller_id=l.seller_id) review_count,(SELECT AVG(rating) FROM reviews rv WHERE rv.seller_id=l.seller_id) seller_rating FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id JOIN seller_profiles s ON s.user_id=l.seller_id JOIN users u ON u.id=l.seller_id WHERE {' AND '.join(where)} AND l.stock>l.reserved ORDER BY {order} LIMIT ? OFFSET ?",(*online_args,uid or '',*args,limit,(page-1)*limit)).fetchall()
+            rows=db.execute(f"SELECT l.id,l.title,l.description,l.product_type,l.price_minor,l.currency,l.platform,l.region,l.attributes_json,l.delivery_eta,l.min_quantity,l.unit_label,l.stock,l.reserved,(l.stock-l.reserved) available,l.image_url,l.created_at,g.name game_name,g.slug game_slug,c.name category_name,s.shop_name seller_name,s.verification_status,CASE WHEN s.identity_provider='didit' AND s.identity_status='verified' THEN 1 ELSE 0 END AS identity_verified,{online_expression} AS seller_online,EXISTS(SELECT 1 FROM favorites fv WHERE fv.user_id=? AND fv.listing_id=l.id) AS is_favorite,(SELECT COUNT(*) FROM visible_reviews rv WHERE rv.seller_id=l.seller_id) review_count,(SELECT AVG(rating) FROM visible_reviews rv WHERE rv.seller_id=l.seller_id) seller_rating FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id JOIN seller_profiles s ON s.user_id=l.seller_id JOIN users u ON u.id=l.seller_id WHERE {' AND '.join(where)} AND l.stock>l.reserved ORDER BY {order} LIMIT ? OFFSET ?",(*online_args,uid or '',*args,limit,(page-1)*limit)).fetchall()
             items=[dict(x) for x in rows]
             for item in items:
                 if item.get('seller_rating') is not None: item['seller_rating']=float(item['seller_rating'])
                 try: attributes=json.loads(item.pop('attributes_json') or '{}')
                 except (TypeError,ValueError): attributes={}
                 item['attributes']={key:value for key,value in attributes.items() if isinstance(key,str) and not key.startswith('_')} if isinstance(attributes,dict) else {}
+            purchase_reviews.add_listing_scores(db,items)
             return {'items':items,'total_count':count,'page':page,'page_size':limit,'has_more':page*limit<count}
         if path.startswith('/api/listings/') and method=='GET':
             lid=path.split('/')[-1]; item=listing_detail(db,lid,uid)
@@ -1867,7 +1883,7 @@ class Handler(BaseHTTPRequestHandler):
             if user_presence_available(db):
                 presence=db.execute('SELECT last_seen_at FROM users WHERE id=?',(seller_id,)).fetchone()
                 online=bool(presence and presence['last_seen_at'] and presence['last_seen_at']>=(datetime.now(timezone.utc)-timedelta(minutes=3)).isoformat(timespec='seconds'))
-            positive=db.execute('SELECT COUNT(*) n FROM reviews WHERE seller_id=? AND rating>=4',(seller_id,)).fetchone()['n']
+            positive=db.execute('SELECT COUNT(*) n FROM visible_reviews WHERE seller_id=? AND rating>=4',(seller_id,)).fetchone()['n']
             reply_samples=[]
             reply_rows=db.execute("""SELECT first_message.sent_at first_buyer,MIN(reply.created_at) first_reply
                 FROM (SELECT c.id,MIN(m.created_at) sent_at FROM conversations c
@@ -1894,7 +1910,7 @@ class Handler(BaseHTTPRequestHandler):
                 'active_listings':db.execute("SELECT COUNT(*) n FROM listings WHERE seller_id=? AND status='published' AND stock>reserved",(seller_id,)).fetchone()['n'],
             }
             item['seller']['total_sales']=int(item['seller']['total_sales'])
-            item['reviews']=[dict(row) for row in db.execute('SELECT r.rating,r.body,r.created_at,u.display_name reviewer_name FROM reviews r JOIN users u ON u.id=r.reviewer_id WHERE r.seller_id=? ORDER BY r.created_at DESC,r.id DESC LIMIT 20',(seller_id,))]
+            item['reviews']=[dict(row) for row in db.execute('SELECT r.rating,r.body,r.created_at,u.display_name reviewer_name FROM visible_reviews r JOIN users u ON u.id=r.reviewer_id WHERE r.seller_id=? ORDER BY r.created_at DESC,r.id DESC LIMIT 20',(seller_id,))]
             item['related']=[dict(x) for x in db.execute('SELECT id,title,price_minor,currency FROM listings WHERE game_id=? AND status=\'published\' AND id<>? ORDER BY created_at DESC LIMIT 4',(item['game_id'],lid))]
             return item
         if path=='/api/cart' and method=='GET':
@@ -2505,16 +2521,10 @@ class Handler(BaseHTTPRequestHandler):
             require_user(ctx)
             return [dict(x) for x in db.execute('''SELECT r.id,r.rating,r.body,r.created_at,
                 l.id listing_id,l.title listing_title,sp.shop_name seller_name,o.reference order_reference
-                FROM reviews r JOIN order_items i ON i.id=r.order_item_id
+                FROM visible_reviews r JOIN order_items i ON i.id=r.order_item_id
                 JOIN orders o ON o.id=i.order_id JOIN listings l ON l.id=i.listing_id
                 JOIN seller_profiles sp ON sp.user_id=r.seller_id
                 WHERE r.reviewer_id=? ORDER BY r.created_at DESC LIMIT 100''',(uid,)).fetchall()]
-        if path=='/api/reviews' and method=='POST':
-            require_verified(ctx); iid=clean_text(data.get('item_id'),'Buyurtma mahsuloti',1,100); rating=data.get('rating'); body=clean_text(data.get('body'),'Sharh',5,1500)
-            if isinstance(rating,bool) or not isinstance(rating,int) or rating<1 or rating>5: raise HttpError(400,'Baho 1 dan 5 gacha bo‘lsin.')
-            it=db.execute("SELECT i.*,o.status,o.buyer_id FROM order_items i JOIN orders o ON o.id=i.order_id WHERE i.id=?",(iid,)).fetchone()
-            if not it or it['buyer_id']!=uid or it['status']!='completed': raise HttpError(403,'Sharh faqat tugallangan xarid uchun mumkin.')
-            rid=ident(); db.execute('INSERT INTO reviews(id,order_item_id,reviewer_id,seller_id,rating,body) VALUES(?,?,?,?,?,?)',(rid,iid,uid,it['seller_id'],rating,body)); return 201,{'id':rid}
         if path=='/api/payouts' and method=='GET':
             require_user(ctx); seller_ok(db,uid); return [dict(x) for x in db.execute('SELECT id,amount_minor,currency,status,note,created_at,updated_at FROM payout_requests WHERE seller_id=? ORDER BY created_at DESC LIMIT 50',(uid,))]
         if path=='/api/payouts' and method=='POST':

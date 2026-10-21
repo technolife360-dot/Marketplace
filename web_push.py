@@ -56,10 +56,9 @@ def dispatch(db,core,send=None,limit=3):
     private=core['delivery_crypto'].decrypt_payload(pair['cipher'],'webpush-vapid:v1')
     result={'configured':True,'sent':0,'failed':0};attempted=0;deadline=time.monotonic()+7
     cursor=launch.config(db,'webpush_cursor','')
-    accounts=db.execute("SELECT user_id,settings_json FROM experience_preferences WHERE settings_json LIKE '%push_devices%' AND user_id>? ORDER BY user_id LIMIT 100",(cursor,)).fetchall()
-    if not accounts:
-        launch.put_config(db,'webpush_cursor','')
-        accounts=db.execute("SELECT user_id,settings_json FROM experience_preferences WHERE settings_json LIKE '%push_devices%' ORDER BY user_id LIMIT 100").fetchall()
+    # Rotate the complete bounded batch: an empty account after the cursor
+    # must not postpone an earlier account with newly queued notifications.
+    accounts=db.execute("SELECT user_id,settings_json FROM experience_preferences WHERE settings_json LIKE '%push_devices%' ORDER BY CASE WHEN user_id>? THEN 0 ELSE 1 END,user_id LIMIT 100",(cursor,)).fetchall()
     for account in accounts:
         if attempted>=limit or time.monotonic()>deadline:return result
         launch.put_config(db,'webpush_cursor',account['user_id'])
