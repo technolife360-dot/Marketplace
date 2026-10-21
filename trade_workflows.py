@@ -169,7 +169,11 @@ def workflow_view(db,order,uid,core):
         batches=[]
         for b in db.execute('SELECT * FROM delivery_batches WHERE order_item_id=? ORDER BY delivered_total,created_at,id',(item['id'],)):
             val=dict(b);val.pop('request_key');cipher=val.pop('payload')
-            val['body']=decrypt(core,cipher,'batch:'+val['id']) if buyer or admin or uid==item['seller_id'] else ''
+            # Moderation grants access to status/evidence, not customer credentials
+            # or prepaid codes. Keep this consistent with app.order_view.
+            can_read=buyer or uid==item['seller_id']
+            val['body']=decrypt(core,cipher,'batch:'+val['id']) if can_read else ''
+            val['body_private']=not can_read
             batches.append(val)
         lines.append({'id':item['id'],'title':item['title'],'seller_id':item['seller_id'],'quantity':item['quantity'],'delivered_quantity':item['delivered_quantity'],'buyer_fields':fields,'buyer_details':details_view(db,item['id'],core),'batches':batches,'policy':snap.get('after_sale_policy',{'days':0,'appeal_days':7,'legacy':True})})
     cancellations=[]

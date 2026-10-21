@@ -177,7 +177,8 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         db.execute('BEGIN IMMEDIATE')
         try:
             rows=db.execute(f'SELECT id,status FROM listings WHERE seller_id=? AND id IN ({placeholders})',(uid,*ids)).fetchall()
-            if len(rows)!=len(ids) or any(r['status'] not in ('published','paused') for r in rows):raise error(409,'Faqat o‘zingizning faol e’lonlaringizni tanlang.')
+            if len(rows)!=len(ids):raise error(404,'E’lon topilmadi.')
+            if any(r['status'] not in ('published','paused') for r in rows):raise error(409,'Faqat o‘zingizning faol e’lonlaringizni tanlang.')
             db.execute(f"UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE seller_id=? AND id IN ({placeholders})",(uid,*ids));db.execute('COMMIT')
         except Exception:db.execute('ROLLBACK');raise
         return {'updated':len(ids)}

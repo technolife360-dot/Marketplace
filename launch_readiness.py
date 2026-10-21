@@ -31,7 +31,7 @@ def staff_allowed(db,uid,capability):
     return capability in capabilities(db,uid)
 
 def route_capability(path):
-    if path.startswith('/api/admin/blog'):return 'content'
+    if path=='/api/admin/blog' or re.fullmatch(r'/api/admin/blog/[A-Za-z0-9_-]+',path):return 'content'
     if path=='/api/catalog/readiness' or path=='/api/admin/listings' or re.fullmatch(r'/api/admin/listings/[^/]+',path):return 'moderation'
     return None
 

@@ -1,5 +1,7 @@
 // Uzbek source phrases mapped to Russian and English. Game names and user content stay as entered.
 window.BOZOR_COPY={
+  "Mustaqil moderator kerak.":["Требуется независимый модератор.", "An independent moderator is required."],
+  "O‘z e’loningizni moderator sifatida tekshira olmaysiz.":["Вы не можете модерировать собственное объявление.", "You cannot moderate your own listing."],
   "Ikki bosqichli kirish yoqildi":["Двухэтапная проверка включена", "Two-step verification enabled"],
   "Ikki bosqichli kirish o‘chirildi":["Двухэтапная проверка отключена", "Two-step verification disabled"],
   "Hisob paroli yangilandi":["Пароль аккаунта изменён", "Account password changed"],

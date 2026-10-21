@@ -738,8 +738,19 @@ def require_verified(ctx):
     if not ctx['user']['email_verified']: raise HttpError(403,'Avval elektron pochtangizni tasdiqlang.')
     return uid
 def require_admin(ctx):
-    uid=require_user(ctx)
-    if not is_admin(ctx['db'],uid) and not (ctx.get('required_capability') and launch_readiness.staff_allowed(ctx['db'],uid,ctx['required_capability'])): raise HttpError(403,'Administrator ruxsati kerak.')
+    uid=require_verified(ctx)
+    scope=ctx.get('required_capability')
+    # A request may check its role more than once. Never reuse a scoped check
+    # when an internal route dispatch changes the required capability.
+    if ctx.get('_admin_scope_checked')==(uid,scope): return uid
+    if not is_admin(ctx['db'],uid) and not (scope and launch_readiness.staff_allowed(ctx['db'],uid,scope)): raise HttpError(403,'Administrator ruxsati kerak.')
+    ctx['_admin_scope_checked']=(uid,scope)
+    return uid
+
+def require_independent_admin(ctx, buyer_id=None, seller_ids=()):
+    uid=require_admin(ctx)
+    if uid==buyer_id or uid in seller_ids:
+        raise HttpError(403,'Mustaqil moderator kerak.')
     return uid
 def seller_ok(db,uid):
     p=db.execute('SELECT * FROM seller_profiles WHERE user_id=?',(uid,)).fetchone()
@@ -1196,7 +1207,7 @@ def order_view(db, oid, uid, admin=False):
     order=dict(q)
     items=db.execute('SELECT oi.*,l.game_id,l.category_id,l.product_type,l.delivery_eta,l.delivery_minutes FROM order_items oi LEFT JOIN listings l ON l.id=oi.listing_id WHERE oi.order_id=?',(oid,)).fetchall()
     is_buyer=order['buyer_id']==uid
-    if not admin and not is_buyer and not any(i['seller_id']==uid for i in items): raise HttpError(403,'Bu buyurtmaga ruxsatingiz yo‘q.')
+    if not admin and not is_buyer and not any(i['seller_id']==uid for i in items): raise HttpError(404,'Buyurtma topilmadi.')
     if not admin and not is_buyer:
         items=[i for i in items if i['seller_id']==uid]
         order['buyer_id']=None
@@ -1227,6 +1238,9 @@ def order_view(db, oid, uid, admin=False):
         order['items'].append(it)
     order['events']=[dict(x) for x in db.execute('SELECT to_status,note,created_at FROM order_events WHERE order_id=? ORDER BY created_at',(oid,)).fetchall()]
     order['payment']=rowdict(db.execute('SELECT provider,status,amount_minor,currency,created_at FROM payments WHERE order_id=?',(oid,)).fetchone())
+    if order['payment'] and not admin and not is_buyer:
+        # The payment covers the whole basket, including other sellers' lines.
+        order['payment'].pop('amount_minor',None)
     if is_buyer or admin:
         review=db.execute('SELECT status,review_note,buyer_attested_at,submitted_at,reviewed_at FROM account_reviews WHERE order_id=?',(oid,)).fetchone()
         if review:
@@ -1494,6 +1508,12 @@ class Handler(BaseHTTPRequestHandler):
     def route(self,db,ctx,method,path,qs,data,raw_body=b''):
         uid=ctx['uid']
         ctx={**ctx,'required_capability':launch_readiness.route_capability(path)}
+        if ctx.get('mfa_pending') and path not in ('/api/me','/api/security/unlock','/api/logout'):
+            raise HttpError(403,'Ikki bosqichli tasdiqlash kerak.')
+        # Deny every admin path before module dispatch, including future routes.
+        # Capabilities are selected by the server's route map, never request JSON.
+        if path=='/api/admin' or path.startswith('/api/admin/'):
+            require_admin(ctx)
         push_result=web_push.route(self,db,ctx,method,path,data,globals())
         if push_result is not launch_readiness.UNHANDLED:return push_result
         growth_result=marketplace_growth.route(db,ctx,method,path,data,globals())
@@ -2574,6 +2594,8 @@ class Handler(BaseHTTPRequestHandler):
             if action=='reject' and len(note)<5: raise HttpError(400,'Rad etish sababini kamida 5 belgi bilan yozing.')
             status={'approve':'published','reject':'rejected','pause':'paused'}[action]; l=db.execute("SELECT * FROM listings WHERE id=? AND status IN ('pending_review','published')",(lid,)).fetchone()
             if not l: raise HttpError(404,'Tekshiriladigan e’lon topilmadi.')
+            if l['seller_id']==aid and not is_admin(db,aid):
+                raise HttpError(403,'O‘z e’loningizni moderator sifatida tekshira olmaysiz.')
             if action=='approve':
                 if MODE=='production' and not internal_testing_enabled():
                     problems=marketplace_operations.quality(l)
@@ -2623,6 +2645,7 @@ class Handler(BaseHTTPRequestHandler):
             review=db.execute("SELECT * FROM account_reviews WHERE order_id=? AND status='pending'",(oid,)).fetchone()
             order=db.execute("SELECT * FROM orders WHERE id=? AND status='under_review'",(oid,)).fetchone()
             if not review or not order: raise HttpError(404,'Moderator ko‘rigida turgan akkaunt buyurtmasi topilmadi.')
+            require_independent_admin(ctx,order['buyer_id'],[r['seller_id'] for r in db.execute('SELECT seller_id FROM order_items WHERE order_id=?',(oid,))])
             evidence=db.execute('SELECT slot,object_path FROM account_review_evidence WHERE order_id=? ORDER BY slot',(oid,)).fetchall()
             if len(evidence)!=2 or [row['slot'] for row in evidence]!=[1,2]: raise HttpError(409,'Ikkala maxfiy skrinshot ham mavjud bo‘lishi shart.')
             payment=db.execute('SELECT * FROM payments WHERE order_id=?',(oid,)).fetchone()
@@ -2669,6 +2692,7 @@ class Handler(BaseHTTPRequestHandler):
             order=db.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
             if not report or not order or order['status']!='disputed': raise HttpError(404,'Ochiq nizoli buyurtma topilmadi.')
             sellers=[x['seller_id'] for x in db.execute('SELECT DISTINCT seller_id FROM order_items WHERE order_id=?',(oid,)).fetchall()]
+            require_independent_admin(ctx,order['buyer_id'],sellers)
             if action=='request_info':
                 db.execute("UPDATE reports SET status='reviewing',resolution=? WHERE id=?",(note,report['id'])); audit(db,aid,'dispute_request_info','order',oid,{'note':note})
                 db.execute('UPDATE reports SET response_due_at=? WHERE id=?',(marketplace_operations.iso(datetime.now(timezone.utc)+timedelta(hours=48)),report['id']))
@@ -2744,6 +2768,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 p=db.execute('SELECT * FROM payout_requests WHERE id=?',(m.group(1),)).fetchone()
                 if not p: raise HttpError(404,'Payout so‘rovi topilmadi.')
+                require_independent_admin(ctx,seller_ids=(p['seller_id'],))
                 allowed={'approve':'pending','reject':'pending','mark_paid':'approved'}
                 if p['status']!=allowed[action]: raise HttpError(409,'Payout so‘rovi oldingi holatini tugatmagan yoki allaqachon ko‘rilgan.')
                 status={'approve':'approved','reject':'rejected','mark_paid':'paid'}[action]
