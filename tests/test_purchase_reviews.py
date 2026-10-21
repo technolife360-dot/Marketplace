@@ -99,6 +99,20 @@ class PurchaseReviewFlows(unittest.TestCase):
         self.assertTrue(any('visible_reviews WITH (security_invoker=true)' in sql for sql in statements))
         self.assertIn('REVOKE ALL ON public.visible_reviews FROM PUBLIC, anon, authenticated',statements)
 
+    def test_topup_scores_and_eligibility_exclude_sandbox_payment_references(self):
+        for reference in ('sandbox','sandbox:old-payment','SANDBOX-test','verified-reference'):
+            oid=self.topup_order()
+            self.db.execute('UPDATE topup_orders SET payment_reference=? WHERE id=?',(reference,oid))
+            self.db.execute('INSERT INTO topup_reviews(id,order_id,reviewer_id,rating,body) VALUES(?,?,?,5,?)',
+                            (app.ident(),oid,self.buyer,'Existing purchase review.'))
+        catalogue=self.route(None,'GET','/api/top-up/catalog')
+        summary=next(game for game in catalogue if game['slug']=='pubg-mobile')['review_summary']
+        self.assertEqual(summary,{'count':1,'rating':5.0})
+        public=self.route(self.buyer,'GET','/api/review-hub/topup/pubg-mobile')
+        self.assertEqual(public['count'],1)
+        self.assertEqual(len(public['eligible']),1)
+        self.assertEqual(len(self.route(self.buyer,'GET','/api/review-hub/mine')),1)
+
     def test_languages_masked_names_packages_and_helpful_votes(self):
         oid=self.topup_order();r=self.route(self.buyer,'POST','/api/top-up/reviews',{'order_id':oid,'rating':5,'body':'Fast delivery and useful service.','language':'en'})
         public=self.route(None,'GET','/api/review-hub/topup/pubg-mobile')['items'][0]
