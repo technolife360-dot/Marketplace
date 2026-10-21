@@ -202,3 +202,50 @@ test('stored security notifications render in the current language',()=>{
     assert.equal(context.localized(message,'uz'),message);
   }
 });
+
+test('home paints banner and search before slow catalogue responses; abandoned requests cannot replace another page', async()=>{
+ const start=source.indexOf('async function renderHome(filters={}){');
+ const homeSource=source.slice(start,source.indexOf('\nasync function renderComparison',start));
+ for(const abandoned of [false,true]){
+  const pending=[];const slot={innerHTML:'',setAttribute(){}};
+  const root={isConnected:true},category={insertAdjacentHTML(){}};
+  const context={app:{innerHTML:'',classList:{add(){}}},document:{body:{classList:{add(){}}}},
+   bootstrapSessionReady:null,URLSearchParams,Promise,marketGameLinks:[],
+   api:()=>new Promise(resolve=>pending.push(resolve)),adminText:(uz,ru,en)=>en,
+   syncRouteBack(){},marketSidebarMarkup:()=>'<aside></aside>',esc:String,icon:()=>'',
+   setupMarketBanner(){},marketCard:item=>'<article>'+item.title+'</article>',
+   MarketUX:{home(){}},openBrowse(){},
+   $:selector=>selector==='#hero-search-form'?{}:selector==='.home-storefront'?root:selector==='[data-home-listings]'?slot:selector==='#home-category'?category:null};
+  vm.createContext(context);vm.runInContext(homeSource,context);
+  const loading=context.renderHome();
+  assert.match(context.app.innerHTML,/home-intro-image/);
+  assert.match(context.app.innerHTML,/hero-search-input/);
+  assert.match(context.app.innerHTML,/Loading listings/);
+  assert.doesNotMatch(context.app.innerHTML,/New listings are on the way/);
+  if(abandoned)root.isConnected=false;
+  pending[0]({items:[{id:'one',title:'Real listing'}]});pending[1]([]);
+  await loading;
+  if(abandoned)assert.equal(slot.innerHTML,'');else assert.match(slot.innerHTML,/Real listing/);
+ }
+});
+
+test('home bootstrap does not wait for account collections before showing the page',async()=>{
+ const start=source.indexOf('let bootstrapSessionReady=null;');
+ const bootstrapSource=source.slice(start,source.indexOf('\nfunction updateRouteMetadata',start));
+ // Extract only bootstrap, without adjacent unrelated route helpers.
+ const stop=bootstrapSource.indexOf('\n}',bootstrapSource.indexOf('async function bootstrap'))+2;
+ let sessionResolve,painted=false;
+ const context={localStorage:{getItem:()=>null},localeKey:'language',supportedLocales:new Set(['en']),
+  location:{pathname:'/',hash:'',search:''},loadAsiaMarkets:async()=>{},
+  api:()=>new Promise(resolve=>sessionResolve=resolve),
+  navigate:async()=>{painted=true},ExperienceUX:{sync:()=>new Promise(()=>{})},
+  document:{documentElement:{}},URLSearchParams,
+  syncProfileTrigger(){},syncLanguageMenu(){},syncSellItemButton(){},syncAdminLink(){},
+  renderSupportWidget(){},localizeDOM(){},refreshCart(){},refreshNotifications(){}};
+ vm.createContext(context);vm.runInContext(bootstrapSource.slice(0,stop),context);
+ const loading=context.bootstrap();
+ assert.equal(painted,true,'public shell must paint before /me responds');
+ await new Promise(setImmediate);
+ sessionResolve({user:null,csrf:''});
+ await loading;
+});

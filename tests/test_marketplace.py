@@ -639,7 +639,7 @@ class MarketplaceFlows(unittest.TestCase):
         self.db.execute('UPDATE deliveries SET protected_payload=? WHERE order_item_id=?',('legacy account secret',item))
         app.MODE='production'
         try:
-            with patch.object(app,'DATABASE_URL','postgresql://production.invalid/db'), patch.object(app,'migrate'), patch.object(app,'connect',return_value=self.db):
+            with patch.object(app,'DATABASE_URL','postgresql://production.invalid/db'), patch.object(app,'migrate'), patch.object(app,'assert_private_postgres_tables'), patch.object(app,'connect',return_value=self.db):
                 with self.assertRaisesRegex(RuntimeError,'Encrypt existing delivery records'):
                     app.main()
         finally:

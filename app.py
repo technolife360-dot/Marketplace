@@ -96,7 +96,7 @@ def postgres_placeholders(sql):
 
 class PostgresConnectionPool:
     """Small thread-safe pool to avoid a new Supabase connection per HTTP request."""
-    def __init__(self, max_size=1):
+    def __init__(self, max_size=4):
         self.max_size=max_size
         self.idle=LifoQueue(maxsize=max_size)
         self.lock=Lock()
@@ -172,7 +172,10 @@ def connect():
         global _postgres_pool
         if _postgres_pool is None:
             with _postgres_pool_lock:
-                if _postgres_pool is None: _postgres_pool=PostgresConnectionPool(max_size=1)
+                if _postgres_pool is None:
+                    # Bound per-instance concurrency without serializing all API requests.
+                    size=max(1,min(8,int(os.environ.get('DATABASE_POOL_SIZE','4'))))
+                    _postgres_pool=PostgresConnectionPool(max_size=size)
         return PostgresConnection(_postgres_pool.getconn(),_postgres_pool)
     db = sqlite3.connect(DB_PATH, timeout=15, isolation_level=None)
     db.row_factory = sqlite3.Row
@@ -1376,7 +1379,7 @@ class Handler(BaseHTTPRequestHandler):
     def set_session(self, token, db):
         raw=decode_session(token)
         if raw:
-            # The request already holds the only pooled PostgreSQL connection.
+            # The request already holds a pooled PostgreSQL connection.
             # Reuse it: borrowing again here waits for this request to finish.
             address=self.client_address[0]
             try: network=str(ipaddress.ip_network(address+('/24' if ':' not in address else '/48'),strict=False))
@@ -2823,30 +2826,47 @@ class VercelWSGIApplication:
         self._startup_lock=Lock()
         self._startup_complete=False
 
+    def _validate_config(self):
+        if MODE=='production':
+            if not DATABASE_URL:
+                raise RuntimeError('Set DATABASE_URL to the production Supabase PostgreSQL connection string.')
+            if not delivery_crypto.crypto_is_available():
+                raise RuntimeError('Install requirements.txt before starting production.')
+            if not delivery_crypto.key_is_configured():
+                raise RuntimeError('Set DELIVERY_ENCRYPTION_KEY before starting production.')
+
     def _startup(self):
         if self._startup_complete: return
         with self._startup_lock:
             if self._startup_complete: return
-            if MODE=='production':
-                if not DATABASE_URL:
-                    raise RuntimeError('Set DATABASE_URL to the production Supabase PostgreSQL connection string.')
-                if not delivery_crypto.crypto_is_available():
-                    raise RuntimeError('Install requirements.txt before starting production.')
-                if not delivery_crypto.key_is_configured():
-                    raise RuntimeError('Set DELIVERY_ENCRYPTION_KEY before starting production.')
-            migrate()
+            self._validate_config()
             if MODE=='production':
                 db=connect()
                 try:
-                    legacy=db.execute("SELECT COUNT(*) n FROM deliveries WHERE protected_payload NOT LIKE 'enc:v1:%'").fetchone()['n']
+                    # Deployment migrations are explicit. Cold starts only verify safety;
+                    # they must never perform DDL, reseed rows or rewrite listings.
+                    required=('account_deletion_requests','account_review_evidence','account_reviews','admin_accounts','audit_logs','blog_posts','carts','categories','conversations','deliveries','email_tokens','favorites','games','ledger_entries','listings','messages','notifications','oauth_identities','order_events','order_items','orders','payments','payout_requests','platform_config','product_requests','rate_limits','reports','request_responses','reviews','seller_profiles','sessions','users','topup_packages','topup_orders','topup_inventory_events','bonus_entries')
+                    required+=purchase_reviews.TABLES+marketplace_features.TABLES+marketplace_operations.TABLES+trade_workflows.TABLES+catalogue_experience.TABLES
+                    assert_private_postgres_tables(db,required)
+                    legacy=db.execute("SELECT 1 FROM deliveries WHERE protected_payload NOT LIKE 'enc:v1:%' LIMIT 1").fetchone()
                 finally:
                     db.close()
                 if legacy:
                     raise RuntimeError('Encrypt existing delivery records with scripts/encrypt_delivery_payloads.py before starting production.')
+            else:
+                migrate()
             self._startup_complete=True
 
     def __call__(self, environ, start_response):
-        self._startup()
+        path=environ.get('PATH_INFO','/')
+        # The home shell and static assets do not need a database connection.
+        # Dynamic SEO pages, APIs and health checks still run the safety guard.
+        shell_request=(environ.get('REQUEST_METHOD','GET') in ('GET','HEAD')
+                       and (path in ('/','/index.html','/robots.txt') or path.startswith('/static/')))
+        if MODE=='production' and shell_request:
+            self._validate_config()
+        else:
+            self._startup()
         request=_VercelRequest(environ)
         method=request.command
         if method=='HEAD':
@@ -2869,21 +2889,8 @@ class VercelWSGIApplication:
 app=VercelWSGIApplication()
 
 def main():
-    if MODE=='production':
-        if not DATABASE_URL:
-            raise RuntimeError('Set DATABASE_URL to the production Supabase PostgreSQL connection string.')
-        if not delivery_crypto.crypto_is_available():
-            raise RuntimeError('Install requirements.txt before starting production.')
-        if not delivery_crypto.key_is_configured():
-            raise RuntimeError('Set DELIVERY_ENCRYPTION_KEY before starting production.')
-    migrate()
-    if MODE=='production':
-        db=connect()
-        try:
-            legacy=db.execute("SELECT COUNT(*) n FROM deliveries WHERE protected_payload NOT LIKE 'enc:v1:%'").fetchone()['n']
-        finally: db.close()
-        if legacy:
-            raise RuntimeError('Encrypt existing delivery records with scripts/encrypt_delivery_payloads.py before starting production.')
+    # Development initializes SQLite; production only checks its pre-migrated schema.
+    VercelWSGIApplication()._startup()
     host=os.environ.get('HOST','127.0.0.1'); port=int(os.environ.get('PORT','8000'))
     print(f'SentryLoot {MODE} server: http://{host}:{port}')
     Server((host,port),Handler).serve_forever()

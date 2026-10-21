@@ -267,7 +267,24 @@ function pageTitle(title,sub='',right=''){return `<div class="page-header"><div>
 function empty(text,cta=''){return `<div class="empty">${esc(text)}${cta?`<div class="actions" style="justify-content:center">${cta}</div>`:''}</div>`}
 function syncSellItemButton(){const button=$('#sell-item-button');if(!button)return;const label=adminText('E’lon joylash','Продать товар','Sell Item');button.textContent=label;button.setAttribute('aria-label',label)}
 function syncAdminLink(){const link=$('#admin-nav-link');if(!link)return;link.hidden=!(me?.is_admin&&me.email?.trim().toLowerCase()==='admin@gamestore.com');const label=adminText('Admin paneli','Панель администратора','Admin panel');link.setAttribute('aria-label',label);link.title=label}
-async function bootstrap(){await loadAsiaMarkets();try{const m=await api('/me');me=m.user;csrf=m.csrf||'';if(m.mfa_required)location.hash='security-unlock';locale=localStorage.getItem(localeKey)||me?.language||'en';if(!supportedLocales.has(locale))locale='en';syncProfileTrigger()}catch{locale=localStorage.getItem(localeKey)||'en';if(!supportedLocales.has(locale))locale='en'}document.documentElement.lang=locale;document.documentElement.dir=locale==='ar'?'rtl':'ltr';syncLanguageMenu();syncSellItemButton();syncAdminLink();renderSupportWidget();await ExperienceUX.sync().catch(()=>{});await navigate();const linkedProvider=new URLSearchParams(location.search).get('oauth_linked');if(linkedProvider==='facebook'){toast('Facebook hisobingiz SentryLoot profilingizga bog‘landi.');history.replaceState(history.state,'',location.pathname+'#home')}localizeDOM();refreshCart();refreshNotifications()}
+let bootstrapSessionReady=null;
+function isHomeLocation(){return location.pathname==='/'&&(!location.hash||location.hash==='#home')}
+async function bootstrap(){
+ locale=localStorage.getItem(localeKey)||'en';if(!supportedLocales.has(locale))locale='en';
+ bootstrapSessionReady=(async()=>{
+  await loadAsiaMarkets();
+  try{const m=await api('/me');me=m.user;csrf=m.csrf||'';if(m.mfa_required)location.hash='security-unlock';locale=localStorage.getItem(localeKey)||me?.language||'en';if(!supportedLocales.has(locale))locale='en';syncProfileTrigger()}catch{}
+  document.documentElement.lang=locale;document.documentElement.dir=locale==='ar'?'rtl':'ltr';syncLanguageMenu();syncSellItemButton();syncAdminLink();renderSupportWidget();
+ })();
+ // Paint the public home shell while session and catalogue requests run in parallel.
+ const initialHome=isHomeLocation()?navigate():null;
+ await bootstrapSessionReady;
+ const collectionsReady=ExperienceUX.sync().catch(()=>{});
+ if(initialHome)await initialHome;else{await collectionsReady;await navigate()}
+ const linkedProvider=new URLSearchParams(location.search).get('oauth_linked');if(linkedProvider==='facebook'){toast('Facebook hisobingiz SentryLoot profilingizga bog‘landi.');history.replaceState(history.state,'',location.pathname+'#home')}
+ localizeDOM();refreshCart();refreshNotifications();
+}
+
 async function refreshCart(){const badge=$('#cart-count');if(!badge)return;if(!me){badge.textContent='0';badge.hidden=true;return}try{const count=(await api('/cart')).items.reduce((n,x)=>n+x.quantity,0);badge.textContent=count>9?'9+':String(count);badge.hidden=count<1}catch{}}
 async function refreshNotifications(){const badge=$('#notification-count');if(!badge)return;if(!me){badge.hidden=true;badge.textContent='0';return}try{const items=await api('/notifications');window.ExperienceUX?.browserAlerts(items).catch(()=>{});const count=items.filter(x=>!x.read_at).length;badge.textContent=count>9?'9+':String(count);badge.hidden=count===0}catch{badge.hidden=true}}
 // A visible, signed-in tab refreshes presence; the server expires it after three minutes.
@@ -430,8 +447,8 @@ function startHeroVisualCanvas(){
 }
 async function renderHome(filters={}){
  syncRouteBack('home');
- const [res,categories]=await Promise.all([api('/listings?'+new URLSearchParams({sort:'newest',...filters})),api('/categories')]);
- const items=res.items||[],t=(uz,ru,en)=>adminText(uz,ru,en);
+ const t=(uz,ru,en)=>adminText(uz,ru,en),categories=[];
+ const dataReady=Promise.allSettled([api('/listings?'+new URLSearchParams({sort:'newest',...filters})),api('/categories')]);
  document.body.classList.add('home-page');app.classList.add('home-background');
  app.innerHTML=`<section class="listings-section home-storefront" id="browse"><div class="market-shell">
  ${marketSidebarMarkup(filters)}
@@ -455,7 +472,7 @@ async function renderHome(filters={}){
    <select id="home-category" name="category"><option value="">${t('Barcha kategoriyalar','Все категории','All categories')}</option>${categories.map(c=>`<option value="${esc(c.slug)}" ${filters.category===c.slug?'selected':''}>${esc(categoryLabel(c.name))}</option>`).join('')}</select>
    <button type="submit" aria-label="${t('Qidirish','Поиск','Search')}">${icon('search')}</button>
   </form><a href="/browse">${t('Barchasini ko‘rish','Смотреть все','View all listings')} →</a></div>
-   ${items.length?`<div class="product-grid home-listing-grid">${items.slice(0,8).map(marketCard).join('')}</div>`:`<div class="empty home-empty"><span>${icon('box')}</span><h3>${t('Yangi e’lonlar tez orada','Новые предложения скоро появятся','New listings are on the way')}</h3><p>${t('Tasdiqlangan mahsulotlar shu yerda paydo bo‘ladi.','Одобренные товары появятся здесь.','Approved products will appear here.')}</p><a class="text-link" href="/browse">${t('Bozorni ko‘rish','Открыть маркет','Browse marketplace')} →</a></div>`}
+   <div data-home-listings aria-busy="true"><div class="loading" role="status"><span class="spinner"></span>${t('E’lonlar yuklanmoqda…','Загрузка объявлений…','Loading listings…')}</div></div>
   </section>
   <div class="home-recent-slot"></div>
   <section class="home-guide" aria-labelledby="home-guide-title"><div><span class="home-kicker">${t('BIRINCHI XARIDINGIZMI?','ПЕРВАЯ ПОКУПКА?','FIRST TIME HERE?')}</span><h2 id="home-guide-title">${t('Boshlash oson','Начать просто','Getting started is easy')}</h2><a href="/guide">${t('Qo‘llanmani o‘qish','Читать руководство','Read the guide')} →</a></div><ol>${[
@@ -465,7 +482,20 @@ async function renderHome(filters={}){
   ].map(([title,copy],i)=>`<li><span>${String(i+1).padStart(2,'0')}</span><div><h3>${title}</h3><p>${copy}</p></div></li>`).join('')}</ol></section>
  </div></div></section>`;
  const search=$('#hero-search-form');search.onsubmit=event=>{event.preventDefault();openBrowse(Object.fromEntries(new FormData(search)))};
- setupMarketBanner();MarketUX.home(items.slice(0,8));
+ const root=$('.home-storefront',app),slot=$('[data-home-listings]',root);
+ setupMarketBanner();
+ const [listingResult,categoryResult]=await dataReady;
+ if(bootstrapSessionReady)await bootstrapSessionReady;
+ if(!root.isConnected)return;
+ // Refresh account navigation only after the authenticated session is known.
+ const sidebar=$('#market-sidebar',root);if(sidebar){const holder=document.createElement('div');holder.innerHTML=marketSidebarMarkup(filters);sidebar.replaceWith(holder.firstElementChild)}
+ const category=$('#home-category',root);
+ if(categoryResult.status==='fulfilled')category.insertAdjacentHTML('beforeend',categoryResult.value.map(c=>`<option value="${esc(c.slug)}" ${filters.category===c.slug?'selected':''}>${esc(categoryLabel(c.name))}</option>`).join(''));
+ const items=listingResult.status==='fulfilled'?(listingResult.value.items||[]):[];
+ slot.setAttribute('aria-busy','false');
+ if(listingResult.status==='fulfilled')slot.innerHTML=items.length?`<div class="product-grid home-listing-grid">${items.slice(0,8).map(marketCard).join('')}</div>`:`<div class="empty home-empty"><span>${icon('box')}</span><h3>${t('Yangi e’lonlar tez orada','Новые предложения скоро появятся','New listings are on the way')}</h3><p>${t('Tasdiqlangan mahsulotlar shu yerda paydo bo‘ladi.','Одобренные товары появятся здесь.','Approved products will appear here.')}</p><a class="text-link" href="/browse">${t('Bozorni ko‘rish','Открыть маркет','Browse marketplace')} →</a></div>`;
+ else{slot.innerHTML=`<div class="notice error" role="alert">${esc(t('E’lonlarni yuklab bo‘lmadi.','Не удалось загрузить объявления.','Could not load listings.'))} <button class="button-secondary" type="button" data-home-retry>${t('Qayta urinish','Повторить','Try again')}</button></div>`;slot.querySelector('[data-home-retry]').onclick=()=>navigate()}
+ MarketUX.home(items.slice(0,8));
 }
 async function renderComparison(){return ExperienceUX.comparison()}
 async function renderListing(id){const it=await api('/listings/'+encodeURIComponent(id));const i=locale==='ru'?1:locale==='uz'?0:2;const t=(uz,ru,en)=>adminText(uz,ru,en);updateRouteMetadata('listing/'+encodeURIComponent(id));const title=`${it.title} | ${it.game_name} | SentryLoot`;const description=String(it.description||`${it.game_name} ${it.product_type}`).replace(/\s+/g,' ').slice(0,260);document.title=title;const desc=$('meta[name="description"]');if(desc)desc.content=description;for(const [selector,value] of [['meta[property="og:title"]',title],['meta[property="og:description"]',description],['meta[property="og:url"]',location.href],['meta[property="og:image"]',it.image_url||`${location.origin}https://images.gamestorehub.com/site-assets/sentryloot-logo-full.jpg`]]){const el=$(selector);if(el)el.content=value}const attrs=it.attributes||{},seller=it.seller||{},reviews=it.reviews||[],available=it.status==='published'?Math.max(0,Number(it.available)||0):0,reviewCount=Number(it.review_count)||0;
