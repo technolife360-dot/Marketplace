@@ -319,6 +319,48 @@ class HTTPWorkflows(unittest.TestCase):
         self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM topup_orders').fetchone()['n'],count)
         self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM topup_packages WHERE id=?',(named['id'],)).fetchone()['n'],1)
 
+    def test_topup_create_reuses_game_name_allows_different_units_and_explains_duplicates(self):
+        original=self.db.execute("SELECT game_name,currency FROM topup_packages WHERE id='pubg-mobile-60-uc'").fetchone()
+        for slug,currency,expected in [('qa-extra-pass','Pass','Pass'),('qa-extra-pack','Pack','Pack'),('qa-extra-uc','uc','UC')]:
+            payload={'game_name':'pubg mobile','game_slug':'pubg-mobile','currency':currency,'amount':1,'url_slug':slug,'price_minor':0,'coming_soon':True}
+            status,result,_=self.admin.request('POST','/api/admin/top-up/packages',payload)
+            self.assertEqual(status,201,result)
+            self.assertEqual((result['package']['game_name'],result['package']['currency']),('PUBG Mobile',expected))
+            status,error,_=self.admin.request('POST','/api/admin/top-up/packages',payload)
+            self.assertEqual(status,409)
+            self.assertIn('url_slug',error['fields'])
+            self.assertIn('Bu paket manzili allaqachon mavjud.',error['error'])
+            self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM topup_packages WHERE game_slug=? AND url_slug=?',('pubg-mobile',slug)).fetchone()['n'],1)
+        self.assertEqual(dict(self.db.execute("SELECT game_name,currency FROM topup_packages WHERE id='pubg-mobile-60-uc'").fetchone()),dict(original))
+
+    def test_topup_package_removal_is_admin_only_reversible_and_preserves_orders(self):
+        status,created,_=self.admin.request('POST','/api/admin/top-up/packages',{'game_name':'Archive Test','game_slug':'archive-test','currency':'Gold','amount':100,'url_slug':'100-gold','price_minor':25000,'coming_soon':True})
+        self.assertEqual(status,201,created)
+        pid=created['package']['id'];path='/api/admin/top-up/packages/'+pid
+        self.db.execute('UPDATE topup_packages SET stock_on_hand=7,stock_reserved=2 WHERE id=?',(pid,))
+        oid=app.ident()
+        self.db.execute("INSERT INTO topup_orders(id,reference,buyer_id,package_id,player_id,quantity,unit_price_minor,status,inventory_quantity) VALUES(?,?,?,?,'123456789',2,25000,'paid',2)",(oid,oid,self.seller_id,pid))
+        before=dict(self.db.execute('SELECT * FROM topup_orders WHERE id=?',(oid,)).fetchone())
+        self.assertEqual(self.guest.request('PATCH',path,{'enabled':False})[0],401)
+        self.assertEqual(self.seller.request('PATCH',path,{'enabled':False})[0],403)
+        self.assertEqual(self.admin.request('PATCH',path,{'enabled':False},csrf=False)[0],403)
+        self.assertEqual(self.admin.request('PATCH',path,{'enabled':False})[0],200)
+        self.assertNotIn(pid,[p['id'] for game in self.guest.request('GET','/api/top-up/catalog')[1] for p in game['packages']])
+        self.assertEqual(self.guest.request('GET','/api/top-up/packages/archive-test/100-gold')[0],404)
+        admin=self.admin.request('GET','/api/admin/top-up')[1]
+        hidden=next(p for p in admin['packages'] if p['id']==pid)
+        self.assertFalse(hidden['enabled']);self.assertEqual((hidden['stock_on_hand'],hidden['stock_reserved']),(7,2))
+        self.assertEqual(dict(self.db.execute('SELECT * FROM topup_orders WHERE id=?',(oid,)).fetchone()),before)
+        self.assertTrue(any(o['id']==oid for o in admin['orders']))
+        self.assertEqual(self.admin.request('PATCH',path,{'enabled':True})[0],200)
+        restored=self.guest.request('GET','/api/top-up/packages/archive-test/100-gold')
+        self.assertEqual(restored[0],200);self.assertEqual(restored[1]['price_minor'],25000)
+        self.assertEqual(dict(self.db.execute('SELECT * FROM topup_orders WHERE id=?',(oid,)).fetchone()),before)
+        seeded='pubg-mobile-60-uc'
+        self.assertEqual(self.admin.request('PATCH','/api/admin/top-up/packages/'+seeded,{'enabled':False})[0],200)
+        self.guest.request('GET','/api/top-up/catalog')
+        self.assertEqual(self.db.execute('SELECT enabled FROM topup_packages WHERE id=?',(seeded,)).fetchone()['enabled'],0)
+
     def test_sold_out_listing_remains_readable_without_allowing_another_purchase(self):
         lid=self.published_item();buyer=self.registered_buyer()
         self.db.execute("UPDATE listings SET status='sold_out',stock=0,reserved=0 WHERE id=?",(lid,))

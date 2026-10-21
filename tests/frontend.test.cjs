@@ -37,7 +37,7 @@ test('failed asynchronous page requests render an error instead of leaving the l
     const context = {
       location: {hash: '#' + route, pathname: '/', search: ''},
       history: {state: null, replaceState() {}},
-      app: {classList: {remove() {}}, innerHTML: ''},
+      app: {classList: {remove() {}, toggle() {}}, innerHTML: ''}, me: null,
       document: {body: {classList: {remove() {}}}}, window: {},
       currentPageAnchor: () => '', updateRouteMetadata() {}, syncRouteBack() {}, stopHomeCanvas() {},
       pageTitle: text => '<h1>' + text + '</h1>', esc: text => String(text),
@@ -113,11 +113,11 @@ test('buyer sidebar exposes conversations and purchases using the primary naviga
   assert.doesNotMatch(html, /href="\/#(?:seller|wallet|payout-options|admin)"/);
 });
 
-test('seller tools remain role-specific and admin navigation is absent from the sidebar', () => {
+test('seller wallet links remain role-specific without seller dashboard or admin sidebar links', () => {
   const seller = sidebarMarkup({seller: {id: 'seller'}, is_admin: false});
   assert.match(seller, /href="\/#wallet"/);
   assert.match(seller, /href="\/#payout-options"/);
-  assert.doesNotMatch(seller, /href="\/#admin"/);
+  assert.doesNotMatch(seller, /href="\/#(?:seller|admin)"/);
   assert.doesNotMatch(sidebarMarkup({seller: null, is_admin: true}), /href="\/#(?:seller|admin)"/);
 });
 
@@ -134,4 +134,71 @@ test('home product cards show verified product scores and omit empty or seller-o
   const rated = context.marketCard({...item, product_review_count: 3, product_rating: 4.3});
   assert.match(rated, /4\.3 <small>\(3\)<\/small>/);
   assert.doesNotMatch(rated, /4\.9/);
+});
+
+test('Top Up admin excludes deleted packages until the hidden filter is selected', () => {
+  const topupSource=fs.readFileSync(path.join(__dirname,'../static/topup.js'),'utf8');
+  const start=topupSource.indexOf('function topupAdminMatchesStatus(');
+  const context={};vm.createContext(context);
+  vm.runInContext(topupSource.slice(start,topupSource.indexOf('async function renderTopUpAdmin(',start)),context);
+  const active={enabled:1,price_minor:100,stock_on_hand:5,stock_reserved:5};
+  const hidden={...active,enabled:0};
+  assert.equal(context.topupAdminMatchesStatus(active,''),true);
+  assert.equal(context.topupAdminMatchesStatus(active,'empty'),true);
+  assert.equal(context.topupAdminMatchesStatus(active,'stock'),false);
+  assert.equal(context.topupAdminMatchesStatus(active,'hidden'),false);
+  for(const filter of ['', 'priced','needs-price','stock','empty'])assert.equal(context.topupAdminMatchesStatus(hidden,filter),false,filter);
+  assert.equal(context.topupAdminMatchesStatus(hidden,'hidden'),true);
+  assert.equal(context.topupAdminMatchesStatus({...active,price_minor:0},'needs-price'),true);
+  assert.equal(context.topupAdminMatchesStatus({...active,stock_reserved:2},'stock'),true);
+  assert.equal(context.topupAdminMatchesStatus(null,''),false);
+});
+
+
+test('Top Up create reuses the existing game name and suggests its common unit',()=>{
+  const topupSource=fs.readFileSync(path.join(__dirname,'../static/topup.js'),'utf8'),context={};
+  const start=topupSource.indexOf('function topupAdminExistingGame(');vm.createContext(context);
+  vm.runInContext(topupSource.slice(start,topupSource.indexOf('function topupAdminMatchesStatus(',start)),context);
+  const packages=[{game_slug:'pubg-mobile',game_name:'PUBG Mobile',currency:'Pass'},{game_slug:'pubg-mobile',game_name:'PUBG Mobile',currency:'UC'},{game_slug:'pubg-mobile',game_name:'PUBG Mobile',currency:'UC'}];
+  const game=context.topupAdminExistingGame(packages,' PUBG-MOBILE ');
+  assert.equal(game.game_name,'PUBG Mobile');assert.equal(game.currency,'UC');
+  assert.equal(context.topupAdminExistingGame(packages,'new-game'),null);
+});
+
+test('Top Up creation errors follow the selected English or Russian language',()=>{
+  const context=localeContext();
+  for(const message of ['Bu o‘yin manzili uchun nom va valyuta avvaldan belgilangan.','Bu paket manzili allaqachon mavjud. Mavjud paketni tahrirlang yoki yashirilgan paketlar ichidan tiklang.','Valyuta turi harf va raqamlardan iborat bo‘lsin.','O‘yin nomi: uzunligi 2–100 belgi bo‘lishi kerak.']){
+    assert.notEqual(context.localized(message,'en'),message);
+    assert.notEqual(context.localized(message,'ru'),message);
+    assert.equal(context.localized(message,'uz'),message);
+  }
+});
+
+test('shared form errors translate both the main alert and field notes',()=>{
+  const context=localeContext();
+  context.document={createElement(){return {setAttribute(){}}}};
+  const experience=fs.readFileSync(path.join(__dirname,'../static/experience.js'),'utf8'),start=experience.indexOf('function fail(');
+  vm.runInContext(experience.slice(start,experience.indexOf('function bind(',start)),context);
+  for(const [language,expected,expectedNote] of [['en','These details conflict with an existing record. Check the values you entered.','Enter 2–100 characters.'],['ru','Данные конфликтуют с существующей записью. Проверьте введённые значения.','Введите 2–100 символов.']]){
+    context.locale=language;const alerts=[],notes=[];
+    const input={setAttribute(){},after(note){notes.push(note)}};
+    const form={isConnected:true,querySelectorAll(){return []},prepend(box){alerts.push(box)},elements:{namedItem(){return input}}};
+    context.fail(form,{message:'Ma’lumotlar to‘qnashuvi yuz berdi. Kiritilgan qiymatlarni tekshiring.',fields:{game_name:'2–100 belgi kiriting.'}});
+    assert.equal(alerts[0].textContent,expected);assert.equal(notes[0].textContent,expectedNote);
+  }
+});
+
+test('stored security notifications render in the current language',()=>{
+  const context=localeContext();
+  for(const [message,en,ru] of [
+    ['Ikki bosqichli kirish yoqildi','Two-step verification enabled','Двухэтапная проверка включена'],
+    ['Ikki bosqichli kirish o‘chirildi','Two-step verification disabled','Двухэтапная проверка отключена'],
+    ['Hisob paroli yangilandi','Account password changed','Пароль аккаунта изменён'],
+    ['Hisob email manzili yangilandi','Account email address changed','Email аккаунта изменён'],
+    ['Bu amalni siz bajarmagan bo‘lsangiz, yordam xizmatiga murojaat qiling.','If you did not make this change, contact support.','Если это сделали не вы, обратитесь в службу поддержки.'],
+  ]){
+    assert.equal(context.localized(message,'en'),en);
+    assert.equal(context.localized(message,'ru'),ru);
+    assert.equal(context.localized(message,'uz'),message);
+  }
 });

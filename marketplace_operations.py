@@ -2,6 +2,7 @@
 import base64
 import hashlib
 import hmac
+import io
 import json
 import re
 import secrets
@@ -9,6 +10,8 @@ import struct
 import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+import qrcode
 
 UNHANDLED=object()
 TABLES=('account_security','security_recovery_codes','pending_email_changes','seller_availability','user_blocks','support_tickets','support_entries','dispute_entries','dispute_attachments','order_deadline_notices')
@@ -60,6 +63,15 @@ def totp(secret,step,digits=6,digest=hashlib.sha1):
     key=base64.b32decode(secret+'='*((8-len(secret)%8)%8))
     value=hmac.new(key,struct.pack('>Q',step),digest).digest();offset=value[-1]&15
     return str((struct.unpack('>I',value[offset:offset+4])[0]&0x7fffffff)%(10**digits)).zfill(digits)
+
+def authenticator_qr(uri):
+    """Render the enrollment secret in memory, without an external QR service."""
+    qr=qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M,box_size=6,border=4)
+    qr.add_data(uri)
+    qr.make(fit=True)
+    image=io.BytesIO()
+    qr.make_image(fill_color='black',back_color='white').save(image,format='PNG')
+    return 'data:image/png;base64,'+base64.b64encode(image.getvalue()).decode('ascii')
 
 def enabled(db,uid):
     r=db.execute('SELECT enabled FROM account_security WHERE user_id=?',(uid,)).fetchone()
@@ -219,9 +231,11 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         verified(ctx);reauthenticate(db,uid,data,core)
         if enabled(db,uid):raise error(409,'2FA allaqachon yoqilgan.')
         secret=base64.b32encode(secrets.token_bytes(20)).decode().rstrip('=');cipher=encrypt(secret,uid,core)
-        db.execute('INSERT INTO account_security(user_id,pending_cipher,pending_expires) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET pending_cipher=excluded.pending_cipher,pending_expires=excluded.pending_expires',(uid,cipher,iso(now+timedelta(minutes=10))))
         from urllib.parse import quote
-        return {'secret':secret,'uri':'otpauth://totp/'+quote('SentryLoot:'+ctx['user']['email'],safe='')+'?secret='+secret+'&issuer=SentryLoot&digits=6&period=30'}
+        uri='otpauth://totp/'+quote('SentryLoot:'+ctx['user']['email'],safe='')+'?secret='+secret+'&issuer=SentryLoot&digits=6&period=30'
+        qr_image=authenticator_qr(uri)
+        db.execute('INSERT INTO account_security(user_id,pending_cipher,pending_expires) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET pending_cipher=excluded.pending_cipher,pending_expires=excluded.pending_expires',(uid,cipher,iso(now+timedelta(minutes=10))))
+        return {'secret':secret,'uri':uri,'qr_image':qr_image}
     if path=='/api/security/mfa/enable' and method=='POST':
         verified(ctx);core['check_rate'](db,'mfa_enroll',uid,8,300)
         row=db.execute('SELECT * FROM account_security WHERE user_id=?',(uid,)).fetchone()

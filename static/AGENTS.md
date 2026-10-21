@@ -3,6 +3,8 @@
 - All select dropdowns must use `select-menu.js` and the `.auth-country-trigger` style: open below the field, match its width, limit list height to 180px, scroll long lists, and search lists over eight options.
 - Preserve native select values, FormData, required validation, disabled states and change handlers. Verify keyboard and pointer selection in Chrome.
 - Never add duplicate field icons, select arrows or borders.
+- Keep form controls 44px high, with 8px between a label and its control and at least 16px between neighbouring fields. Use 18px vertical spacing for stacked fields; preserve compact home/header search geometry and quantity controls.
+- Single-line field icons must be absolutely positioned inside their own `.field-control`, vertically centered, with 24px SVGs and 18px artwork. Reserve 46px leading padding so text cannot overlap the icon. Textarea icons align with the first text line.
 - Header `.top-actions` SVGs stay 24×24, with actual rendered `use` artwork 18×18.
 - Further detail: `../.cursor/rules/compact-select-menus.mdc`.
 
@@ -16,4 +18,4 @@
 
 - Close the sidebar by dragging its vertical right divider (`#market-sidebar-handle`) left. The supplied Geist sidebar icon (`#market-sidebar-toggle`) appears in the header only while collapsed and only opens it. Preserve the original brand position; align the icon with the sidebar icon frames. Keep persisted state, keyboard access and unchanged row sizes.
 
-- Do not show Start selling or Admin panel in `.market-sidebar`. Existing sellers may keep their Seller dashboard; admin access is separate from public sidebar navigation.
+- Do not show Start selling, Seller dashboard or Admin panel in `.market-sidebar`, including for existing sellers and admins. Keep the header Sell Item button as the selling entry point; admin access is separate from public sidebar navigation.

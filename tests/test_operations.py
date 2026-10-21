@@ -1,11 +1,13 @@
 import base64
 import hashlib
+import io
 import json
 import time
 import unittest
 from datetime import datetime,timezone,timedelta
 from unittest.mock import patch
 from urllib.parse import parse_qs
+from PIL import Image
 import app
 import marketplace_operations as ops
 from tests import test_marketplace as fixtures
@@ -44,6 +46,30 @@ class OperationsFlows(unittest.TestCase):
         with self.assertRaises(app.HttpError):self.route(self.buyer,'POST','/api/security/mfa/enable',{'otp':'not valid'})
         with self.assertRaises(app.HttpError):self.route(self.buyer,'POST','/api/security/mfa/enable',{'otp':'１２３４５６'})
         self.assertFalse(ops.enabled(self.db,self.buyer))
+    def test_mfa_qr_contains_pending_enrollment_and_requires_confirmation(self):
+        import qrcode
+        original=qrcode.QRCode.add_data
+        with patch.object(qrcode.QRCode,'add_data',autospec=True) as add_data:
+            # Spy on the exact payload while letting the generator build a real QR.
+            add_data.side_effect=lambda qr,data:original(qr,data)
+            setup=self.route(self.buyer,'POST','/api/security/mfa/setup',{'password':'unique-test-password'})
+        add_data.assert_called_once()
+        self.assertEqual(add_data.call_args.args[1],setup['uri'])
+        self.assertEqual(parse_qs(setup['uri'].split('?',1)[1])['secret'],[setup['secret']])
+        prefix,payload=setup['qr_image'].split(',',1)
+        self.assertEqual(prefix,'data:image/png;base64')
+        with Image.open(io.BytesIO(base64.b64decode(payload,validate=True))) as image:
+            self.assertEqual(image.format,'PNG')
+            self.assertEqual(image.width,image.height)
+            self.assertGreaterEqual(image.width,240)
+            self.assertEqual(image.convert('RGB').getpixel((0,0)),(255,255,255))
+            self.assertEqual(image.convert('RGB').getpixel((24,24)),(0,0,0))
+        row=self.db.execute('SELECT * FROM account_security WHERE user_id=?',(self.buyer,)).fetchone()
+        self.assertFalse(row['enabled'])
+        self.assertNotIn(setup['secret'],row['pending_cipher'])
+        with patch.object(ops.time,'time',return_value=1800000000):
+            result=self.route(self.buyer,'POST','/api/security/mfa/enable',{'otp':ops.totp(setup['secret'],1800000000//30)})
+        self.assertTrue(result['enabled'])
     def test_email_changes_are_owned_expire_and_consume_only_once(self):
         r=self.route(self.buyer,'POST','/api/security/email',{'password':'unique-test-password','email':'new-address@test.invalid'})
         token=r['confirmation_token']
@@ -167,7 +193,12 @@ class SecurityHTTP(unittest.TestCase):
     registered_buyer=http.HTTPWorkflows.registered_buyer
     def test_mfa_login_oauth_style_session_gate_and_session_revocation(self):
         buyer=self.registered_buyer();uid=buyer.request('GET','/api/me')[1]['user']['id']
-        status,setup,_=buyer.request('POST','/api/security/mfa/setup',{'password':'HTTP-buyer-password-123'});self.assertEqual(status,200,setup)
+        self.assertEqual(self.guest.request('POST','/api/security/mfa/setup',{'password':'HTTP-buyer-password-123'})[0],401)
+        self.assertEqual(buyer.request('POST','/api/security/mfa/setup',{'password':'HTTP-buyer-password-123'},csrf=False)[0],403)
+        status,setup,headers=buyer.request('POST','/api/security/mfa/setup',{'password':'HTTP-buyer-password-123'});self.assertEqual(status,200,setup)
+        self.assertEqual(headers['Cache-Control'],'no-store')
+        self.assertEqual(headers['Pragma'],'no-cache')
+        self.assertTrue(setup['qr_image'].startswith('data:image/png;base64,'))
         with patch.object(ops.time,'time',return_value=time.time()):
             otp=ops.totp(setup['secret'],int(time.time())//30)
             status,result,_=buyer.request('POST','/api/security/mfa/enable',{'otp':otp});self.assertEqual(status,200,result)

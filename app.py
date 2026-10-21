@@ -2079,10 +2079,16 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(price,int) or isinstance(price,bool) or price<0 or price>1000000000000: raise HttpError(400,'Narx miqdori noto‘g‘ri.')
             coming_soon=data.get('coming_soon',True)
             if not isinstance(coming_soon,bool): raise HttpError(400,'Coming Soon holati noto‘g‘ri.')
-            existing=db.execute('SELECT game_name,currency FROM topup_packages WHERE game_slug=? LIMIT 1',(game_slug,)).fetchone()
-            if existing and (existing['game_name']!=game_name or existing['currency'].casefold()!=currency.casefold()):
-                raise HttpError(409,'Bu o‘yin manzili uchun nom va valyuta avvaldan belgilangan.')
+            # A game can sell currency, passes and weekly packs. Reuse its
+            # display name without forcing every package to share one unit.
+            existing=db.execute('SELECT game_name FROM topup_packages WHERE game_slug=? ORDER BY created_at,id LIMIT 1',(game_slug,)).fetchone()
+            if existing:game_name=existing['game_name']
+            unit=db.execute('SELECT currency FROM topup_packages WHERE game_slug=? AND lower(currency)=lower(?) LIMIT 1',(game_slug,currency)).fetchone()
+            if unit:currency=unit['currency']
             package_id=game_slug+'-'+url_slug
+            if db.execute('SELECT id FROM topup_packages WHERE game_slug=? AND url_slug=?',(game_slug,url_slug)).fetchone():
+                message='Bu paket manzili allaqachon mavjud. Mavjud paketni tahrirlang yoki yashirilgan paketlar ichidan tiklang.'
+                raise HttpError(409,message,{'url_slug':message})
             db.execute('INSERT INTO topup_packages(id,game_slug,game_name,url_slug,currency,amount,price_minor,enabled,coming_soon,manual_enabled) VALUES(?,?,?,?,?,?,?,1,?,1)',(package_id,game_slug,game_name,url_slug,currency,amount,price,int(coming_soon)))
             audit(db,aid,'topup_package_create','topup_package',package_id,{'game_slug':game_slug,'amount':amount,'currency':currency,'price_minor':price,'coming_soon':coming_soon})
             return 201,{'ok':True,'package':topup_admin_row(db.execute('SELECT * FROM topup_packages WHERE id=?',(package_id,)).fetchone())}
