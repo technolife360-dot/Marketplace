@@ -1,0 +1,9 @@
+# Images live in R2. Keep local originals in Git for recovery, outside Vercel uploads.
+static/**/*.png
+static/**/*.jpg
+static/**/*.jpeg
+static/**/*.webp
+static/**/*.gif
+static/**/*.svg
+static/**/*.ico
+static/**/*.avif

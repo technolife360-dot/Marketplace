@@ -60,6 +60,14 @@ def _key(value):
     return value
 
 
+def _listing_key(value):
+    # Preserve existing listing URLs; new uploads are separated by their owner role.
+    if isinstance(value, str) and value.startswith(('visitor-images/', 'admin-images/')):
+        _key(value.split('/', 1)[1])
+        return value
+    return _key(value)
+
+
 def is_listing_url(value):
     """Accept only object URLs generated for this deployment's listing bucket."""
     try:
@@ -67,7 +75,7 @@ def is_listing_url(value):
         prefix = public_base + '/'
         if not isinstance(value, str) or not value.startswith(prefix):
             return False
-        _key(value[len(prefix):])
+        _listing_key(value[len(prefix):])
         return True
     except (RuntimeError, ValueError):
         return False
@@ -102,8 +110,10 @@ def delete_evidence(key):
     _client().delete_object(Bucket=bucket, Key=key)
 
 
-def put_listing(key, body):
-    key = _key(key)
+def put_listing(key, body, *, audience='visitor'):
+    if audience not in ('visitor','admin'):
+        raise ValueError('Invalid public image audience')
+    key = ('admin-images/' if audience=='admin' else 'visitor-images/') + _key(key)
     _, _, _, bucket, _, public_base = _settings()
     _client().put_object(Bucket=bucket, Key=key, Body=body, ContentType='image/webp',
                          CacheControl='public, max-age=31536000, immutable')

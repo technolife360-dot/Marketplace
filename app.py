@@ -27,6 +27,7 @@ import identity_service
 import oauth_service
 import seagm_supplier
 import storage_r2
+import public_assets
 from asia_markets import ASIA_COUNTRIES, ASIA_COUNTRY_CURRENCIES, ASIA_CURRENCIES
 
 SUPPORTED_LANGUAGES = frozenset({'en', 'uz', 'ru'})
@@ -1107,7 +1108,7 @@ def seo_listing_html(listing_id):
         'SentryLoot — Game Marketplace':html.escape(title,quote=True),
         'A marketplace for permitted game items and digital services. Marketplace sales are currently restricted to approved games and products.':html.escape(description,quote=True),
         'https://gamestorehub.com/':html.escape(canonical,quote=True),
-        'https://gamestorehub.com/static/assets/sentryloot-logo-full.jpg':html.escape(image or base+'/static/assets/sentryloot-logo-full.jpg',quote=True),
+        public_assets.SITE_ASSET_BASE+'sentryloot-logo-full.jpg':html.escape(public_assets.image_url(image) if image else public_assets.SITE_ASSET_BASE+'sentryloot-logo-full.jpg',quote=True),
         'SentryLoot GameStore logo':html.escape(f"{item['game_name']} listing image" if image else 'SentryLoot GameStore logo',quote=True),
     }
     for old,new in replacements.items(): template=template.replace(old,new)
@@ -1171,7 +1172,7 @@ def seo_page_html(path, slug=None):
     template=re.sub(r'<meta property="og:title" content="[^"]*">','<meta property="og:title" content="'+html.escape(title,quote=True)+'">',template,count=1)
     template=re.sub(r'<meta property="og:description" content="[^"]*">','<meta property="og:description" content="'+html.escape(description,quote=True)+'">',template,count=1)
     template=re.sub(r'<meta property="og:url" content="[^"]*">','<meta property="og:url" content="'+html.escape(canonical,quote=True)+'">',template,count=1)
-    template=re.sub(r'<meta property="og:image" content="[^"]*">','<meta property="og:image" content="'+html.escape(base+'/static/assets/sentryloot-logo-full.jpg',quote=True)+'">',template,count=1)
+    template=re.sub(r'<meta property="og:image" content="[^"]*">','<meta property="og:image" content="'+html.escape(public_assets.SITE_ASSET_BASE+'sentryloot-logo-full.jpg',quote=True)+'">',template,count=1)
     template=template.replace('<main id="app" tabindex="-1"><div class="loading"><span class="spinner"></span> Yuklanmoqda…</div></main>','<main id="app" tabindex="-1">'+body+'</main>')
     return template.encode('utf-8')
 
@@ -1324,7 +1325,7 @@ class Handler(BaseHTTPRequestHandler):
     def send_json(self, code, data, headers=None):
         self._request_status=code
         if hasattr(self,'_request_id'):headers={**(headers or {}),'X-Request-ID':self._request_id}
-        payload=json.dumps(data,ensure_ascii=False,separators=(',',':')).encode()
+        payload=json.dumps(public_assets.rewrite_payload(data),ensure_ascii=False,separators=(',',':')).encode()
         self.send_response(code); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.send_header('Pragma','no-cache'); self.send_header('Vary','Cookie'); self.secure_headers()
         for k,v in (headers or {}).items():
             for value in (v if isinstance(v,(list,tuple)) else [v]): self.send_header(k,value)
@@ -1404,6 +1405,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.path.startswith('/api/'):
             parsed=urlparse(self.path)
+            if parsed.path in public_assets.IMAGE_MANIFEST:
+                target=public_assets.image_url(parsed.path+('?' + parsed.query if parsed.query else ''))
+                self.send_response(308);self.send_header('Location',target);self.send_header('Cache-Control','public, max-age=3600');self.send_header('Content-Length','0');self.secure_headers();self.end_headers();return
             if parsed.path=='/healthz': self.dispatch(); return
             if parsed.path=='/robots.txt':
                 payload=f"User-agent: *\n{'Disallow: /' if MODE=='production' and not production_marketplace_sales_enabled() else 'Allow: /'}\nDisallow: /api/\nDisallow: /admin\nSitemap: {public_site_base()}/sitemap.xml\n".encode('utf-8')
@@ -2241,7 +2245,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception: raise HttpError(400,'Rasm fayli yaroqsiz yoki buzilgan.')
             object_path=f"{hashlib.sha256(str(uid).encode()).hexdigest()[:20]}/{secrets.token_hex(20)}.webp"
             try:
-                public_url=storage_r2.put_listing(object_path,image_bytes)
+                public_url=storage_r2.put_listing(object_path,image_bytes,audience='admin' if ctx['user'].get('is_admin') else 'visitor')
             except Exception as exc:
                 raise HttpError(502,'Rasm R2 xizmatiga yuklanmadi.') from exc
             return 201,{'url':public_url,'content_type':'image/webp','size':len(image_bytes)}

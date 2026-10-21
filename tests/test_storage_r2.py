@@ -36,17 +36,33 @@ class R2StorageTests(unittest.TestCase):
             self.assertEqual(storage_r2.evidence_url(key), 'https://example.invalid/signed')
             storage_r2.delete_evidence(key)
             self.assertEqual(storage_r2.put_listing(key, b'image'),
-                             'https://assets.gamestorehub.com/' + key)
+                             'https://assets.gamestorehub.com/visitor-images/' + key)
         client.head_bucket.assert_called_once_with(Bucket='sentryloot-account-evidence')
         client.put_object.assert_any_call(Bucket='sentryloot-account-evidence', Key=key,
                                           Body=b'image', ContentType='image/webp',
                                           CacheControl='private, no-store')
-        client.put_object.assert_any_call(Bucket='sentryloot-listing-images', Key=key,
+        client.put_object.assert_any_call(Bucket='sentryloot-listing-images', Key='visitor-images/' + key,
                                           Body=b'image', ContentType='image/webp',
                                           CacheControl='public, max-age=31536000, immutable')
         client.generate_presigned_url.assert_called_once_with(
             'get_object', Params={'Bucket': 'sentryloot-account-evidence', 'Key': key}, ExpiresIn=300)
         client.delete_object.assert_called_once_with(Bucket='sentryloot-account-evidence', Key=key)
+
+    def test_admin_and_visitor_images_are_kept_separate(self):
+        key = 'a' * 20 + '/' + 'b' * 40 + '.webp'
+        client = MagicMock()
+        with patch.dict(os.environ, R2_ENV), patch.object(storage_r2, '_client', return_value=client):
+            url = storage_r2.put_listing(key, b'admin-image', audience='admin')
+            self.assertEqual(url, 'https://assets.gamestorehub.com/admin-images/' + key)
+            self.assertTrue(storage_r2.is_listing_url(url))
+            self.assertTrue(storage_r2.is_listing_url('https://assets.gamestorehub.com/visitor-images/' + key))
+            self.assertTrue(storage_r2.is_listing_url('https://assets.gamestorehub.com/' + key))
+            self.assertFalse(storage_r2.is_listing_url('https://assets.gamestorehub.com/site-assets/logo.png'))
+            with self.assertRaises(ValueError):
+                storage_r2.put_listing(key, b'image', audience='../private')
+            with self.assertRaises(ValueError):
+                storage_r2.evidence_url('admin-images/' + key)
+        self.assertEqual(client.put_object.call_args.kwargs['Key'], 'admin-images/' + key)
 
     def test_rejects_unexpected_object_paths(self):
         with patch.dict(os.environ, R2_ENV), patch.object(storage_r2, '_client') as client:

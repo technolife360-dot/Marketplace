@@ -15,10 +15,10 @@ const TOPUP_OFFICIAL_GAME_ART = {
 };
 
 const TOPUP_CURRENCY_ART = {
-  'pubg-mobile': '/static/assets/topup-uc.png',
-  'mobile-legends': '/static/assets/topup-mobile-legends-diamonds.png',
-  'free-fire': '/static/assets/topup-free-fire-diamonds.png',
-  'honor-of-kings': '/static/assets/topup-honor-of-kings-tokens.png'
+  'pubg-mobile': 'https://images.gamestorehub.com/site-assets/topup-uc.png',
+  'mobile-legends': 'https://images.gamestorehub.com/site-assets/topup-mobile-legends-diamonds.png',
+  'free-fire': 'https://images.gamestorehub.com/site-assets/topup-free-fire-diamonds.png',
+  'honor-of-kings': 'https://images.gamestorehub.com/site-assets/topup-honor-of-kings-tokens.png'
 };
 
 function topupCurrencyImage(game, variant) {
@@ -75,10 +75,10 @@ async function renderTopUpCatalog(selectedGame, selectedProduct) {
   } else {
     body = '<div class="topup-games-grid">' + rows.map(function(item, index) {
       const currencyIcon = topupCurrencyImage(item, 'catalog');
-      return '<article class="topup-game-card topup-game-' + esc(item.slug) + '"><a class="topup-game-cover" href="/top-up/' + encodeURIComponent(item.slug) + '" aria-label="' + esc(item.name) + '"><img data-topup-fallback="/static/assets/topup-' + esc(item.slug) + '.svg" src="' + TOPUP_OFFICIAL_GAME_ART[item.slug] + '" alt="' + esc(item.name) + '" loading="' + (index < 2 ? 'eager' : 'lazy') + '"' + (index < 2 ? ' fetchpriority="high"' : '') + '><span class="topup-game-cover-shade"></span><span class="topup-cover-index">0' + (index + 1) + '</span></a><div class="topup-game-card-body"><div class="topup-currency-row"><span class="topup-currency-icon">' + currencyIcon + '</span><span>' + esc(item.currency) + '</span></div><h2>' + esc(item.name) + '</h2><a class="topup-game-cta" href="/top-up/' + encodeURIComponent(item.slug) + '">Top Up</a></div></article>';
+      return '<article class="topup-game-card topup-game-' + esc(item.slug) + '"><a class="topup-game-cover" href="/top-up/' + encodeURIComponent(item.slug) + '" aria-label="' + esc(item.name) + '"><img data-topup-fallback="https://images.gamestorehub.com/site-assets/topup-' + esc(item.slug) + '.svg" src="' + TOPUP_OFFICIAL_GAME_ART[item.slug] + '" alt="' + esc(item.name) + '" loading="' + (index < 2 ? 'eager' : 'lazy') + '"' + (index < 2 ? ' fetchpriority="high"' : '') + '><span class="topup-game-cover-shade"></span><span class="topup-cover-index">0' + (index + 1) + '</span></a><div class="topup-game-card-body"><div class="topup-currency-row"><span class="topup-currency-icon">' + currencyIcon + '</span><span>' + esc(item.currency) + '</span></div><h2>' + esc(item.name) + '</h2><a class="topup-game-cta" href="/top-up/' + encodeURIComponent(item.slug) + '">Top Up</a></div></article>';
     }).join('') + '</div>';
   }
-  const catalogContent = '<div class="topup-hero topup-hero-image"><nav class="topup-breadcrumb topup-hero-back" aria-label="Breadcrumb"><a href="/">← ' + adminText('Marketplacega qaytish','Вернуться в маркет','Back to marketplace') + '</a></nav><img class="topup-hero-background" src="/static/assets/topup-hero.jpg" alt="" fetchpriority="high"><div class="topup-hero-overlay"></div><div class="topup-hero-content"><div class="topup-hero-brand"><b>SentryLoot</b></div><h1>' + esc(words.feature) + '</h1><p>' + words.intro + '</p></div></div><div class="topup-section-heading topup-catalog-heading"><div><span class="topup-overline">' + words.select + '</span><h2>' + words.games + '</h2></div><span class="topup-count">' + topupGameCount(rows.length) + '</span></div>' + body + '<aside class="topup-safe-note">' + icon('shield') + '<p><b>' + adminText('Xaridlar va to‘lovlar','Покупки и оплата','Payments are being prepared') + '</b><br>' + adminText('To‘lov tizimi ulangach paketlarni xarid qilish mumkin bo‘ladi.','Пакеты можно будет купить после подключения платёжной системы.','Packages will be available to buy once a payment provider is connected.') + '</p></aside>';
+  const catalogContent = '<div class="topup-hero topup-hero-image"><nav class="topup-breadcrumb topup-hero-back" aria-label="Breadcrumb"><a href="/">← ' + adminText('Marketplacega qaytish','Вернуться в маркет','Back to marketplace') + '</a></nav><img class="topup-hero-background" src="https://images.gamestorehub.com/site-assets/topup-hero.jpg" alt="" fetchpriority="high"><div class="topup-hero-overlay"></div><div class="topup-hero-content"><div class="topup-hero-brand"><b>SentryLoot</b></div><h1>' + esc(words.feature) + '</h1><p>' + words.intro + '</p></div></div><div class="topup-section-heading topup-catalog-heading"><div><span class="topup-overline">' + words.select + '</span><h2>' + words.games + '</h2></div><span class="topup-count">' + topupGameCount(rows.length) + '</span></div>' + body + '<aside class="topup-safe-note">' + icon('shield') + '<p><b>' + adminText('Xaridlar va to‘lovlar','Покупки и оплата','Payments are being prepared') + '</b><br>' + adminText('To‘lov tizimi ulangach paketlarni xarid qilish mumkin bo‘ladi.','Пакеты можно будет купить после подключения платёжной системы.','Packages will be available to buy once a payment provider is connected.') + '</p></aside>';
   app.innerHTML = '<section class="page topup-page">' + (game ? body : catalogContent) + '</section>';
   $$('[data-topup-fallback]', app).forEach(image => image.addEventListener('error', () => { if (image.src !== new URL(image.dataset.topupFallback, location.origin).href) image.src = image.dataset.topupFallback; }, { once: true }));
 

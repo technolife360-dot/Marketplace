@@ -108,3 +108,16 @@ This is supplier-side preparation, not a live storefront launch. Each enabled pa
 ## Deployment
 
 Run locally with `npm install`, `npm run dev`, then open `http://127.0.0.1:8000`. `GET /healthz` can be used locally for a basic process check; on Vercel use `GET /api/health`. `npm run backup` makes a timestamped SQLite snapshot and verifies it; schedule it only for local evaluation. Production database backups must use the managed PostgreSQL provider’s backup/PITR service. Before launch, complete the items in “Not launch-complete,” obtain provider approval and credentials, configure a real email sender and verified domain, and perform a deployment/security review. These marketplace, provider, and legal details are not present in the project, so the current build remains in its guarded preview mode.
+
+
+### Public artwork storage
+Site/admin artwork is served directly from `https://images.gamestorehub.com/site-assets/`.
+`public-image-manifest.json` records verified source sizes and SHA-256 hashes. Original
+image files stay in Git for recovery, but `.vercelignore` prevents them being uploaded to Vercel or included in
+new remote function bundles. Fonts remain local.
+Legacy `/static/` image URLs redirect to R2, and known legacy URLs in API responses
+are mapped to the public origin. New public seller uploads use `visitor-images/`;
+admin uploads use `admin-images/`. Existing root-key listing URLs remain valid.
+Private evidence always uses the separate private evidence bucket and signed links.
+When changing artwork, upload and verify the new R2 object before updating its URL
+and manifest. Do not remove an old object while retained deployments still use it.
