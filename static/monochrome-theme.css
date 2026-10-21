@@ -565,4 +565,77 @@ body #auth-password-error[hidden] { display: none !important; }
   body .auth-card { padding: 48px 24px 28px !important; }
 }
 
+/* Registration shares the login shell; pair the short fields to keep it compact. */
+body .auth-page.is-register .auth-card { padding: 44px 32px 28px !important; }
+body .auth-page.is-register .auth-heading { margin-bottom: 18px !important; }
+body .auth-page.is-register .auth-showcase-art {
+  flex: 0 0 240px !important;
+  height: 240px !important;
+  max-height: 240px !important;
+}
+body .auth-page.is-register #auth-form {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+body .auth-page.is-register #auth-form > .field {
+  margin: 0 !important;
+  min-width: 0;
+}
+body .auth-page.is-register #auth-form > :is(.auth-country-field, .auth-registration-terms, .auth-submit),
+body .auth-page.is-register #auth-form > .field:has(#auth-password) {
+  grid-column: 1 / -1;
+}
+body .auth-page.is-register #auth-form input { min-width: 0; width: 100%; }
+body .auth-page.is-register .auth-registration-terms { margin: 0 !important; }
+body .auth-page.is-register .auth-switch { margin-top: 18px !important; }
+body #auth-country {
+  background-repeat: no-repeat !important;
+  background-size: 18px !important;
+  background-position: right 12px center !important;
+}
+@media(max-width:600px) {
+  body .auth-page.is-register #auth-form { grid-template-columns: minmax(0, 1fr); }
+  body .auth-page.is-register .auth-card { padding: 44px 24px 28px !important; }
+}
+
+body .auth-page #auth-password-toggle.password-visibility-toggle,
+body .auth-page #auth-password-toggle.password-visibility-toggle:is(:hover, :active, :focus-visible) {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Authentication fields own one border; focus changes that existing edge. */
+body .auth-page :is(input, select, textarea):not([type='checkbox']) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+body .auth-page :is(input, select, textarea):not([type='checkbox']):focus-visible {
+  border-color: #AAAAAA !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+body .auth-page :is(.field-control, .auth-password-control) {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+body .auth-page .field-control > select { background-image: none !important; }
+
+/* Reserve space for the leading name icon in both authentication forms. */
+body .auth-page .field-control.has-icon > input {
+  padding-inline-start: 40px !important;
+}
+body .auth-page .field-control.has-icon > .field-control-icon {
+  position: absolute !important;
+  left: 13px !important;
+  right: auto !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 16px !important;
+  height: 16px !important;
+  pointer-events: none;
+}
+
 }
