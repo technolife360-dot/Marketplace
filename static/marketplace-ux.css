@@ -69,10 +69,17 @@
 .market-sidebar .market-all-games:hover{border-color:#b28ed02b;background:#ffffff05;color:#e1ceef}
 .market-sidebar a:focus-visible{outline:2px solid #ba95e1;outline-offset:2px}
 @media(min-width:841px){.market-sidebar{position:fixed;top:82px;left:0;z-index:20;width:var(--market-rail-width,272px);height:calc(100dvh - 82px);min-height:0;overflow:hidden;align-self:start}.home-storefront .market-sidebar{position:fixed;left:max(0px,calc((100vw - 1600px)/2));width:224px}}
-@media(min-width:841px) and (max-height:900px){.market-sidebar,.home-storefront .market-sidebar{--rail-row:37px;--game-tile:78px;--game-art:40px;padding:10px;gap:13px}.market-sidebar .market-sidebar-games{padding-top:12px}.market-sidebar .market-sidebar-games nav{gap:6px}}
-@media(min-width:841px) and (max-height:760px){.market-sidebar,.home-storefront .market-sidebar{--rail-row:32px;--game-tile:63px;--game-art:32px;padding:9px;gap:10px}.market-sidebar .market-sidebar-main{gap:1px}.market-sidebar .market-sidebar-games{padding-top:10px}.market-sidebar .market-sidebar-games h2{margin-bottom:8px}.market-sidebar .market-sidebar-games nav a{gap:5px;padding:5px 4px}.market-sidebar .market-all-games{height:25px;min-height:25px;margin-top:8px}.market-sidebar .market-nav-icon{width:27px;height:27px;flex-basis:27px}}
-@media(min-width:841px) and (max-height:650px){.market-sidebar,.home-storefront .market-sidebar{--rail-row:29px;--game-tile:54px;--game-art:26px;padding:7px;gap:8px}.market-sidebar .market-sidebar-games{padding-top:8px}.market-sidebar .market-sidebar-games nav{gap:5px}.market-sidebar .market-sidebar-games nav a{gap:3px;padding:4px}.market-sidebar .market-sidebar-games nav a>span:last-child{font-size:9px;line-height:12px}.market-sidebar .market-sidebar-main a{font-size:10px}.market-sidebar .market-all-games{margin-top:7px;height:23px;min-height:23px}.market-sidebar .market-nav-icon{width:24px;height:24px;flex-basis:24px}.market-sidebar .market-nav-icon .icon{width:16px;height:16px}}
-@media(min-width:841px) and (max-height:600px){.market-sidebar,.home-storefront .market-sidebar{--rail-row:26px;--game-tile:43px;--game-art:21px;padding:6px;gap:6px}.market-sidebar .market-sidebar-games{padding-top:6px}.market-sidebar .market-sidebar-games h2{margin-bottom:5px}.market-sidebar .market-sidebar-games nav{gap:4px}.market-sidebar .market-sidebar-games nav a{gap:2px;padding:3px;border-radius:7px}.market-sidebar .market-sidebar-games nav a>span:last-child{font-size:8px;line-height:10px}.market-sidebar .market-game-mark{border-radius:6px}.market-sidebar .market-all-games{height:21px;min-height:21px;margin-top:5px}.market-sidebar .market-nav-icon{width:22px;height:22px;flex-basis:22px}}
 @media(max-width:840px){.market-sidebar,.home-storefront .market-sidebar{position:static;top:auto;width:auto;height:auto;min-height:0;overflow:visible;padding:10px 14px;gap:0;border-right:0;border-bottom:1px solid #ffffff08}.market-sidebar .market-sidebar-main{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.market-sidebar .market-sidebar-main a{height:34px;min-height:34px;gap:5px;padding:0 5px;font-size:10px;border-color:#ffffff08}.market-sidebar .market-nav-icon{width:18px;height:20px;flex-basis:18px;border:0;background:none}.market-sidebar .market-nav-icon .icon{width:15px;height:15px}.market-sidebar .market-sidebar-games{display:none}}
 
-@media(min-width:841px) and (max-height:520px){.market-sidebar .market-all-games{display:none}}
+
+/* Keep desktop navigation dimensions stable when docked DevTools reduces height. */
+@media(min-width:841px){
+ .market-sidebar,.home-storefront .market-sidebar{--rail-row:32px;--game-tile:63px;--game-art:32px;padding:9px;gap:10px}
+ .market-sidebar .market-sidebar-main{gap:1px}
+ .market-sidebar .market-sidebar-games{padding-top:10px}
+ .market-sidebar .market-sidebar-games h2{margin-bottom:8px}
+ .market-sidebar .market-sidebar-games nav{gap:6px}
+ .market-sidebar .market-sidebar-games nav a{gap:5px;padding:5px 4px}
+ .market-sidebar .market-all-games{height:25px;min-height:25px;margin-top:8px}
+ .market-sidebar .market-nav-icon{width:27px;height:27px;flex-basis:27px}
+}

@@ -11,7 +11,7 @@ window.ExperienceUX=(()=>{
  const field=(name,title,type='text',value='',attrs='')=>`<label class="field"><span>${title}</span><input name="${name}" type="${type}" value="${s(value)}" ${attrs}></label>`;
  const submit=text=>`<button class="button-secondary" type="submit">${text}</button>`;
  function dialog(title,body){const d=document.createElement('dialog');d.className='ux-preview-dialog ops-modal';d.innerHTML=`<header><h2>${title}</h2><button type="button" class="button-secondary" data-close aria-label="${t('Yopish','Закрыть','Close')}">×</button></header>${body}`;document.body.append(d);d.querySelector('[data-close]').onclick=()=>d.close();d.addEventListener('close',()=>d.remove());d.showModal();return d}
- function errorFromApi(error){if(lastForm&&Date.now()-lastSubmit<30000)fail(lastForm,error)}
+ function errorFromApi(error){if(lastForm?.id==='auth-form')return;if(lastForm&&Date.now()-lastSubmit<30000)fail(lastForm,error)}
  document.addEventListener('submit',event=>{lastForm=event.target;lastSubmit=Date.now()},true);
  document.addEventListener('input',event=>{event.target.removeAttribute?.('aria-invalid');event.target.parentElement?.querySelector('.ex-native-error')?.remove()},true);
  document.addEventListener('invalid',event=>{const input=event.target;if(!input.closest('#app,dialog'))return;input.setAttribute('aria-invalid','true');let note=input.parentElement.querySelector('.ex-native-error');if(!note){note=document.createElement('small');note.className='ex-native-error';input.after(note)}note.textContent=input.validationMessage},true);

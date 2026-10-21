@@ -243,9 +243,9 @@ body #account-button.account-button.is-profile-trigger {
 }
 /* Frosted glass profile window; inner panels must not paint over the glass. */
 body #profile-menu-root .profile-dropdown {
-  background: linear-gradient(135deg, rgba(255,255,255,.09), rgba(255,255,255,.025) 55%), rgba(18,18,18,.56) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
-  backdrop-filter: blur(24px) saturate(160%) !important;
+  background: linear-gradient(135deg, rgba(255,255,255,.16), rgba(255,255,255,.04) 55%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(0%) !important;
+  backdrop-filter: blur(24px) saturate(0%) !important;
   border: 1px solid rgba(255,255,255,.22) !important;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 20px 64px rgba(0,0,0,.28) !important;
 }
@@ -385,5 +385,184 @@ body #hero-search-form.home-search > button {
   }
 }
 body .home-intro { min-height: 330px !important; }
+
+/* A centered introduction and three evenly spaced guide steps. */
+body .home-guide {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 28px !important;
+  padding: 32px 16px !important;
+  text-align: center;
+}
+body .home-guide > div {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center !important;
+  gap: 10px !important;
+}
+body .home-guide > div .home-kicker { display: block !important; }
+body .home-guide h2 { margin: 0 !important; }
+body .home-guide > div a { margin: 0 !important; }
+body .home-guide ol {
+  width: min(900px, 100%);
+  margin: 0 auto !important;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 24px !important;
+}
+body .home-guide li {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center !important;
+  gap: 12px !important;
+  min-width: 0;
+}
+body .home-guide li > span {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0 !important;
+  border: 1px solid #303030;
+  border-radius: 50%;
+  background: #111111;
+  color: #AAAAAA !important;
+}
+body .home-guide h3 { margin: 0 0 6px !important; }
+body .home-guide p { max-width: 230px; margin: 0 auto !important; }
+@media(max-width:600px) {
+  body .home-guide { padding: 26px 12px !important; }
+  body .home-guide ol { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+/* Footer feedback keeps the brand colors and the icon frames stationary. */
+body .footer-links a {
+  transition: transform 160ms ease, text-decoration-color 160ms ease !important;
+  text-decoration: underline !important;
+  text-decoration-color: transparent !important;
+  text-underline-offset: 4px;
+}
+body .footer-links a:is(:hover, :focus-visible) {
+  transform: translateX(3px) !important;
+  text-decoration-color: currentColor !important;
+}
+body .footer-social { overflow: hidden; }
+body .footer-social svg {
+  transform-origin: center;
+  transition: transform 180ms ease !important;
+}
+body .footer-social:hover svg { transform: scale(1.25) !important; }
+@media(prefers-reduced-motion:reduce) {
+  body .footer-links a, body .footer-social svg { transition: none !important; }
+}
+
+/* Give each language a separate, comfortably spaced row. */
+body #language-menu.language-menu {
+  display: grid;
+  gap: 6px;
+  min-width: 210px;
+  padding: 8px !important;
+  border-radius: 16px !important;
+}
+body #language-menu > button {
+  min-height: 44px !important;
+  margin: 0 !important;
+  padding: 10px 12px !important;
+  gap: 24px !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  transform: none !important;
+  font-weight: 500;
+}
+body #language-menu > button[aria-checked='true'] {
+  background: #202020 !important;
+  border-color: #414141 !important;
+}
+body #language-menu > button:is(:hover, :focus-visible) {
+  background: #292929 !important;
+  border-color: #666666 !important;
+}
+body #language-menu > button small {
+  flex: 0 0 auto;
+  color: #AAAAAA !important;
+  font-weight: 500;
+}
+
+/* Larger primary navigation labels with consistent spacing and icon sizing. */
+body .market-sidebar .market-sidebar-main {
+  gap: 10px !important;
+}
+body .market-sidebar .market-sidebar-main > a {
+  min-height: 40px !important;
+  height: 40px !important;
+  gap: 10px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+body .market-sidebar .market-sidebar-main .market-nav-icon {
+  width: 32px !important;
+  height: 32px !important;
+  flex: 0 0 32px !important;
+}
+body .market-sidebar .market-sidebar-main .market-nav-icon .icon {
+  width: 21px !important;
+  height: 21px !important;
+}
+
+@media(max-width:840px) {
+  body .market-sidebar .market-sidebar-main {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Compact authentication on the same black surface as the storefront. */
+body .auth-page {
+  background: #000000 !important;
+  padding: 24px 16px !important;
+}
+body .auth-page::before { background: none !important; }
+body .auth-shell {
+  position: relative !important;
+  width: min(920px, 100%) !important;
+  min-height: 540px !important;
+  background: #000000 !important;
+  border-color: #333333 !important;
+}
+body .auth-card, body .auth-showcase { background: #000000 !important; }
+body .auth-showcase { padding: 26px !important; }
+body .auth-showcase::before, body .auth-showcase::after { background: none !important; }
+body .auth-showcase-art { min-height: 240px !important; }
+body .auth-card { padding: 48px 32px 32px !important; }
+body .auth-close {
+  position: absolute !important;
+  display: grid !important;
+  place-items: center;
+  top: 12px !important;
+  right: 12px !important;
+  width: 34px !important;
+  height: 34px !important;
+  z-index: 10 !important;
+  background: #171717 !important;
+  border: 1px solid #414141 !important;
+  border-radius: 50% !important;
+  color: #F1F1F1 !important;
+  font-size: 26px !important;
+  text-decoration: none !important;
+}
+body .auth-close:hover { background: #292929 !important; }
+body #auth-password-error {
+  color: #FF6B6B !important;
+  background: transparent !important;
+  margin: 8px 0 0 !important;
+  font-size: 12px;
+  line-height: 1.5;
+}
+body #auth-password-error[hidden] { display: none !important; }
+@media(max-width:800px) {
+  body .auth-shell { max-width: 540px !important; min-height: 0 !important; }
+  body .auth-card { padding: 48px 24px 28px !important; }
+}
 
 }
