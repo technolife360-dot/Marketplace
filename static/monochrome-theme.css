@@ -1,3 +1,19 @@
+/* Uniform icon geometry across storefront and administration. */
+@layer sentryloot-icons, sentryloot-theme;
+@layer sentryloot-icons {
+  body svg.icon {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    flex-shrink: 0 !important;
+  }
+  body svg.icon > use {
+    width: 18px !important;
+    height: 18px !important;
+    x: 3px;
+    y: 3px;
+  }
+}
 /* Layered important paints override legacy page-specific themes consistently. */
 @layer sentryloot-theme {
 /* Shared site palette. Product artwork and social brand marks keep their colours. */
@@ -729,6 +745,26 @@ body .auth-country-popup .auth-country-search {
   height: 38px !important;
   padding: 8px 11px !important;
   font-size: 12px !important;
+}
+
+/* Let the registration artwork fill its column instead of leaving a bottom gap. */
+@media(min-width:801px) {
+  body .auth-page.is-register .auth-showcase {
+    display: flex !important;
+    flex-direction: column;
+    gap: 16px;
+  }
+  body .auth-page.is-register .auth-showcase-art {
+    flex: 1 1 auto !important;
+    height: auto !important;
+    min-height: 260px !important;
+    max-height: none !important;
+    margin: 0 -12px !important;
+  }
+  body .auth-page.is-register .auth-showcase-foot {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
 }
 
 }
