@@ -201,31 +201,3 @@
 .market-details-loading,.market-details-error{padding:24px 0;color:#bbb}
 @media(max-width:600px){#app .market-main .market-product-card .product-card-body{padding:14px 14px 0;gap:10px}#app .market-main .market-product-card .product-title{font-size:16px}#app .market-main .market-product-card .market-card-footer{min-height:50px;padding:6px 0 10px}#app .market-main .market-product-card .market-seller-avatar{width:36px;height:36px}#app .market-main .market-product-card .market-card-bottom{padding:13px 14px 14px}#app .market-main .market-product-card .market-card-bottom .price{font-size:17px}#app .market-main .market-product-card .market-card-view{min-width:78px;min-height:42px}.market-details-dialog{width:calc(100vw - 22px);max-height:94vh;padding:23px 20px;border-radius:20px}.market-details-header{margin-bottom:22px}.market-details-facts{gap:0 18px}.market-details-facts span{font-size:12px}.market-details-facts strong{font-size:14px}.market-details-copy p{font-size:14px}}
 .market-details-more{display:inline-block;margin-top:12px;color:#f2f2f2;text-decoration:underline;text-underline-offset:3px}
-
-/* Marketplace cards use the same readable, compact hierarchy as the listing reference. */
-#app .market-main .market-product-card{isolation:isolate;min-height:380px;border-color:#ffffff1a!important;border-radius:22px!important;background:linear-gradient(145deg,#191919,#121212)!important}
-#app .market-main .market-product-card::before{position:absolute;z-index:0;inset:0;background:radial-gradient(circle at 88% -10%,#ffffff0c,transparent 31%),linear-gradient(135deg,transparent 58%,#ffffff03);content:''}
-#app .market-main .market-product-card .market-card-watermark{position:absolute;z-index:0;top:-30px;right:-11px;max-width:92%;overflow:hidden;color:#fff;opacity:.035;font-size:clamp(86px,10vw,142px);font-weight:800;letter-spacing:-.13em;line-height:1;pointer-events:none;user-select:none}
-#app .market-main .market-product-card .product-card-body{position:relative;z-index:1;gap:15px;padding:31px 33px 0}
-#app .market-main .market-product-card .product-title{max-width:95%;font-size:clamp(21px,1.65vw,28px);font-weight:600;line-height:1.28}
-#app .market-main .market-product-card .market-card-highlights{gap:8px;margin-top:1px}
-#app .market-main .market-product-card .market-card-rating,#app .market-main .market-product-card .market-card-sold,#app .market-main .market-product-card .market-sold-out{min-height:31px;padding:6px 10px;border-radius:6px;font-size:13px}
-#app .market-main .market-product-card .market-card-rating{background:#123520;color:#3ddc87}
-#app .market-main .market-product-card .market-card-sold{background:#2b2b2b;color:#bdbdbd}
-#app .market-main .market-product-card .market-sold-out{display:inline-flex;align-items:center;background:#3a1f1f;color:#f2a2a2}
-#app .market-main .market-product-card .market-card-pills{min-height:42px;margin-top:7px;padding-right:49px;gap:8px}
-#app .market-main .market-product-card .market-card-pills>span{min-height:40px;padding:8px 13px;border-radius:22px;font-size:15px}
-#app .market-main .market-product-card .market-card-details{width:42px;height:42px;color:#c5c5c5}
-#app .market-main .market-product-card .market-card-details .icon{width:29px;height:29px}
-#app .market-main .market-product-card .market-card-footer{min-height:62px;margin-top:8px;padding:8px 0 15px;gap:12px}
-#app .market-main .market-product-card .market-seller-avatar{width:50px;height:50px;border-color:#ffffff32;background:linear-gradient(135deg,#8564a1,#26385d);font-size:17px}
-#app .market-main .market-product-card .market-seller-name{font-size:17px;font-weight:550}
-#app .market-main .market-product-card .market-seller-presence{font-size:13px}
-#app .market-main .market-product-card .market-seller-verified{width:20px;height:20px}
-#app .market-main .market-product-card .market-seller-verified .icon{width:19px;height:19px}
-#app .market-main .market-product-card .market-card-bottom{position:relative;z-index:1;padding:19px 33px 25px;border-top-color:#ffffff17}
-#app .market-main .market-product-card .market-card-price-label{font-size:16px}
-#app .market-main .market-product-card .market-card-bottom .price{font-size:27px;font-weight:700}
-#app .market-main .market-product-card .market-card-view{min-width:132px;min-height:64px;border-radius:22px;font-size:21px}
-#app .market-main .market-product-card .favorite-card-button{display:none}
-@media(max-width:600px){#app .market-main .market-product-card{min-height:348px;border-radius:18px!important}#app .market-main .market-product-card .market-card-watermark{top:-17px;right:-7px;font-size:86px}#app .market-main .market-product-card .product-card-body{gap:12px;padding:23px 20px 0}#app .market-main .market-product-card .product-title{font-size:20px}#app .market-main .market-product-card .market-card-rating,#app .market-main .market-product-card .market-card-sold,#app .market-main .market-product-card .market-sold-out{min-height:28px;font-size:12px}#app .market-main .market-product-card .market-card-pills{margin-top:2px}#app .market-main .market-product-card .market-card-pills>span{min-height:35px;padding:7px 11px;font-size:13px}#app .market-main .market-product-card .market-card-details{width:37px;height:37px}#app .market-main .market-product-card .market-card-footer{min-height:52px;margin-top:2px;padding-bottom:11px}#app .market-main .market-product-card .market-seller-avatar{width:42px;height:42px;font-size:14px}#app .market-main .market-product-card .market-seller-name{font-size:15px}#app .market-main .market-product-card .market-seller-presence{font-size:12px}#app .market-main .market-product-card .market-card-bottom{padding:15px 20px 18px}#app .market-main .market-product-card .market-card-price-label{font-size:13px}#app .market-main .market-product-card .market-card-bottom .price{font-size:22px}#app .market-main .market-product-card .market-card-view{min-width:94px;min-height:48px;border-radius:16px;font-size:17px}}
