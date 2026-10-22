@@ -201,3 +201,35 @@
 .market-details-loading,.market-details-error{padding:24px 0;color:#bbb}
 @media(max-width:600px){#app .market-main .market-product-card .product-card-body{padding:14px 14px 0;gap:10px}#app .market-main .market-product-card .product-title{font-size:16px}#app .market-main .market-product-card .market-card-footer{min-height:50px;padding:6px 0 10px}#app .market-main .market-product-card .market-seller-avatar{width:36px;height:36px}#app .market-main .market-product-card .market-card-bottom{padding:13px 14px 14px}#app .market-main .market-product-card .market-card-bottom .price{font-size:17px}#app .market-main .market-product-card .market-card-view{min-width:78px;min-height:42px}.market-details-dialog{width:calc(100vw - 22px);max-height:94vh;padding:23px 20px;border-radius:20px}.market-details-header{margin-bottom:22px}.market-details-facts{gap:0 18px}.market-details-facts span{font-size:12px}.market-details-facts strong{font-size:14px}.market-details-copy p{font-size:14px}}
 .market-details-more{display:inline-block;margin-top:12px;color:#f2f2f2;text-decoration:underline;text-underline-offset:3px}
+
+/* Keep listing-card details aligned at both wide and compact card widths. */
+#app .market-main .market-product-card{container-type:inline-size}
+#app .market-main .market-product-card .product-card-body{gap:10px;padding:16px 18px 0}
+#app .market-main .market-product-card .market-card-highlights{gap:6px}
+#app .market-main .market-product-card .market-card-pills{display:grid;grid-template-columns:max-content max-content minmax(0,1fr) 36px;align-items:center;gap:6px;min-height:36px;padding-right:0}
+#app .market-main .market-product-card .market-card-pills>span{min-width:0;min-height:34px;padding:7px 10px;font-size:12px}
+#app .market-main .market-product-card .market-card-details{position:static;width:36px;height:36px;justify-self:end;transform:none}
+#app .market-main .market-product-card .market-card-footer{min-height:52px;margin-top:2px;padding:6px 0 12px}
+#app .market-main .market-product-card .market-card-bottom{align-items:flex-end;gap:14px;padding:14px 18px 17px}
+#app .market-main .market-product-card .market-card-bottom>div{gap:2px}
+#app .market-main .market-product-card .market-card-price-label{font-size:12px}
+#app .market-main .market-product-card .market-card-bottom .price{font-size:19px;line-height:1.15}
+#app .market-main .market-product-card .market-card-view{min-width:88px;min-height:44px;padding:7px 14px;border-radius:14px;font-size:14px}
+@container (max-width:260px){
+ #app .market-main .market-product-card .product-card-body{gap:8px;padding:12px 12px 0}
+ #app .market-main .market-product-card .product-title{font-size:14px}
+ #app .market-main .market-product-card .market-card-rating,#app .market-main .market-product-card .market-card-sold{min-height:26px;padding:5px 7px;font-size:10px}
+ #app .market-main .market-product-card .market-card-pills{grid-template-columns:minmax(0,1fr) max-content;gap:5px;min-height:0}
+ #app .market-main .market-product-card .market-card-pills>span{min-height:30px;padding:6px 7px;font-size:10px}
+ #app .market-main .market-product-card .market-card-pills>span:nth-child(3){grid-column:1;grid-row:2}
+ #app .market-main .market-product-card .market-card-details{grid-column:2;grid-row:2;width:30px;height:30px}
+ #app .market-main .market-product-card .market-card-details .icon{width:21px;height:21px}
+ #app .market-main .market-product-card .market-card-footer{min-height:44px;padding:5px 0 9px;gap:7px}
+ #app .market-main .market-product-card .market-seller-avatar{width:34px;height:34px;font-size:12px}
+ #app .market-main .market-product-card .market-seller-name{font-size:12px}
+ #app .market-main .market-product-card .market-seller-presence{font-size:10px}
+ #app .market-main .market-product-card .market-card-bottom{gap:8px;padding:11px 12px 13px}
+ #app .market-main .market-product-card .market-card-price-label{font-size:10px}
+ #app .market-main .market-product-card .market-card-bottom .price{font-size:16px}
+ #app .market-main .market-product-card .market-card-view{min-width:66px;min-height:36px;padding:6px 9px;border-radius:11px;font-size:12px}
+}
