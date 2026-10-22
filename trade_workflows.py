@@ -129,10 +129,10 @@ def cancel_settle(db,order,core):
         db.execute("UPDATE payments SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE order_id=? AND status='pending'",(oid,));status='cancelled'
     else:
         p=db.execute('SELECT provider,status FROM payments WHERE order_id=?',(oid,)).fetchone()
-        if not p or p['provider']!='sandbox' or p['status']!='succeeded' or (core['MODE']!='development' and not core['internal_testing_enabled']()):raise core['HttpError'](503,'Qaytarim adapteri ulanmagan. So‘rov saqlanadi; haqiqiy pul o‘zgarmaydi.')
-        core['refund_sandbox_escrow'](db,oid,order['buyer_id']);db.execute("UPDATE payments SET status='sandbox_refunded',updated_at=CURRENT_TIMESTAMP WHERE order_id=?",(oid,));status='refunded'
+        if not p or p['provider'] not in ('sandbox','stripe_test') or p['status']!='succeeded' or (core['MODE']!='development' and not core['internal_testing_enabled']()):raise core['HttpError'](503,'Qaytarim adapteri ulanmagan. So‘rov saqlanadi; haqiqiy pul o‘zgarmaydi.')
+        core['refund_sandbox_escrow'](db,oid,order['buyer_id']);db.execute("UPDATE payments SET status='sandbox_refunded',updated_at=CURRENT_TIMESTAMP WHERE order_id=? AND provider='sandbox'",(oid,));status='refund_pending' if p['provider']=='stripe_test' else 'refunded'
         # Restock only completely undelivered lines; an item already sent may be irrecoverable.
-        for i in db.execute('SELECT listing_id,quantity,delivered_quantity FROM order_items WHERE order_id=?',(oid,)):
+        for i in ([] if p['provider']=='stripe_test' else db.execute('SELECT listing_id,quantity,delivered_quantity FROM order_items WHERE order_id=?',(oid,))):
             if i['delivered_quantity']==0:db.execute("UPDATE listings SET stock=stock+?,status=CASE WHEN status='sold_out' THEN 'published' ELSE status END WHERE id=?",(i['quantity'],i['listing_id']))
     db.execute('UPDATE orders SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(status,oid));core['event'](db,oid,None,order['status'],status,'Bekor qilish kelishuvi · sandbox bo‘lsa haqiqiy pul o‘zgarmaydi')
     return status

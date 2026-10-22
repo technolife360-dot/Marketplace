@@ -24,8 +24,8 @@ def discount(db,code,uid,lines,core,lock=False):
     return (original-line['price_minor'])*line['quantity']
 
 def stats(db,uid):
-    own=db.execute("SELECT COUNT(*) n FROM orders WHERE buyer_id=? AND status='completed' AND payment_mode NOT IN ('sandbox','disabled')",(uid,)).fetchone()['n']
-    friends=db.execute("SELECT COUNT(DISTINCT o.buyer_id) n FROM orders o JOIN platform_config c ON c.key='referral_attribution:'||o.buyer_id WHERE c.value=? AND o.status='completed' AND o.payment_mode NOT IN ('sandbox','disabled')",(uid,)).fetchone()['n']
+    own=db.execute("SELECT COUNT(*) n FROM orders WHERE buyer_id=? AND status='completed' AND payment_mode NOT IN ('sandbox','disabled','stripe_test')",(uid,)).fetchone()['n']
+    friends=db.execute("SELECT COUNT(DISTINCT o.buyer_id) n FROM orders o JOIN platform_config c ON c.key='referral_attribution:'||o.buyer_id WHERE c.value=? AND o.status='completed' AND o.payment_mode NOT IN ('sandbox','disabled','stripe_test')",(uid,)).fetchone()['n']
     row=db.execute('SELECT settings_json FROM experience_preferences WHERE user_id=?',(uid,)).fetchone();prefs=json.loads(row['settings_json']) if row else {}
     return {'referral_code':prefs.get('referral_code',''),'completed_purchases':own,'qualified_referrals':friends,'loyalty_points':own*10+friends*20,'rules':{'purchase_points':10,'referral_points':20,'cash_value':False,'redeemable':False,'sandbox_excluded':True},'tier':'regular' if own>=10 else 'member'}
 

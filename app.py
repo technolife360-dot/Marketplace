@@ -3,6 +3,8 @@
 from __future__ import annotations
 import marketplace_features
 import purchase_reviews
+import stripe_test_payments
+import stripe_test_topups
 import marketplace_operations
 import trade_workflows
 import catalogue_experience
@@ -197,16 +199,18 @@ def production_marketplace_sales_enabled():
         provider=get_provider(MODE,os.environ.get('PAYMENT_PROVIDER','disabled').strip().lower())
     except Exception:
         return False
-    return provider.name not in ('disabled','sandbox')
+    return provider.name not in ('disabled','sandbox','stripe_test')
 
 def internal_testing_enabled():
     """Explicitly opt in to sandbox transactions inside the protected deployment."""
     return (MODE == 'production'
             and os.environ.get('MARKETPLACE_INTERNAL_TESTING_ENABLED','').strip().lower() == 'true'
-            and os.environ.get('PAYMENT_PROVIDER','').strip().lower() == 'sandbox')
+            and os.environ.get('PAYMENT_PROVIDER','').strip().lower() in ('sandbox','stripe_test'))
 
 def configured_payment_provider():
-    if internal_testing_enabled():
+    if MODE=='production' and os.environ.get('PAYMENT_PROVIDER','').strip().lower()=='stripe_test' and not internal_testing_enabled():
+        raise RuntimeError('Stripe test checkout requires explicit internal testing mode.')
+    if internal_testing_enabled() and os.environ.get('PAYMENT_PROVIDER','').strip().lower()=='sandbox':
         return get_provider('development','sandbox')
     return get_provider(MODE,os.environ.get('PAYMENT_PROVIDER','disabled').strip().lower())
 
@@ -317,10 +321,11 @@ def seed_topup_catalog(db):
 
 def topup_public_package(row,db=None):
     available=int(row['stock_on_hand'])-int(row['stock_reserved'])>0
+    test_ready=stripe_test_topups.enabled(globals()) and int(row['price_minor'])>0 and bool(row['enabled'])
     return {**topup_package_metadata(row),**launch_readiness.package_metadata(row,db),'id':row['id'],'game_slug':row['game_slug'],'game_name':row['game_name'],'url_slug':row['url_slug'],
             'currency':row['currency'],'amount':row['amount'],'price_minor':row['price_minor'],
             'coming_soon':bool(row['coming_soon']),'available':available,
-            'priced':int(row['price_minor'])>0,'purchasable':False,'payment_ready':False}
+            'priced':int(row['price_minor'])>0,'purchasable':test_ready,'payment_ready':test_ready,'payment_mode':'stripe_test' if test_ready else 'disabled'}
 
 def topup_admin_row(row):
     """Normalize PostgreSQL timestamp values before returning admin API rows as JSON."""
@@ -777,7 +782,7 @@ def award_account_order_bonuses(db,oid):
         FROM order_items i JOIN listings l ON l.id=i.listing_id
         WHERE i.order_id=? AND l.product_type='account' ''',(oid,)).fetchall()
     if not items: return
-    mode='preview' if payment['provider']=='sandbox' else 'real'
+    mode='preview' if payment['provider'] in ('sandbox','stripe_test') else 'real'
     buyer_amount=sum(i['unit_price_minor']*i['quantity'] for i in items)
     add_bonus_entry(db,order['buyer_id'],'account_buy',oid,'earned',buyer_amount//1000,mode)
     seller_amounts={}
@@ -811,6 +816,10 @@ def bonus_summary(db,uid):
 
 def settle_seller_escrow(db,oid):
     """Move sandbox-held amounts into withdrawable seller balances after resolution."""
+    payment=db.execute('SELECT provider FROM payments WHERE order_id=?',(oid,)).fetchone()
+    if payment and payment['provider']=='stripe_test':
+        stripe_test_payments.queue_release(db,oid); return
+    if db.execute("SELECT 1 FROM ledger_entries WHERE order_id=? AND entry_type='seller_earning'",(oid,)).fetchone(): return
     order=db.execute('SELECT currency FROM orders WHERE id=?',(oid,)).fetchone()
     if not order: raise HttpError(404,'Buyurtma topilmadi.')
     for item in db.execute('SELECT * FROM order_items WHERE order_id=?',(oid,)).fetchall():
@@ -825,6 +834,12 @@ def settle_seller_escrow(db,oid):
 
 def refund_sandbox_escrow(db,oid,buyer_id):
     """Record a simulated sandbox refund; it never represents a live cash transfer."""
+    payment=db.execute('SELECT provider FROM payments WHERE order_id=?',(oid,)).fetchone()
+    if payment and payment['provider']=='stripe_test':
+        stripe_test_payments.queue_refund(db,oid,globals()); return
+    record_held_refund(db,oid,buyer_id)
+
+def record_held_refund(db,oid,buyer_id):
     order=db.execute('SELECT currency,total_minor FROM orders WHERE id=?',(oid,)).fetchone()
     if not order: raise HttpError(404,'Buyurtma topilmadi.')
     reverse_order_bonuses(db,oid)
@@ -1238,6 +1253,9 @@ def order_view(db, oid, uid, admin=False):
         order['items'].append(it)
     order['events']=[dict(x) for x in db.execute('SELECT to_status,note,created_at FROM order_events WHERE order_id=? ORDER BY created_at',(oid,)).fetchall()]
     order['payment']=rowdict(db.execute('SELECT provider,status,amount_minor,currency,created_at FROM payments WHERE order_id=?',(oid,)).fetchone())
+    if order['payment'] and order['payment']['provider']=='stripe_test':
+        job=stripe_test_payments.read(db,'job:'+oid+':refund') or stripe_test_payments.read(db,'job:'+oid+':transfer')
+        order['payment']['settlement_status']=job['kind']+':'+job['status'] if job else 'held' if order['payment']['status']=='succeeded' else order['payment']['status']
     if order['payment'] and not admin and not is_buyer:
         # The payment covers the whole basket, including other sellers' lines.
         order['payment'].pop('amount_minor',None)
@@ -1408,12 +1426,12 @@ class Handler(BaseHTTPRequestHandler):
             db=connect()
             ctx=self.context(db)
             if ctx.get('mfa_pending') and path not in ('/api/me','/api/security/unlock','/api/logout'): raise HttpError(403,'Ikki bosqichli tasdiqlash kerak.')
-            csrf_exempt=path=='/api/webhooks/didit'
+            csrf_exempt=path in ('/api/webhooks/didit','/api/webhooks/stripe-test')
             if method in ('POST','PATCH','DELETE') and ctx['uid'] and not csrf_exempt:
                 if not hmac.compare_digest(self.headers.get('X-CSRF-Token',''),ctx['csrf'] or ''): raise HttpError(403,'Xavfsizlik tokeni noto‘g‘ri. Sahifani yangilang.')
             binary_evidence=method=='POST' and (re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/account-evidence/[12]',path) or re.fullmatch(r'/api/conversations/[A-Za-z0-9_-]{1,100}/photos',path) or re.fullmatch(r'/api/disputes/[A-Za-z0-9_-]{1,100}/(?:photos|videos)',path) or (re.fullmatch(r'/api/orders/[A-Za-z0-9_-]{1,100}/evidence',path) and self.headers.get('Content-Type','').startswith('image/')))
             raw_body=self.body(MAX_IMAGE_BODY) if method=='POST' and (path in ('/api/listing-images','/api/seller/import/preview') or binary_evidence) else self.body() if method in ('POST','PATCH','PUT') and path.startswith('/api/') else b''
-            if (path in ('/api/listing-images','/api/seller/import/preview') and method=='POST') or binary_evidence: data={}
+            if (path in ('/api/listing-images','/api/seller/import/preview','/api/webhooks/stripe-test') and method=='POST') or binary_evidence: data={}
             else: data=parse_json(raw_body) if raw_body else {}
             result=self.route(db,ctx,method,path,parse_qs(parsed.query),data,raw_body)
             if isinstance(result,tuple) and len(result)==3: status,data,headers=result
@@ -1514,6 +1532,8 @@ class Handler(BaseHTTPRequestHandler):
         # Capabilities are selected by the server's route map, never request JSON.
         if path=='/api/admin' or path.startswith('/api/admin/'):
             require_admin(ctx)
+        stripe_result=stripe_test_payments.route(self,db,ctx,method,path,data,raw_body,globals())
+        if stripe_result is not stripe_test_payments.UNHANDLED: return stripe_result
         push_result=web_push.route(self,db,ctx,method,path,data,globals())
         if push_result is not launch_readiness.UNHANDLED:return push_result
         growth_result=marketplace_growth.route(db,ctx,method,path,data,globals())
@@ -2006,7 +2026,7 @@ class Handler(BaseHTTPRequestHandler):
             held=int(db.execute("SELECT COALESCE(SUM(amount_minor),0) amount_minor FROM ledger_entries WHERE user_id=? AND entry_type IN ('escrow_hold','escrow_release')",(uid,)).fetchone()['amount_minor'] or 0)
             pending_payout=int(db.execute("SELECT COALESCE(SUM(amount_minor),0) amount_minor FROM payout_requests WHERE seller_id=? AND status IN ('pending','approved')",(uid,)).fetchone()['amount_minor'] or 0)
             wallet_balance=earnings-paid_out
-            return {'listings':[dict(x) for x in db.execute('SELECT status,COUNT(*) count FROM listings WHERE seller_id=? GROUP BY status',(uid,)).fetchall()],'orders':[dict(x) for x in db.execute('SELECT o.status,COUNT(DISTINCT o.id) count FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.seller_id=? GROUP BY o.status',(uid,)).fetchall()],'earnings':earnings,'wallet':{'currency':'UZS','held_minor':held,'available_minor':max(0,wallet_balance-pending_payout),'pending_payout_minor':pending_payout,'paid_out_minor':paid_out,'automated_withdrawals_enabled':False}}
+            return {'stripe_test_enabled':stripe_test_topups.enabled(globals()),'listings':[dict(x) for x in db.execute('SELECT status,COUNT(*) count FROM listings WHERE seller_id=? GROUP BY status',(uid,)).fetchall()],'orders':[dict(x) for x in db.execute('SELECT o.status,COUNT(DISTINCT o.id) count FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.seller_id=? GROUP BY o.status',(uid,)).fetchall()],'earnings':earnings,'wallet':{'currency':'UZS','held_minor':held,'available_minor':max(0,wallet_balance-pending_payout),'pending_payout_minor':pending_payout,'paid_out_minor':paid_out,'automated_withdrawals_enabled':False}}
         if path=='/api/requests' and method=='GET':
             own=qs.get('mine',['0'])[0]=='1'
             if own: require_user(ctx)
@@ -2028,9 +2048,9 @@ class Handler(BaseHTTPRequestHandler):
             require_user(ctx)
             rows=db.execute('SELECT c.*,l.title listing_title, CASE WHEN c.buyer_id=? THEN su.display_name ELSE bu.display_name END other_name,(SELECT body FROM messages m WHERE m.conversation_id=c.id ORDER BY created_at DESC LIMIT 1) last_message,(SELECT COUNT(*) FROM messages m WHERE m.conversation_id=c.id AND m.sender_id<>? AND m.read_at IS NULL) unread FROM conversations c LEFT JOIN listings l ON l.id=c.listing_id JOIN users su ON su.id=c.seller_id JOIN users bu ON bu.id=c.buyer_id WHERE c.buyer_id=? OR c.seller_id=? ORDER BY c.created_at DESC',(uid,uid,uid,uid)).fetchall()
             return [dict(x) for x in rows]
-        if path.startswith('/api/conversations/') and method=='GET':
+        if re.fullmatch(r'/api/conversations/[A-Za-z0-9_-]+',path) and method=='GET':
             require_user(ctx); cid=path.split('/')[-1]; conv=db.execute('SELECT * FROM conversations WHERE id=?',(cid,)).fetchone()
-            if not conv or uid not in (conv['buyer_id'],conv['seller_id']) and not is_admin(db,uid): raise HttpError(404,'Suhbat topilmadi.')
+            if not conv or uid not in (conv['buyer_id'],conv['seller_id']): raise HttpError(404,'Suhbat topilmadi.')
             db.execute('UPDATE messages SET read_at=CURRENT_TIMESTAMP WHERE conversation_id=? AND sender_id<>?',(cid,uid))
             return {'conversation':dict(conv),'messages':[dict(x) for x in db.execute('SELECT id,sender_id,body,created_at,read_at FROM messages WHERE conversation_id=? ORDER BY created_at LIMIT 200',(cid,))]}
         m=re.fullmatch(r'/api/notifications/([^/]+)/read',path)
@@ -2649,7 +2669,7 @@ class Handler(BaseHTTPRequestHandler):
             evidence=db.execute('SELECT slot,object_path FROM account_review_evidence WHERE order_id=? ORDER BY slot',(oid,)).fetchall()
             if len(evidence)!=2 or [row['slot'] for row in evidence]!=[1,2]: raise HttpError(409,'Ikkala maxfiy skrinshot ham mavjud bo‘lishi shart.')
             payment=db.execute('SELECT * FROM payments WHERE order_id=?',(oid,)).fetchone()
-            if (MODE!='development' and not internal_testing_enabled()) or not payment or payment['provider']!='sandbox' or payment['status']!='succeeded':
+            if (MODE!='development' and not internal_testing_enabled()) or not payment or payment['provider'] not in ('sandbox','stripe_test') or payment['status']!='succeeded':
                 raise HttpError(503,'Bu amal faqat sandbox buyurtmada ishlaydi. Haqiqiy pul uchun tasdiqlangan payment/refund/escrow jarayoni kerak; mablag‘ o‘zgartirilmadi.')
             if action in ('approve','request_info'): require_private_evidence_bucket()
             db.execute('BEGIN IMMEDIATE')
@@ -2671,9 +2691,9 @@ class Handler(BaseHTTPRequestHandler):
                     changed=db.execute("UPDATE orders SET status='refunded',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='under_review'",(oid,))
                     if changed.rowcount!=1: raise HttpError(409,'Buyurtma holati o‘zgargan; yangilang.')
                     refund_sandbox_escrow(db,oid,review['buyer_id'])
-                    db.execute("UPDATE payments SET status='sandbox_refunded',updated_at=CURRENT_TIMESTAMP WHERE order_id=?",(oid,))
+                    db.execute("UPDATE payments SET status='sandbox_refunded',updated_at=CURRENT_TIMESTAMP WHERE order_id=? AND provider='sandbox'",(oid,))
                     event(db,oid,aid,'under_review','refunded','Moderator sandbox qaytarimini qayd etdi: '+note)
-                    result='refunded'
+                    result='refund_pending' if payment['provider']=='stripe_test' else 'refunded'
                 audit(db,aid,'account_review_'+action,'order',oid,{'note':note,'evidence_count':2})
                 if action=='approve': notify(db,review['buyer_id'],'account_review','Akkaunt tekshiruvi yakunlandi','Moderator ikkala skrinshotni ko‘rib, buyurtmani tasdiqladi. Bu keyinchalik akkaunt tiklanmasligiga kafolat bermaydi.','/order/'+oid)
                 elif action=='refund_buyer': notify(db,review['buyer_id'],'account_review','Sandbox qaytarimi qayd etildi','Moderator sandbox qaytarimini qayd etdi; haqiqiy pul o‘tkazilmagan.','/order/'+oid)
@@ -2700,7 +2720,7 @@ class Handler(BaseHTTPRequestHandler):
                 for seller in sellers: notify(db,seller,'dispute_update','Nizo bo‘yicha qo‘shimcha ma’lumot',note,'/order/'+oid)
                 return {'status':'reviewing','funds_moved':False}
             payment=db.execute('SELECT * FROM payments WHERE order_id=?',(oid,)).fetchone()
-            if (MODE!='development' and not internal_testing_enabled()) or not payment or payment['provider']!='sandbox' or payment['status']!='succeeded':
+            if (MODE!='development' and not internal_testing_enabled()) or not payment or payment['provider'] not in ('sandbox','stripe_test') or payment['status']!='succeeded':
                 raise HttpError(503,'Haqiqiy nizoni yakunlash uchun provayderning tasdiqlangan refund/escrow adapteri kerak. Hech qanday mablag‘ o‘zgartirilmadi.')
             db.execute('BEGIN IMMEDIATE')
             try:
@@ -2712,8 +2732,8 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     changed=db.execute("UPDATE orders SET status='refunded',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='disputed'",(oid,))
                     if changed.rowcount!=1: raise HttpError(409,'Nizo allaqachon yakunlangan.')
-                    refund_sandbox_escrow(db,oid,order['buyer_id']); db.execute("UPDATE payments SET status='sandbox_refunded',updated_at=CURRENT_TIMESTAMP WHERE order_id=?",(oid,)); event(db,oid,aid,'disputed','refunded',note)
-                    result='refunded'; buyer_title='Sandbox qaytarimi qayd etildi'; buyer_body='Sinov buyurtmasi bekor qilindi. Bu haqiqiy pul qaytarimi emas.'; seller_title='Nizo yakunlandi'; seller_body='Sinov buyurtmasi qaytarim bilan yopildi; haqiqiy pul ko‘chirilmagan.'
+                    refund_sandbox_escrow(db,oid,order['buyer_id']); db.execute("UPDATE payments SET status='sandbox_refunded',updated_at=CURRENT_TIMESTAMP WHERE order_id=? AND provider='sandbox'",(oid,)); event(db,oid,aid,'disputed','refunded',note)
+                    result='refund_pending' if payment['provider']=='stripe_test' else 'refunded'; buyer_title='Sandbox qaytarimi qayd etildi'; buyer_body='Sinov buyurtmasi bekor qilindi. Bu haqiqiy pul qaytarimi emas.'; seller_title='Nizo yakunlandi'; seller_body='Sinov buyurtmasi qaytarim bilan yopildi; haqiqiy pul ko‘chirilmagan.'
                 db.execute("UPDATE reports SET status='resolved',resolution=?,resolved_at=CURRENT_TIMESTAMP WHERE id=?",(note,report['id'])); audit(db,aid,'dispute_'+action,'order',oid,{'note':note,'payment_mode':'sandbox'})
                 notify(db,order['buyer_id'],'dispute_update',buyer_title,buyer_body,'/order/'+oid)
                 for seller in sellers: notify(db,seller,'dispute_update',seller_title,seller_body,'/order/'+oid)

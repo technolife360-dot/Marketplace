@@ -1,4 +1,4 @@
-/* Product presentation uses public catalogue data; ordering remains disabled. */
+/* Live ordering stays disabled; explicit Stripe sandbox checkout uses test funds. */
 function topupQuantity(value) {
   const quantity=Number(value);
   return Number.isInteger(quantity)&&quantity>=1&&quantity<=99?quantity:null;
@@ -73,6 +73,37 @@ function renderTopUpDetail(game, initialPackage) {
   if(me)LaunchUX.topupState().then(r=>{launchAlerts=r.launch_alert;prefsReady=true;updateLaunchAlert()}).catch(error=>{prefsReady=true;updateLaunchAlert();toast(error.message,'error')});
   const form=q('#topup-checkout-form');form.addEventListener('input',()=>{invalidatePreview();q('#tu-player-error').hidden=true;all('#topup-checkout-form input').forEach(input=>input.removeAttribute('aria-invalid'));});
   form.addEventListener('submit',event=>{event.preventDefault();const invalid=Array.from(form.elements).find(field=>field.willValidate&&!field.validity.valid);if(invalid){q('#tu-player-error').hidden=false;q('#tu-player-error').textContent=t('ID faqat raqamlardan iborat bo‘lishi kerak. O‘yinchi ID: 3–40 ta raqam; server: 1–10 ta raqam.','ID должен содержать только цифры. ID игрока: 3–40 цифр; сервер: 1–10 цифр.','Use numbers only. Player ID: 3–40 digits; server: 1–10 digits.');invalid.setAttribute('aria-invalid','true');invalid.focus();return;}const count=topupQuantity(quantity.value);if(count===null){quantity.focus();return;}const player=form.elements.namedItem('player_id').value,server=form.elements.namedItem('server_id')?.value;const preview=q('#topup-details-preview');preview.hidden=false;preview.innerHTML='<b>'+t('Kiritilgan ma’lumotlar','Введённые данные','Your entered details')+'</b><p>'+esc(game.name)+' · '+esc(packLabel(selected))+' × '+count+' · '+topupDetailPrice(selected,count)+'</p><p>ID: '+esc(player)+(server?' · Server: '+esc(server):'')+'</p><small>'+t('Bu buyurtma emas. Ma’lumotlar yuborilmadi, hisob API orqali tekshirilmadi va pul yechilmadi.','Это не заказ. Данные не отправлены, аккаунт не проверен через API, деньги не списаны.','This is not an order. Nothing was submitted, your account was not verified through an API, and no payment was taken.')+'</small>';preview.scrollIntoView({block:'nearest',behavior:'smooth'});});
-  choosePackage(selected,false);showGallery();updateLaunchAlert();
+  const testBuy=q('.tu-purchase-actions .button-secondary');
+  const testTerms=document.createElement('label');testTerms.className='field';testTerms.hidden=true;
+  testTerms.innerHTML='<span><input type="checkbox" data-tu-test-consent> '+t('Bu faqat sinov xaridi. Haqiqiy UC yetkazilmaydi. Savdo shartlarini qabul qilaman.','Это тестовая покупка без доставки UC. Я принимаю условия покупки.','This is a test purchase with no UC delivery. I accept the checkout terms.')+'</span>';
+  q('.tu-purchase-actions').before(testTerms);
+  let testRequestKey=crypto.randomUUID();
+  function updateTestCheckout(){
+    const ready=selected.payment_ready&&selected.payment_mode==='stripe_test';
+    testBuy.disabled=!ready;testTerms.hidden=!ready;
+    if(ready){testBuy.textContent=t('Stripe test xaridi','Тестовая покупка Stripe','Stripe test checkout');q('.tu-checkout-state span').textContent=t('Sinov rejimi · haqiqiy pul va UC ishlatilmaydi.','Тестовый режим · без реальных денег и UC.','Test mode · no real money or UC delivery.');}
+  }
+  testBuy.addEventListener('click',async()=>{
+    if(!me){location.hash='login';return;}
+    if(!form.reportValidity())return;
+    if(!q('[data-tu-test-consent]').checked){toast(t('Sinov xaridi shartlarini tasdiqlang.','Подтвердите условия тестовой покупки.','Confirm the test checkout terms.'),'error');return;}
+    testBuy.disabled=true;
+    try{
+      const order=await api('/top-up/test-checkout',{method:'POST',body:JSON.stringify({package_id:selected.id,quantity:topupQuantity(quantity.value),player_id:form.elements.namedItem('player_id').value,server_id:form.elements.namedItem('server_id')?.value||'',request_key:testRequestKey,accept_terms:true})});
+      location.hash='topup-order/'+encodeURIComponent(order.id);
+      const payment=await api('/top-up/test-orders/'+encodeURIComponent(order.id)+'/checkout',{method:'POST',body:'{}'});
+      location.assign(payment.checkout_url);
+    }catch(error){toast(error.message,'error')}finally{testBuy.disabled=false;}
+  });
+  form.addEventListener('input',()=>{testRequestKey=crypto.randomUUID()});
+  all('[data-tu-package]').forEach(button=>button.addEventListener('click',()=>{testRequestKey=crypto.randomUUID();updateTestCheckout()}));
+  choosePackage(selected,false);showGallery();updateLaunchAlert();updateTestCheckout();
   window.ReviewHub?.mount(q('.tu-left'),'topup',game.slug);
+}
+
+async function renderStripeTopupOrder(id){
+  if(!me){location.hash='login';return;}
+  const order=await api('/top-up/test-orders/'+encodeURIComponent(id));
+  app.innerHTML=`<section class="page topup-page"><a class="route-back-link" href="/top-up">← Top Up</a>${pageTitle(esc(order.reference),'Stripe test · '+esc(order.game_name),status(order.status))}<div class="notice warn">${adminText('Sinov buyurtmasi. Haqiqiy pul olinmaydi va UC yetkazilmaydi.','Тестовый заказ. Реальные деньги не списываются, UC не доставляется.','Test order. No real money is charged and no UC is delivered.')}</div><section class="panel"><h2>${esc(order.game_name)} · ${order.amount} × ${order.quantity}</h2><p>Player ID: ${esc(order.player_id)}${order.server_id?' · Server: '+esc(order.server_id):''}</p><p>${fmt(order.total_minor,order.currency)}</p><div class="actions">${order.status==='awaiting_payment'?'<button class="button-primary" data-test-topup-action="checkout">'+adminText('Stripe test to‘lovi','Stripe test оплата','Stripe test checkout')+'</button>':''}${order.status==='delivered_test'?'<button class="button-primary" data-test-topup-action="confirm">'+adminText('Test yetkazishni tasdiqlash','Подтвердить тестовую доставку','Accept simulated delivery')+'</button>':''}${['awaiting_payment','paid_test','delivered_test','completed'].includes(order.status)?'<button class="button-secondary" data-test-topup-action="cancel">'+adminText('Bekor qilish / qaytarim','Отмена / возврат','Cancel / refund')+'</button>':''}<button class="button-secondary" data-test-topup-action="refresh">${adminText('Yangilash','Обновить','Refresh')}</button></div></section></section>`;
+  app.querySelectorAll('[data-test-topup-action]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{const action=button.dataset.testTopupAction;if(action==='refresh'){await renderStripeTopupOrder(id);return;}const result=await api('/top-up/test-orders/'+encodeURIComponent(id)+'/'+action,{method:'POST',body:'{}'});if(result.checkout_url)location.assign(result.checkout_url);else await renderStripeTopupOrder(id);}catch(error){toast(error.message,'error')}finally{button.disabled=false;}});
 }

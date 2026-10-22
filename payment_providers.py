@@ -1,4 +1,4 @@
-"""Provider boundary. Only the explicitly marked local sandbox is implemented."""
+"""Payment boundary. Stripe is deliberately restricted to test credentials."""
 from dataclasses import dataclass
 from typing import Protocol, Mapping
 
@@ -43,6 +43,9 @@ class UnavailableProvider:
         raise RuntimeError('No live payment provider adapter is configured.')
 
 def get_provider(mode: str, configured_name: str = 'disabled') -> PaymentProvider:
+    if configured_name == 'stripe_test':
+        from stripe_test_payments import StripeTestProvider
+        return StripeTestProvider()
     if mode=='development' and configured_name in ('disabled','sandbox'):
         return DevelopmentSandboxProvider()
     # Explicit credentials alone must never make the application report a provider as operational.

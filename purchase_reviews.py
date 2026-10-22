@@ -47,10 +47,10 @@ def migrate(db, postgres=False):
     if postgres:db.execute('REVOKE ALL ON public.visible_reviews FROM PUBLIC, anon, authenticated')
 
 
-MARKET_REAL = "o.status='completed' AND o.payment_mode NOT IN ('sandbox','disabled')"
+MARKET_REAL = "o.status='completed' AND o.payment_mode NOT IN ('sandbox','disabled','stripe_test')"
 # Avoid a literal percent wildcard: Psycopg parses it as a parameter marker
 # when the shared database wrapper passes a parameter sequence.
-TOPUP_REAL = "o.status='completed' AND o.completed_at IS NOT NULL AND o.payment_reference<>'' AND lower(substr(o.payment_reference,1,7))<>'sandbox'"
+TOPUP_REAL = "o.status='completed' AND o.completed_at IS NOT NULL AND o.payment_reference<>'' AND lower(substr(o.payment_reference,1,7))<>'sandbox' AND lower(substr(o.payment_reference,1,12))<>'stripe_test_'"
 
 
 def add_listing_scores(db, items):

@@ -104,8 +104,8 @@ def unit_price(db,lid,base,quantity):
 
 def reputation(db,sid):
     # Sandbox orders never create a public reputation tier.
-    row=db.execute("SELECT COUNT(DISTINCT o.id) n FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.seller_id=? AND o.status='completed' AND o.payment_mode NOT IN ('sandbox','disabled')",(sid,)).fetchone()
-    reviews=db.execute("SELECT COUNT(*) n,AVG(r.rating) rating FROM visible_reviews r JOIN order_items i ON i.id=r.order_item_id JOIN orders o ON o.id=i.order_id WHERE r.seller_id=? AND o.payment_mode NOT IN ('sandbox','disabled')",(sid,)).fetchone()
+    row=db.execute("SELECT COUNT(DISTINCT o.id) n FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.seller_id=? AND o.status='completed' AND o.payment_mode NOT IN ('sandbox','disabled','stripe_test')",(sid,)).fetchone()
+    reviews=db.execute("SELECT COUNT(*) n,AVG(r.rating) rating FROM visible_reviews r JOIN order_items i ON i.id=r.order_item_id JOIN orders o ON o.id=i.order_id WHERE r.seller_id=? AND o.payment_mode NOT IN ('sandbox','disabled','stripe_test')",(sid,)).fetchone()
     sales=row['n'];rating=float(reviews['rating']) if reviews['rating'] is not None else None
     tier='established' if sales>=100 and reviews['n']>=20 and rating>=4.7 else 'experienced' if sales>=20 and reviews['n']>=5 and rating>=4.5 else 'new'
     return {'tier':tier,'real_completed_orders':sales,'verified_review_count':reviews['n'],'rating':rating,'criteria':{'experienced':{'orders':20,'reviews':5,'rating':4.5},'established':{'orders':100,'reviews':20,'rating':4.7}},'sample':'completed non-sandbox orders only'}
