@@ -16,6 +16,13 @@ class ProductionStartup(unittest.TestCase):
         self.addCleanup(self.crypto.stop)
         self.addCleanup(self.settings.stop)
 
+    def test_postgres_placeholder_conversion_escapes_literal_percent(self):
+        sql = "SELECT key FROM platform_config WHERE key LIKE 'stripe_test:job:%' AND value NOT LIKE '%\\\"status\\\":\\\"succeeded\\\"%' AND id=? AND note='?'"
+        self.assertEqual(
+            app.postgres_placeholders(sql),
+            "SELECT key FROM platform_config WHERE key LIKE 'stripe_test:job:%%' AND value NOT LIKE '%%\\\"status\\\":\\\"succeeded\\\"%%' AND id=%s AND note='?'",
+        )
+
     def test_api_cold_start_checks_safety_once_without_migrating(self):
         db = Mock()
         db.execute.return_value.fetchone.return_value = None

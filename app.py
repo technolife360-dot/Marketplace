@@ -84,7 +84,7 @@ def postgres_placeholders(sql):
     while i < len(sql):
         ch=sql[i]
         if quote:
-            out.append(ch)
+            out.append('%%' if ch == '%' else ch)
             if ch == quote:
                 if i + 1 < len(sql) and sql[i + 1] == quote:
                     out.append(sql[i + 1]); i += 1
@@ -92,6 +92,7 @@ def postgres_placeholders(sql):
         elif ch in ("'", '"'):
             quote=ch; out.append(ch)
         elif ch == '?': out.append('%s')
+        elif ch == '%': out.append('%%')
         else: out.append(ch)
         i += 1
     return ''.join(out)
