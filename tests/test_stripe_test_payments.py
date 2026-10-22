@@ -103,6 +103,26 @@ class StripeTestFlows(unittest.TestCase):
         provider.client.v1.checkout.sessions.create.side_effect = create
         payments.start_checkout(self.db, self.oid, self.buyer, vars(app))
 
+    def test_checkout_retry_reuses_identical_stripe_parameters_after_transient_failure(self):
+        provider=self.configure();self.order()
+        self.db.execute('DELETE FROM platform_config WHERE key IN (?,?)',
+            (payments.PREFIX+'checkout:'+self.oid,payments.PREFIX+'checkout_attempt:'+self.oid))
+        provider.client.v1.checkout.sessions.create.reset_mock()
+        provider.client.v1.checkout.sessions.create.side_effect=[
+            TimeoutError('temporary network failure'),
+            {'id':'cs_test_retry','livemode':False,
+             'url':'https://checkout.stripe.com/c/pay/cs_test_retry',
+             'expires_at':int(time.time())+1800}]
+        with self.assertRaises(app.HttpError) as error:
+            payments.start_checkout(self.db,self.oid,self.buyer,vars(app))
+        self.assertEqual(error.exception.status,503)
+        first=provider.client.v1.checkout.sessions.create.call_args
+        payments.start_checkout(self.db,self.oid,self.buyer,vars(app))
+        second=provider.client.v1.checkout.sessions.create.call_args
+        self.assertEqual(first.args,second.args)
+        self.assertEqual(first.kwargs,second.kwargs)
+        self.assertTrue(first.kwargs['options']['idempotency_key'].startswith('checkout:v2:'))
+
     def test_payment_is_verified_once_and_held_until_delivery(self):
         provider = self.configure(); self.order()
         with self.assertRaises(app.HttpError): self.route(self.buyer, 'POST', '/api/orders/'+self.oid+'/sandbox-complete')

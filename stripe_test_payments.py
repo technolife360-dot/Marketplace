@@ -60,7 +60,7 @@ class StripeTestProvider:
             raise RuntimeError('Invalid checkout amount or currency.')
         return PaymentIntent(self.name, amount_minor, currency, idempotency_key)
 
-    def session(self, oid, amount, currency, idem, kind='marketplace'):
+    def session(self, oid, amount, currency, idem, kind='marketplace', expires_at=None):
         self.assert_account()
         result = self.client.v1.checkout.sessions.create({
             'mode': 'payment', 'payment_method_types': ['card'],
@@ -70,7 +70,9 @@ class StripeTestProvider:
                                     'metadata': {'sentryloot_order': oid, 'sentryloot_mode': self.name}},
             'line_items': [{'quantity': 1, 'price_data': {'currency': currency.lower(),
                 'unit_amount': amount, 'product_data': {'name': 'SentryLoot TEST order'}}}],
-            'expires_at': int(time.time())+1800,
+            # Callers pin this value before the network request so retries with
+            # the same idempotency key send byte-for-byte equivalent parameters.
+            'expires_at': expires_at if expires_at is not None else int(time.time())+1800,
             'success_url': self.base+('/#topup-order/' if kind=='topup' else '/#order/')+oid,
             'cancel_url': self.base+('/#topup-order/' if kind=='topup' else '/#order/')+oid,
         }, options={'idempotency_key': 'checkout:'+idem})
@@ -186,8 +188,24 @@ def start_checkout(db, oid, uid, core):
             raise core['HttpError'](409, 'Test checkout expired. Cancel this order and create a new one.')
         return {'checkout_url': saved['url'], 'mode': 'stripe_test'}
     payment = db.execute('SELECT * FROM payments WHERE order_id=?', (oid,)).fetchone()
+    attempt_key='checkout_attempt:'+oid
+    attempt=read(db,attempt_key)
+    if attempt is None:
+        # Stripe compares every request parameter for a reused idempotency key.
+        # Persist a fixed expiry first, then reuse it after timeouts or retries.
+        # The v2 key also avoids the old key whose first attempt used a moving
+        # expires_at value and became permanently unusable after an idempotency error.
+        candidate={'idempotency_key':'v2:'+payment['idempotency_key'],
+                   'expires_at':int(time.time())+1800}
+        db.execute('INSERT INTO platform_config(key,value) VALUES(?,?) ON CONFLICT(key) DO NOTHING',
+                   (PREFIX+attempt_key,json.dumps(candidate,separators=(',',':'))))
+        attempt=read(db,attempt_key)
+    if not attempt or int(attempt.get('expires_at',0))<=int(time.time()):
+        raise core['HttpError'](409,'This checkout attempt expired. Cancel it and create a new order.')
     try:
-        session = core['configured_payment_provider']().session(oid, payment['amount_minor'], payment['currency'], payment['idempotency_key'])
+        session = core['configured_payment_provider']().session(
+            oid,payment['amount_minor'],payment['currency'],attempt['idempotency_key'],
+            expires_at=attempt['expires_at'])
     except Exception as exc:
         error = getattr(exc, 'json_body', None)
         stripe_code = getattr(exc, 'code', None)
