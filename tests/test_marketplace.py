@@ -43,6 +43,17 @@ class MarketplaceFlows(unittest.TestCase):
         result=self.handler.route(self.db,self.ctx(uid),method,path,{},data or {})
         return result[1] if isinstance(result,tuple) else result
     def add_cart(self,uid,qty=1): self.db.execute('INSERT INTO carts(user_id,listing_id,quantity) VALUES(?,?,?)',(uid,self.listing,qty))
+    def test_buy_now_replaces_existing_cart_quantity_instead_of_adding_it_again(self):
+        self.db.execute('UPDATE listings SET stock=2 WHERE id=?',(self.listing,))
+        request={'listing_id':self.listing,'quantity':1,'mode':'set'}
+        self.assertEqual(self.route(self.buyer,'POST','/api/cart',request)['quantity'],1)
+        self.assertEqual(self.route(self.buyer,'POST','/api/cart',request)['quantity'],1)
+        self.assertEqual(self.db.execute('SELECT quantity FROM carts WHERE user_id=? AND listing_id=?',(self.buyer,self.listing)).fetchone()['quantity'],1)
+        # Add to Cart keeps its established additive behavior.
+        self.assertEqual(self.route(self.buyer,'POST','/api/cart',{'listing_id':self.listing,'quantity':1})['quantity'],2)
+        with self.assertRaises(app.HttpError) as error:
+            self.route(self.buyer,'POST','/api/cart',{'listing_id':self.listing,'quantity':3,'mode':'set'})
+        self.assertEqual(error.exception.status,409)
     def test_admin_overview_is_bounded_and_excludes_unrelated_private_configuration(self):
         self.db.execute("INSERT INTO platform_config(key,value) VALUES('private_test_key','not-for-overview')")
         self.add_cart(self.buyer);order=app.checkout(self.db,self.buyer,True,True)

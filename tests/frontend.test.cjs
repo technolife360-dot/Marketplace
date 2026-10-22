@@ -104,6 +104,11 @@ test('order payment notice explains outcomes without exposing provider status co
  assert.match(pending,/Next: complete payment/);
 });
 
+test('Buy Now sets the selected cart quantity while Add to Cart remains additive',()=>{
+ assert.match(source,/if\(a==='buy-now'\)[\s\S]{0,220}mode:'set'/);
+ assert.match(source,/if\(a==='add-cart'\)[\s\S]{0,180}quantity:ExperienceUX\.quantity\(\)\}\)\}\);toast/);
+});
+
 
 test('account tools initialize before app globals',()=>{
  const context={window:{},encodeURIComponent};vm.createContext(context);

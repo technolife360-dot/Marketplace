@@ -2466,10 +2466,13 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/cart' and method=='POST':
             require_user(ctx); lid=clean_text(data.get('listing_id'),'E’lon',1,100); qty=data.get('quantity',1)
             if isinstance(qty,bool) or not isinstance(qty,int) or qty<1 or qty>10000: raise HttpError(400,'Miqdor 1–10000 orasida bo‘lishi kerak.')
+            mode=data.get('mode','add')
+            if mode not in ('add','set'): raise HttpError(400,'Savatcha amali noto‘g‘ri.')
             l=db.execute("SELECT * FROM listings WHERE id=? AND status='published'",(lid,)).fetchone()
             if not l: raise HttpError(404,'E’lon topilmadi.')
             if l['seller_id']==uid: raise HttpError(400,'O‘zingizning e’loningizni savatchaga qo‘sha olmaysiz.')
-            existing=db.execute('SELECT quantity FROM carts WHERE user_id=? AND listing_id=?',(uid,lid)).fetchone(); qty+=existing['quantity'] if existing else 0
+            existing=db.execute('SELECT quantity FROM carts WHERE user_id=? AND listing_id=?',(uid,lid)).fetchone()
+            if mode=='add': qty+=existing['quantity'] if existing else 0
             if qty<l['min_quantity']:raise HttpError(400,'Minimal buyurtma: '+str(l['min_quantity'])+' '+l['unit_label'])
             if qty>l['stock']-l['reserved']: raise HttpError(409,'Mavjud qoldiqdan ko‘p miqdor tanlandi.')
             db.execute('INSERT INTO carts(user_id,listing_id,quantity) VALUES(?,?,?) ON CONFLICT(user_id,listing_id) DO UPDATE SET quantity=excluded.quantity,updated_at=CURRENT_TIMESTAMP',(uid,lid,qty)); catalogue_experience.insight(db,lid,'cart');return {'ok':True,'quantity':qty}
