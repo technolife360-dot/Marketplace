@@ -18,6 +18,10 @@
 .launch-saved a { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .launch-checklist li { margin-block: 8px; }
 .launch-checklist details { padding-block: 10px; border-top: 1px solid var(--line); }
+.launch-checklist-intro { margin: -6px 0 18px; color: var(--muted, #aaa); font-size: 13px; line-height: 1.65; }
+.launch-checklist-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 22px; }
+.launch-checklist-listings h3 { margin: 0 0 8px; font-size: 14px; }
+.seller-readiness-link { margin-bottom: 12px; }
 .market-sold-out { position: absolute; inset-inline-start: 10px; bottom: 10px; padding: 6px 10px; border-radius: 8px; background: #20182e; color: #f0e5ff; font-size: 11px; font-weight: 650; }
 .tu-launch-alert { width: 100%; margin-block: 12px; }
 @media(max-width:600px){.launch-grid { grid-template-columns: minmax(0,1fr); }.launch-page .panel { padding: 16px; }.launch-actions>* { width:100%; }}

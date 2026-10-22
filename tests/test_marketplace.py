@@ -591,6 +591,11 @@ class MarketplaceFlows(unittest.TestCase):
         order=app.checkout(self.db,self.buyer,True,True)
         stock=self.db.execute('SELECT stock,reserved FROM listings WHERE id=?',(self.listing,)).fetchone()
         self.assertEqual((stock['stock'],stock['reserved']),(1,1))
+        # A browser retry after the first checkout committed must not create a
+        # second order or reserve the same stock again.
+        with self.assertRaises(app.HttpError):app.checkout(self.db,self.buyer,True,True)
+        self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM orders WHERE buyer_id=?',(self.buyer,)).fetchone()['n'],1)
+        self.assertEqual(self.db.execute('SELECT reserved FROM listings WHERE id=?',(self.listing,)).fetchone()['reserved'],1)
         terms=self.db.execute('SELECT accepted_checkout_terms_version,accepted_checkout_terms_at FROM orders WHERE id=?',(order['id'],)).fetchone()
         self.assertTrue(terms['accepted_checkout_terms_version']);self.assertTrue(terms['accepted_checkout_terms_at'])
         # A second buyer cannot reserve already-reserved stock.

@@ -71,6 +71,39 @@ test('marketplace UX loads before app globals and parses multilingual delivery w
  for(const [value,minutes]of [['5 minutes',5],['1 hour',60],['24 soat',1440],['1 kun',1440],['Instant',1],['Ask seller',null]])assert.equal(ux.duration(value),minutes);
 });
 
+test('order guidance shows only the server-owned next step and treats cancellation as terminal',()=>{
+ const context={window:{},encodeURIComponent,adminText:(_uz,_ru,en)=>en,esc:value=>String(value??''),me:{id:'buyer'},icon:name=>`<svg data-icon="${name}"></svg>`,$:()=>null};
+ let html='';
+ const page={querySelector:selector=>selector==='.page-header'?{insertAdjacentHTML:(_where,value)=>{html=value}}:null};
+ context.app={querySelector:selector=>selector==='.page'?page:null,querySelectorAll:()=>[]};
+ vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/marketplace-ux.js'),'utf8'),context);
+ context.window.MarketUX.order({id:'cancelled-order',buyer_id:'buyer',status:'cancelled',items:[]});
+ assert.match(html,/Order cancelled/);
+ assert.match(html,/There are no further steps/);
+ assert.doesNotMatch(html,/Next to act|>—</);
+ assert.doesNotMatch(html,/data-order-continue/);
+ html='';
+ context.window.MarketUX.order({id:'paid-order',buyer_id:'buyer',status:'paid',items:[]});
+ assert.match(html,/Payment/);assert.match(html,/Delivery/);assert.match(html,/Nothing you need to do right now/);
+ assert.doesNotMatch(html,/data-order-continue|ux-order-checks|Next to act/);
+ html='';context.me={id:'seller'};
+ context.window.MarketUX.order({id:'paid-order',buyer_id:'buyer',status:'paid',items:[]});
+ assert.match(html,/Continue to delivery/);assert.match(html,/data-order-continue/);
+});
+
+test('order payment notice explains outcomes without exposing provider status codes',()=>{
+ const start=source.indexOf('function orderPaymentNotice(');
+ const end=source.indexOf('\nasync function renderOrder(',start);
+ const context={adminText:(uz,ru,en)=>en};vm.createContext(context);
+ vm.runInContext(source.slice(start,end),context);
+ const failed=context.orderPaymentNotice({status:'cancelled',payment:{provider:'stripe_test',status:'failed'}});
+ assert.match(failed,/Payment was not completed/);
+ assert.match(failed,/Try again from your cart/);
+ assert.doesNotMatch(failed,/stripe_test|failed/);
+ const pending=context.orderPaymentNotice({status:'pending_payment',payment:{status:'pending'}});
+ assert.match(pending,/Next: complete payment/);
+});
+
 
 test('account tools initialize before app globals',()=>{
  const context={window:{},encodeURIComponent};vm.createContext(context);

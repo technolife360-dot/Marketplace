@@ -104,3 +104,40 @@
 .market-sidebar-account>h2{flex:0 0 auto;margin:0 9px 12px;font-size:10px;font-weight:500;line-height:1.5;letter-spacing:.5px}
 .market-sidebar-account>.market-sidebar-personal{flex:0 0 auto}
 @media(max-width:840px){.market-sidebar-account{flex:initial;margin-top:12px;padding-top:12px;overflow:visible}.market-sidebar-account>h2{margin:0 5px 10px}}
+
+/* Order steps mirror the server-owned order status; terminal states never show a fake next action. */
+.ux-order-guide{padding:22px 24px}.ux-order-guide h2{margin:7px 0 5px}.ux-order-guide>p{margin:0;color:#aeb8cf;line-height:1.7;font-size:13px}.ux-order-steps li{position:relative}.ux-order-steps li.current{color:#f1f1f1;font-weight:600}.ux-order-steps li.current span{color:#fff;background:#7540dc;border-color:#9b6bff;box-shadow:0 0 0 4px #7540dc20}.ux-order-steps li.done{color:#a9dfc1}.ux-order-steps li.done span{color:#08130c;background:#55d48a;border-color:#55d48a;font-weight:700}.ux-order-continue{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:42px;margin:0 0 12px;padding:0 18px!important}.ux-order-continue .icon{width:16px;height:16px}.ux-order-guide.is-terminal{border-color:#ffffff16}.ux-order-guide.is-terminal h2{color:#f1f1f1}.ux-order-guide.is-waiting{border-color:#9b78df42}.ux-order-guide .actions{margin-top:8px}
+
+/* Calm, status-driven order flow: one clear action at a time. */
+.ux-order-guide{padding:22px 24px;border:1px solid #292929;background:#080808;border-radius:14px}
+.ux-order-guide .ux-eyebrow{margin-bottom:8px;color:#999;font-size:10px;font-weight:600;letter-spacing:.09em}
+.ux-order-guide h2{margin:0 0 6px;color:#f1f1f1;font-size:20px;line-height:1.35}
+.ux-order-guide>p{max-width:680px;margin:0;color:#aaa;line-height:1.65;font-size:13px}
+.ux-order-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:18px 0;padding:0;border:0}
+.ux-order-steps li{display:flex;align-items:center;gap:8px;min-height:38px;padding:6px 9px;border:1px solid #222;border-radius:8px;color:#777;font-size:11px}
+.ux-order-steps li span{width:22px;height:22px;flex:0 0 22px;border-color:#333;color:#888}
+.ux-order-steps li.current{border-color:#7250a5;background:#151019;color:#f1f1f1}
+.ux-order-steps li.current span{box-shadow:none}
+.ux-order-steps li.done{border-color:#263b2d;background:#0b120d;color:#b8dfc4}
+.ux-order-steps li.done span{color:#07100a}
+.ux-order-continue{margin:2px 0 0;min-height:42px;padding:0 16px!important;border-radius:8px!important}
+.ux-order-waiting{display:flex;align-items:center;gap:10px;width:fit-content;margin-top:16px;padding:10px 13px;border:1px solid #292929;border-radius:9px;background:#0b0b0b;color:#c8c8c8;font-size:12px}
+.ux-order-waiting>.icon{width:17px;height:17px;color:#aaa}
+.ux-order-waiting b{font-weight:500}
+.ux-order-guide .actions{margin-top:14px}
+.order-payment-summary{margin:12px 0 0!important;padding:12px 14px!important;border-radius:9px!important;background:#0b0b0b!important;border-color:#292929!important;color:#ccc!important;font-size:12px;line-height:1.65}
+.order-payment-summary p{margin:4px 0 0;color:#aaa}
+.ux-order-extra{margin:14px 0 0!important;padding:0!important;border:1px solid #262626!important;border-radius:10px!important;background:#050505!important}
+.ux-order-extra>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;color:#bbb;cursor:pointer;list-style:none;font-size:12px}
+.ux-order-extra>summary::-webkit-details-marker{display:none}
+.ux-order-extra>summary span{color:#888;font-size:16px;transition:transform .15s}
+.ux-order-extra[open]>summary{border-bottom:1px solid #222}
+.ux-order-extra[open]>summary span{transform:rotate(45deg)}
+.ux-order-extra #order-detail-steps{margin:0!important;padding:14px;border:0;background:transparent}
+.ux-order-guide.is-terminal .ux-order-steps{display:none}
+.ux-order-guide.is-terminal{border-color:#292929}
+.ux-order-step-gated[hidden]{display:none!important}
+.ux-order-step-revealed{animation:ux-order-reveal .22s ease-out}
+@keyframes ux-order-reveal{from{opacity:.65;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:700px){.ux-order-guide{padding:18px}.ux-order-guide h2{font-size:18px}.ux-order-steps{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:14px 0}.ux-order-steps li{font-size:10px}.ux-order-continue{width:100%}}
+@media(prefers-reduced-motion:reduce){.ux-order-step-revealed{animation:none}}

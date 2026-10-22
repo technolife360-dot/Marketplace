@@ -133,6 +133,15 @@ class AuthorizationBoundaries(unittest.TestCase):
         with self.assertRaises(app.HttpError):self.handler.route(self.db,context,'GET','/api/admin/overview',{}, {})
         self.assertEqual(admin.request('POST','/api/logout',{})[0],200)
 
+    def test_production_admin_must_enroll_in_mfa_before_using_privileged_routes(self):
+        context=self.ctx(self.admin)
+        with patch.object(app,'MODE','production'):
+            with self.assertRaises(app.HttpError) as blocked:
+                app.require_admin(context)
+            self.assertIn('2FA',blocked.exception.message)
+            self.db.execute('INSERT INTO account_security(user_id,enabled) VALUES(?,1)',(self.admin,))
+            self.assertEqual(app.require_admin(context),self.admin)
+
     def test_private_chat_files_are_signed_only_after_participant_authorization(self):
         oid=self.order();buyer=self.client(self.buyer);seller=self.client(self.seller)
         status,result,_=buyer.request('POST','/api/conversations',{'order_id':oid,'seller_id':self.seller})

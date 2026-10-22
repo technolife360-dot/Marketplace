@@ -746,10 +746,16 @@ def require_verified(ctx):
 def require_admin(ctx):
     uid=require_verified(ctx)
     scope=ctx.get('required_capability')
+    full_admin=is_admin(ctx['db'],uid)
+    if not full_admin and not (scope and launch_readiness.staff_allowed(ctx['db'],uid,scope)): raise HttpError(403,'Administrator ruxsati kerak.')
+    # Full production administrators must enroll in MFA before reaching privileged
+    # admin routes. Account/security endpoints remain available for enrollment,
+    # so an unenrolled admin is guided to setup instead of being locked out.
+    if MODE=='production' and full_admin and not marketplace_operations.enabled(ctx['db'],uid):
+        raise HttpError(403,'Admin panelga kirishdan oldin Account → Security bo‘limida authenticator 2FA ni yoqing.')
     # A request may check its role more than once. Never reuse a scoped check
     # when an internal route dispatch changes the required capability.
     if ctx.get('_admin_scope_checked')==(uid,scope): return uid
-    if not is_admin(ctx['db'],uid) and not (scope and launch_readiness.staff_allowed(ctx['db'],uid,scope)): raise HttpError(403,'Administrator ruxsati kerak.')
     ctx['_admin_scope_checked']=(uid,scope)
     return uid
 
