@@ -1822,3 +1822,7 @@ body #app .admin-portal .admin-nav [data-admin-count] {
 }
 body #app .admin-portal .admin-nav [data-admin-count][hidden] { display:none !important; }
 }
+
+/* Sign-in never shows field icons; registration keeps the field decoration. */
+body .auth-page.is-login #auth-form .field-control.has-icon > .field-control-icon { display:none !important; }
+body .auth-page.is-login #auth-form .field-control.has-icon > :is(input,textarea,select) { padding-inline-start:12px !important; }
