@@ -181,11 +181,27 @@ def start_checkout(db, oid, uid, core):
     if not order or order['payment_mode'] != 'stripe_test':
         raise core['HttpError'](404, 'Test order not found.')
     if order['status'] != 'pending_payment':
+        # Older releases expired pending orders without restoring their cart.
+        # Repair that one-time gap when the buyer reopens the expired order.
+        payment = db.execute("SELECT status FROM payments WHERE order_id=? AND provider='stripe_test'", (oid,)).fetchone()
+        if order['status'] == 'cancelled' and payment and payment['status'] == 'expired':
+            postgres = bool(core.get('DATABASE_URL'))
+            db.execute('BEGIN' if postgres else 'BEGIN IMMEDIATE')
+            try:
+                core['trade_workflows'].lock_order(db, oid)
+                restore_expired_cart(db, oid, uid)
+                db.execute('COMMIT')
+            except Exception:
+                db.execute('ROLLBACK')
+                raise
+            raise core['HttpError'](409, 'This order expired. Its items are back in your cart; review availability and start a new checkout.')
         raise core['HttpError'](409, 'This order is no longer awaiting payment.')
     saved = read(db, 'checkout:'+oid)
     if saved:
         if saved['expires_at'] <= time.time():
-            raise core['HttpError'](409, 'Test checkout expired. Cancel this order and create a new one.')
+            if not expire_pending_checkout(db, oid, uid, core):
+                raise core['HttpError'](409, 'Order status changed while opening checkout. The order has been refreshed; review its current status.')
+            raise core['HttpError'](409, 'This test checkout expired. Its items are back in your cart; review availability and start a new checkout.')
         return {'checkout_url': saved['url'], 'mode': 'stripe_test'}
     payment = db.execute('SELECT * FROM payments WHERE order_id=?', (oid,)).fetchone()
     attempt_key='checkout_attempt:'+oid
@@ -201,7 +217,9 @@ def start_checkout(db, oid, uid, core):
                    (PREFIX+attempt_key,json.dumps(candidate,separators=(',',':'))))
         attempt=read(db,attempt_key)
     if not attempt or int(attempt.get('expires_at',0))<=int(time.time()):
-        raise core['HttpError'](409,'This checkout attempt expired. Cancel it and create a new order.')
+        if not expire_pending_checkout(db, oid, uid, core):
+            raise core['HttpError'](409, 'Order status changed while opening checkout. The order has been refreshed; review its current status.')
+        raise core['HttpError'](409,'This test checkout expired. Its items are back in your cart; review availability and start a new checkout.')
     try:
         session = core['configured_payment_provider']().session(
             oid,payment['amount_minor'],payment['currency'],attempt['idempotency_key'],
@@ -243,6 +261,46 @@ def start_checkout(db, oid, uid, core):
         raise core['HttpError'](503, 'Stripe test checkout is temporarily unavailable. Retry from this order.') from exc
     write(db, 'checkout:'+oid, {'id': session['id'], 'url': session['url'], 'expires_at': session['expires_at']})
     return {'checkout_url': session['url'], 'mode': 'stripe_test'}
+
+
+def restore_expired_cart(db, oid, uid):
+    """Restore an expired order's lines once, so the buyer can retry safely."""
+    marker = 'expired_cart_restored:'+oid
+    if read(db, marker):
+        return
+    for item in db.execute('SELECT listing_id,quantity FROM order_items WHERE order_id=?', (oid,)).fetchall():
+        db.execute('INSERT INTO carts(user_id,listing_id,quantity) VALUES(?,?,?) '
+                   'ON CONFLICT(user_id,listing_id) DO UPDATE SET '
+                   'quantity=CASE WHEN carts.quantity>excluded.quantity THEN carts.quantity ELSE excluded.quantity END,updated_at=CURRENT_TIMESTAMP',
+                   (uid, item['listing_id'], item['quantity']))
+    write(db, marker, {'restored': True})
+
+
+def expire_pending_checkout(db, oid, uid, core):
+    """Expire the order and release its reservation before offering a retry."""
+    postgres = bool(core.get('DATABASE_URL'))
+    db.execute('BEGIN' if postgres else 'BEGIN IMMEDIATE')
+    try:
+        core['trade_workflows'].lock_order(db, oid)
+        order = db.execute('SELECT status FROM orders WHERE id=? AND buyer_id=?', (oid, uid)).fetchone()
+        payment = db.execute("SELECT status FROM payments WHERE order_id=? AND provider='stripe_test'", (oid,)).fetchone()
+        if order and order['status'] == 'pending_payment' and payment and payment['status'] == 'pending':
+            items = db.execute('SELECT listing_id,quantity FROM order_items WHERE order_id=?', (oid,)).fetchall()
+            for item in items:
+                db.execute('UPDATE listings SET reserved=CASE WHEN reserved>=? THEN reserved-? ELSE 0 END,updated_at=CURRENT_TIMESTAMP WHERE id=?',
+                           (item['quantity'], item['quantity'], item['listing_id']))
+            db.execute("UPDATE payments SET status='expired',updated_at=CURRENT_TIMESTAMP WHERE order_id=? AND status='pending'", (oid,))
+            db.execute("UPDATE orders SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending_payment'", (oid,))
+            db.execute("DELETE FROM platform_config WHERE key LIKE 'coupon_use:%' AND value=?", (oid,))
+            restore_expired_cart(db, oid, uid)
+            core['event'](db, oid, uid, 'pending_payment', 'cancelled', 'Stripe test checkout expired; cart restored for retry.')
+        db.execute('COMMIT')
+    except Exception:
+        db.execute('ROLLBACK')
+        raise
+    order = db.execute('SELECT status FROM orders WHERE id=? AND buyer_id=?', (oid, uid)).fetchone()
+    payment = db.execute("SELECT status FROM payments WHERE order_id=? AND provider='stripe_test'", (oid,)).fetchone()
+    return bool(order and order['status'] == 'cancelled' and payment and payment['status'] == 'expired')
 
 
 def enqueue(db, oid, kind):
@@ -363,6 +421,7 @@ def webhook(db, headers, raw, core):
                 db.execute('UPDATE listings SET reserved=CASE WHEN reserved>=? THEN reserved-? ELSE 0 END WHERE id=?', (item['quantity'], item['quantity'], item['listing_id']))
             db.execute("UPDATE payments SET status='expired' WHERE order_id=?", (oid,))
             db.execute("UPDATE orders SET status='cancelled' WHERE id=?", (oid,))
+            restore_expired_cart(db, oid, order['buyer_id'])
         write(db, 'event:'+event['id'], {'processed': True})
         db.execute('COMMIT')
         return {'ok': True}

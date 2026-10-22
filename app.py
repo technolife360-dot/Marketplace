@@ -1281,12 +1281,17 @@ def checkout(db,uid,accept_terms=False,accept_account_risk=False,buyer_details=N
     try:
         # release expired reservations so abandoned carts cannot lock stock forever
         expired_order_filter="o.created_at::timestamptz < CURRENT_TIMESTAMP - INTERVAL '30 minutes'" if DATABASE_URL else "o.created_at < datetime('now','-30 minutes')"
-        old=db.execute(f"SELECT o.id,oi.listing_id,oi.quantity FROM orders o JOIN order_items oi ON oi.order_id=o.id WHERE o.status='pending_payment' AND {expired_order_filter}").fetchall()
+        old=db.execute(f"SELECT o.id,o.buyer_id,oi.listing_id,oi.quantity FROM orders o JOIN order_items oi ON oi.order_id=o.id WHERE o.status='pending_payment' AND {expired_order_filter}").fetchall()
+        expired_ids=set()
         for x in old:
             db.execute('UPDATE listings SET reserved=CASE WHEN reserved>? THEN reserved-? ELSE 0 END WHERE id=?',(x['quantity'],x['quantity'],x['listing_id']))
-            db.execute("UPDATE orders SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=?",(x['id'],))
-            db.execute("UPDATE payments SET status='expired',updated_at=CURRENT_TIMESTAMP WHERE order_id=?",(x['id'],))
-            event(db,x['id'],None,'pending_payment','cancelled','To‘lov muddati tugadi')
+            if x['id'] not in expired_ids:
+                expired_ids.add(x['id'])
+                db.execute("UPDATE orders SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=?",(x['id'],))
+                db.execute("UPDATE payments SET status='expired',updated_at=CURRENT_TIMESTAMP WHERE order_id=? AND status='pending'",(x['id'],))
+                db.execute("DELETE FROM platform_config WHERE key LIKE 'coupon_use:%' AND value=?",(x['id'],))
+                stripe_test_payments.restore_expired_cart(db,x['id'],x['buyer_id'])
+                event(db,x['id'],None,'pending_payment','cancelled','To‘lov muddati tugadi')
         cart=[dict(r) for r in db.execute('SELECT c.listing_id,c.quantity,l.* FROM carts c JOIN listings l ON l.id=c.listing_id WHERE c.user_id=? ORDER BY l.id'+(' FOR UPDATE OF l' if DATABASE_URL else ''),(uid,)).fetchall()]
         if not cart: raise HttpError(400,'Savatchangiz bo‘sh.')
         account_lines=[x for x in cart if x['product_type']=='account']

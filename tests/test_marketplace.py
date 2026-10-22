@@ -43,6 +43,16 @@ class MarketplaceFlows(unittest.TestCase):
         result=self.handler.route(self.db,self.ctx(uid),method,path,{},data or {})
         return result[1] if isinstance(result,tuple) else result
     def add_cart(self,uid,qty=1): self.db.execute('INSERT INTO carts(user_id,listing_id,quantity) VALUES(?,?,?)',(uid,self.listing,qty))
+    def test_expired_order_releases_stock_and_restores_cart_for_a_new_checkout(self):
+        self.add_cart(self.buyer)
+        previous=app.checkout(self.db,self.buyer,True,True)
+        self.db.execute("UPDATE orders SET created_at=datetime('now','-31 minutes') WHERE id=?",(previous['id'],))
+        retry=app.checkout(self.db,self.buyer,True,True)
+        self.assertNotEqual(previous['id'],retry['id'])
+        self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?',(previous['id'],)).fetchone()['status'],'cancelled')
+        self.assertEqual(self.db.execute('SELECT status FROM payments WHERE order_id=?',(previous['id'],)).fetchone()['status'],'expired')
+        self.assertEqual(self.db.execute('SELECT quantity FROM order_items WHERE order_id=?',(retry['id'],)).fetchone()['quantity'],1)
+        self.assertIsNone(self.db.execute('SELECT 1 FROM carts WHERE user_id=?',(self.buyer,)).fetchone())
     def test_buy_now_replaces_existing_cart_quantity_instead_of_adding_it_again(self):
         self.db.execute('UPDATE listings SET stock=2 WHERE id=?',(self.listing,))
         request={'listing_id':self.listing,'quantity':1,'mode':'set'}

@@ -109,6 +109,11 @@ test('Buy Now sets the selected cart quantity while Add to Cart remains additive
  assert.match(source,/if\(a==='add-cart'\)[\s\S]{0,180}quantity:ExperienceUX\.quantity\(\)\}\)\}\);toast/);
 });
 
+test('expired Stripe test orders explain the cart recovery path and refresh after checkout conflicts',()=>{
+ assert.match(source,/order\.status==='cancelled'&&payment\.status==='expired'[\s\S]{0,700}href="#cart"/);
+ assert.match(source,/if\(error\.status===409\)await renderOrder\(id\)/);
+});
+
 
 test('account tools initialize before app globals',()=>{
  const context={window:{},encodeURIComponent};vm.createContext(context);

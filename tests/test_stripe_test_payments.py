@@ -123,6 +123,46 @@ class StripeTestFlows(unittest.TestCase):
         self.assertEqual(first.kwargs,second.kwargs)
         self.assertTrue(first.kwargs['options']['idempotency_key'].startswith('checkout:v2:'))
 
+    def test_expired_checkout_releases_stock_restores_cart_once_and_explains_retry(self):
+        self.configure(); self.order()
+        self.db.execute('INSERT INTO carts(user_id,listing_id,quantity) VALUES(?,?,2)',(self.buyer,self.listing))
+        self.db.execute('UPDATE platform_config SET value=? WHERE key=?',
+            (json.dumps({'id':'cs_test_fixture','url':'https://checkout.stripe.com/c/pay/cs_test_fixture','expires_at':int(time.time())-1}),
+             payments.PREFIX+'checkout:'+self.oid))
+        with self.assertRaises(app.HttpError) as error:
+            payments.start_checkout(self.db,self.oid,self.buyer,vars(app))
+        self.assertEqual(error.exception.status,409)
+        self.assertIn('back in your cart',error.exception.message)
+        self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?',(self.oid,)).fetchone()['status'],'cancelled')
+        self.assertEqual(self.db.execute('SELECT status FROM payments WHERE order_id=?',(self.oid,)).fetchone()['status'],'expired')
+        self.assertEqual(self.db.execute('SELECT reserved FROM listings WHERE id=?',(self.listing,)).fetchone()['reserved'],0)
+        self.assertEqual(self.db.execute('SELECT quantity FROM carts WHERE user_id=? AND listing_id=?',(self.buyer,self.listing)).fetchone()['quantity'],2)
+        with self.assertRaises(app.HttpError):
+            payments.start_checkout(self.db,self.oid,self.buyer,vars(app))
+        self.assertEqual(self.db.execute('SELECT quantity FROM carts WHERE user_id=? AND listing_id=?',(self.buyer,self.listing)).fetchone()['quantity'],2)
+
+    def test_stripe_expiry_webhook_restores_order_items_to_the_cart(self):
+        self.configure(); self.order()
+        expired={'id':'cs_test_fixture','livemode':False,'client_reference_id':self.oid,
+            'metadata':{'sentryloot_mode':'stripe_test','sentryloot_order':self.oid},'payment_status':'unpaid'}
+        raw,headers=self.signed('evt_checkout_expired','checkout.session.expired',expired)
+        self.assertTrue(payments.webhook(self.db,headers,raw,vars(app))['ok'])
+        self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?',(self.oid,)).fetchone()['status'],'cancelled')
+        self.assertEqual(self.db.execute('SELECT status FROM payments WHERE order_id=?',(self.oid,)).fetchone()['status'],'expired')
+        self.assertEqual(self.db.execute('SELECT quantity FROM carts WHERE user_id=? AND listing_id=?',(self.buyer,self.listing)).fetchone()['quantity'],1)
+
+    def test_reopening_a_previously_expired_order_repairs_legacy_cart_once(self):
+        self.configure(); self.order()
+        self.db.execute("UPDATE orders SET status='cancelled' WHERE id=?",(self.oid,))
+        self.db.execute("UPDATE payments SET status='expired' WHERE order_id=?",(self.oid,))
+        with self.assertRaises(app.HttpError) as error:
+            payments.start_checkout(self.db,self.oid,self.buyer,vars(app))
+        self.assertEqual(error.exception.status,409)
+        self.assertEqual(self.db.execute('SELECT quantity FROM carts WHERE user_id=? AND listing_id=?',(self.buyer,self.listing)).fetchone()['quantity'],1)
+        with self.assertRaises(app.HttpError):
+            payments.start_checkout(self.db,self.oid,self.buyer,vars(app))
+        self.assertEqual(self.db.execute('SELECT quantity FROM carts WHERE user_id=? AND listing_id=?',(self.buyer,self.listing)).fetchone()['quantity'],1)
+
     def test_payment_is_verified_once_and_held_until_delivery(self):
         provider = self.configure(); self.order()
         with self.assertRaises(app.HttpError): self.route(self.buyer, 'POST', '/api/orders/'+self.oid+'/sandbox-complete')
