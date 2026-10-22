@@ -189,6 +189,38 @@ def start_checkout(db, oid, uid, core):
     try:
         session = core['configured_payment_provider']().session(oid, payment['amount_minor'], payment['currency'], payment['idempotency_key'])
     except Exception as exc:
+        error = getattr(exc, 'json_body', None)
+        stripe_code = getattr(exc, 'code', None)
+        if not stripe_code and isinstance(error, dict):
+            stripe_code = (error.get('error') or {}).get('code')
+        if stripe_code == 'amount_too_small':
+            # Stripe has definitively rejected this amount, so there is no
+            # session to retry. Release the reservation and restore the cart.
+            postgres = bool(core.get('DATABASE_URL'))
+            db.execute('BEGIN' if postgres else 'BEGIN IMMEDIATE')
+            try:
+                lock = ' FOR UPDATE' if postgres else ''
+                current = db.execute('SELECT status FROM orders WHERE id=? AND buyer_id=?'+lock,
+                                     (oid, uid)).fetchone()
+                if current and current['status'] == 'pending_payment':
+                    items = db.execute('SELECT listing_id,quantity FROM order_items WHERE order_id=?'+lock,
+                                       (oid,)).fetchall()
+                    for item in items:
+                        db.execute('UPDATE listings SET reserved=CASE WHEN reserved>? THEN reserved-? ELSE 0 END,updated_at=CURRENT_TIMESTAMP WHERE id=?',
+                                   (item['quantity'], item['quantity'], item['listing_id']))
+                        db.execute('INSERT INTO carts(user_id,listing_id,quantity) VALUES(?,?,?) ON CONFLICT(user_id,listing_id) DO UPDATE SET quantity=carts.quantity+excluded.quantity,updated_at=CURRENT_TIMESTAMP',
+                                   (uid, item['listing_id'], item['quantity']))
+                    db.execute("UPDATE orders SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending_payment'", (oid,))
+                    db.execute("UPDATE payments SET status='failed',updated_at=CURRENT_TIMESTAMP WHERE order_id=? AND status='pending'", (oid,))
+                    db.execute("DELETE FROM platform_config WHERE key LIKE 'coupon_use:%' AND value=?", (oid,))
+                    core['event'](db, oid, uid, 'pending_payment', 'cancelled',
+                                  'Stripe test minimum amount not met; checkout canceled and cart restored.')
+                db.execute('COMMIT')
+            except Exception:
+                db.execute('ROLLBACK')
+                raise
+            raise core['HttpError'](400,
+                'Stripe requires at least RM 2.00 after currency conversion. This order was not charged; it was canceled and returned to your cart. Increase the quantity or choose a higher-priced item.') from exc
         # Never put SDK exception messages or response bodies in client output.
         raise core['HttpError'](503, 'Stripe test checkout is temporarily unavailable. Retry from this order.') from exc
     write(db, 'checkout:'+oid, {'id': session['id'], 'url': session['url'], 'expires_at': session['expires_at']})

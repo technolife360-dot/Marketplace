@@ -119,6 +119,20 @@ class StripeTestFlows(unittest.TestCase):
         with self.assertRaises(app.HttpError): self.route(self.buyer, 'POST', '/api/orders/'+self.oid+'/complete')
         self.assertEqual(payments.process(self.db, vars(app))['jobs'], [])
 
+    def test_amount_below_stripe_minimum_cancels_order_and_restores_cart(self):
+        provider = self.configure(); self.order()
+        self.db.execute('DELETE FROM platform_config WHERE key=?', (payments.PREFIX+'checkout:'+self.oid,))
+        class AmountTooSmall(Exception):
+            code = 'amount_too_small'
+        provider.client.v1.checkout.sessions.create.side_effect = AmountTooSmall('minimum amount')
+        with self.assertRaises(app.HttpError) as err:
+            payments.start_checkout(self.db, self.oid, self.buyer, vars(app))
+        self.assertEqual(err.exception.status, 400)
+        self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?', (self.oid,)).fetchone()['status'], 'cancelled')
+        self.assertEqual(self.db.execute('SELECT status FROM payments WHERE order_id=?', (self.oid,)).fetchone()['status'], 'failed')
+        self.assertEqual(self.db.execute('SELECT reserved FROM listings WHERE id=?', (self.listing,)).fetchone()['reserved'], 0)
+        self.assertEqual(self.db.execute('SELECT quantity FROM carts WHERE user_id=? AND listing_id=?', (self.buyer, self.listing)).fetchone()['quantity'], 1)
+
     def test_bad_signature_amount_currency_and_live_event_cannot_confirm_payment(self):
         self.configure(); self.order()
         raw, headers = self.signed()
