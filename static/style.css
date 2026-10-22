@@ -2876,7 +2876,6 @@ html[dir="rtl"] .sort-menu { right: auto; left: 0; text-align: right; }
 .market-card-cover.market-art-valorant > img { object-position:75% center; }
 .market-card-cover.market-art-dota-2 > img { object-position:52% center; }
 .market-card-cover::after { position:absolute; z-index:1; inset:0; background:linear-gradient(180deg,#050a1b8c,transparent 38%,#080b1d24); content:""; pointer-events:none; }
-.market-card-badge { position:absolute; z-index:2; top:9px; right:9px; display:inline-flex; align-items:center; max-width:45%; min-height:20px; padding:2px 7px; border:1px solid #198f6980; border-radius:5px; background:#089267e0; color:#fff; font-size:10px; font-weight:750; line-height:1.2; white-space:nowrap; backdrop-filter:blur(7px); }
 .market-card-art-empty { display:grid; width:100%; height:100%; place-items:center; color:#9aabf3; background:radial-gradient(circle at 50% 45%,#354676,#161e3b 47%,#11172a); }
 .market-card-art-empty .icon { width:46px; height:46px; opacity:.8; }
 .market-main .market-product-card .product-card-body { display:grid; flex:none; width:100%; height:123px; grid-template-rows:17px 14px 18px 34px; row-gap:6px; padding:10px 11px 12px; }
