@@ -92,7 +92,7 @@ def listing(db, qs, core):
         LEFT JOIN seller_profiles s ON s.user_id=a.entity_id WHERE a.entity_type='seller'
         AND (a.action LIKE 'didit_identity_%' OR a.action IN ('seller_approve','seller_reject','seller_request_info'))
         ORDER BY a.created_at DESC,a.id DESC LIMIT 12""")]
-    chart = [dict(r) for r in db.execute("""SELECT SUBSTR(created_at,1,10) day,action,COUNT(*) count FROM audit_logs
+    chart = [dict(r) for r in db.execute("""SELECT SUBSTR(created_at,1,10) AS day,action,COUNT(*) AS count FROM audit_logs
         WHERE entity_type='seller' AND action IN ('seller_approve','seller_reject','didit_identity_started')
         AND created_at>=? GROUP BY SUBSTR(created_at,1,10),action ORDER BY day""",
         ((datetime.now(timezone.utc)-timedelta(days=30)).strftime('%Y-%m-%d'),))]
