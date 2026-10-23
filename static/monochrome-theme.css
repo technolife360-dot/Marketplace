@@ -1703,6 +1703,8 @@ body #route-back { box-sizing:border-box !important; width:calc(100% - 48px) !im
 body #route-back[hidden] { display:none !important; }
 body #route-back-link { box-sizing:border-box !important; display:inline-flex !important; align-items:center !important; justify-content:center !important; gap:9px !important; text-align:center !important; }
 body #route-back-link>span { display:inline-flex !important; align-items:center !important; justify-content:center !important; }
+body :is(#route-back-link,.route-back-link),
+body :is(#route-back-link,.route-back-link):is(:hover,:focus-visible,:active) { background:transparent !important; border:0 !important; box-shadow:none !important; }
 @media (max-width:760px) {
 body #route-back { width:calc(100% - 28px) !important; margin:11px 14px 0 !important; }
 }
