@@ -5,6 +5,22 @@ const vm = require('node:vm');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '../static/app.js'), 'utf8');
 
+test('admin navigation uses the server role for every administrator email', () => {
+  const definition = source.match(/function syncAdminLink\(\)\{[^\n]*/)[0];
+  for (const [user, hidden] of [
+    [{is_admin:true,email:'admin@gamestore.com'},false],
+    [{is_admin:true,email:'sentryloot@gamestorehub.com'},false],
+    [{is_admin:false,email:'admin@gamestore.com'},true],
+    [null,true],
+  ]) {
+    const link = {setAttribute(){}};
+    const context = {me:user,$:()=>link,adminText:(_uz,_ru,en)=>en};
+    vm.createContext(context);
+    vm.runInContext(definition+';syncAdminLink()',context);
+    assert.equal(link.hidden,hidden);
+  }
+});
+
 function localeContext() {
   const context = {window: {}, locale: 'en'};
   vm.createContext(context);

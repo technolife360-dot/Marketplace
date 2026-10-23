@@ -277,7 +277,7 @@ async function renderBrowsePage(filters={}){
 function pageTitle(title,sub='',right=''){return `<div class="page-header"><div><h1 class="page-title">${title}</h1>${sub?`<div class="page-subtitle">${sub}</div>`:''}</div>${right}</div>`}
 function empty(text,cta=''){return `<div class="empty">${esc(text)}${cta?`<div class="actions" style="justify-content:center">${cta}</div>`:''}</div>`}
 function syncSellItemButton(){const button=$('#sell-item-button');if(!button)return;const label=adminText('E’lon joylash','Продать товар','Sell Item');button.textContent=label;button.setAttribute('aria-label',label)}
-function syncAdminLink(){const link=$('#admin-nav-link');if(!link)return;link.hidden=!(me?.is_admin&&me.email?.trim().toLowerCase()==='admin@gamestore.com');const label=adminText('Admin paneli','Панель администратора','Admin panel');link.setAttribute('aria-label',label);link.title=label}
+function syncAdminLink(){const link=$('#admin-nav-link');if(!link)return;link.hidden=!me?.is_admin;const label=adminText('Admin paneli','Панель администратора','Admin panel');link.setAttribute('aria-label',label);link.title=label}
 let bootstrapSessionReady=null;
 function isHomeLocation(){return location.pathname==='/'&&(!location.hash||location.hash==='#home')}
 async function bootstrap(){
