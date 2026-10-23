@@ -9,3 +9,4 @@ pywebpush>=2.5,<3
 
 # Test-only hosted Checkout, signed webhooks, refunds and Connect transfers.
 stripe==14.4.1
+phonenumbers>=9.0.41,<10

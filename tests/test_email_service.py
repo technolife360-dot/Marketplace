@@ -63,6 +63,23 @@ class ResendEmailTests(unittest.TestCase):
         with patch.dict(os.environ,{'RESEND_API_KEY':'','EMAIL_API_KEY':''}):
             self.assertFalse(email_service.is_configured())
 
+    def test_verification_email_contains_exact_decision_and_stable_retry_key(self):
+        import seller_verification
+        class Response:
+            status=200
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def read(self,n):return b'{"id":"verification-email-test"}'
+        for action,description in seller_verification.DECISION_MESSAGES.items():
+            with patch.object(email_service,'urlopen',return_value=Response()) as send:
+                email_service.send_verification_update('seller@example.test','<Seller>','Identity verification '+action,description,'notification-123')
+            request=send.call_args.args[0];payload=json.loads(request.data)
+            self.assertIn(description,payload['text'])
+            self.assertEqual(payload['html'].count(description),1)
+            self.assertIn('&lt;Seller&gt;',payload['html'])
+            self.assertNotIn('Salom',payload['html'])
+            self.assertEqual(request.get_header('Idempotency-key'),'seller-review/notification-123')
+
     def test_resend_requires_verified_domain_sender_in_production(self):
         with patch.dict(os.environ,{'EMAIL_FROM':'SentryLoot <onboarding@resend.dev>'}):
             self.assertFalse(email_service.is_configured())

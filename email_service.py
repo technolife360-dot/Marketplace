@@ -33,7 +33,7 @@ def _from_address() -> str:
     return os.environ.get('EMAIL_FROM','').strip()
 
 
-def _deliver(message: EmailMessage) -> None:
+def _deliver(message: EmailMessage, *, idempotency_key: str = '') -> None:
     if not is_configured(): raise RuntimeError('Transactional email is not configured')
     if os.environ.get('EMAIL_PROVIDER','disabled').strip().lower()=='resend':
         plain=message.get_body(preferencelist=('plain',))
@@ -43,6 +43,7 @@ def _deliver(message: EmailMessage) -> None:
         key=(os.environ.get('RESEND_API_KEY') or os.environ.get('EMAIL_API_KEY') or '').strip()
         req=Request('https://api.resend.com/emails',data=json.dumps(payload).encode(),headers={
             'Authorization':'Bearer '+key,'Content-Type':'application/json','User-Agent':'SentryLoot/1.0'},method='POST')
+        if idempotency_key: req.add_header('Idempotency-Key',idempotency_key)
         try:
             with urlopen(req,timeout=12) as response:
                 if not 200<=response.status<300: raise RuntimeError('Resend rejected the email request')
@@ -156,6 +157,27 @@ def send_security_update(address: str, display_name: str, description: str, lang
     message['To']=address
     message.set_content(f'Salom, {display_name}.\n\n{description}.\nBu amalni siz bajarmagan bo‘lsangiz, gamestorehub.com orqali yordam xizmatiga murojaat qiling.')
     _deliver(message)
+
+
+def send_verification_update(address: str, display_name: str, title: str, description: str, notification_id: str) -> None:
+    """Send the exact persisted admin decision, with a stable provider retry key."""
+    base=os.environ.get('PUBLIC_BASE_URL','').strip().rstrip('/')
+    parsed=urlsplit(base)
+    if parsed.scheme not in ('https','http') or not parsed.netloc or parsed.username or parsed.password:
+        raise ValueError('PUBLIC_BASE_URL must be an absolute URL')
+    if os.environ.get('MARKETPLACE_MODE','development').lower()=='production' and parsed.scheme!='https':
+        raise ValueError('HTTPS is required')
+    url=base+'/#seller'
+    message=EmailMessage(); message['Subject']='SentryLoot — '+title
+    message['From']=_from_address(); message['To']=address
+    message.set_content(f'Hello, {display_name}.\n\n{description}\n\nView verification: {url}')
+    message.add_alternative(f'<!doctype html><html lang="en"><body style="margin:0;background:#000;color:#f1f1f1;font:15px/1.6 Roboto,Arial,sans-serif">'
+        f'<main style="max-width:560px;margin:32px auto;padding:28px;background:#111;border:1px solid #333;border-radius:16px">'
+        f'<div style="font-size:22px;font-weight:700">Sentry<span style="color:#ff9b42">Loot</span></div>'
+        f'<h1 style="font-size:23px">{escape(title)}</h1><p>Hello, {escape(display_name)}.</p><p>{escape(description)}</p>'
+        f'<a href="{escape(url,quote=True)}" style="display:inline-block;margin-top:12px;padding:12px 18px;background:#ff9b42;color:#000;border-radius:8px;text-decoration:none;font-weight:700">View verification</a>'
+        f'<p style="color:#aaa;font-size:12px">This is an account verification update from SentryLoot.</p></main></body></html>',subtype='html')
+    _deliver(message,idempotency_key='seller-review/'+notification_id)
 
 
 def send_marketplace_alert(address: str, display_name: str, title: str, language: str = 'uz') -> None:

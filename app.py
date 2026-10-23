@@ -28,6 +28,7 @@ from payment_providers import get_provider
 import email_service
 import identity_service
 import seller_verification
+import account_contacts
 import oauth_service
 import seagm_supplier
 import storage_r2
@@ -630,7 +631,7 @@ def erase_account_personal_data(db, uid):
     """
     for table in ('experience_preferences','account_collections','conversation_preferences','seller_quick_replies','price_watches'):
         db.execute(f'DELETE FROM {table} WHERE user_id=?',(uid,))
-    db.execute('DELETE FROM platform_config WHERE key IN (?,?,?)',('staff_capabilities:'+uid,'referral_attribution:'+uid,'didit_review:'+uid))
+    db.execute('DELETE FROM platform_config WHERE key IN (?,?,?,?,?,?)',('staff_capabilities:'+uid,'referral_attribution:'+uid,'didit_review:'+uid,'account_phone:'+uid,'account_phone_verified:'+uid,'account_phone_challenge:'+uid))
     db.execute('DELETE FROM message_retry_keys WHERE sender_id=?',(uid,))
     db.execute('DELETE FROM listing_imports WHERE seller_id=?',(uid,))
     db.execute('DELETE FROM seller_code_inventory WHERE seller_id=? AND order_item_id IS NULL',(uid,))
@@ -691,10 +692,11 @@ def erase_account_personal_data(db, uid):
                ('deleted-'+uid+'@deleted.invalid',password_hash(secrets.token_urlsafe(48)),uid))
 
 def notify(db, uid, kind, title, body, href='/'):
-    if not uid or not catalogue_experience.notification_allowed(db,uid,kind):return
+    if not uid or (kind!='seller_verification_decision' and not catalogue_experience.notification_allowed(db,uid,kind)):return
     nid=ident();db.execute('INSERT INTO notifications(id,user_id,kind,title,body,href) VALUES(?,?,?,?,?,?)',(nid,uid,kind,title,body,href))
-    if kind in ('message','favorite','seller_listing','saved_search') and catalogue_experience.settings(db,uid)['email']:
+    if kind=='seller_verification_decision' or (kind in ('message','favorite','seller_listing','saved_search') and catalogue_experience.settings(db,uid)['email']):
         db.execute('INSERT INTO notification_outbox(notification_id,user_id) VALUES(?,?)',(nid,uid))
+    return nid
 def email_order_update(db, uid, reference, status, description):
     if not uid or not email_service.is_configured() or not catalogue_experience.settings(db,uid)['order']: return
     user=db.execute('SELECT email,display_name,email_verified,suspended,language FROM users WHERE id=?',(uid,)).fetchone()
@@ -714,7 +716,7 @@ def event(db, oid, actor, old, new, note=''):
         buyer=db.execute('SELECT buyer_id FROM orders WHERE id=?',(oid,)).fetchone()
         if buyer and old!='completed':notify(db,buyer['buyer_id'],'review','Xaridingizni baholang','Yakunlangan xaridingiz uchun baho va izoh qoldirishingiz mumkin.','/#my-reviews')
 def user_view(db, uid):
-    u = db.execute('SELECT id,email,display_name,country,language,currency,email_verified,suspended,created_at FROM users WHERE id=?',(uid,)).fetchone()
+    u = db.execute("SELECT u.id,u.email,u.display_name,u.country,u.language,u.currency,u.email_verified,u.suspended,u.created_at,COALESCE(p.value,'') AS phone,CASE WHEN p.value IS NOT NULL AND p.value=v.value THEN 1 ELSE 0 END AS phone_verified FROM users u LEFT JOIN platform_config p ON p.key='account_phone:'||u.id LEFT JOIN platform_config v ON v.key='account_phone_verified:'||u.id WHERE u.id=?",(uid,)).fetchone()
     if not u: return None
     out = dict(u)
     # Admin status is an immutable role marker created by the local bootstrap command.
@@ -1736,7 +1738,7 @@ class Handler(BaseHTTPRequestHandler):
                 db.execute('INSERT INTO users(id,email,password_hash,display_name,country,language,currency,email_verified,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,1,?,?)',(user_id,email,password_hash(create_token()),name,oauth_country,'en',ASIA_COUNTRY_CURRENCIES[oauth_country],terms,now_iso()))
                 db.execute('INSERT INTO oauth_identities(provider,subject,user_id) VALUES(?,?,?)',(provider,subject,user_id))
             session_token,csrf=session_create(db,user_id); self.set_session(session_token,db)
-            return 302,{'ok':True},{'Location':'/#home','Set-Cookie':[clear]}
+            return 302,{'ok':True},{'Location':'/#home' if account_contacts.verified(db,user_id) else '/#contact-details','Set-Cookie':[clear]}
         if path=='/api/webhooks/didit' and method=='POST':
             payload=identity_service.verify_webhook(raw_body,self.headers.get('X-Signature-V2',''),self.headers.get('X-Timestamp',''))
             if payload is None: raise HttpError(401,'Didit webhook imzosi yoki vaqti noto‘g‘ri.')
@@ -2300,9 +2302,83 @@ class Handler(BaseHTTPRequestHandler):
             existing=db.execute("SELECT id,status FROM account_deletion_requests WHERE user_id=? AND status IN ('pending','reviewing') ORDER BY created_at DESC LIMIT 1",(uid,)).fetchone()
             if existing: return {'id':existing['id'],'status':existing['status']}
             rid=ident(); db.execute('INSERT INTO account_deletion_requests(id,user_id,reason) VALUES(?,?,?)',(rid,uid,reason)); audit(db,uid,'account_deletion_request','user',uid); return 201,{'id':rid,'status':'pending'}
+        if path=='/api/phone/countries' and method=='GET':
+            require_user(ctx)
+            return account_contacts.countries()
+        if path=='/api/phone/status' and method=='GET':
+            require_user(ctx)
+            pending=account_contacts.challenge(db,uid)
+            return {'phone':account_contacts.read(db,uid),'verified':account_contacts.verified(db,uid),
+                    'pending_phone':pending['phone'] if pending else '',
+                    'retry_after':max(0,int(pending['resend_at']-time.time())+1) if pending else 0,
+                    'channel':pending['channel'] if pending else 'sms'}
+        if path=='/api/phone/send' and method=='POST':
+            require_verified(ctx)
+            try: phone=account_contacts.normalize_phone(data.get('phone'),data.get('country'))
+            except ValueError as exc: raise HttpError(400,str(exc))
+            channel=data.get('channel','sms')
+            if channel not in ('sms','whatsapp'): raise HttpError(400,'Choose SMS or WhatsApp.')
+            check_rate(db,'phone_send_user',uid,5,3600)
+            check_rate(db,'phone_send_ip',self.client_address[0],10,3600)
+            phone_key=hmac.new(SESSION_SECRET.encode(),phone.encode(),hashlib.sha256).hexdigest()
+            check_rate(db,'phone_send_number',phone_key,3,3600)
+            db.execute("INSERT OR IGNORE INTO platform_config(key,value) VALUES(?,'{}')",(account_contacts.CHALLENGE_PREFIX+uid,))
+            db.execute('BEGIN IMMEDIATE')
+            try:
+                db.execute('SELECT value FROM platform_config WHERE key=?'+(' FOR UPDATE' if DATABASE_URL else ''),(account_contacts.CHALLENGE_PREFIX+uid,)).fetchone()
+                pending=account_contacts.challenge(db,uid)
+                if pending and pending['resend_at']>time.time(): raise HttpError(429,'Please wait 60 seconds before requesting another code.')
+                reference='phone-'+hmac.new(SESSION_SECRET.encode(),uid.encode(),hashlib.sha256).hexdigest()[:40]
+                try: result=identity_service.phone_request('send',{'phone_number':phone,'vendor_data':reference,'options':{'preferred_channel':channel,'locale':{'en':'en-US','ru':'ru-RU','uz':'uz-UZ'}.get(ctx['user']['language'],'en-US'),'sms_sender_name':'SentryLoot'}})
+                except identity_service.IdentityProviderError as exc: raise HttpError(503,str(exc))
+                if result.get('status') not in ('Success','Retry') or not isinstance(result.get('request_id'),str): raise HttpError(409,'A code could not be sent. Please try again later.')
+                issued=time.time()
+                expires=pending['expires_at'] if pending and pending['request_id']==result['request_id'] else issued+300
+                attempts=pending.get('attempts',0) if pending and pending['request_id']==result['request_id'] else 0
+                account_contacts.store(db,account_contacts.CHALLENGE_PREFIX+uid,{'phone':phone,'channel':channel,'request_id':result['request_id'],'reference':reference,'expires_at':expires,'resend_at':issued+60,'attempts':attempts})
+                db.execute('COMMIT')
+            except Exception:
+                db.execute('ROLLBACK'); raise
+            return {'sent':True,'retry_after':60,'expires_in':max(0,int(expires-issued)),'phone':phone,'channel':channel}
+        if path=='/api/phone/check' and method=='POST':
+            require_verified(ctx)
+            code=data.get('code','')
+            if not isinstance(code,str) or not re.fullmatch(r'[0-9]{4,8}',code): raise HttpError(400,'Enter the verification code you received.')
+            check_rate(db,'phone_check',uid,12,3600)
+            db.execute('BEGIN IMMEDIATE')
+            try:
+                db.execute('SELECT value FROM platform_config WHERE key=?'+(' FOR UPDATE' if DATABASE_URL else ''),(account_contacts.CHALLENGE_PREFIX+uid,)).fetchone()
+                pending=account_contacts.challenge(db,uid)
+                if not pending or pending.get('attempts',0)>=3: raise HttpError(409,'This code expired. Request a new code.')
+                pending['attempts']=pending.get('attempts',0)+1
+                account_contacts.store(db,account_contacts.CHALLENGE_PREFIX+uid,pending)
+                # Commit the attempt even when the provider declines the code.
+                db.execute('COMMIT')
+            except Exception:
+                db.execute('ROLLBACK'); raise
+            try: result=identity_service.phone_request('check',{'phone_number':pending['phone'],'code':code,'voip_number_action':'DECLINE'})
+            except identity_service.IdentityProviderError as exc: raise HttpError(503,str(exc))
+            report=result.get('phone') if isinstance(result.get('phone'),dict) else {}
+            if result.get('status')!='Approved': raise HttpError(400,'The code is incorrect or expired. Please try again or request a new code.')
+            if result.get('request_id')!=pending['request_id'] or result.get('vendor_data')!=pending['reference'] or report.get('full_number')!=pending['phone'] or report.get('status')!='Approved':
+                raise HttpError(409,'Phone verification did not match this request. Request a new code.')
+            db.execute('BEGIN IMMEDIATE')
+            try:
+                current=db.execute('SELECT value FROM platform_config WHERE key=?'+(' FOR UPDATE' if DATABASE_URL else ''),(account_contacts.CHALLENGE_PREFIX+uid,)).fetchone()
+                current=json.loads(current['value']) if current else {}
+                if current.get('request_id')!=pending['request_id'] or current.get('expires_at',0)<=time.time(): raise HttpError(409,'This verification expired or changed. Request a new code.')
+                account_contacts.save(db,uid,pending['phone'])
+                db.execute('INSERT INTO platform_config(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP',(account_contacts.VERIFIED_PREFIX+uid,pending['phone']))
+                db.execute('DELETE FROM platform_config WHERE key=?',(account_contacts.CHALLENGE_PREFIX+uid,))
+                audit(db,uid,'phone_verified','user',uid,{'provider':'didit','channel':pending['channel']})
+                db.execute('COMMIT')
+            except Exception:
+                db.execute('ROLLBACK'); raise
+            return {'verified':True,'user':user_view(db,uid)}
         if path=='/api/profile' and method=='POST':
             require_user(ctx)
             fields={}
+            if 'phone' in data: raise HttpError(400,'Use phone verification to change your phone number.')
             if 'display_name' in data: fields['display_name']=clean_text(data['display_name'],'Ism',2,80)
             if 'language' in data:
                 if not isinstance(data['language'],str) or data['language'] not in SUPPORTED_LANGUAGES: raise HttpError(400,'Til tanlovi noto‘g‘ri.')
@@ -2320,14 +2396,16 @@ class Handler(BaseHTTPRequestHandler):
             if data.get('consent') is not True: raise HttpError(400,'Didit’ga ma’lumot yuborish uchun rozilikni belgilang.')
             if not identity_service.is_configured(): raise HttpError(503,'Didit hali ulanmagan. Serverda API key, workflow ID va webhook secret sozlanishi kerak.')
             check_rate(db,'didit_session',uid,5,3600)
-            user=db.execute('SELECT email FROM users WHERE id=? AND email_verified=1 AND suspended=0',(uid,)).fetchone()
+            user=db.execute('SELECT email,language FROM users WHERE id=? AND email_verified=1 AND suspended=0',(uid,)).fetchone()
             profile=db.execute('SELECT * FROM seller_profiles WHERE user_id=?',(uid,)).fetchone()
             if not user or not profile: raise HttpError(409,'Avval emailni tasdiqlab, sotuvchi profilini yarating.')
+            phone=account_contacts.read(db,uid)
+            if not phone or not account_contacts.verified(db,uid): raise HttpError(409,'Verify your phone number before starting identity verification.')
             if profile['identity_status']=='verified' and profile['identity_provider']=='didit': raise HttpError(409,'Shaxs Didit orqali tasdiqlangan.')
             reference='sl-'+hmac.new(SESSION_SECRET.encode('utf-8'),('didit-user:'+uid).encode('utf-8'),hashlib.sha256).hexdigest()[:40]
-            try: session=identity_service.create_verification_session(reference)
+            try: session=identity_service.create_verification_session(reference,email=user['email'],phone=phone,language=user['language'])
             except identity_service.IdentityProviderError as exc: raise HttpError(503,str(exc))
-            consent_version='kyc-consent-v2-admin-review'
+            consent_version='kyc-consent-v3-account-contact'
             db.execute("UPDATE seller_profiles SET identity_reference=?,identity_provider='didit',identity_status='pending',identity_verified_at=NULL,identity_last_event_at=NULL,identity_consent_at=?,identity_consent_version=? WHERE user_id=?",(session['session_id'],now_iso(),consent_version,uid))
             audit(db,uid,'didit_identity_started','seller',uid,{'provider':'didit','consent_version':consent_version})
             return {'url':session['url'],'status':'pending'}
@@ -2684,8 +2762,9 @@ class Handler(BaseHTTPRequestHandler):
             audit(db,aid,'listing_'+action,'listing',lid,{'note':note}); notify(db,l['seller_id'],'moderation','Moderatsiya natijasi',f'E’loningiz holati: {status}. {note}','/seller'); return {'status':status}
         m=re.fullmatch(r'/api/admin/sellers/([^/]+)',path)
         if m and method=='POST':
-            aid=require_admin(ctx); target=m.group(1); action=data.get('action'); note=clean_text(data.get('note'),'Review note',5,1000)
+            aid=require_admin(ctx); target=m.group(1); action=data.get('action')
             if action not in ('approve','reject','request_info'): raise HttpError(400,'Choose approve, reject, or request information.')
+            note=seller_verification.DECISION_MESSAGES[action] if action in seller_verification.DECISION_MESSAGES else clean_text(data.get('note'),'Review note',5,1000)
             if aid==target: raise HttpError(403,'Another administrator must review your own seller profile.')
             db.execute('BEGIN IMMEDIATE')
             try:
@@ -2694,19 +2773,24 @@ class Handler(BaseHTTPRequestHandler):
                 if not profile: raise HttpError(404,'Seller profile not found.')
                 if 'expected_session' in data and data['expected_session']!=profile['identity_reference']: raise HttpError(409,'The seller started another verification. Refresh before deciding.')
                 if action=='approve' and (not profile['email_verified'] or profile['suspended']): raise HttpError(409,'The seller must have a verified email and an active account.')
+                if action=='approve' and not account_contacts.verified(db,target): raise HttpError(409,'The seller must verify their phone number before approval.')
                 if action=='approve' and (profile['identity_status']!='verified' or profile['identity_provider']!='didit'): raise HttpError(409,'Didit must approve document, liveness, and face match first.')
                 if profile['verification_status']=='verified' and profile['selling_enabled'] and action=='approve': raise HttpError(409,'This seller is already approved.')
+                if profile['verification_status']=='rejected' and action=='reject': raise HttpError(409,'This seller is already rejected.')
                 status='verified' if action=='approve' else 'rejected' if action=='reject' else 'pending'
                 enabled=1 if action=='approve' else 0
                 db.execute('UPDATE seller_profiles SET verification_status=?,selling_enabled=? WHERE user_id=?',(status,enabled,target))
                 if not enabled: db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE seller_id=? AND status='published'",(target,))
                 audit(db,aid,'seller_'+action,'seller',target,{'note':note})
-                message={'approve':'Your seller profile is approved. You can submit listings. ', 'reject':'Your seller application was rejected. ', 'request_info':'More information is needed for your seller application. '}[action]
-                notify(db,target,'seller_review','Seller review updated',message+note,'/seller')
+                notification_id=notify(db,target,'seller_verification_decision','Identity verification '+{'approve':'approved','reject':'rejected','request_info':'— more information needed'}[action],note,'/seller')
                 db.execute('COMMIT')
             except Exception:
                 db.execute('ROLLBACK'); raise
-            return {'verification_status':status,'selling_enabled':bool(enabled)}
+            try: email_result=catalogue_experience.dispatch_emails(db,globals(),notification_id=notification_id)
+            except Exception as exc:
+                print('seller verification email dispatch failed:',type(exc).__name__)
+                email_result={'sent':0}
+            return {'verification_status':status,'selling_enabled':bool(enabled),'email_sent':bool(email_result.get('sent'))}
         m=re.fullmatch(r'/api/admin/account-reviews/([^/]+)',path)
         if m and method=='POST':
             aid=require_admin(ctx); oid=m.group(1); action=data.get('action'); note=clean_text(data.get('note',''),'Moderator izohi',5,1500)

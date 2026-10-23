@@ -5,6 +5,10 @@ from datetime import datetime, timedelta, timezone
 
 PREFIX = 'didit_review:'
 CHECKS = ('id_verifications', 'liveness_checks', 'face_matches')
+DECISION_MESSAGES = {
+    'approve': 'Identity verification completed successfully. The submitted documents have been reviewed and approved.',
+    'reject': 'Verification rejected because the submitted documents could not be verified. Please provide valid and readable identity documents.',
+}
 
 
 def read(db, uid):
@@ -56,10 +60,13 @@ def entry(row):
 
 
 BASE = """FROM seller_profiles s JOIN users u ON u.id=s.user_id
-    LEFT JOIN platform_config c ON c.key='didit_review:'||s.user_id"""
+    LEFT JOIN platform_config c ON c.key='didit_review:'||s.user_id
+    LEFT JOIN platform_config p ON p.key='account_phone:'||s.user_id
+    LEFT JOIN platform_config v ON v.key='account_phone_verified:'||s.user_id"""
 FIELDS = """s.user_id,s.shop_name,s.bio,s.verification_status,s.selling_enabled,s.identity_status,
     s.identity_provider,s.identity_reference,s.identity_verified_at,s.identity_last_event_at,s.created_at,
-    u.email,u.display_name,u.country,u.email_verified,c.value review_json"""
+    u.email,u.display_name,u.country,u.email_verified,c.value review_json,COALESCE(p.value,'') AS phone,
+    CASE WHEN p.value IS NOT NULL AND p.value=v.value THEN 1 ELSE 0 END AS phone_verified"""
 
 
 def listing(db, qs, core):
@@ -79,8 +86,8 @@ def listing(db, qs, core):
     if country: where.append('u.country=?'); args.append(country[:3])
     query = val('q').strip()[:100]
     if query:
-        where.append("(LOWER(u.display_name) LIKE ? OR LOWER(u.email) LIKE ? OR LOWER(s.shop_name) LIKE ? OR LOWER(s.identity_reference) LIKE ?)")
-        args.extend(['%'+query.lower()+'%']*4)
+        where.append("(LOWER(u.display_name) LIKE ? OR LOWER(u.email) LIKE ? OR LOWER(s.shop_name) LIKE ? OR LOWER(s.identity_reference) LIKE ? OR p.value LIKE ?)")
+        args.extend(['%'+query.lower()+'%']*5)
     clause = ' WHERE '+' AND '.join(where) if where else ''
     total = db.execute('SELECT COUNT(*) n '+BASE+clause, args).fetchone()['n']
     rows = db.execute('SELECT '+FIELDS+' '+BASE+clause+' ORDER BY s.created_at DESC,s.user_id LIMIT 25 OFFSET ?', (*args, (page-1)*25)).fetchall()

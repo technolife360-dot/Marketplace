@@ -5,6 +5,7 @@ included in public configuration or personal exports.
 """
 import json
 import re
+import account_contacts
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -80,6 +81,8 @@ def save_preferences(db,uid,transform,core):
 def personal_export(db,uid):
     # Explicit field lists: never SELECT * from sessions, users or deliveries.
     profile=dict(db.execute('SELECT id,display_name,email,country,language,currency,created_at FROM users WHERE id=?',(uid,)).fetchone())
+    profile['phone']=account_contacts.read(db,uid)
+    profile['phone_verified']=account_contacts.verified(db,uid)
     queries={
         'orders':('SELECT id,reference,status,currency,total_minor,created_at FROM orders WHERE buyer_id=?',(uid,)),
         'reviews':('SELECT rating,body,created_at,hidden FROM reviews WHERE reviewer_id=?',(uid,)),

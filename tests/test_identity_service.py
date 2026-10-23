@@ -67,15 +67,37 @@ class DiditIntegrationTests(unittest.TestCase):
                 self.host, self.port = host, port
             def request(self, method, path, body, headers):
                 self.request_data = (method, path, json.loads(body), headers)
+                Connection.latest = self.request_data
             def getresponse(self):
                 return Response()
             def close(self):
                 pass
 
         with patch.object(identity_service.http.client, 'HTTPSConnection', Connection):
-            session = identity_service.create_verification_session('opaque-reference')
+            session = identity_service.create_verification_session('opaque-reference',email='seller@example.test',phone='+60123456789',language='en')
         self.assertEqual(session['session_id'], 'session-123')
         self.assertEqual(session['url'], 'https://verify.didit.me/session/abc')
+        self.assertEqual(Connection.latest[2]['contact_details'],{'email':'seller@example.test','phone':'+60123456789','send_notification_emails':False})
+        self.assertEqual(Connection.latest[2]['language'],'en')
+
+    def test_phone_provider_uses_official_endpoint_and_rejects_unactivated_service(self):
+        class Response:
+            status=200
+            def read(self,_limit):return b'{"status":"Success","request_id":"phone-123"}'
+        class Connection:
+            def __init__(self,host,port,**kwargs):
+                self.host=host
+            def request(self,method,path,body,headers):
+                Connection.latest=(self.host,method,path,json.loads(body),headers)
+            def getresponse(self):return Response()
+            def close(self):pass
+        payload={'phone_number':'+60123456789','options':{'preferred_channel':'sms'}}
+        with patch.object(identity_service.http.client,'HTTPSConnection',Connection):
+            self.assertEqual(identity_service.phone_request('send',payload)['status'],'Success')
+            self.assertEqual(Connection.latest[:3],('verification.didit.me','POST','/v3/phone/send/'))
+            Response.status=403
+            with self.assertRaisesRegex(identity_service.IdentityProviderError,'not activated'):
+                identity_service.phone_request('send',payload)
 
 
 if __name__ == '__main__':

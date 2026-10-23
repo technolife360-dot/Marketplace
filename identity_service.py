@@ -37,7 +37,7 @@ def _api_host() -> str:
     return parsed.hostname
 
 
-def create_verification_session(user_reference: str) -> dict[str, str]:
+def create_verification_session(user_reference: str, *, email: str = '', phone: str = '', language: str = 'en') -> dict[str, str]:
     if not is_configured():
         raise IdentityProviderError('Didit ulanishi konfiguratsiya qilinmagan.')
     host = _api_host()
@@ -46,7 +46,8 @@ def create_verification_session(user_reference: str) -> dict[str, str]:
         'workflow_id': os.environ['DIDIT_WORKFLOW_ID'].strip(),
         'callback': callback,
         'vendor_data': user_reference,
-        'language': 'uz',
+        'language': language if language in ('en', 'uz', 'ru') else 'en',
+        'contact_details': {'email': email, 'phone': phone, 'send_notification_emails': False},
         'expected_details': {'expected_document_types': ['P', 'ID']},
     }, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
     headers = {
@@ -149,3 +150,32 @@ def report_media(decision):
                         and any(host == domain or host.endswith('.'+domain) for domain in ('didit.me','amazonaws.com','cloudfront.net'))):
                     images.append({'label':label, 'url':value})
     return images
+
+
+def phone_request(operation, payload):
+    """Standalone Didit phone API. Never return the report, OTP, or upstream body."""
+    if operation not in ('send', 'check') or not os.environ.get('DIDIT_API_KEY', '').strip():
+        raise IdentityProviderError('Phone verification is not configured yet.')
+    connection = http.client.HTTPSConnection(_api_host(), 443, timeout=8, context=ssl.create_default_context())
+    try:
+        connection.request('POST', '/v3/phone/'+operation+'/',
+            body=json.dumps(payload,separators=(',', ':')).encode(), headers={
+                'Accept':'application/json', 'Content-Type':'application/json',
+                'x-api-key':os.environ['DIDIT_API_KEY'].strip(), 'User-Agent':'SentryLoot/1.0'})
+        response = connection.getresponse()
+        raw = response.read(65537)
+        if response.status == 403:
+            raise IdentityProviderError('SMS and WhatsApp verification are not activated. Please contact support.')
+        if response.status == 429:
+            raise IdentityProviderError('Too many code requests. Please try again later.')
+        if response.status == 400:
+            raise IdentityProviderError('Check your phone number and verification code.')
+        if response.status != 200 or len(raw) > 65536:
+            raise IdentityProviderError('Phone verification is temporarily unavailable. Please retry.')
+        value = json.loads(raw)
+        if not isinstance(value,dict): raise ValueError('Unexpected phone response')
+        return value
+    except (OSError, ValueError, http.client.HTTPException) as exc:
+        raise IdentityProviderError('Phone verification is temporarily unavailable. Please retry.') from exc
+    finally:
+        connection.close()

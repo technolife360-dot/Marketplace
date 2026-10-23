@@ -446,17 +446,21 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         return dispatch_emails(db,core)
     return UNHANDLED
 
-def dispatch_emails(db,core):
+def dispatch_emails(db,core,notification_id=None):
     if not core['email_service'].is_configured():return {'sent':0,'configured':False}
     sent=0;failed=0
-    for row in db.execute("SELECT q.notification_id,q.user_id,n.title,n.kind FROM notification_outbox q JOIN notifications n ON n.id=q.notification_id WHERE q.status='pending' AND q.attempts<3 ORDER BY q.created_at LIMIT 50").fetchall():
+    query="SELECT q.notification_id,q.user_id,n.title,n.body,n.kind FROM notification_outbox q JOIN notifications n ON n.id=q.notification_id WHERE (q.status='pending' OR (q.status='failed' AND n.kind='seller_verification_decision')) AND q.attempts<3"
+    if notification_id: query+=' AND q.notification_id=?'
+    for row in db.execute(query+' ORDER BY q.created_at LIMIT 50',(notification_id,) if notification_id else ()).fetchall():
+        verification=row['kind']=='seller_verification_decision'
         user=db.execute('SELECT email,display_name,email_verified,suspended,language FROM users WHERE id=?',(row['user_id'],)).fetchone()
-        if not user or not user['email_verified'] or user['suspended'] or not settings(db,row['user_id'])['email'] or not notification_allowed(db,row['user_id'],row['kind']):
+        if not user or not user['email_verified'] or (not verification and (user['suspended'] or not settings(db,row['user_id'])['email'] or not notification_allowed(db,row['user_id'],row['kind']))):
             db.execute("UPDATE notification_outbox SET status='skipped' WHERE notification_id=?",(row['notification_id'],));continue
         # Claim once. A crash leaves an unknown send outcome for operator review rather than double emailing.
-        if not db.execute("UPDATE notification_outbox SET status='sending',attempts=attempts+1 WHERE notification_id=? AND status='pending'",(row['notification_id'],)).rowcount:continue
+        if not db.execute("UPDATE notification_outbox SET status='sending',attempts=attempts+1 WHERE notification_id=? AND (status='pending' OR (status='failed' AND ?=1)) AND attempts<3",(row['notification_id'],int(verification))).rowcount:continue
         try:
-            core['email_service'].send_marketplace_alert(user['email'],user['display_name'],row['title'],language=user['language'])
+            if verification: core['email_service'].send_verification_update(user['email'],user['display_name'],row['title'],row['body'],row['notification_id'])
+            else: core['email_service'].send_marketplace_alert(user['email'],user['display_name'],row['title'],language=user['language'])
             db.execute("UPDATE notification_outbox SET status='sent' WHERE notification_id=?",(row['notification_id'],));sent+=1
         except Exception:
             db.execute("UPDATE notification_outbox SET status='failed' WHERE notification_id=?",(row['notification_id'],));failed+=1

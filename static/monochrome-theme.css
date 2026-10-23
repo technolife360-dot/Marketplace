@@ -1826,3 +1826,44 @@ body #app .admin-portal .admin-nav [data-admin-count][hidden] { display:none !im
 /* Sign-in never shows field icons; registration keeps the field decoration. */
 body .auth-page.is-login #auth-form .field-control.has-icon > .field-control-icon { display:none !important; }
 body .auth-page.is-login #auth-form .field-control.has-icon > :is(input,textarea,select) { padding-inline-start:12px !important; }
+@layer sentryloot-theme {
+ .phone-verification-page{display:grid;place-items:center;min-height:70vh;padding:40px 20px!important}
+ .phone-verification-card{width:min(100%,440px);padding:30px;border:1px solid #292929!important;border-radius:20px;background:#080808!important;box-sizing:border-box}
+ .phone-brand{display:inline-block;margin-bottom:30px;font-size:24px;font-weight:700;text-decoration:none}
+ .phone-brand span{color:#ff9b42!important}
+ .phone-step{display:flex;justify-content:space-between;gap:16px;margin-bottom:14px;font-size:11px;font-weight:600;letter-spacing:.09em;color:#aaa!important}
+ .phone-verification-card h1{margin:0;font-size:27px;line-height:1.2;letter-spacing:-.025em}
+ .phone-intro{margin:14px 0 22px;color:#aaa!important;line-height:1.6;overflow-wrap:anywhere}
+ .phone-account-email{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid #252525!important;font-size:13px}
+ .phone-account-email .icon{flex:0 0 20px;width:20px;height:20px;color:#42ce80!important}
+ .phone-account-email span{min-width:0;overflow-wrap:anywhere}
+ .phone-account-email small{color:#aaa!important;margin-left:auto}
+ #phone-form .field{display:flex;flex-direction:column;gap:8px;margin-bottom:22px}
+ #phone-form label{font-weight:500;font-size:14px}
+ #phone-form input:not([type=radio]){width:100%;height:48px;box-sizing:border-box;padding:0 14px;border:1px solid #3c3c3c!important;border-radius:10px;background:#111!important;color:#f1f1f1!important;box-shadow:none!important}
+ #phone-form input:not([type=radio]):focus{outline:2px solid #ff9b42!important;outline-offset:2px}
+ #phone-form small,.phone-privacy{font-size:12px;line-height:1.6;color:#aaa!important}
+ #phone-form .phone-code-input{font-size:24px;letter-spacing:.23em;text-align:center}
+ .phone-channels{display:grid;grid-template-columns:1fr 1fr;gap:12px;border:0!important;padding:0;margin:0 0 24px}
+ .phone-channels legend{margin-bottom:10px;font-size:13px;color:#aaa!important}
+ .phone-channels label{display:flex;align-items:center;justify-content:center;gap:10px;height:44px;border:1px solid #333!important;border-radius:10px;background:#111!important;cursor:pointer}
+ .phone-channels label:has(input:checked){border-color:#ff9b42!important;background:#1b140e!important}
+ .phone-channels input{width:16px;height:16px;accent-color:#ff9b42}
+ .phone-verification-card .button-primary{display:flex;align-items:center;justify-content:center;width:100%;min-height:46px;border:0!important;border-radius:10px;background:#ff9b42!important;color:#000!important;font-weight:600}
+ .phone-verification-card button:disabled{opacity:.5;cursor:wait}
+ .phone-code-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px}
+ .phone-code-actions button,#phone-change{border:0!important;background:transparent!important;padding:8px 0;min-height:36px;color:#aaa!important;font-size:13px;cursor:pointer}
+ .phone-error{font-size:13px;line-height:1.5;color:#ff6868!important;margin:0 0 16px}
+ .phone-privacy{margin:22px 0 0}
+ .phone-verification-card .phone-back{display:flex!important;width:fit-content;text-align:left;margin:-8px 0 24px!important;font-size:13px}
+ .phone-verification-card .phone-brand{display:block!important;width:fit-content;margin:0 auto 30px!important;text-align:center}
+ .phone-national-control{display:flex;align-items:center;min-width:0;border:1px solid #3c3c3c!important;border-radius:10px;background:#111!important}
+ .phone-national-control:focus-within{outline:2px solid #ff9b42!important;outline-offset:2px}
+ #phone-prefix{flex:0 0 auto;padding-left:14px;color:#aaa!important;font-size:15px}
+ #phone-form .phone-national-control input:not([type=radio]){border:0!important;background:transparent!important;outline:none!important;padding-left:10px;min-width:0}
+ #phone-form .site-select{width:100%}
+ .phone-confirmed{text-align:center;padding:8px 0 20px}
+ .phone-confirmed .icon{display:block;margin:0 auto 14px;color:#42ce80!important;width:32px;height:32px}
+ #phone-change{display:block;margin:12px auto 0}
+ @media(max-width:480px){.phone-verification-page{padding:24px 16px!important}.phone-verification-card{padding:24px 20px}.phone-verification-card h1{font-size:25px}}
+}

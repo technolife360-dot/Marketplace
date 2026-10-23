@@ -17,6 +17,8 @@ class SellerVerificationFlows(unittest.TestCase):
 
     def pending(self):
         self.db.execute("UPDATE seller_profiles SET identity_reference='session-123',selling_enabled=0,verification_status='pending' WHERE user_id=?",(self.seller,))
+        app.account_contacts.save(self.db,self.seller,'+60123456789')
+        self.db.execute('INSERT INTO platform_config(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',('account_phone_verified:'+self.seller,'+60123456789'))
 
     def test_admin_only_list_detail_report_and_decision(self):
         self.pending()
@@ -104,3 +106,42 @@ class SellerVerificationFlows(unittest.TestCase):
         with patch.object(app.identity_service,'verify_webhook',return_value=payload):
             self.assertTrue(self.route(None,'POST','/api/webhooks/didit')['ok'])
         self.assertEqual(verification.read(self.db,self.seller)['checks']['id_verifications'],'Approved')
+
+    def test_exact_decision_goes_to_bell_and_email_once_without_manual_text(self):
+        for action in ('approve','reject'):
+            self.pending()
+            self.db.execute("UPDATE seller_profiles SET identity_status='verified' WHERE user_id=?",(self.seller,))
+            with patch.object(app.email_service,'is_configured',return_value=True),patch.object(app.email_service,'send_verification_update') as send:
+                result=self.route(self.admin,'POST','/api/admin/sellers/'+self.seller,{'action':action})
+                self.assertTrue(result['email_sent'])
+                send.assert_called_once()
+                self.assertEqual(send.call_args.args[0],'seller@test.invalid')
+                self.assertEqual(send.call_args.args[3],verification.DECISION_MESSAGES[action])
+                notification=self.db.execute('SELECT body FROM notifications WHERE id=?',(send.call_args.args[4],)).fetchone()
+                self.assertEqual(notification['body'],verification.DECISION_MESSAGES[action])
+                with self.assertRaises(app.HttpError):self.route(self.admin,'POST','/api/admin/sellers/'+self.seller,{'action':action})
+                app.catalogue_experience.dispatch_emails(self.db,vars(app))
+                send.assert_called_once()
+
+    def test_request_information_remains_manual_and_failed_email_can_retry(self):
+        self.pending()
+        with self.assertRaises(app.HttpError):self.route(self.admin,'POST','/api/admin/sellers/'+self.seller,{'action':'request_info','note':''})
+        text='Please upload a clear photo with all four document corners visible.'
+        with patch.object(app.email_service,'is_configured',return_value=True),patch.object(app.email_service,'send_verification_update',side_effect=RuntimeError('temporary unavailable')):
+            result=self.route(self.admin,'POST','/api/admin/sellers/'+self.seller,{'action':'request_info','note':text})
+        self.assertFalse(result['email_sent'])
+        queued=self.db.execute('SELECT notification_id,status FROM notification_outbox').fetchone()
+        self.assertEqual(queued['status'],'failed')
+        with patch.object(app.email_service,'is_configured',return_value=True),patch.object(app.email_service,'send_verification_update') as send:
+            self.assertEqual(app.catalogue_experience.dispatch_emails(self.db,vars(app))['sent'],1)
+            self.assertEqual(send.call_args.args[3],text)
+            self.assertEqual(send.call_args.args[4],queued['notification_id'])
+            self.assertEqual(app.catalogue_experience.dispatch_emails(self.db,vars(app))['sent'],0)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) n FROM notifications WHERE kind='seller_verification_decision'").fetchone()['n'],1)
+
+    def test_failed_transaction_never_sends_a_decision_email(self):
+        self.pending()
+        with patch.object(app,'notify',side_effect=RuntimeError('notification storage failed')),patch.object(app.email_service,'send_verification_update') as send:
+            with self.assertRaises(RuntimeError):self.route(self.admin,'POST','/api/admin/sellers/'+self.seller,{'action':'reject'})
+        send.assert_not_called()
+        self.assertEqual(self.db.execute('SELECT verification_status FROM seller_profiles WHERE user_id=?',(self.seller,)).fetchone()['verification_status'],'pending')
