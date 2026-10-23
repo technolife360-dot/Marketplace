@@ -107,3 +107,45 @@ def verify_webhook(raw_body: bytes, signature: str, timestamp_header: str) -> di
         return payload
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError, OverflowError):
         return None
+
+
+def retrieve_decision(session_id: str) -> dict:
+    """Read a bound session only on explicit admin request; never persist media."""
+    import re
+    if not is_configured() or not isinstance(session_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', session_id):
+        raise IdentityProviderError('Didit session is not available.')
+    connection = http.client.HTTPSConnection(_api_host(), 443, timeout=8, context=ssl.create_default_context())
+    try:
+        connection.request('GET', '/v3/session/'+session_id+'/decision/', headers={
+            'Accept':'application/json', 'x-api-key':os.environ['DIDIT_API_KEY'].strip(), 'User-Agent':'SentryLoot/1.0'})
+        response = connection.getresponse()
+        body = response.read(1_048_577)
+        if response.status != 200 or len(body)>1_048_576:
+            raise IdentityProviderError('Didit report could not be loaded. Please retry.')
+        value = json.loads(body.decode('utf-8'))
+        if not isinstance(value, dict) or value.get('session_id') != session_id:
+            raise IdentityProviderError('Didit returned an unexpected session.')
+        return value
+    except (OSError, ValueError, http.client.HTTPException) as exc:
+        raise IdentityProviderError('Didit report is temporarily unavailable.') from exc
+    finally:
+        connection.close()
+
+
+def report_media(decision):
+    """Only expose known provider media hosts, without forwarding credentials."""
+    images = []
+    for key, fields in (('id_verifications', (('front_image','Passport / ID front'), ('back_image','Passport / ID back'))),
+                        ('liveness_checks', (('reference_image','Selfie'),))):
+        entries = decision.get(key) or []
+        if not isinstance(entries, list): continue
+        for entry in entries[:3]:
+            if not isinstance(entry, dict): continue
+            for field, label in fields:
+                value = entry.get(field)
+                parsed = urlsplit(value if isinstance(value, str) else '')
+                host = parsed.hostname or ''
+                if (parsed.scheme == 'https' and not parsed.username and not parsed.password
+                        and any(host == domain or host.endswith('.'+domain) for domain in ('didit.me','amazonaws.com','cloudfront.net'))):
+                    images.append({'label':label, 'url':value})
+    return images

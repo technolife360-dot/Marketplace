@@ -27,6 +27,7 @@ from urllib.error import HTTPError as UrlHTTPError, URLError as UrlURLError
 from payment_providers import get_provider
 import email_service
 import identity_service
+import seller_verification
 import oauth_service
 import seagm_supplier
 import storage_r2
@@ -629,7 +630,7 @@ def erase_account_personal_data(db, uid):
     """
     for table in ('experience_preferences','account_collections','conversation_preferences','seller_quick_replies','price_watches'):
         db.execute(f'DELETE FROM {table} WHERE user_id=?',(uid,))
-    db.execute('DELETE FROM platform_config WHERE key IN (?,?)',('staff_capabilities:'+uid,'referral_attribution:'+uid))
+    db.execute('DELETE FROM platform_config WHERE key IN (?,?,?)',('staff_capabilities:'+uid,'referral_attribution:'+uid,'didit_review:'+uid))
     db.execute('DELETE FROM message_retry_keys WHERE sender_id=?',(uid,))
     db.execute('DELETE FROM listing_imports WHERE seller_id=?',(uid,))
     db.execute('DELETE FROM seller_code_inventory WHERE seller_id=? AND order_item_id IS NULL',(uid,))
@@ -1501,7 +1502,7 @@ class Handler(BaseHTTPRequestHandler):
                 payload=seo_listing_html(listing_match.group(1))
                 if payload is None: self.send_error(404); return
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
-            f={'/static/purchase-reviews.js':'purchase-reviews.js','/static/assets/pubg-uid-guide.png':'assets/pubg-uid-guide.png','/static/select-menu.js':'select-menu.js','/static/monochrome-theme.css':'monochrome-theme.css','/static/assets/roboto-variable.ttf':'assets/roboto-variable.ttf','/static/assets/roboto-OFL.txt':'assets/roboto-OFL.txt','/push-worker.js':'push-worker.js','/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/qa-vitals.js':'qa-vitals.js','/static/vendor/web-vitals.iife.js':'vendor/web-vitals.iife.js','/static/launch-readiness.js':'launch-readiness.js','/static/launch-readiness.css':'launch-readiness.css','/static/experience.js':'experience.js','/static/experience.css':'experience.css','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup-detail.js':'topup-detail.js','/static/topup-detail.css':'topup-detail.css','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-uc-660.png':'assets/topup-uc-660.png','/static/assets/topup-uc-1800.png':'assets/topup-uc-1800.png','/static/assets/topup-uc-3850.png':'assets/topup-uc-3850.png','/static/assets/topup-uc-8100.png':'assets/topup-uc-8100.png','/static/assets/topup-uc-60.png':'assets/topup-uc-60.png','/static/assets/topup-uc-325.png':'assets/topup-uc-325.png','/static/assets/topup-weekly-deal-1.png':'assets/topup-weekly-deal-1.png','/static/assets/topup-weekly-deal-2.png':'assets/topup-weekly-deal-2.png','/static/assets/topup-weekly-mythic.png':'assets/topup-weekly-mythic.png','/static/assets/topup-elite-pass.png':'assets/topup-elite-pass.png','/static/assets/topup-pubg-banner.jpg':'assets/topup-pubg-banner.jpg','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.webp':'assets/market-banner-soldier.webp','/static/assets/market-banner-games.webp':'assets/market-banner-games.webp','/static/assets/market-banner-worlds.webp':'assets/market-banner-worlds.webp','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
+            f={'/static/seller-verification.js':'seller-verification.js','/static/seller-verification.css':'seller-verification.css','/static/purchase-reviews.js':'purchase-reviews.js','/static/assets/pubg-uid-guide.png':'assets/pubg-uid-guide.png','/static/select-menu.js':'select-menu.js','/static/monochrome-theme.css':'monochrome-theme.css','/static/assets/roboto-variable.ttf':'assets/roboto-variable.ttf','/static/assets/roboto-OFL.txt':'assets/roboto-OFL.txt','/push-worker.js':'push-worker.js','/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/qa-vitals.js':'qa-vitals.js','/static/vendor/web-vitals.iife.js':'vendor/web-vitals.iife.js','/static/launch-readiness.js':'launch-readiness.js','/static/launch-readiness.css':'launch-readiness.css','/static/experience.js':'experience.js','/static/experience.css':'experience.css','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup-detail.js':'topup-detail.js','/static/topup-detail.css':'topup-detail.css','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-uc-660.png':'assets/topup-uc-660.png','/static/assets/topup-uc-1800.png':'assets/topup-uc-1800.png','/static/assets/topup-uc-3850.png':'assets/topup-uc-3850.png','/static/assets/topup-uc-8100.png':'assets/topup-uc-8100.png','/static/assets/topup-uc-60.png':'assets/topup-uc-60.png','/static/assets/topup-uc-325.png':'assets/topup-uc-325.png','/static/assets/topup-weekly-deal-1.png':'assets/topup-weekly-deal-1.png','/static/assets/topup-weekly-deal-2.png':'assets/topup-weekly-deal-2.png','/static/assets/topup-weekly-mythic.png':'assets/topup-weekly-mythic.png','/static/assets/topup-elite-pass.png':'assets/topup-elite-pass.png','/static/assets/topup-pubg-banner.jpg':'assets/topup-pubg-banner.jpg','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.webp':'assets/market-banner-soldier.webp','/static/assets/market-banner-games.webp':'assets/market-banner-games.webp','/static/assets/market-banner-worlds.webp':'assets/market-banner-worlds.webp','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
             if not f: self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/webp' if f.endswith('.webp') else 'image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))
@@ -1746,24 +1747,31 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 event_time=datetime.fromtimestamp(int(payload['timestamp']),timezone.utc).isoformat(timespec='milliseconds')
             except (KeyError,TypeError,ValueError,OverflowError,OSError): raise HttpError(400,'Didit webhook vaqti noto‘g‘ri.')
-            profile=db.execute("SELECT * FROM seller_profiles WHERE identity_reference=? AND identity_provider='didit'",(session_id,)).fetchone()
-            if not profile: return {'ok':True,'ignored':'unknown session'}
-            if profile['identity_last_event_at'] and event_time<=profile['identity_last_event_at']: return {'ok':True,'ignored':'stale event'}
-            provider_status=payload.get('status')
-            decision=payload.get('decision') if isinstance(payload.get('decision'),dict) else {}
-            def feature_passed(key):
-                values=decision.get(key)
-                return isinstance(values,list) and bool(values) and all(isinstance(x,dict) and x.get('status')=='Approved' for x in values)
-            checks_complete=all(feature_passed(key) for key in ('id_verifications','liveness_checks','face_matches'))
-            identity_status='verified' if provider_status=='Approved' and checks_complete else ('rejected' if provider_status=='Declined' else 'pending')
-            db.execute('UPDATE seller_profiles SET identity_status=?,identity_verified_at=?,identity_last_event_at=? WHERE user_id=?',(identity_status,event_time if identity_status=='verified' else None,event_time,profile['user_id']))
-            if identity_status!='verified':
-                db.execute('UPDATE seller_profiles SET selling_enabled=0 WHERE user_id=?',(profile['user_id'],))
-                db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE seller_id=? AND status='published'",(profile['user_id'],))
-            message={'verified':'Didit tekshiruvi yakunlandi. Administrator sotuvchi profilingizni ko‘rib chiqadi.','rejected':'Didit shaxsni tekshirishni tasdiqlamadi. Sotish hozircha yopiq.','pending':'Didit tekshiruvi ko‘rib chiqilmoqda.'}[identity_status]
-            notify(db,profile['user_id'],'identity_review','Shaxsni tekshirish holati yangilandi',message,'/seller')
-            audit(db,None,'didit_identity_'+identity_status,'seller',profile['user_id'],{'provider':'didit','event_at':event_time,'event_id':payload.get('event_id')})
-            return {'ok':True}
+            db.execute('BEGIN IMMEDIATE')
+            try:
+                profile=db.execute("SELECT * FROM seller_profiles WHERE identity_reference=? AND identity_provider='didit'"+(' FOR UPDATE' if DATABASE_URL else ''),(session_id,)).fetchone()
+                if not profile:
+                    db.execute('COMMIT'); return {'ok':True,'ignored':'unknown session'}
+                if profile['identity_last_event_at'] and event_time<=profile['identity_last_event_at']:
+                    db.execute('COMMIT'); return {'ok':True,'ignored':'stale event'}
+                provider_status=payload.get('status')
+                decision=payload.get('decision') if isinstance(payload.get('decision'),dict) else {}
+                def feature_passed(key):
+                    values=decision.get(key)
+                    return isinstance(values,list) and bool(values) and all(isinstance(x,dict) and x.get('status')=='Approved' for x in values)
+                checks_complete=all(feature_passed(key) for key in ('id_verifications','liveness_checks','face_matches'))
+                identity_status='verified' if provider_status=='Approved' and checks_complete else ('rejected' if provider_status=='Declined' else 'pending')
+                db.execute('UPDATE seller_profiles SET identity_status=?,identity_verified_at=?,identity_last_event_at=? WHERE user_id=?',(identity_status,event_time if identity_status=='verified' else None,event_time,profile['user_id']))
+                seller_verification.save(db,profile['user_id'],seller_verification.summary(decision,session_id,provider_status,event_time))
+                if identity_status!='verified':
+                    db.execute('UPDATE seller_profiles SET selling_enabled=0 WHERE user_id=?',(profile['user_id'],))
+                    db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE seller_id=? AND status='published'",(profile['user_id'],))
+                message={'verified':'Didit tekshiruvi yakunlandi. Administrator sotuvchi profilingizni ko‘rib chiqadi.','rejected':'Didit shaxsni tekshirishni tasdiqlamadi. Sotish hozircha yopiq.','pending':'Didit tekshiruvi ko‘rib chiqilmoqda.'}[identity_status]
+                notify(db,profile['user_id'],'identity_review','Shaxsni tekshirish holati yangilandi',message,'/seller')
+                audit(db,None,'didit_identity_'+identity_status,'seller',profile['user_id'],{'provider':'didit','event_at':event_time,'event_id':payload.get('event_id')})
+                db.execute('COMMIT'); return {'ok':True}
+            except Exception:
+                db.execute('ROLLBACK'); raise
         if path=='/api/register' and method=='POST':
             if data.get('accept_terms') is not True: raise HttpError(400,'Ro‘yxatdan o‘tish uchun foydalanish shartlarini qabul qiling.')
             if not email_service.is_configured() and MODE!='development': raise HttpError(503,'Ro‘yxatdan o‘tish uchun xavfsiz email yuborish xizmati konfiguratsiyasi kerak.')
@@ -2202,7 +2210,7 @@ class Handler(BaseHTTPRequestHandler):
                 (SELECT COUNT(*) FROM reports WHERE status='open' AND reason!='order_dispute') open_reports,
                 (SELECT COUNT(*) FROM reports WHERE reason='order_dispute' AND status IN ('open','reviewing')) open_disputes,
                 (SELECT COUNT(*) FROM payout_requests WHERE status IN ('pending','approved')) pending_payouts,
-                (SELECT COUNT(*) FROM seller_profiles WHERE verification_status!='verified' OR selling_enabled=0 OR identity_status!='verified' OR identity_provider!='didit') pending_sellers,
+                (SELECT COUNT(*) FROM seller_profiles WHERE verification_status!='rejected' AND (verification_status!='verified' OR selling_enabled=0 OR identity_status!='verified' OR identity_provider!='didit')) pending_sellers,
                 (SELECT COUNT(*) FROM account_reviews WHERE status='pending') pending_account_reviews,
                 (SELECT COUNT(*) FROM listings WHERE status='published') active_listings,
                 (SELECT COUNT(*) FROM orders WHERE {today}) today_orders,
@@ -2239,6 +2247,21 @@ class Handler(BaseHTTPRequestHandler):
             return [listing_detail(db,x['id'],uid) for x in db.execute("SELECT id FROM listings WHERE status IN ('pending_review','approved_private','rejected','published','paused') ORDER BY CASE status WHEN 'pending_review' THEN 0 WHEN 'approved_private' THEN 1 WHEN 'rejected' THEN 2 WHEN 'published' THEN 3 ELSE 4 END,updated_at DESC LIMIT 200")]
         if path=='/api/admin/reports' and method=='GET':
             require_admin(ctx); return [dict(x) for x in db.execute('SELECT r.*,u.email reporter_email FROM reports r JOIN users u ON u.id=r.reporter_id ORDER BY CASE r.status WHEN \'open\' THEN 0 ELSE 1 END,r.created_at DESC LIMIT 100')]
+        if path=='/api/admin/verification' and method=='GET':
+            require_admin(ctx); return seller_verification.listing(db,qs,globals())
+        review_match=re.fullmatch(r'/api/admin/verification/([A-Za-z0-9_-]+)(/report)?',path)
+        if review_match and method in ('GET','POST'):
+            aid=require_admin(ctx); target=review_match.group(1)
+            if not review_match.group(2) and method=='GET': return seller_verification.detail(db,target,globals())
+            if review_match.group(2) and method=='POST':
+                check_rate(db,'admin_didit_report',aid,30,3600)
+                profile=seller_verification.detail(db,target,globals())
+                if profile['identity_provider']!='didit' or not profile['identity_reference']: raise HttpError(409,'No Didit session exists for this seller.')
+                try: decision=identity_service.retrieve_decision(profile['identity_reference'])
+                except identity_service.IdentityProviderError as exc: raise HttpError(503,str(exc))
+                result=seller_verification.summary(decision,profile['identity_reference'],decision.get('status','Unknown'),profile['identity_last_event_at'])
+                audit(db,aid,'didit_report_viewed','seller',target)
+                return {'identity':result,'media':identity_service.report_media(decision)}
         if path=='/api/admin/sellers' and method=='GET':
             require_admin(ctx); return [dict(x) for x in db.execute("SELECT s.user_id,s.shop_name,s.bio,s.verification_status,s.selling_enabled,s.identity_status,s.identity_provider,s.identity_verified_at,s.created_at,u.email,u.display_name FROM seller_profiles s JOIN users u ON u.id=s.user_id WHERE s.verification_status!='verified' OR s.selling_enabled=0 OR s.identity_status!='verified' OR s.identity_provider!='didit' ORDER BY CASE s.identity_status WHEN 'verified' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,s.created_at DESC LIMIT 100")]
         if path=='/api/admin/disputes' and method=='GET':
@@ -2304,7 +2327,7 @@ class Handler(BaseHTTPRequestHandler):
             reference='sl-'+hmac.new(SESSION_SECRET.encode('utf-8'),('didit-user:'+uid).encode('utf-8'),hashlib.sha256).hexdigest()[:40]
             try: session=identity_service.create_verification_session(reference)
             except identity_service.IdentityProviderError as exc: raise HttpError(503,str(exc))
-            consent_version='kyc-consent-v1'
+            consent_version='kyc-consent-v2-admin-review'
             db.execute("UPDATE seller_profiles SET identity_reference=?,identity_provider='didit',identity_status='pending',identity_verified_at=NULL,identity_last_event_at=NULL,identity_consent_at=?,identity_consent_version=? WHERE user_id=?",(session['session_id'],now_iso(),consent_version,uid))
             audit(db,uid,'didit_identity_started','seller',uid,{'provider':'didit','consent_version':consent_version})
             return {'url':session['url'],'status':'pending'}
@@ -2661,17 +2684,28 @@ class Handler(BaseHTTPRequestHandler):
             audit(db,aid,'listing_'+action,'listing',lid,{'note':note}); notify(db,l['seller_id'],'moderation','Moderatsiya natijasi',f'E’loningiz holati: {status}. {note}','/seller'); return {'status':status}
         m=re.fullmatch(r'/api/admin/sellers/([^/]+)',path)
         if m and method=='POST':
-            aid=require_admin(ctx); target=m.group(1); action=data.get('action'); note=clean_text(data.get('note'),'Tekshiruv izohi',5,1000)
-            if action not in ('approve','reject'): raise HttpError(400,'Sotuvchi uchun tasdiqlash yoki rad etishni tanlang.')
-            profile=db.execute('SELECT s.*,u.email_verified FROM seller_profiles s JOIN users u ON u.id=s.user_id WHERE s.user_id=?',(target,)).fetchone()
-            if not profile: raise HttpError(404,'Sotuvchi profili topilmadi.')
-            if action=='approve' and not profile['email_verified']: raise HttpError(409,'Sotuvchini tasdiqlashdan oldin emaili tasdiqlangan bo‘lishi kerak.')
-            if action=='approve' and (profile['identity_status']!='verified' or profile['identity_provider']!='didit'): raise HttpError(409,'Sotuvchini tasdiqlashdan oldin Didit ID, liveness va face-match tekshiruvlari tasdiqlanishi kerak.')
-            if profile['verification_status']=='verified' and profile['selling_enabled'] and action=='approve': raise HttpError(409,'Sotuvchi allaqachon tasdiqlangan va faol.')
-            status='verified' if action=='approve' else 'rejected'; enabled=1 if action=='approve' else 0
-            db.execute('UPDATE seller_profiles SET verification_status=?,selling_enabled=? WHERE user_id=?',(status,enabled,target))
-            if not enabled: db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE seller_id=? AND status='published'",(target,))
-            audit(db,aid,'seller_'+action,'seller',target,{'note':note}); notify(db,target,'seller_review','Sotuvchi tekshiruvi yakunlandi',('Profilingiz tasdiqlandi. Endi e’lon joylashingiz mumkin. ' if enabled else 'Profil tasdiqlanmadi. Izoh: ')+note,'/seller')
+            aid=require_admin(ctx); target=m.group(1); action=data.get('action'); note=clean_text(data.get('note'),'Review note',5,1000)
+            if action not in ('approve','reject','request_info'): raise HttpError(400,'Choose approve, reject, or request information.')
+            if aid==target: raise HttpError(403,'Another administrator must review your own seller profile.')
+            db.execute('BEGIN IMMEDIATE')
+            try:
+                lock=' FOR UPDATE OF s' if DATABASE_URL else ''
+                profile=db.execute('SELECT s.*,u.email_verified,u.suspended FROM seller_profiles s JOIN users u ON u.id=s.user_id WHERE s.user_id=?'+lock,(target,)).fetchone()
+                if not profile: raise HttpError(404,'Seller profile not found.')
+                if 'expected_session' in data and data['expected_session']!=profile['identity_reference']: raise HttpError(409,'The seller started another verification. Refresh before deciding.')
+                if action=='approve' and (not profile['email_verified'] or profile['suspended']): raise HttpError(409,'The seller must have a verified email and an active account.')
+                if action=='approve' and (profile['identity_status']!='verified' or profile['identity_provider']!='didit'): raise HttpError(409,'Didit must approve document, liveness, and face match first.')
+                if profile['verification_status']=='verified' and profile['selling_enabled'] and action=='approve': raise HttpError(409,'This seller is already approved.')
+                status='verified' if action=='approve' else 'rejected' if action=='reject' else 'pending'
+                enabled=1 if action=='approve' else 0
+                db.execute('UPDATE seller_profiles SET verification_status=?,selling_enabled=? WHERE user_id=?',(status,enabled,target))
+                if not enabled: db.execute("UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE seller_id=? AND status='published'",(target,))
+                audit(db,aid,'seller_'+action,'seller',target,{'note':note})
+                message={'approve':'Your seller profile is approved. You can submit listings. ', 'reject':'Your seller application was rejected. ', 'request_info':'More information is needed for your seller application. '}[action]
+                notify(db,target,'seller_review','Seller review updated',message+note,'/seller')
+                db.execute('COMMIT')
+            except Exception:
+                db.execute('ROLLBACK'); raise
             return {'verification_status':status,'selling_enabled':bool(enabled)}
         m=re.fullmatch(r'/api/admin/account-reviews/([^/]+)',path)
         if m and method=='POST':

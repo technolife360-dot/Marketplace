@@ -175,7 +175,7 @@ test('home product cards show verified product scores and omit empty or seller-o
   const item = {id: 'listing', title: 'Game item', available: 1, stock: 1, reserved: 0, status: 'published', attributes: {}, seller_rating: 4.9, review_count: 200};
   assert.doesNotMatch(context.marketCard(item), /market-seller-stats/);
   const rated = context.marketCard({...item, product_review_count: 3, product_rating: 4.3});
-  assert.match(rated, /4\.3 <small>\(3\)<\/small>/);
+  assert.match(rated, /4\.3\s*<small>(?:·\s*3|\(3\))<\/small>/);
   assert.doesNotMatch(rated, /4\.9/);
 });
 

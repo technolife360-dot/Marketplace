@@ -1,0 +1,166 @@
+/* Scoped seller verification dashboard; public storefront geometry is untouched. */
+body #app .sv-workspace{--sv-orange:#ff9b42;color:#f1f1f1;background:#000;font-family:Roboto,Arial,sans-serif;line-height:1.5;min-width:0}
+body #app .sv-workspace *{box-sizing:border-box}
+body #app .sv-workspace [hidden]{display:none!important}
+body #app .sv-workspace :is(h2,h3,h4,p,figure,dl){margin:0}
+body #app .sv-workspace h2{font-size:26px;font-weight:650;line-height:1.3;margin:7px 0 4px}
+body #app .sv-workspace h3{font-size:14px;font-weight:600;color:#f1f1f1}
+body #app .sv-workspace h4{font-size:12px;font-weight:600;margin-bottom:12px}
+body #app .sv-workspace :is(small,.sv-muted,dt,time){color:#aaa;font-size:11px}
+body #app .sv-workspace p{font-size:12px}
+body #app .sv-header{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:18px}
+body #app .sv-header p{color:#aaa}
+body #app .sv-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+body #app .sv-workspace :is(button,input,select,textarea){font:inherit;font-size:12px;color:#f1f1f1;background:#131313;border:1px solid #303030;border-radius:8px;box-shadow:none;min-width:0}
+body #app .sv-workspace button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:7px 12px;cursor:pointer;white-space:nowrap;line-height:1.4;font-weight:500}
+body #app .sv-workspace button:hover{background:#222;border-color:#555}
+body #app .sv-workspace :is(button,input,textarea):focus-visible{outline:2px solid #ff9b42;outline-offset:2px}
+body #app .sv-workspace button:disabled{opacity:.4;cursor:not-allowed}
+body #app .sv-workspace button.sv-primary{background:#ff9b42;border-color:#ff9b42;color:#090909}
+body #app .sv-workspace button.sv-primary:hover{background:#ffb16d}
+body #app .sv-workspace button.sv-danger{border-color:#9a3535;color:#ff8080}
+body #app .sv-workspace .icon{display:block;width:24px!important;height:24px!important;min-width:24px!important;flex-shrink:0;color:inherit;stroke:currentColor;stroke-width:1.6;fill:none}
+body #app .sv-workspace .site-select{width:100%;min-width:0}
+body #app .sv-workspace .auth-country-trigger{width:100%;min-height:44px!important;background:#131313!important;border:1px solid #303030!important;border-radius:8px;box-shadow:none!important}
+body #app .sv-range{display:block;width:150px}
+body #app .sv-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
+body #app .sv-stat{display:flex;align-items:center;gap:14px;background:#101010;border:1px solid #282828;border-radius:10px;padding:17px 18px;min-height:88px}
+body #app .sv-stat small{display:block;font-size:12px}
+body #app .sv-stat b{display:block;font-size:26px;font-weight:600;line-height:1.3;margin-top:3px}
+body #app .sv-stat-icon{display:flex;width:44px;height:44px;align-items:center;justify-content:center;background:#202020;border:1px solid #333;border-radius:13px;flex-shrink:0}
+body #app .sv-stat-icon.sv-pending{color:#ff9b42;background:#24190e;border-color:#5a3c1d}
+body #app .sv-stat-icon.sv-approved{color:#46d997;background:#0b2319;border-color:#1d5a3b}
+body #app .sv-stat-icon.sv-rejected{color:#ef7474;background:#270e10;border-color:#6a262a}
+body #app .sv-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+body #app .sv-layout.sv-no-detail{grid-template-columns:minmax(0,1fr)}
+body #app .sv-main{min-width:0}
+body #app .sv-panel{background:#0e0e0e;border:1px solid #282828;border-radius:10px;padding:16px;min-width:0}
+body #app .sv-section-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+body #app .sv-section-title>span{font-size:11px;color:#aaa}
+body #app .sv-filters{display:grid;grid-template-columns:150px 155px minmax(160px,1fr);gap:12px;margin-bottom:14px}
+body #app .sv-filters label{min-width:0}
+body #app .sv-workspace input{height:44px;padding:10px 12px;width:100%}
+body #app .sv-workspace select{height:44px;width:100%;padding:8px}
+body #app .sv-search{position:relative;display:block}
+body #app .sv-search>.icon{position:absolute;left:11px;top:10px;pointer-events:none;color:#aaa}
+body #app .sv-search input{padding-left:43px}
+body #app .sv-table-scroll{overflow:auto;margin:0 -16px;max-width:calc(100% + 32px)}
+body #app .sv-table{width:100%;border-collapse:collapse;table-layout:auto;font-size:11px;white-space:nowrap}
+body #app .sv-table :is(td,th){padding:12px 13px;text-align:left;border-bottom:1px solid #262626;vertical-align:middle;font-size:11px}
+body #app .sv-table th{color:#aaa;font-weight:500;font-size:10px;background:#111}
+body #app .sv-table tbody tr:last-child td{border-bottom:0}
+body #app .sv-table tbody tr:hover{background:#171717}
+body #app .sv-table tr.sv-selected{background:#1a1a1a}
+body #app .sv-table tr.sv-selected td:first-child{box-shadow:inset 3px 0 #ff9b42}
+body #app .sv-workspace .sv-seller{display:flex;text-align:left;justify-content:flex-start;border:0;background:transparent;padding:0;gap:10px;min-height:38px;max-width:220px}
+body #app .sv-seller span:last-child{min-width:0}
+body #app .sv-seller :is(b,small){display:block;max-width:155px;overflow:hidden;text-overflow:ellipsis}
+body #app .sv-avatar{display:flex;align-items:center;justify-content:center;width:36px;height:36px;flex-shrink:0;background:#292929;border:1px solid #414141;color:#eee;font-size:15px;font-weight:600;border-radius:50%}
+body #app .sv-table td:last-child button{min-height:32px;padding:5px 9px;font-size:11px}
+body #app .sv-table td:last-child .icon{width:16px!important;height:16px!important;min-width:16px!important}
+body #app .sv-badge{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:3px 8px;border:1px solid #3d3d3d;background:#242424;color:#ccc;border-radius:99px;font-size:10px;font-weight:500;white-space:nowrap}
+body #app .sv-badge.sv-approved{background:#0b251a;border-color:#155536;color:#58e1a1}
+body #app .sv-badge.sv-rejected{background:#2c1014;border-color:#64252a;color:#ff8282}
+body #app .sv-badge.sv-pending{background:#2b1e0d;border-color:#6b491e;color:#ffb263}
+body #app .sv-pagination{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+body #app .sv-pagination>div{display:flex;gap:8px}
+body #app .sv-pagination button{width:36px;padding:5px}
+body #app .sv-empty{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;min-height:260px;white-space:normal;text-align:center;max-width:430px;margin:auto}
+body #app .sv-empty p{color:#aaa}
+body #app .sv-bottom{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:14px}
+body #app .sv-bottom h3{margin-bottom:12px}
+body #app .sv-activity article{display:flex;gap:8px;align-items:flex-start;padding:9px 0;border-bottom:1px solid #222}
+body #app .sv-activity article:last-child{border-bottom:0}
+body #app .sv-activity b{font-size:11px;display:block;font-weight:500}
+body #app .sv-activity small{display:block;font-size:10px}
+body #app .sv-activity time{margin-left:auto;font-size:9px;text-align:right;max-width:75px}
+body #app .sv-event-dot{width:6px;height:6px;border-radius:50%;background:#ff9b42;flex-shrink:0;margin-top:5px}
+body #app .sv-workspace dl{margin:12px 0}
+body #app .sv-workspace dl>div{display:flex;justify-content:space-between;gap:12px;margin-top:9px;align-items:start}
+body #app .sv-workspace dd{margin:0;text-align:right;font-size:11px;overflow-wrap:anywhere;min-width:0}
+body #app .sv-workspace dt{min-width:72px}
+body #app .sv-bottom .sv-panel>button{margin-top:8px;width:100%}
+body #app .sv-bottom svg:not(.icon){width:100%;height:110px}
+body #app .sv-legend{display:flex;flex-wrap:wrap;gap:9px;font-size:9px;color:#aaa}
+body #app .sv-legend span{display:flex;gap:5px;align-items:center}
+body #app .sv-legend i{display:inline-block;width:6px;height:6px;border-radius:50%}
+body #app .sv-detail{position:sticky;top:20px}
+body #app .sv-workspace .sv-close{width:30px;height:30px;min-height:30px;padding:3px;border:0;background:none}
+body #app .sv-person{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+body #app .sv-person .sv-avatar{width:46px;height:46px;font-size:20px}
+body #app .sv-person>div{min-width:0}
+body #app .sv-person b{display:block;font-size:14px}
+body #app .sv-person small{display:block;font-size:10px}
+body #app .sv-wrap{overflow-wrap:anywhere;word-break:break-word}
+body #app .sv-tabs{display:flex;justify-content:space-between;gap:5px;margin:18px -4px 12px;border-bottom:1px solid #292929}
+body #app .sv-workspace .sv-tabs button{font-size:11px;min-height:40px;background:none;border:0;border-radius:0;padding:7px 5px;border-bottom:2px solid transparent;color:#aaa}
+body #app .sv-workspace .sv-tabs button[aria-selected="true"]{border-bottom-color:#ff9b42;color:#ff9b42}
+body #app .sv-info{border:1px solid #262626;border-radius:8px;padding:12px;margin-bottom:10px}
+body #app .sv-info dl{margin:0}
+body #app .sv-success{display:flex;gap:10px;align-items:center;padding:10px;background:#10251c;border:1px solid #225b3d;border-radius:7px;margin-top:12px!important}
+body #app .sv-success .icon{color:#5de1a1}
+body #app .sv-success b{display:block;font-size:11px}
+body #app .sv-success small{display:block;font-size:10px;line-height:1.6}
+body #app .sv-report{width:100%;margin:5px 0 18px}
+body #app .sv-review-form{display:flex;flex-direction:column;gap:8px}
+body #app .sv-review-form label{font-size:12px}
+body #app .sv-workspace .sv-review-form textarea{width:100%;min-height:86px;resize:vertical;padding:12px;line-height:1.5;margin:0}
+body #app .sv-decisions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+body #app .sv-decisions button{flex:1;font-size:10px;padding:7px;min-height:38px}
+body #app .sv-documents{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+body #app .sv-documents img{display:block;width:100%;height:105px;object-fit:contain;background:#080808;border-radius:6px}
+body #app .sv-documents figcaption{font-size:10px;color:#aaa;margin-top:5px}
+body #app .sv-timeline{border-left:1px solid #383838;padding:0 0 16px 12px}
+body #app .sv-timeline b{display:block;font-size:11px}
+body #app .sv-timeline time{font-size:10px}
+body #app .sv-timeline p{margin-top:5px;overflow-wrap:anywhere}
+body #app .sv-form-error{color:#ff8282}
+@media(min-width:1500px){body #app .admin-portal:has([data-admin-view="sellers"]:not([hidden])){max-width:none}}
+@media(max-width:1250px){body #app .sv-layout{grid-template-columns:minmax(0,1fr) 320px}body #app .sv-bottom{grid-template-columns:1fr}body #app .sv-header{align-items:flex-start;flex-direction:column}body #app .sv-filters{grid-template-columns:1fr 1fr}body #app .sv-search{grid-column:1/-1}}
+@media(max-width:950px){body #app .sv-layout{grid-template-columns:minmax(0,1fr)}body #app .sv-detail{position:static;grid-row:1}body #app .sv-stats{grid-template-columns:repeat(2,minmax(0,1fr))}body #app .sv-bottom{grid-template-columns:repeat(2,minmax(0,1fr))}body #app .sv-toolbar{width:100%}}
+@media(max-width:550px){body #app .sv-bottom{grid-template-columns:1fr}body #app .sv-stat{gap:9px;padding:12px}body #app .sv-stat b{font-size:22px}body #app .sv-stat small{font-size:10px}body #app .sv-stat-icon{width:34px;height:34px}body #app .sv-toolbar{gap:8px}body #app .sv-range{width:130px}body #app .sv-workspace h2{font-size:22px}body #app .sv-decisions button{min-height:44px}body #app .sv-tabs button{min-height:44px!important}}
+/* Join the existing important theme layer so the approved accents survive it. */
+@layer sentryloot-theme {
+ body #app .sv-workspace :is(.sv-panel,.sv-stat){background-color:#101010!important;border-color:#282828!important}
+ body #app .sv-workspace :is(small,.sv-muted,dt,time,.sv-header p,.sv-form-error+small){color:#aaa!important}
+ body #app .sv-workspace :is(button,input,select,textarea){background-color:#131313!important;border-color:#303030!important;color:#f1f1f1!important;box-shadow:none!important}
+ body #app .sv-workspace button:hover{background-color:#222!important;border-color:#555!important}
+ body #app .sv-workspace button.sv-primary{background-color:#ff9b42!important;border-color:#ff9b42!important;color:#090909!important}
+ body #app .sv-workspace button.sv-primary:hover{background-color:#ffb16d!important}
+ body #app .sv-workspace button.sv-danger{background-color:#1b1012!important;border-color:#9a3535!important;color:#ff8080!important}
+ body #app .sv-workspace .sv-badge{background-color:#242424!important;border-color:#3d3d3d!important;color:#ccc!important}
+ body #app .sv-workspace .sv-badge.sv-approved{background-color:#0b251a!important;border-color:#155536!important;color:#58e1a1!important}
+ body #app .sv-workspace .sv-badge.sv-rejected{background-color:#2c1014!important;border-color:#64252a!important;color:#ff8282!important}
+ body #app .sv-workspace .sv-badge.sv-pending{background-color:#2b1e0d!important;border-color:#6b491e!important;color:#ffb263!important}
+ body #app .sv-workspace .sv-avatar{background-color:#292929!important;border-color:#414141!important;color:#eee!important}
+ body #app .sv-workspace .sv-stat-icon{background-color:#202020!important;border-color:#333!important}
+ body #app .sv-workspace .sv-stat-icon.sv-pending{color:#ff9b42!important;background-color:#24190e!important;border-color:#5a3c1d!important}
+ body #app .sv-workspace .sv-stat-icon.sv-approved{color:#46d997!important;background-color:#0b2319!important;border-color:#1d5a3b!important}
+ body #app .sv-workspace .sv-stat-icon.sv-rejected{color:#ef7474!important;background-color:#270e10!important;border-color:#6a262a!important}
+ body #app .sv-workspace .sv-success{background-color:#10251c!important;border-color:#225b3d!important}
+ body #app .sv-workspace .sv-success .icon{color:#5de1a1!important}
+ body #app .sv-workspace .sv-tabs button,body #app .sv-workspace .sv-close{background-color:transparent!important;border-color:transparent!important;color:#aaa!important}
+ body #app .sv-workspace .sv-tabs button[aria-selected="true"]{border-bottom-color:#ff9b42!important;color:#ff9b42!important}
+ body #app .sv-workspace .sv-seller{background-color:transparent!important;border:0!important;box-shadow:none!important}
+ body #app .sv-workspace .sv-table th{background-color:#111!important;color:#aaa!important}
+ body #app .sv-workspace .sv-table tr.sv-selected{background-color:#1b1b1b!important}
+ body #app .sv-workspace .sv-table tr.sv-selected td:first-child{box-shadow:inset 3px 0 #ff9b42!important}
+ body #app .sv-workspace .sv-form-error{color:#ff8282!important}
+ body #app .sv-workspace .sv-event-dot{background-color:#ff9b42!important}
+ body #app .sv-workspace .sv-legend span:nth-child(1) i{background-color:#ff9b42!important}
+ body #app .sv-workspace .sv-legend span:nth-child(2) i{background-color:#999!important}
+ body #app .sv-workspace .sv-legend span:nth-child(3) i{background-color:#ef6666!important}
+}
+body #app .admin-portal:has([data-admin-view="sellers"]:not([hidden])) .admin-topbar{display:none!important}
+body #app .admin-portal:has([data-admin-view="sellers"]:not([hidden])) #ops-admin-links{display:none!important}
+body #app .sv-table :is(td,th){padding-inline:9px}
+body #app .sv-table td:nth-child(4){white-space:normal;min-width:70px;max-width:88px}
+body #app .sv-workspace .sv-seller{max-width:170px}
+body #app .sv-seller :is(b,small){max-width:130px}
+@layer sentryloot-theme {
+ body #app .sv-workspace .sv-search input{padding-left:43px!important;padding-right:12px!important;background-image:none!important}
+ body #app .sv-workspace .sv-search>.icon{color:#aaa!important}
+}
+@layer sentryloot-theme {
+ body #app .admin-portal:has([data-admin-view="sellers"]:not([hidden])) #ops-admin-links{display:none!important}
+}
