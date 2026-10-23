@@ -1861,6 +1861,10 @@ body .auth-page.is-login #auth-form .field-control.has-icon > :is(input,textarea
  .phone-national-control:focus-within{outline:2px solid #ff9b42!important;outline-offset:2px}
  #phone-prefix{flex:0 0 auto;padding-left:14px;color:#aaa!important;font-size:15px}
  #phone-form .phone-national-control input:not([type=radio]){border:0!important;background:transparent!important;outline:none!important;padding-left:10px;min-width:0}
+ #phone-form #phone-number,
+ #phone-form #phone-number:is(:hover,:focus,:focus-visible,:active){background:#111!important;box-shadow:none!important;caret-color:#f1f1f1!important;color:#f1f1f1!important}
+ #phone-form #phone-number:autofill,
+ #phone-form #phone-number:-webkit-autofill{background:#111!important;box-shadow:0 0 0 1000px #111 inset!important;-webkit-box-shadow:0 0 0 1000px #111 inset!important;-webkit-text-fill-color:#f1f1f1!important;caret-color:#f1f1f1!important}
  #phone-form .site-select{width:100%}
  .phone-confirmed{text-align:center;padding:8px 0 20px}
  .phone-confirmed .icon{display:block;margin:0 auto 14px;color:#42ce80!important;width:32px;height:32px}
