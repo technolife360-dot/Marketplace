@@ -107,7 +107,7 @@ def listing(db, qs, core):
     return {'items':[entry(r) for r in rows], 'total':total, 'page':page, 'page_size':25, 'stats':stats,
             'countries':[r['country'] for r in db.execute('SELECT DISTINCT u.country FROM seller_profiles s JOIN users u ON u.id=s.user_id ORDER BY u.country')],
             'activity':events, 'chart':chart, 'integration':{'configured':core['identity_service'].is_configured(),
-            'environment':core['MODE'], 'last_webhook_at':last['created_at'] if last else None,
+            'environment':core['MODE'], 'phone_verification_enabled':core['account_contacts'].enabled(), 'last_webhook_at':last['created_at'] if last else None,
             'webhook_path':'/api/webhooks/didit'}}
 
 

@@ -2,10 +2,15 @@
 import re
 import json
 import time
+import os
 
 PREFIX = 'account_phone:'
 VERIFIED_PREFIX = 'account_phone_verified:'
 CHALLENGE_PREFIX = 'account_phone_challenge:'
+
+
+def enabled():
+    return os.environ.get('PHONE_VERIFICATION_ENABLED','false').strip().lower() == 'true'
 
 
 def normalize_phone(value, country=None):

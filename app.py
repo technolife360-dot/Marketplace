@@ -719,6 +719,7 @@ def user_view(db, uid):
     u = db.execute("SELECT u.id,u.email,u.display_name,u.country,u.language,u.currency,u.email_verified,u.suspended,u.created_at,COALESCE(p.value,'') AS phone,CASE WHEN p.value IS NOT NULL AND p.value=v.value THEN 1 ELSE 0 END AS phone_verified FROM users u LEFT JOIN platform_config p ON p.key='account_phone:'||u.id LEFT JOIN platform_config v ON v.key='account_phone_verified:'||u.id WHERE u.id=?",(uid,)).fetchone()
     if not u: return None
     out = dict(u)
+    out['phone_verification_enabled'] = account_contacts.enabled()
     # Admin status is an immutable role marker created by the local bootstrap command.
     out['staff_capabilities']=launch_readiness.capabilities(db,uid)
     out['is_admin'] = db.execute('SELECT 1 FROM admin_accounts WHERE user_id=?',(uid,)).fetchone() is not None
@@ -1738,7 +1739,7 @@ class Handler(BaseHTTPRequestHandler):
                 db.execute('INSERT INTO users(id,email,password_hash,display_name,country,language,currency,email_verified,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,1,?,?)',(user_id,email,password_hash(create_token()),name,oauth_country,'en',ASIA_COUNTRY_CURRENCIES[oauth_country],terms,now_iso()))
                 db.execute('INSERT INTO oauth_identities(provider,subject,user_id) VALUES(?,?,?)',(provider,subject,user_id))
             session_token,csrf=session_create(db,user_id); self.set_session(session_token,db)
-            return 302,{'ok':True},{'Location':'/#home' if account_contacts.verified(db,user_id) else '/#contact-details','Set-Cookie':[clear]}
+            return 302,{'ok':True},{'Location':'/#contact-details' if account_contacts.enabled() and not account_contacts.verified(db,user_id) else '/#home','Set-Cookie':[clear]}
         if path=='/api/webhooks/didit' and method=='POST':
             payload=identity_service.verify_webhook(raw_body,self.headers.get('X-Signature-V2',''),self.headers.get('X-Timestamp',''))
             if payload is None: raise HttpError(401,'Didit webhook imzosi yoki vaqti noto‘g‘ri.')
@@ -2302,6 +2303,8 @@ class Handler(BaseHTTPRequestHandler):
             existing=db.execute("SELECT id,status FROM account_deletion_requests WHERE user_id=? AND status IN ('pending','reviewing') ORDER BY created_at DESC LIMIT 1",(uid,)).fetchone()
             if existing: return {'id':existing['id'],'status':existing['status']}
             rid=ident(); db.execute('INSERT INTO account_deletion_requests(id,user_id,reason) VALUES(?,?,?)',(rid,uid,reason)); audit(db,uid,'account_deletion_request','user',uid); return 201,{'id':rid,'status':'pending'}
+        if path.startswith('/api/phone/') and not account_contacts.enabled():
+            raise HttpError(404,'Phone verification is currently disabled.')
         if path=='/api/phone/countries' and method=='GET':
             require_user(ctx)
             return account_contacts.countries()
@@ -2399,8 +2402,8 @@ class Handler(BaseHTTPRequestHandler):
             user=db.execute('SELECT email,language FROM users WHERE id=? AND email_verified=1 AND suspended=0',(uid,)).fetchone()
             profile=db.execute('SELECT * FROM seller_profiles WHERE user_id=?',(uid,)).fetchone()
             if not user or not profile: raise HttpError(409,'Avval emailni tasdiqlab, sotuvchi profilini yarating.')
-            phone=account_contacts.read(db,uid)
-            if not phone or not account_contacts.verified(db,uid): raise HttpError(409,'Verify your phone number before starting identity verification.')
+            phone=account_contacts.read(db,uid) if account_contacts.enabled() else ''
+            if account_contacts.enabled() and (not phone or not account_contacts.verified(db,uid)): raise HttpError(409,'Verify your phone number before starting identity verification.')
             if profile['identity_status']=='verified' and profile['identity_provider']=='didit': raise HttpError(409,'Shaxs Didit orqali tasdiqlangan.')
             reference='sl-'+hmac.new(SESSION_SECRET.encode('utf-8'),('didit-user:'+uid).encode('utf-8'),hashlib.sha256).hexdigest()[:40]
             try: session=identity_service.create_verification_session(reference,email=user['email'],phone=phone,language=user['language'])
@@ -2773,7 +2776,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not profile: raise HttpError(404,'Seller profile not found.')
                 if 'expected_session' in data and data['expected_session']!=profile['identity_reference']: raise HttpError(409,'The seller started another verification. Refresh before deciding.')
                 if action=='approve' and (not profile['email_verified'] or profile['suspended']): raise HttpError(409,'The seller must have a verified email and an active account.')
-                if action=='approve' and not account_contacts.verified(db,target): raise HttpError(409,'The seller must verify their phone number before approval.')
+                if action=='approve' and account_contacts.enabled() and not account_contacts.verified(db,target): raise HttpError(409,'The seller must verify their phone number before approval.')
                 if action=='approve' and (profile['identity_status']!='verified' or profile['identity_provider']!='didit'): raise HttpError(409,'Didit must approve document, liveness, and face match first.')
                 if profile['verification_status']=='verified' and profile['selling_enabled'] and action=='approve': raise HttpError(409,'This seller is already approved.')
                 if profile['verification_status']=='rejected' and action=='reject': raise HttpError(409,'This seller is already rejected.')

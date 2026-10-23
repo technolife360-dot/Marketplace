@@ -47,7 +47,7 @@ def create_verification_session(user_reference: str, *, email: str = '', phone: 
         'callback': callback,
         'vendor_data': user_reference,
         'language': language if language in ('en', 'uz', 'ru') else 'en',
-        'contact_details': {'email': email, 'phone': phone, 'send_notification_emails': False},
+        'contact_details': {'email': email, **({'phone':phone} if phone else {}), 'send_notification_emails': False},
         'expected_details': {'expected_document_types': ['P', 'ID']},
     }, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
     headers = {

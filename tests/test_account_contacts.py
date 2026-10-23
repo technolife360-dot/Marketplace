@@ -1,5 +1,6 @@
 """Phone OTP, account ownership and Didit contact forwarding with isolated storage."""
 import time
+import os
 import unittest
 from unittest.mock import patch
 
@@ -9,7 +10,11 @@ from tests import test_marketplace as fixtures
 
 
 class PhoneVerificationFlows(unittest.TestCase):
-    setUp = fixtures.MarketplaceFlows.setUp
+    def setUp(self):
+        fixtures.MarketplaceFlows.setUp(self)
+        flag=patch.dict(os.environ,{'PHONE_VERIFICATION_ENABLED':'true'})
+        flag.start()
+        self.addCleanup(flag.stop)
     tearDown = fixtures.MarketplaceFlows.tearDown
     ctx = fixtures.MarketplaceFlows.ctx
     route = fixtures.MarketplaceFlows.route
@@ -118,3 +123,24 @@ class PhoneVerificationFlows(unittest.TestCase):
         self.assertEqual(contacts.normalize_phone('012 3456789','MY'),'+60123456789')
         for country,phone in (('MY','+998901234567'),('XX','1234567'),({},'1234567')):
             with self.assertRaises(ValueError):contacts.normalize_phone(phone,country)
+
+    def test_disabled_phone_does_not_send_codes_or_block_identity_and_admin_review(self):
+        with patch.dict(os.environ,{'PHONE_VERIFICATION_ENABLED':'false'}):
+            self.assertFalse(app.user_view(self.db,self.buyer)['phone_verification_enabled'])
+            with patch.object(app.identity_service,'phone_request') as remote:
+                for method,path in (('GET','/api/phone/countries'),('GET','/api/phone/status'),('POST','/api/phone/send'),('POST','/api/phone/check')):
+                    with self.assertRaises(app.HttpError) as error:self.route(self.buyer,method,path,{'phone':'+60123456789','code':'482135'})
+                    self.assertEqual(error.exception.status,404)
+                remote.assert_not_called()
+            self.db.execute("UPDATE seller_profiles SET identity_status='not_started',verification_status='pending',selling_enabled=0 WHERE user_id=?",(self.seller,))
+            with patch.object(app.identity_service,'is_configured',return_value=True),patch.object(app.identity_service,'create_verification_session',return_value={'session_id':'email-only-session','url':'https://verify.didit.me/session/email'}) as remote:
+                self.route(self.seller,'POST','/api/seller/identity-session',{'consent':True})
+            self.assertEqual(remote.call_args.kwargs['email'],'seller@test.invalid')
+            self.assertEqual(remote.call_args.kwargs['phone'],'')
+            self.db.execute("UPDATE seller_profiles SET identity_status='verified' WHERE user_id=?",(self.seller,))
+            with patch.object(app.email_service,'is_configured',return_value=True),patch.object(app.email_service,'send_verification_update') as send:
+                result=self.route(self.admin,'POST','/api/admin/sellers/'+self.seller,{'action':'approve'})
+            self.assertTrue(result['selling_enabled'])
+            self.assertTrue(result['email_sent'])
+            self.assertEqual(send.call_args.args[0],'seller@test.invalid')
+            self.assertEqual(send.call_args.args[3],app.seller_verification.DECISION_MESSAGES['approve'])
