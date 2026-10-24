@@ -5,6 +5,7 @@ import marketplace_features
 import purchase_reviews
 import stripe_test_payments
 import stripe_test_topups
+import order_process
 import marketplace_operations
 import trade_workflows
 import catalogue_experience
@@ -846,6 +847,9 @@ def settle_seller_escrow(db,oid):
     """Move sandbox-held amounts into withdrawable seller balances after resolution."""
     payment=db.execute('SELECT provider FROM payments WHERE order_id=?',(oid,)).fetchone()
     if payment and payment['provider']=='stripe_test':
+        # Test credits are an internal entitlement, separate from a Connect transfer.
+        # The caller holds the order lock and has completed payment/delivery checks.
+        stripe_test_payments.release_test_ledger(db,oid,globals())
         stripe_test_payments.queue_release(db,oid); return
     if db.execute("SELECT 1 FROM ledger_entries WHERE order_id=? AND entry_type='seller_earning'",(oid,)).fetchone(): return
     order=db.execute('SELECT currency FROM orders WHERE id=?',(oid,)).fetchone()
@@ -1284,7 +1288,14 @@ def order_view(db, oid, uid, admin=False):
         else:
             it['delivery']={'submitted_at':delivery['submitted_at']} if delivery else None
         it['store_id']=it.pop('seller_id',None)
+        seller=db.execute('SELECT display_name FROM users WHERE id=?',(it['store_id'],)).fetchone()
+        it['seller_name']=seller['display_name'] if seller else 'Seller'
         order['items'].append(it)
+    order['funds']={'mode':order['payment_mode'],'test_only':order['payment_mode'] in ('sandbox','stripe_test'),'seller_net_minor':sum(i['unit_price_minor']*i['quantity']-i['commission_minor'] for i in items),'seller_fee_minor':sum(i['commission_minor'] for i in items)}
+    if order['payment_mode']=='stripe_test':
+        released=db.execute("SELECT COALESCE(SUM(amount_minor),0) n FROM ledger_entries WHERE order_id=? AND entry_type='stripe_test_earning'"+(" AND user_id=?" if not is_buyer and not admin else ''),(oid,uid) if not is_buyer and not admin else (oid,)).fetchone()['n']
+        order['funds']['state']='available' if order['status']=='completed' and released else 'refunded' if order['status']=='refunded' else 'pending'
+    else: order['funds']['state']='available' if order['status']=='completed' else 'refunded' if order['status']=='refunded' else 'pending'
     order['events']=[dict(x) for x in db.execute('SELECT to_status,note,created_at FROM order_events WHERE order_id=? ORDER BY created_at',(oid,)).fetchall()]
     order['payment']=rowdict(db.execute('SELECT provider,status,amount_minor,currency,created_at FROM payments WHERE order_id=?',(oid,)).fetchone())
     if order['payment'] and order['payment']['provider']=='stripe_test':
@@ -1300,12 +1311,26 @@ def order_view(db, oid, uid, admin=False):
             order['account_review']={**dict(review),'evidence_slots':sorted(slots)}
     return order
 
-def checkout(db,uid,accept_terms=False,accept_account_risk=False,buyer_details=None,buyer_context=None,coupon_code=None):
+def checkout(db,uid,accept_terms=False,accept_account_risk=False,buyer_details=None,buyer_context=None,coupon_code=None,request_key=None,expected_total_minor=None,expected_currency=None):
     if not accept_terms: raise HttpError(400,'Checkoutdan oldin savdo shartlarini qabul qiling.')
     try: provider=configured_payment_provider()
     except RuntimeError as e: raise HttpError(503,'Haqiqiy to‘lov provayderi hali sozlanmagan. Ishlab chiqarish checkout’i yopiq.')
+    request_record=None
+    fingerprint=hashlib.sha256(json.dumps({'terms':accept_terms,'account_risk':accept_account_risk,'details':buyer_details,'context':buyer_context,'coupon':coupon_code,'total':expected_total_minor,'currency':expected_currency},sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    if request_key is not None:
+        if not isinstance(request_key,str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,100}',request_key): raise HttpError(400,'Invalid checkout request key.')
+        request_record='checkout_request:'+uid+':'+hashlib.sha256(request_key.encode()).hexdigest()
     db.execute('BEGIN IMMEDIATE')
     try:
+        if request_record:
+            db.execute('SELECT id FROM users WHERE id=?'+(' FOR UPDATE' if DATABASE_URL else ''),(uid,)).fetchone()
+            prior=db.execute('SELECT value FROM platform_config WHERE key=?',(request_record,)).fetchone()
+            if prior:
+                saved=json.loads(prior['value'])
+                if saved['fingerprint']!=fingerprint: raise HttpError(409,'This checkout request was already used with different details.')
+                order=db.execute('SELECT * FROM orders WHERE id=? AND buyer_id=?',(saved['order_id'],uid)).fetchone()
+                db.execute('COMMIT')
+                return {'id':order['id'],'reference':order['reference'],'status':order['status'],'total_minor':order['total_minor'],'currency':order['currency'],'mode':order['payment_mode'],'idempotent':True}
         # release expired reservations so abandoned carts cannot lock stock forever
         expired_order_filter="o.created_at::timestamptz < CURRENT_TIMESTAMP - INTERVAL '30 minutes'" if DATABASE_URL else "o.created_at < datetime('now','-30 minutes')"
         old=db.execute(f"SELECT o.id,o.buyer_id,oi.listing_id,oi.quantity FROM orders o JOIN order_items oi ON oi.order_id=o.id WHERE o.status='pending_payment' AND {expired_order_filter}").fetchall()
@@ -1356,6 +1381,8 @@ def checkout(db,uid,accept_terms=False,accept_account_risk=False,buyer_details=N
         config=db.execute("SELECT value FROM platform_config WHERE key='commission_bps'").fetchone()
         bps=int(config['value']) if config else 0
         commission=(subtotal*bps)//10000
+        if expected_total_minor is not None and (type(expected_total_minor) is not int or expected_total_minor!=subtotal+commission or expected_currency!=currency):
+            raise HttpError(409,'The price or fee changed. Refresh and review the total before continuing.')
         oid,reference,idem=ident(),'BG-'+secrets.token_hex(4).upper(),create_token()
         intent=provider.create_intent(oid,subtotal+commission,currency,idem)
         terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']
@@ -1373,6 +1400,7 @@ def checkout(db,uid,accept_terms=False,accept_account_risk=False,buyer_details=N
         db.execute('INSERT INTO payments(id,order_id,provider,amount_minor,currency,status,idempotency_key) VALUES(?,?,?,?,?,?,?)',(ident(),oid,intent.provider,intent.amount_minor,intent.currency,'pending',intent.idempotency_key))
         if coupon_code:db.execute('INSERT INTO platform_config(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',('coupon_use:'+coupon_code+':'+uid,oid))
         db.execute('DELETE FROM carts WHERE user_id=?',(uid,)); event(db,oid,uid,None,'pending_payment','Sinov to‘lovi yaratildi' if intent.provider=='sandbox' else 'To‘lov yaratildi')
+        if request_record: db.execute('INSERT INTO platform_config(key,value) VALUES(?,?)',(request_record,json.dumps({'order_id':oid,'fingerprint':fingerprint})))
         db.execute('COMMIT'); return {'id':oid,'reference':reference,'status':'pending_payment','total_minor':subtotal+commission,'currency':currency,'mode':intent.provider,'checkout_url':intent.checkout_url}
     except Exception:
         db.execute('ROLLBACK'); raise
@@ -1528,7 +1556,7 @@ class Handler(BaseHTTPRequestHandler):
                 payload=seo_listing_html(listing_match.group(1))
                 if payload is None: self.send_error(404); return
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
-            f={'/static/listing-detail.css':'listing-detail.css','/static/listing-detail.js':'listing-detail.js','/static/product-cards.css':'product-cards.css','/static/offer-wizard.js':'offer-wizard.js','/static/offer-wizard.css':'offer-wizard.css','/static/seller-verification.js':'seller-verification.js','/static/seller-verification.css':'seller-verification.css','/static/purchase-reviews.js':'purchase-reviews.js','/static/assets/pubg-uid-guide.png':'assets/pubg-uid-guide.png','/static/select-menu.js':'select-menu.js','/static/monochrome-theme.css':'monochrome-theme.css','/static/assets/roboto-variable.ttf':'assets/roboto-variable.ttf','/static/assets/roboto-OFL.txt':'assets/roboto-OFL.txt','/push-worker.js':'push-worker.js','/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/qa-vitals.js':'qa-vitals.js','/static/vendor/web-vitals.iife.js':'vendor/web-vitals.iife.js','/static/launch-readiness.js':'launch-readiness.js','/static/launch-readiness.css':'launch-readiness.css','/static/experience.js':'experience.js','/static/experience.css':'experience.css','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup-detail.js':'topup-detail.js','/static/topup-detail.css':'topup-detail.css','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-uc-660.png':'assets/topup-uc-660.png','/static/assets/topup-uc-1800.png':'assets/topup-uc-1800.png','/static/assets/topup-uc-3850.png':'assets/topup-uc-3850.png','/static/assets/topup-uc-8100.png':'assets/topup-uc-8100.png','/static/assets/topup-uc-60.png':'assets/topup-uc-60.png','/static/assets/topup-uc-325.png':'assets/topup-uc-325.png','/static/assets/topup-weekly-deal-1.png':'assets/topup-weekly-deal-1.png','/static/assets/topup-weekly-deal-2.png':'assets/topup-weekly-deal-2.png','/static/assets/topup-weekly-mythic.png':'assets/topup-weekly-mythic.png','/static/assets/topup-elite-pass.png':'assets/topup-elite-pass.png','/static/assets/topup-pubg-banner.jpg':'assets/topup-pubg-banner.jpg','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.webp':'assets/market-banner-soldier.webp','/static/assets/market-banner-games.webp':'assets/market-banner-games.webp','/static/assets/market-banner-worlds.webp':'assets/market-banner-worlds.webp','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
+            f={'/static/order-process.js':'order-process.js','/static/order-process.css':'order-process.css','/static/listing-detail.css':'listing-detail.css','/static/listing-detail.js':'listing-detail.js','/static/product-cards.css':'product-cards.css','/static/offer-wizard.js':'offer-wizard.js','/static/offer-wizard.css':'offer-wizard.css','/static/seller-verification.js':'seller-verification.js','/static/seller-verification.css':'seller-verification.css','/static/purchase-reviews.js':'purchase-reviews.js','/static/assets/pubg-uid-guide.png':'assets/pubg-uid-guide.png','/static/select-menu.js':'select-menu.js','/static/monochrome-theme.css':'monochrome-theme.css','/static/assets/roboto-variable.ttf':'assets/roboto-variable.ttf','/static/assets/roboto-OFL.txt':'assets/roboto-OFL.txt','/push-worker.js':'push-worker.js','/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/qa-vitals.js':'qa-vitals.js','/static/vendor/web-vitals.iife.js':'vendor/web-vitals.iife.js','/static/launch-readiness.js':'launch-readiness.js','/static/launch-readiness.css':'launch-readiness.css','/static/experience.js':'experience.js','/static/experience.css':'experience.css','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup-detail.js':'topup-detail.js','/static/topup-detail.css':'topup-detail.css','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-uc-660.png':'assets/topup-uc-660.png','/static/assets/topup-uc-1800.png':'assets/topup-uc-1800.png','/static/assets/topup-uc-3850.png':'assets/topup-uc-3850.png','/static/assets/topup-uc-8100.png':'assets/topup-uc-8100.png','/static/assets/topup-uc-60.png':'assets/topup-uc-60.png','/static/assets/topup-uc-325.png':'assets/topup-uc-325.png','/static/assets/topup-weekly-deal-1.png':'assets/topup-weekly-deal-1.png','/static/assets/topup-weekly-deal-2.png':'assets/topup-weekly-deal-2.png','/static/assets/topup-weekly-mythic.png':'assets/topup-weekly-mythic.png','/static/assets/topup-elite-pass.png':'assets/topup-elite-pass.png','/static/assets/topup-pubg-banner.jpg':'assets/topup-pubg-banner.jpg','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.webp':'assets/market-banner-soldier.webp','/static/assets/market-banner-games.webp':'assets/market-banner-games.webp','/static/assets/market-banner-worlds.webp':'assets/market-banner-worlds.webp','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
             if not f: self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/webp' if f.endswith('.webp') else 'image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))
@@ -1571,6 +1599,8 @@ class Handler(BaseHTTPRequestHandler):
         # Capabilities are selected by the server's route map, never request JSON.
         if path=='/api/admin' or path.startswith('/api/admin/'):
             require_admin(ctx)
+        order_result=order_process.route(db,ctx,method,path,data,globals())
+        if order_result is not order_process.UNHANDLED: return order_result
         stripe_result=stripe_test_payments.route(self,db,ctx,method,path,data,raw_body,globals())
         if stripe_result is not stripe_test_payments.UNHANDLED: return stripe_result
         push_result=web_push.route(self,db,ctx,method,path,data,globals())
@@ -2019,7 +2049,13 @@ class Handler(BaseHTTPRequestHandler):
                 v=listing_detail(db,x['listing_id'],uid)
                 if v and v['status']=='published':
                     v['quantity']=x['quantity'];v['base_price_minor']=v['price_minor'];v['price_minor']=launch_readiness.unit_price(db,v['id'],v['price_minor'],v['quantity']);items.append(v)
-            return {'items':items,'subtotal_minor':sum(x['price_minor']*x['quantity'] for x in items)}
+            subtotal=sum(x['price_minor']*x['quantity'] for x in items)
+            fee_row=db.execute("SELECT value FROM platform_config WHERE key='commission_bps'").fetchone()
+            bps=int(fee_row['value']) if fee_row else 0
+            fee=subtotal*bps//10000
+            try: payment_mode=configured_payment_provider().name
+            except RuntimeError: payment_mode='disabled'
+            return {'items':items,'subtotal_minor':subtotal,'commission_minor':fee,'total_minor':subtotal+fee,'commission_bps':bps,'payment_mode':payment_mode}
         if path=='/api/orders' and method=='GET':
             require_user(ctx)
             rows=db.execute('SELECT DISTINCT o.* FROM orders o LEFT JOIN order_items i ON i.order_id=o.id WHERE o.buyer_id=? OR i.seller_id=? ORDER BY o.created_at DESC',(uid,uid)).fetchall()
@@ -2082,7 +2118,7 @@ class Handler(BaseHTTPRequestHandler):
             held=int(db.execute("SELECT COALESCE(SUM(amount_minor),0) amount_minor FROM ledger_entries WHERE user_id=? AND entry_type IN ('escrow_hold','escrow_release')",(uid,)).fetchone()['amount_minor'] or 0)
             pending_payout=int(db.execute("SELECT COALESCE(SUM(amount_minor),0) amount_minor FROM payout_requests WHERE seller_id=? AND status IN ('pending','approved')",(uid,)).fetchone()['amount_minor'] or 0)
             wallet_balance=earnings-paid_out
-            return {'stripe_test_enabled':stripe_test_topups.enabled(globals()),'listings':[dict(x) for x in db.execute('SELECT status,COUNT(*) count FROM listings WHERE seller_id=? GROUP BY status',(uid,)).fetchall()],'orders':[dict(x) for x in db.execute('SELECT o.status,COUNT(DISTINCT o.id) count FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.seller_id=? GROUP BY o.status',(uid,)).fetchall()],'earnings':earnings,'wallet':{'currency':'UZS','held_minor':held,'available_minor':max(0,wallet_balance-pending_payout),'pending_payout_minor':pending_payout,'paid_out_minor':paid_out,'automated_withdrawals_enabled':False}}
+            return {'stripe_test_enabled':stripe_test_topups.enabled(globals()),'listings':[dict(x) for x in db.execute('SELECT status,COUNT(*) count FROM listings WHERE seller_id=? GROUP BY status',(uid,)).fetchall()],'orders':[dict(x) for x in db.execute('SELECT o.status,COUNT(DISTINCT o.id) count FROM orders o JOIN order_items i ON i.order_id=o.id WHERE i.seller_id=? GROUP BY o.status',(uid,)).fetchall()],'earnings':earnings,'test_wallet':order_process.wallet(db,uid),'wallet':{'currency':'UZS','held_minor':held,'available_minor':max(0,wallet_balance-pending_payout),'pending_payout_minor':pending_payout,'paid_out_minor':paid_out,'automated_withdrawals_enabled':False}}
         if path=='/api/requests' and method=='GET':
             own=qs.get('mine',['0'])[0]=='1'
             if own: require_user(ctx)
@@ -2635,7 +2671,12 @@ class Handler(BaseHTTPRequestHandler):
         m=re.fullmatch(r'/api/cart/([^/]+)',path)
         if m and method=='DELETE': require_user(ctx); db.execute('DELETE FROM carts WHERE user_id=? AND listing_id=?',(uid,m.group(1))); return {'ok':True}
         if path=='/api/checkout' and method=='POST':
-            require_verified(ctx); return 201,checkout(db,uid,data.get('accept_terms') is True,data.get('accept_account_risk') is True,data.get('buyer_details'),data.get('buyer_context'),data.get('coupon_code'))
+            require_verified(ctx)
+            if data.get('stripe_test_only') is True:
+                try: checkout_provider=configured_payment_provider().name
+                except RuntimeError: raise HttpError(503,'Stripe test checkout is not configured. Please try again after setup.')
+                if checkout_provider!='stripe_test': raise HttpError(409,'Stripe test checkout is not configured. A local simulator cannot replace a Stripe payment.')
+            return 201,checkout(db,uid,data.get('accept_terms') is True,data.get('accept_account_risk') is True,data.get('buyer_details'),data.get('buyer_context'),data.get('coupon_code'),data.get('request_key'),data.get('expected_total_minor'),data.get('expected_currency'))
         m=re.fullmatch(r'/api/orders/([^/]+)/sandbox-complete',path)
         if m and method=='POST':
             require_verified(ctx)

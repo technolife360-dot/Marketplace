@@ -541,7 +541,7 @@ class MarketplaceFlows(unittest.TestCase):
         self.route(self.admin,'POST',f"/api/admin/listings/{draft['id']}",{'action':'approve','note':'Checked'})
         self.assertEqual(self.db.execute('SELECT status FROM listings WHERE id=?',(draft['id'],)).fetchone()['status'],'published')
     def test_approval_generates_note_without_moderator_prompt(self):
-        draft=self.route(self.seller,'POST','/api/listings',{'game_id':'valorant','category_id':'items','title':'Transferable game item','description':'A game item delivered through an in-game trade.','price_minor':23000,'stock':1})
+        draft=self.route(self.seller,'POST','/api/listings',{'game_name':'Counter-Strike 2','category_id':'items','title':'Transferable game item','description':'A game item delivered through an in-game trade.','price_minor':23000,'stock':1})
         self.route(self.seller,'POST',f"/api/listings/{draft['id']}/submit",{})
         self.route(self.admin,'POST',f"/api/admin/listings/{draft['id']}",{'action':'approve'})
         note=self.db.execute('SELECT moderation_note FROM listings WHERE id=?',(draft['id'],)).fetchone()['moderation_note']

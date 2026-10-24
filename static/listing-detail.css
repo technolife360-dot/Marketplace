@@ -94,6 +94,7 @@ body .listing-redesign .launch-reputation{margin-top:14px!important;font-size:11
 body .listing-redesign .launch-reputation summary{cursor:pointer!important}
 body .listing-redesign .launch-reputation p{font-size:11px!important;line-height:1.6!important;color:#aaa!important}
 body .listing-redesign .ex-price-watch{padding:16px 0!important;border:0!important;margin:0!important;background:none!important;font-size:12px!important;color:#aaa!important}
+body .listing-redesign .listing-purchase-panel>.ex-price-watch{margin-top:16px!important;padding:16px 0 0!important;border-top:1px solid #292929!important}
 body .listing-redesign .ex-price-watch summary{cursor:pointer!important}
 body .listing-redesign .ex-price-watch form{display:grid!important;gap:12px!important;margin-top:14px!important}
 body .listing-redesign .ex-price-watch input{width:100%!important;max-width:100%!important;height:44px!important;padding:0 12px!important;border:1px solid #393939!important;border-radius:7px!important;background:#151515!important}

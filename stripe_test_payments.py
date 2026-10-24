@@ -355,6 +355,11 @@ def webhook(db, headers, raw, core):
         event = provider.verify_webhook(headers, raw)
     except Exception as exc:
         raise core['HttpError'](400, 'Invalid Stripe test webhook signature or environment.') from exc
+    return receive_event(db, provider, event, core)
+
+
+def receive_event(db, provider, event, core):
+    """Only signed webhooks or server-retrieved Checkout sessions enter here."""
     if event['type'] in ('charge.refunded', 'charge.dispute.created'):
         return charge_event(db, provider, event, core)
     if event['type'] not in ('checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.expired', 'checkout.session.async_payment_failed'):
@@ -427,6 +432,30 @@ def webhook(db, headers, raw, core):
         return {'ok': True}
     except Exception:
         db.execute('ROLLBACK'); raise
+
+
+def reconcile_checkout(db, oid, uid, core):
+    """Recover a delayed webhook on return, without trusting browser success flags."""
+    order = db.execute("SELECT status FROM orders WHERE id=? AND buyer_id=? AND payment_mode='stripe_test'", (oid, uid)).fetchone()
+    if not order:
+        raise core['HttpError'](404, 'Test order not found.')
+    if order['status'] != 'pending_payment':
+        return {'status': order['status']}
+    saved = read(db, 'checkout:'+oid)
+    if not saved:
+        return {'status': 'pending_payment'}
+    provider = core['configured_payment_provider']()
+    if provider.name != 'stripe_test':
+        raise core['HttpError'](409, 'Stripe test is disabled.')
+    try:
+        session = provider.paid_session(saved['id'])
+    except ValueError:
+        return {'status': 'pending_payment'}
+    except Exception as exc:
+        raise core['HttpError'](503, 'Payment confirmation is temporarily unavailable. Please retry.') from exc
+    receive_event(db, provider, {'id': 'reconcile_'+saved['id'], 'type': 'checkout.session.completed',
+                                'data': {'object': session}}, core)
+    return {'status': db.execute('SELECT status FROM orders WHERE id=?', (oid,)).fetchone()['status']}
 
 
 def charge_event(db, provider, event, core):
@@ -628,6 +657,11 @@ def route(handler, db, ctx, method, path, data, raw, core):
     if match and method == 'POST':
         core['require_verified'](ctx)
         return start_checkout(db, match[1], ctx['uid'], core)
+    match = re.fullmatch(r'/api/orders/([A-Za-z0-9_-]+)/stripe-confirmation', path)
+    if match and method == 'POST':
+        core['require_verified'](ctx)
+        core['check_rate'](db, 'stripe_confirmation', ctx['uid'], 30, 300)
+        return reconcile_checkout(db, match[1], ctx['uid'], core)
     match = re.fullmatch(r'/api/admin/payments/stripe-test/sellers/([A-Za-z0-9_-]+)', path)
     if match and method == 'POST':
         aid = core['require_admin'](ctx)
