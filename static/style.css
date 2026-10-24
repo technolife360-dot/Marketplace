@@ -1287,7 +1287,7 @@ body.home-page .footer a:hover { color: #d8e5ff; }
 #app.home-background .trust-icon { border-color: rgb(177 198 235 / 17%); background: rgb(177 198 235 / 8%); color: #c9d9f7; }
 #app.home-background .trust-item b { color: #e3ebfb; }
 #app.home-background .trust-item span { color: #a1afc7; }
-body.home-page .sell-item-button { border-color: #c9d9f7; background: #c9d9f7; color: #101a2b; box-shadow: 0 5px 16px rgb(180 200 239 / 15%); }
+body.home-page .sell-item-button { border-color: #c9d9f7; background: #FF9B42; color: #101a2b; box-shadow: 0 5px 16px rgb(180 200 239 / 15%); }
 body.home-page .sell-item-button:hover { background: #e0eaff; box-shadow: 0 8px 20px rgb(180 200 239 / 20%); }
 
 /* Keep the listings heading centered above the marketplace filters. */
