@@ -158,6 +158,7 @@ class OperationsFlows(unittest.TestCase):
         self.db.execute("UPDATE pending_email_changes SET expires_at='2000-01-01T00:00:00+00:00'")
         with self.assertRaises(app.HttpError):self.route(self.buyer,'POST','/api/security/email/confirm',{'token':r['confirmation_token']})
     def test_production_quality_requires_complete_fields_and_moderator_confirmation(self):
+        fixtures.MarketplaceFlows.enable_admin_mfa(self)
         with patch.object(app,'MODE','production'),patch.dict(app.os.environ,{'MARKETPLACE_INTERNAL_TESTING_ENABLED':'false'}):
             with self.assertRaises(app.HttpError):self.route(self.admin,'POST','/api/admin/listings/'+self.listing,{'action':'approve','quality_confirmed':True})
             self.db.execute("UPDATE listings SET description=?,platform='PC',region='Global',requirements='Delivered to your order.',image_url='https://example.test/fixture.webp',attributes_json=? WHERE id=?",('A clearly described real product with complete delivery instructions and restrictions.',json.dumps({'item_name':'Specific item name'}),self.listing))

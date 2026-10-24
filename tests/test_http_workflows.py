@@ -94,6 +94,74 @@ class HTTPWorkflows(unittest.TestCase):
         self.assertIn('SameSite=Lax', headers['Set-Cookie'])
         return client
 
+    def offer_data(self):
+        return {'game_name':'PUBG Mobile','category_id':'accounts','title':'PUBG Mobile level 65 account',
+                'description':'Level 65 account with the outfits and features shown in the photographs. Original email included.',
+                'price_minor':12990,'currency':'MYR','stock':1,'platform':'Android / iOS','region':'Global',
+                'delivery_eta':'15 minutes','delivery_method':'manual','accept_account_terms':True,
+                'attributes':{'account_level':'65','tier':'Ace','original_email_included':'yes'},
+                'images':[f'https://images.example.com/photo-{i}.webp' for i in range(8)],'submit_for_review':True}
+
+    def test_new_offer_saves_myr_price_eight_photos_and_account_details(self):
+        data = self.offer_data()
+        status, result, _ = self.seller.request('POST','/api/listings',data)
+        self.assertEqual(status,201,result)
+        self.assertEqual((result['price_minor'],result['currency'],result['status']),(12990,'MYR','pending_review'))
+        self.assertEqual(result['image_url'],data['images'][0])
+        self.assertEqual(result['attributes']['images'],data['images'])
+        self.assertEqual(result['attributes']['original_email_included'],'yes')
+        self.assertEqual(self.guest.request('POST','/api/listings',data)[0],401)
+        self.assertEqual(self.seller.request('POST','/api/listings',{**data,'currency':'USD'})[0],400)
+        self.assertEqual(self.seller.request('POST','/api/listings',{**data,'images':data['images']+['https://images.example.com/ninth.webp']})[0],400)
+        self.assertEqual(self.seller.request('POST','/api/listings',{**data,'attributes':{'original_email_included':'maybe'}})[0],400)
+        self.assertEqual(self.seller.request('POST','/api/listings',{**data,'accept_account_terms':False})[0],400)
+        for path in ('/static/offer-wizard.js','/static/offer-wizard.css'):
+            self.assertEqual(self.guest.request('GET',path)[0],200,path)
+
+    def test_review_notifications_reach_every_active_admin_and_admin_queue(self):
+        other_admin, suspended_admin = app.ident(), app.ident()
+        for uid, suspended in ((other_admin,0),(suspended_admin,1)):
+            self.db.execute('INSERT INTO users(id,email,password_hash,display_name,email_verified,suspended) VALUES(?,?,?,?,1,?)',
+                            (uid,uid+'@http.test','unused','Review administrator',suspended))
+            self.db.execute('INSERT INTO admin_accounts(user_id) VALUES(?)',(uid,))
+        status, listing, _ = self.seller.request('POST','/api/listings',self.offer_data())
+        self.assertEqual(status,201,listing)
+        for client in (self.admin,self.signed_client(other_admin)):
+            status, notices, _ = client.request('GET','/api/notifications')
+            self.assertEqual(status,200)
+            self.assertEqual(len(notices),1)
+            notice=notices[0]
+            self.assertEqual((notice['kind'],notice['read_at'],notice['href']),('moderation',None,'/admin'))
+            self.assertIn(listing['id'],notice['body'])
+            self.assertIn(listing['title'],notice['body'])
+            self.assertEqual(client.request('GET','/api/admin/overview')[1]['pending_listings'],1)
+            queue=client.request('GET','/api/admin/listings?summary=1')[1]
+            self.assertEqual([(row['id'],row['status']) for row in queue],[(listing['id'],'pending_review')])
+        for uid in (suspended_admin,self.seller_id):
+            self.assertEqual(self.db.execute('SELECT COUNT(*) FROM notifications WHERE user_id=?',(uid,)).fetchone()[0],0)
+        self.assertEqual(self.seller.request('POST','/api/listings/'+listing['id']+'/submit',{})[0],409)
+        self.assertEqual(len(self.admin.request('GET','/api/notifications')[1]),1)
+
+    def test_review_notifications_follow_draft_submit_reopen_and_edited_offer(self):
+        status, listing, _ = self.seller.request('POST','/api/listings',{**self.offer_data(),'submit_for_review':False})
+        self.assertEqual(status,201,listing)
+        self.assertEqual(self.admin.request('GET','/api/notifications')[1],[])
+        path='/api/listings/'+listing['id']
+        self.assertEqual(self.seller.request('POST',path+'/submit',{})[0],200)
+        self.assertEqual(len(self.admin.request('GET','/api/notifications')[1]),1)
+        self.db.execute("UPDATE listings SET status='paused' WHERE id=?",(listing['id'],))
+        self.assertEqual(self.seller.request('POST',path+'/state',{'action':'reopen'})[0],200)
+        self.assertEqual(len(self.admin.request('GET','/api/notifications')[1]),2)
+        self.db.execute("UPDATE listings SET status='published' WHERE id=?",(listing['id'],))
+        status, updated, _ = self.seller.request('PATCH',path,{'title':'Updated PUBG Mobile level 65 account'})
+        self.assertEqual(status,200,updated)
+        self.assertEqual(updated['status'],'pending_review')
+        notices=self.admin.request('GET','/api/notifications')[1]
+        self.assertEqual(len(notices),3)
+        self.assertTrue(any(n['title']=='Updated offer awaiting review' and updated['title'] in n['body'] for n in notices))
+        self.assertEqual(self.seller.request('PATCH',path,{'title':'Corrected PUBG Mobile level 65 account'})[0],200)
+        self.assertEqual(len(self.admin.request('GET','/api/notifications')[1]),3)
+
     def test_login_and_verification_reuse_the_request_database_connection(self):
         original_connect=app.connect
         leased=False

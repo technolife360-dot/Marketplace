@@ -412,8 +412,8 @@ def migrate():
             db.execute(f"UPDATE seller_profiles SET selling_enabled=0 WHERE verification_status!='verified' OR identity_status!='verified' OR (identity_provider!='didit'{demo_seller_clause})")
             db.execute(f"UPDATE listings SET status='paused',updated_at=CURRENT_TIMESTAMP WHERE status='published' AND seller_id NOT IN (SELECT user_id FROM seller_profiles WHERE (verification_status='verified' AND selling_enabled=1 AND identity_status='verified' AND identity_provider='didit'){demo_listing_clause})")
             db.execute("INSERT INTO platform_config(key,value) VALUES('commission_bps','0'),('completion_window_hours','72'),('terms_version','draft-2026-10') ON CONFLICT(key) DO NOTHING")
-            games=[('valorant','Valorant'),('pubg-mobile','PUBG Mobile'),('dota-2','Dota 2'),('counter-strike-2','Counter-Strike 2'),('mobile-legends','Mobile Legends')]
-            categories=[('accounts','Gaming accounts','account'),('items','Items & skins','item'),('currency','In-game currency','currency'),('services','Coaching & services','service'),('codes','Gift cards & digital codes','code'),('digital','Other digital products','digital')]
+            games=[('valorant','Valorant'),('pubg-mobile','PUBG Mobile'),('dota-2','Dota 2'),('counter-strike-2','Counter-Strike 2'),('mobile-legends','Mobile Legends'),('free-fire','Free Fire'),('genshin-impact','Genshin Impact')]
+            categories=[('accounts','Gaming accounts','account'),('items','Items & skins','item'),('currency','In-game currency','currency'),('services','Coaching & services','service'),('codes','Gift cards & digital codes','code'),('digital','Other digital products','digital'),('top-ups','Game top-ups','currency')]
             for slug,name in games: db.execute('INSERT INTO games(id,slug,name) VALUES(?,?,?) ON CONFLICT(id) DO NOTHING',(slug,slug,name))
             for slug,name,typ in categories: db.execute('INSERT INTO categories(id,slug,name,product_type) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING',(slug,slug,name,typ))
             seed_topup_catalog(db)
@@ -494,8 +494,8 @@ def migrate():
         db.execute("INSERT OR IGNORE INTO platform_config(key,value) VALUES('commission_bps','0')")
         db.execute("INSERT OR IGNORE INTO platform_config(key,value) VALUES('completion_window_hours','72')")
         db.execute("INSERT OR IGNORE INTO platform_config(key,value) VALUES('terms_version','draft-2026-10')")
-        games = [('valorant','Valorant'),('pubg-mobile','PUBG Mobile'),('dota-2','Dota 2'),('counter-strike-2','Counter-Strike 2'),('mobile-legends','Mobile Legends')]
-        categories = [('accounts','Gaming accounts','account'),('items','Items & skins','item'),('currency','In-game currency','currency'),('services','Coaching & services','service'),('codes','Gift cards & digital codes','code'),('digital','Other digital products','digital')]
+        games = [('valorant','Valorant'),('pubg-mobile','PUBG Mobile'),('dota-2','Dota 2'),('counter-strike-2','Counter-Strike 2'),('mobile-legends','Mobile Legends'),('free-fire','Free Fire'),('genshin-impact','Genshin Impact')]
+        categories = [('accounts','Gaming accounts','account'),('items','Items & skins','item'),('currency','In-game currency','currency'),('services','Coaching & services','service'),('codes','Gift cards & digital codes','code'),('digital','Other digital products','digital'),('top-ups','Game top-ups','currency')]
         for slug, name in games: db.execute('INSERT OR IGNORE INTO games(id,slug,name) VALUES(?,?,?)',(slug,slug,name))
         for slug, name, typ in categories: db.execute('INSERT OR IGNORE INTO categories(id,slug,name,product_type) VALUES(?,?,?,?)',(slug,slug,name,typ))
         db.execute("""CREATE TABLE IF NOT EXISTS topup_packages (
@@ -697,6 +697,13 @@ def notify(db, uid, kind, title, body, href='/'):
     if kind=='seller_verification_decision' or (kind in ('message','favorite','seller_listing','saved_search') and catalogue_experience.settings(db,uid)['email']):
         db.execute('INSERT INTO notification_outbox(notification_id,user_id) VALUES(?,?)',(nid,uid))
     return nid
+
+def notify_listing_review(db, listing_id, title, *, edited=False):
+    # Every active administrator receives the task, irrespective of account order.
+    heading='Updated offer awaiting review' if edited else 'New offer awaiting review'
+    for admin in db.execute('SELECT a.user_id FROM admin_accounts a JOIN users u ON u.id=a.user_id WHERE u.suspended=0').fetchall():
+        notify(db,admin['user_id'],'moderation',heading,f'{title} · ID: {listing_id}','/admin')
+
 def email_order_update(db, uid, reference, status, description):
     if not uid or not email_service.is_configured() or not catalogue_experience.settings(db,uid)['order']: return
     user=db.execute('SELECT email,display_name,email_verified,suspended,language FROM users WHERE id=?',(uid,)).fetchone()
@@ -940,7 +947,7 @@ def resolve_game_id(db, value):
     return row['id']
 def listing_image_urls(value):
     if value is None: return []
-    if not isinstance(value,list) or len(value)>4: raise HttpError(400,'Ko‘pi bilan 4 ta rasm qo‘shish mumkin.')
+    if not isinstance(value,list) or len(value)>8: raise HttpError(400,'Ko‘pi bilan 8 ta rasm qo‘shish mumkin.')
     urls=[]
     for item in value:
         url=clean_text(item,'Rasm manzili',1,500)
@@ -970,7 +977,7 @@ LISTING_PUBLIC_ATTRIBUTES={
     'behavior_score','rank_medal','premier_rating','prime_status','inventory_summary',
     'current_rank','server_id','item_name','item_variant','transfer_method','amount',
     'unit','service_scope','service_duration','code_kind','redemption_region','expiry',
-    'product_format','access_method'
+    'product_format','access_method','original_email_included'
 }
 LISTING_TYPE_ATTRIBUTES={
     'item':{'item_name','item_variant','transfer_method','item_type','condition','float_value','rarity','pattern'},
@@ -987,6 +994,8 @@ def validate_listing_attributes(attributes, product_type, require_details=False)
         if not isinstance(key,str) or key not in LISTING_PUBLIC_ATTRIBUTES:
             raise HttpError(400,'E’lon atributi noto‘g‘ri.')
         cleaned[key]=clean_text(value,key,0,160)
+    if cleaned.get('original_email_included') and cleaned['original_email_included'] not in ('yes','no'):
+        raise HttpError(400,'Original email inclusion must be yes or no.')
     if cleaned.get('amount') and not re.fullmatch(r'[1-9][0-9]{0,11}',cleaned['amount']):
         raise HttpError(400,'Bir to‘plamdagi valyuta miqdori musbat butun son bo‘lsin.')
     if cleaned.get('float_value'):
@@ -998,7 +1007,7 @@ def validate_listing_attributes(attributes, product_type, require_details=False)
     for key in LISTING_TYPE_ATTRIBUTES.keys()-{product_type}:
         if any(field in cleaned for field in LISTING_TYPE_ATTRIBUTES[key]-allowed):
             raise HttpError(400,'E’lon turi va ma’lumotlari mos kelmaydi.')
-    if product_type!='account' and any(key in cleaned for key in ('rank','account_level','competitive_rank','tier','platform_binding','mmr','behavior_score','rank_medal','premier_rating','prime_status','inventory_summary','current_rank','server_id')):
+    if product_type!='account' and any(key in cleaned for key in ('rank','account_level','competitive_rank','tier','platform_binding','mmr','behavior_score','rank_medal','premier_rating','prime_status','inventory_summary','current_rank','server_id','original_email_included')):
         raise HttpError(400,'Akkaunt ma’lumotlari boshqa mahsulot turiga mos emas.')
     if require_details and product_type=='digital' and any(not cleaned.get(key) for key in ('product_format','access_method')):
         raise HttpError(400,'Raqamli mahsulot formati va yetkazish tafsilotlarini kiriting.')
@@ -1505,7 +1514,7 @@ class Handler(BaseHTTPRequestHandler):
                 payload=seo_listing_html(listing_match.group(1))
                 if payload is None: self.send_error(404); return
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
-            f={'/static/seller-verification.js':'seller-verification.js','/static/seller-verification.css':'seller-verification.css','/static/purchase-reviews.js':'purchase-reviews.js','/static/assets/pubg-uid-guide.png':'assets/pubg-uid-guide.png','/static/select-menu.js':'select-menu.js','/static/monochrome-theme.css':'monochrome-theme.css','/static/assets/roboto-variable.ttf':'assets/roboto-variable.ttf','/static/assets/roboto-OFL.txt':'assets/roboto-OFL.txt','/push-worker.js':'push-worker.js','/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/qa-vitals.js':'qa-vitals.js','/static/vendor/web-vitals.iife.js':'vendor/web-vitals.iife.js','/static/launch-readiness.js':'launch-readiness.js','/static/launch-readiness.css':'launch-readiness.css','/static/experience.js':'experience.js','/static/experience.css':'experience.css','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup-detail.js':'topup-detail.js','/static/topup-detail.css':'topup-detail.css','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-uc-660.png':'assets/topup-uc-660.png','/static/assets/topup-uc-1800.png':'assets/topup-uc-1800.png','/static/assets/topup-uc-3850.png':'assets/topup-uc-3850.png','/static/assets/topup-uc-8100.png':'assets/topup-uc-8100.png','/static/assets/topup-uc-60.png':'assets/topup-uc-60.png','/static/assets/topup-uc-325.png':'assets/topup-uc-325.png','/static/assets/topup-weekly-deal-1.png':'assets/topup-weekly-deal-1.png','/static/assets/topup-weekly-deal-2.png':'assets/topup-weekly-deal-2.png','/static/assets/topup-weekly-mythic.png':'assets/topup-weekly-mythic.png','/static/assets/topup-elite-pass.png':'assets/topup-elite-pass.png','/static/assets/topup-pubg-banner.jpg':'assets/topup-pubg-banner.jpg','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.webp':'assets/market-banner-soldier.webp','/static/assets/market-banner-games.webp':'assets/market-banner-games.webp','/static/assets/market-banner-worlds.webp':'assets/market-banner-worlds.webp','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
+            f={'/static/offer-wizard.js':'offer-wizard.js','/static/offer-wizard.css':'offer-wizard.css','/static/seller-verification.js':'seller-verification.js','/static/seller-verification.css':'seller-verification.css','/static/purchase-reviews.js':'purchase-reviews.js','/static/assets/pubg-uid-guide.png':'assets/pubg-uid-guide.png','/static/select-menu.js':'select-menu.js','/static/monochrome-theme.css':'monochrome-theme.css','/static/assets/roboto-variable.ttf':'assets/roboto-variable.ttf','/static/assets/roboto-OFL.txt':'assets/roboto-OFL.txt','/push-worker.js':'push-worker.js','/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/qa-vitals.js':'qa-vitals.js','/static/vendor/web-vitals.iife.js':'vendor/web-vitals.iife.js','/static/launch-readiness.js':'launch-readiness.js','/static/launch-readiness.css':'launch-readiness.css','/static/experience.js':'experience.js','/static/experience.css':'experience.css','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup-detail.js':'topup-detail.js','/static/topup-detail.css':'topup-detail.css','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-uc-660.png':'assets/topup-uc-660.png','/static/assets/topup-uc-1800.png':'assets/topup-uc-1800.png','/static/assets/topup-uc-3850.png':'assets/topup-uc-3850.png','/static/assets/topup-uc-8100.png':'assets/topup-uc-8100.png','/static/assets/topup-uc-60.png':'assets/topup-uc-60.png','/static/assets/topup-uc-325.png':'assets/topup-uc-325.png','/static/assets/topup-weekly-deal-1.png':'assets/topup-weekly-deal-1.png','/static/assets/topup-weekly-deal-2.png':'assets/topup-weekly-deal-2.png','/static/assets/topup-weekly-mythic.png':'assets/topup-weekly-mythic.png','/static/assets/topup-elite-pass.png':'assets/topup-elite-pass.png','/static/assets/topup-pubg-banner.jpg':'assets/topup-pubg-banner.jpg','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.webp':'assets/market-banner-soldier.webp','/static/assets/market-banner-games.webp':'assets/market-banner-games.webp','/static/assets/market-banner-worlds.webp':'assets/market-banner-worlds.webp','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
             if not f: self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/webp' if f.endswith('.webp') else 'image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))
@@ -2459,6 +2468,8 @@ class Handler(BaseHTTPRequestHandler):
             game_name=clean_text(data.get('game_name') if data.get('game_name') is not None else data.get('game_id'),'O‘yin yoki platforma',2,80); cat=clean_text(data.get('category_id'),'Kategoriya',1,80)
             if not db.execute('SELECT 1 FROM categories WHERE id=? AND active=1',(cat,)).fetchone(): raise HttpError(400,'Kategoriya topilmadi.')
             title=clean_text(data.get('title'),'Sarlavha',5,120); desc=clean_text(data.get('description'),'Tavsif',20,5000); price=money(data.get('price_minor'))
+            currency=data.get('currency','UZS')
+            if currency not in ('UZS','MYR'): raise HttpError(400,'Listing currency must be UZS or MYR.')
             stock=data.get('stock',1)
             if isinstance(stock,bool) or not isinstance(stock,int) or stock<0 or stock>10000: raise HttpError(400,'Qoldiq miqdori noto‘g‘ri.')
             typ=db.execute('SELECT product_type FROM categories WHERE id=?',(cat,)).fetchone()['product_type']
@@ -2481,12 +2492,11 @@ class Handler(BaseHTTPRequestHandler):
             account_terms_at=now_iso() if typ=='account' else None
             risk_flags=listing_risk_flags(db,uid,game,typ,title,desc)
             if risk_flags: attributes['_risk_flags']=risk_flags
-            lid=ident(); db.execute('INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,platform,region,attributes_json,delivery_method,delivery_eta,requirements,stock,image_url,status,seller_account_terms_version,seller_account_terms_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                (lid,uid,game,cat,title,desc,typ,price,platform,region,json.dumps(attributes,ensure_ascii=False),data.get('delivery_method','manual'),delivery_eta,requirements,stock,image_url,'pending_review' if submit_for_review else 'draft',account_terms,account_terms_at))
+            lid=ident(); db.execute('INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,currency,platform,region,attributes_json,delivery_method,delivery_eta,requirements,stock,image_url,status,seller_account_terms_version,seller_account_terms_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                (lid,uid,game,cat,title,desc,typ,price,currency,platform,region,json.dumps(attributes,ensure_ascii=False),data.get('delivery_method','manual'),delivery_eta,requirements,stock,image_url,'pending_review' if submit_for_review else 'draft',account_terms,account_terms_at))
             db.execute('UPDATE listings SET delivery_minutes=? WHERE id=?',(marketplace_features.delivery_minutes(delivery_eta),lid))
             if submit_for_review:
-                admin=db.execute('SELECT user_id FROM admin_accounts LIMIT 1').fetchone()
-                if admin: notify(db,admin['user_id'],'moderation','Yangi e’lon','Tekshirish uchun yangi e’lon yuborildi.','/admin')
+                notify_listing_review(db,lid,title)
             return 201,listing_detail(db,lid,uid)
         m=re.fullmatch(r'/api/listings/([^/]+)/state',path)
         if m and method=='POST':
@@ -2500,7 +2510,9 @@ class Handler(BaseHTTPRequestHandler):
                     raise HttpError(400,'Akkaunt bo‘yicha yangilangan sotuvchi shartlarini tasdiqlang.')
             elif action=='archive' and l['status'] in ('draft','rejected','paused','approved_private'): target='archived'
             else: raise HttpError(409,'Ushbu holatda bu amalni bajarib bo‘lmaydi.')
-            db.execute('UPDATE listings SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(target,lid)); audit(db,uid,'listing_'+action,'listing',lid); return {'status':target}
+            db.execute('UPDATE listings SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',(target,lid)); audit(db,uid,'listing_'+action,'listing',lid)
+            if target=='pending_review': notify_listing_review(db,lid,l['title'])
+            return {'status':target}
         m=re.fullmatch(r'/api/listings/([^/]+)/submit',path)
         if m and method=='POST':
             require_verified(ctx); seller_ok(db,uid); lid=m.group(1); l=db.execute('SELECT * FROM listings WHERE id=? AND seller_id=?',(lid,uid)).fetchone()
@@ -2512,8 +2524,7 @@ class Handler(BaseHTTPRequestHandler):
                 attributes=json.loads(l['attributes_json'] or '{}')
                 validate_listing_attributes({key:value for key,value in attributes.items() if key in LISTING_PUBLIC_ATTRIBUTES},'digital',True)
             db.execute("UPDATE listings SET status='pending_review',moderation_note='',updated_at=CURRENT_TIMESTAMP WHERE id=?",(lid,))
-            for admin in db.execute('SELECT user_id FROM admin_accounts LIMIT 20').fetchall():
-                notify(db,admin['user_id'],'moderation','Yangi e’lon','Tekshirish uchun yangi e’lon yuborildi.','/admin')
+            notify_listing_review(db,lid,l['title'])
             return {'status':'pending_review'}
         m=re.fullmatch(r'/api/listings/([^/]+)',path)
         if m and method=='PATCH':
@@ -2558,8 +2569,7 @@ class Handler(BaseHTTPRequestHandler):
                 if next_status: assignments.extend(['status=?',"moderation_note=''"]); values.append(next_status)
                 assignments.append('updated_at=CURRENT_TIMESTAMP')
                 db.execute(f'UPDATE listings SET {", ".join(assignments)} WHERE id=?',(*values,lid)); audit(db,uid,'listing_edit','listing',lid,{'fields':sorted(fields),'status':next_status or l['status']})
-                if l['status'] in ('published','approved_private'):
-                    for admin in db.execute('SELECT user_id FROM admin_accounts').fetchall(): notify(db,admin['user_id'],'moderation','Tahrirlangan e’lon tekshiruvi',f'{l["title"]} o‘zgartirildi va vaqtincha yashirildi.','/admin')
+                if next_status: notify_listing_review(db,lid,fields.get('title',l['title']),edited=True)
             if 'delivery_eta' in fields: db.execute('UPDATE listings SET delivery_minutes=? WHERE id=?',(marketplace_features.delivery_minutes(fields['delivery_eta']),lid))
             return listing_detail(db,lid,uid)
         m=re.fullmatch(r'/api/favorites/([^/]+)',path)

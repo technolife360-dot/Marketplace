@@ -1,4 +1,5 @@
 import tempfile
+import time
 import unittest
 import json
 import base64
@@ -38,6 +39,10 @@ class MarketplaceFlows(unittest.TestCase):
             if value is None: os.environ.pop(key,None)
             else: os.environ[key]=value
         self.tmp.cleanup()
+    def enable_admin_mfa(self):
+        self.handler.headers={}
+        setup=self.route(self.admin,'POST','/api/security/mfa/setup',{'password':'unique-test-password'})
+        self.route(self.admin,'POST','/api/security/mfa/enable',{'otp':app.marketplace_operations.totp(setup['secret'],int(time.time())//30)})
     def ctx(self,uid): return {'db':self.db,'uid':uid,'user':app.user_view(self.db,uid),'csrf':'test-csrf'}
     def route(self,uid,method,path,data=None):
         result=self.handler.route(self.db,self.ctx(uid),method,path,{},data or {})
@@ -116,6 +121,7 @@ class MarketplaceFlows(unittest.TestCase):
             app.enforce_production_marketplace_gate(self.db)
         self.assertEqual(self.db.execute('SELECT status FROM listings WHERE id=?',(self.listing,)).fetchone()['status'],'paused')
     def test_production_prelaunch_allows_review_but_blocks_publication(self):
+        self.enable_admin_mfa()
         data={'game_name':'Dota 2','category_id':'items','title':'Prelaunch draft item',
               'description':'A private draft prepared before payment launch with complete delivery instructions and restrictions.',
               'platform':'PC','region':'Global','requirements':'Delivered through the protected order.',
@@ -144,6 +150,7 @@ class MarketplaceFlows(unittest.TestCase):
             self.assertEqual(edited['status'],'pending_review')
 
     def test_protected_internal_testing_publishes_approved_listings_and_uses_sandbox(self):
+        self.enable_admin_mfa()
         data={'game_name':'Dota 2','category_id':'items','title':'Protected test item',
               'description':'A reviewed item for the protected marketplace test, with clear product and delivery details.',
               'platform':'PC','region':'Global','requirements':'Delivery through the protected order page.',
@@ -213,18 +220,18 @@ class MarketplaceFlows(unittest.TestCase):
         with self.assertRaises(app.HttpError):
             self.route(self.seller,'POST','/api/listings',{
                 **base,'category_id':'items','attributes':{'code_kind':'Gift card'}})
-    def test_listing_images_are_limited_to_four_and_edits_keep_existing_images(self):
-        images=[f'https://images.example.com/listing-{index}.webp' for index in range(5)]
-        data={'game_name':'Example game','category_id':'items','title':'Four uploaded item photos',
-              'description':'A digital item with four photos and clear delivery details.',
+    def test_listing_images_are_limited_to_eight_and_edits_keep_existing_images(self):
+        images=[f'https://images.example.com/listing-{index}.webp' for index in range(9)]
+        data={'game_name':'Example game','category_id':'items','title':'Eight uploaded item photos',
+              'description':'A digital item with eight photos and clear delivery details.',
               'price_minor':20000,'stock':1}
         with self.assertRaises(app.HttpError) as error:
             self.route(self.seller,'POST','/api/listings',{**data,'images':images})
         self.assertEqual(error.exception.status,400)
-        listing=self.route(self.seller,'POST','/api/listings',{**data,'images':images[:4]})
-        self.assertEqual(listing['attributes']['images'],images[:4])
-        edited=self.route(self.seller,'PATCH',f"/api/listings/{listing['id']}",{'title':'Four item photos retained'})
-        self.assertEqual(edited['attributes']['images'],images[:4])
+        listing=self.route(self.seller,'POST','/api/listings',{**data,'images':images[:8]})
+        self.assertEqual(listing['attributes']['images'],images[:8])
+        edited=self.route(self.seller,'PATCH',f"/api/listings/{listing['id']}",{'title':'Eight item photos retained'})
+        self.assertEqual(edited['attributes']['images'],images[:8])
     def test_seller_cannot_replace_private_risk_flags_and_edits_recompute_them(self):
         with self.assertRaises(app.HttpError) as create_error:
             self.route(self.seller,'POST','/api/listings',{

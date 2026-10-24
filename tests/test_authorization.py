@@ -161,7 +161,8 @@ class AuthorizationBoundaries(unittest.TestCase):
                     status,result,_=client.request(method,path,data)
                     self.assertEqual(status,expected,result)
                 self.assertEqual(client.request('POST','/api/conversations/'+cid+'/photos',raw=b'invalid-image',content_type='image/png')[0],expected)
-                self.assertEqual(client.request('GET','/api/conversations/extra/'+cid)[0],401 if uid is None else 404)
+                # A malformed route is unknown for every role; it must never sign a file.
+                self.assertEqual(client.request('GET','/api/conversations/extra/'+cid)[0],404)
             sign.assert_not_called()
         self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM messages WHERE conversation_id=?',(cid,)).fetchone()['n'],1)
 
