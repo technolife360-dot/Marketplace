@@ -62,10 +62,11 @@ def entry(row):
 BASE = """FROM seller_profiles s JOIN users u ON u.id=s.user_id
     LEFT JOIN platform_config c ON c.key='didit_review:'||s.user_id
     LEFT JOIN platform_config p ON p.key='account_phone:'||s.user_id
-    LEFT JOIN platform_config v ON v.key='account_phone_verified:'||s.user_id"""
+    LEFT JOIN platform_config v ON v.key='account_phone_verified:'||s.user_id
+    LEFT JOIN platform_config av ON av.key='public_avatar:'||s.user_id"""
 FIELDS = """s.user_id,s.shop_name,s.bio,s.verification_status,s.selling_enabled,s.identity_status,
     s.identity_provider,s.identity_reference,s.identity_verified_at,s.identity_last_event_at,s.created_at,
-    u.email,u.display_name,u.country,u.email_verified,c.value review_json,COALESCE(p.value,'') AS phone,
+    u.email,u.display_name,COALESCE(av.value,'') avatar_url,u.country,u.email_verified,c.value review_json,COALESCE(p.value,'') AS phone,
     CASE WHEN p.value IS NOT NULL AND p.value=v.value THEN 1 ELSE 0 END AS phone_verified"""
 
 

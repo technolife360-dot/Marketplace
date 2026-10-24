@@ -117,11 +117,11 @@ def route(db, ctx, method, path, data, core):
             if type(rating) is not int or not 1 <= rating <= 5:
                 raise core['HttpError'](400, 'Choose a rating from 1 to 5.')
             body = core['clean_text'](data.get('body'), 'Test review', 5, 1500)
-            value = {'rating': rating, 'body': body, 'test_only': True, 'updated_at': core['now_iso']()}
+            value = {'rating': rating, 'body': body, 'test_only': True, 'public': data.get('public') is True and core['MODE']!='production', 'updated_at': core['now_iso']()}
             db.execute('INSERT INTO platform_config(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP', (key, json.dumps(value)))
             return value
         row = db.execute('SELECT value FROM platform_config WHERE key=?', (key,)).fetchone()
-        return json.loads(row['value']) if row else {}
+        return {**(json.loads(row['value']) if row else {}), 'public_preview_allowed': core['MODE']!='production'}
     if path == '/api/seller/test-wallet' and method == 'GET':
         core['require_user'](ctx)
         return wallet(db, uid)

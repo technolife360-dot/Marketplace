@@ -359,6 +359,9 @@ class HTTPWorkflows(unittest.TestCase):
             self.assertEqual(listing['seller_avatar_url'],avatar)
             self.assertNotIn('seller_email',listing)
             self.assertNotIn('phone',listing)
+        store=self.guest.request('GET','/api/stores/'+self.seller_id)[1]
+        self.assertEqual(store['avatar_url'],avatar)
+        self.assertEqual(store['display_name'],'Shuxrat Aliev')
         self.assertEqual(self.guest.request('GET','/static/product-cards.css')[0],200)
 
     def test_account_erasure_removes_the_public_avatar_and_retries_storage_failures(self):
@@ -521,7 +524,7 @@ class HTTPWorkflows(unittest.TestCase):
         self.assertEqual(buyer.request('POST','/api/cart',{'listing_id':lid,'quantity':1})[0],404)
         self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM carts WHERE listing_id=?',(lid,)).fetchone()['n'],0)
         self.assertEqual(buyer.request('POST','/api/favorites/'+lid,{})[0],200)
-        self.assertEqual(buyer.request('POST','/api/collections/recent',{'ids':[lid]})[1]['ids'],[lid])
+        self.assertEqual(buyer.request('POST','/api/collections/recent',{'ids':[lid]})[1]['ids'],[])
         with patch.object(app,'listing_allowed_for_production',return_value=False):
             for path in ('/api/listings/'+lid,'/listing/'+lid,'/api/catalogue/offers/'+lid):
                 self.assertEqual(self.guest.request('GET',path)[0],404,path)

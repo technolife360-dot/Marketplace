@@ -64,7 +64,7 @@ Failure releases the reservation; success consumes it once. Request keys,
 seller locks, exact ownership and terminal-state checks prevent double spending
 or changing another seller's payout. These routes never call a real bank.
 
-Test order reviews are private records on the order. They cannot enter public
+Test order reviews are private by default. In non-production previews, opted-in test reviews can appear on Home with a Test review label; they cannot enter public
 verified-purchase ratings or sales counts.
 
 ## Verification
@@ -85,9 +85,10 @@ at least five non-whitespace characters before the buyer leaves the order flow.
 The server's buyer-scoped `/api/orders/review-required` endpoint restores the
 required step after reload; navigation attempts preserve the typed form. Saving
 invalid or missing fields is disabled in the UI and rejected by the server.
-A successful save replaces the order screen with Home. Test feedback remains
-private and does not inflate public ratings. Browser/tab closing is not blocked.
+A successful save replaces the order screen with Home. Test feedback is private by default; explicit buyer opt-in can display it on Home only in non-production previews with a Test review label. It does not inflate public ratings. Browser/tab closing is not blocked.
 
 Public catalogue, saved cards, comparison lists and related offers omit listings
 with no available stock. Sold listings and their order snapshots remain readable
 for purchase history; listings with remaining stock stay available.
+
+Home Buyer reviews loads asynchronously below the catalogue, including for guests. Real listing/top-up reviews share a verified summary; test feedback is excluded from that summary. Historical private test reviews remain private. Production always excludes test feedback, regardless of opt-in. Buyers can withdraw preview test display by unchecking the opt-in and saving again.

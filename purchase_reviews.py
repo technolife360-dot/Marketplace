@@ -1,5 +1,6 @@
 """Purchase-only feedback. Public scores exclude sandbox/unpaid purchases."""
 import re
+import json
 
 UNHANDLED = object()
 TABLES = ('topup_reviews', 'purchase_review_reports', 'purchase_review_helpful')
@@ -106,6 +107,35 @@ def feedback(db,kind,rid):
 
 def route(db,ctx,method,path,qs,data,core):
     uid=ctx['uid']; error=core['HttpError']; text=core['clean_text']
+    if path=='/api/review-hub/home' and method=='GET':
+        sources=[
+            (f"FROM reviews r JOIN order_items i ON i.id=r.order_item_id JOIN orders o ON o.id=i.order_id JOIN users u ON u.id=r.reviewer_id LEFT JOIN platform_config av ON av.key='public_avatar:'||u.id JOIN listings l ON l.id=i.listing_id JOIN games g ON g.id=l.game_id WHERE r.hidden=0 AND {MARKET_REAL}", 'i.title', "'/listing/'||i.listing_id", 'g.slug'),
+            (f"FROM topup_reviews r JOIN topup_orders o ON o.id=r.order_id JOIN topup_packages p ON p.id=o.package_id JOIN users u ON u.id=r.reviewer_id LEFT JOIN platform_config av ON av.key='public_avatar:'||u.id WHERE r.hidden=0 AND {TOPUP_REAL}", 'p.game_name', "'/top-up/'||p.game_slug", 'p.game_slug')]
+        items=[];count=0;total=0
+        for joins,label,link,game in sources:
+            score=db.execute(f'SELECT COUNT(*) n,COALESCE(SUM(r.rating),0) total {joins}').fetchone()
+            count+=score['n'];total+=score['total']
+            items.extend({**dict(r),'test_only':False} for r in db.execute(f'SELECT r.rating,r.body,r.created_at,u.display_name reviewer_name,av.value avatar_url,{label} product_title,{link} product_url,{game} game_slug {joins} ORDER BY r.created_at DESC,r.id DESC LIMIT 6'))
+        if core['MODE']!='production':
+            # Older test feedback stays private. A buyer must explicitly opt in.
+            public_json="COALESCE(c.value::jsonb->>'public','false')='true'" if core['DATABASE_URL'] else "json_extract(c.value,'$.public')=1"
+            for row in db.execute(f"""SELECT c.value,o.created_at,u.display_name reviewer_name,av.value avatar_url,
+                (SELECT i.title FROM order_items i WHERE i.order_id=o.id ORDER BY i.id LIMIT 1) product_title,
+                (SELECT g.slug FROM order_items i JOIN listings l ON l.id=i.listing_id JOIN games g ON g.id=l.game_id WHERE i.order_id=o.id ORDER BY i.id LIMIT 1) game_slug
+                FROM orders o JOIN payments p ON p.order_id=o.id JOIN users u ON u.id=o.buyer_id LEFT JOIN platform_config av ON av.key='public_avatar:'||u.id
+                JOIN platform_config c ON c.key='stripe_test:review:'||o.id
+                WHERE o.status='completed' AND o.payment_mode='stripe_test' AND p.provider='stripe_test'
+                AND p.status='succeeded' AND {public_json} ORDER BY c.updated_at DESC,o.id DESC LIMIT 6"""):
+                review=json.loads(row['value'])
+                if review.get('public') is not True:continue
+                items.append({'rating':review['rating'],'body':review['body'],'created_at':review.get('updated_at') or row['created_at'],'reviewer_name':row['reviewer_name'],'avatar_url':row['avatar_url'],'product_title':row['product_title'],'product_url':None,'game_slug':row['game_slug'],'test_only':True})
+        for item in items:
+            game=core['seller_catalog'].find(item.pop('game_slug', ''))
+            item['game_name']=game['name'] if game else ''
+            item['game_image_url']=core['seller_catalog'].image_url(game['id']) if game else ''
+            name=(item['reviewer_name'] or '').strip()
+            item['reviewer_name']=name[0]+'***'+(name[-1] if len(name)>1 else '') if name else '***'
+        return {'count':count,'rating':round(total/count,1) if count else None,'items':sorted(items,key=lambda r:r['created_at'],reverse=True)[:6]}
     def validate():
         core['require_verified'](ctx)
         core['check_rate'](db,'purchase_review',uid,30,3600)
@@ -131,17 +161,17 @@ def route(db,ctx,method,path,qs,data,core):
         if kind=='listing':
             listing=core['listing_detail'](db,target,uid)
             if not listing or listing['status'] not in core['PUBLIC_LISTING_STATES'] or not core['listing_allowed_for_production'](db,listing['game_id'],listing['product_type']):raise error(404,'E’lon topilmadi.')
-            joins='FROM reviews r JOIN order_items i ON i.id=r.order_item_id JOIN orders o ON o.id=i.order_id JOIN users u ON u.id=r.reviewer_id LEFT JOIN review_replies rr ON rr.review_id=r.id'
+            joins="FROM reviews r JOIN order_items i ON i.id=r.order_item_id JOIN orders o ON o.id=i.order_id JOIN users u ON u.id=r.reviewer_id LEFT JOIN platform_config av ON av.key='public_avatar:'||u.id LEFT JOIN review_replies rr ON rr.review_id=r.id"
             where=f'i.listing_id=? AND r.hidden=0 AND {MARKET_REAL}'
-            fields='i.title package_name,r.language,u.country,r.id,r.rating,r.body,r.created_at,r.updated_at,u.display_name reviewer_name,r.reviewer_id,rr.body reply,rr.updated_at replied_at,r.seller_id'
+            fields='i.title package_name,r.language,u.country,r.id,r.rating,r.body,r.created_at,r.updated_at,u.display_name reviewer_name,av.value avatar_url,r.reviewer_id,rr.body reply,rr.updated_at replied_at,r.seller_id'
             eligible=[dict(r) for r in db.execute("""SELECT i.id purchase_id,o.reference,l.title label,r.id review_id,r.rating,r.body,r.language,COALESCE(r.hidden,0) hidden
                 FROM order_items i JOIN orders o ON o.id=i.order_id JOIN listings l ON l.id=i.listing_id
                 LEFT JOIN reviews r ON r.order_item_id=i.id WHERE o.buyer_id=? AND o.status='completed' AND i.listing_id=? ORDER BY o.created_at DESC LIMIT 50""",(uid or '',target))]
         else:
             if not db.execute('SELECT 1 FROM topup_packages WHERE game_slug=? AND enabled=1',(target,)).fetchone():raise error(404,'O‘yin topilmadi.')
-            joins='FROM topup_reviews r JOIN topup_orders o ON o.id=r.order_id JOIN topup_packages p ON p.id=o.package_id JOIN users u ON u.id=r.reviewer_id'
+            joins="FROM topup_reviews r JOIN topup_orders o ON o.id=r.order_id JOIN topup_packages p ON p.id=o.package_id JOIN users u ON u.id=r.reviewer_id LEFT JOIN platform_config av ON av.key='public_avatar:'||u.id"
             where=f'p.game_slug=? AND r.hidden=0 AND {TOPUP_REAL}'
-            fields="p.game_slug,p.url_slug,r.language,u.country,r.id,r.rating,r.body,r.created_at,r.updated_at,u.display_name reviewer_name,r.reviewer_id,r.reply,r.replied_at,p.game_name package_name,p.amount,p.currency"
+            fields="p.game_slug,p.url_slug,r.language,u.country,r.id,r.rating,r.body,r.created_at,r.updated_at,u.display_name reviewer_name,av.value avatar_url,r.reviewer_id,r.reply,r.replied_at,p.game_name package_name,p.amount,p.currency"
             eligible=[dict(r) for r in db.execute(f'''SELECT o.id purchase_id,o.reference,p.game_name label,p.amount,p.currency,r.id review_id,r.rating,r.body,r.language,COALESCE(r.hidden,0) hidden
                 FROM topup_orders o JOIN topup_packages p ON p.id=o.package_id LEFT JOIN topup_reviews r ON r.order_id=o.id
                 WHERE o.buyer_id=? AND p.game_slug=? AND {TOPUP_REAL} ORDER BY o.created_at DESC LIMIT 50''',(uid or '',target))]

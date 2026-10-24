@@ -42,6 +42,48 @@ class PurchaseReviewFlows(unittest.TestCase):
         for rating in (True,0,6,'5',2.5):
             with self.assertRaises(app.HttpError):self.route(self.buyer,'POST','/api/top-up/reviews',{'order_id':oid,'rating':rating,'body':'Valid review text.'})
         with self.assertRaises(app.HttpError):self.route(self.buyer,'POST','/api/top-up/reviews',{'order_id':oid,'rating':5,'body':'Hi'})
+
+    def test_home_reviews_are_public_masked_and_test_feedback_requires_opt_in(self):
+        import json
+        avatar='https://images.example.com/buyer.webp'
+        self.db.execute('INSERT INTO platform_config(key,value) VALUES(?,?)',('public_avatar:'+self.buyer,avatar))
+        _,iid=self.market_order()
+        self.route(self.buyer,'POST','/api/reviews',{'item_id':iid,'rating':4,'body':'A completed buyer purchase.'})
+        oid,_=self.market_order(mode='stripe_test')
+        self.db.execute("INSERT INTO payments(id,order_id,provider,amount_minor,currency,status,idempotency_key) VALUES(?,?,'stripe_test',100,'UZS','succeeded',?)",(app.ident(),oid,app.ident()))
+        key='stripe_test:review:'+oid
+        self.db.execute('INSERT INTO platform_config(key,value) VALUES(?,?)',(key,json.dumps({'rating':5,'body':'Private test feedback.','test_only':True})))
+        feed=self.route(None,'GET','/api/review-hub/home')
+        self.assertEqual((feed['count'],feed['rating'],len(feed['items'])),(1,4.0,1))
+        self.assertEqual(feed['items'][0]['reviewer_name'],'T***r')
+        self.assertEqual(feed['items'][0]['avatar_url'],avatar)
+        self.assertEqual(feed['items'][0]['game_name'],'Valorant')
+        self.assertEqual(feed['items'][0]['game_image_url'],app.seller_catalog.image_url('valorant'))
+        self.assertNotIn('buyer@test.invalid',json.dumps(feed))
+        self.assertNotIn('order_id',json.dumps(feed))
+        self.route(self.buyer,'POST','/api/orders/'+oid+'/test-review',{'rating':1,'body':'Public test feedback.','public':True})
+        feed=self.route(None,'GET','/api/review-hub/home')
+        self.assertEqual((feed['count'],feed['rating']),(1,4.0))
+        self.assertEqual(len(feed['items']),2)
+        self.assertTrue(next(r for r in feed['items'] if r['body']=='Public test feedback.')['test_only'])
+        from unittest.mock import patch
+        with patch.object(app,'MODE','production'):
+            production=self.route(None,'GET','/api/review-hub/home')
+            self.assertEqual((production['count'],production['rating'],len(production['items'])),(1,4.0,1))
+            self.assertFalse(any(r['test_only'] for r in production['items']))
+            self.assertFalse(self.route(self.buyer,'GET','/api/orders/'+oid+'/test-review')['public_preview_allowed'])
+            saved=self.route(self.buyer,'POST','/api/orders/'+oid+'/test-review',{'rating':5,'body':'Cannot publish test feedback on production.','public':True})
+            self.assertFalse(saved['public'])
+        self.route(self.buyer,'POST','/api/orders/'+oid+'/test-review',{'rating':1,'body':'Private again.','public':False})
+        self.assertEqual(len(self.route(None,'GET','/api/review-hub/home')['items']),1)
+
+    def test_home_reviews_show_no_invented_rating_and_exclude_hidden_feedback(self):
+        feed=self.route(None,'GET','/api/review-hub/home')
+        self.assertEqual(feed,{'count':0,'rating':None,'items':[]})
+        _,iid=self.market_order()
+        review=self.route(self.buyer,'POST','/api/reviews',{'item_id':iid,'rating':5,'body':'Hidden by moderation.'})
+        self.db.execute('UPDATE reviews SET hidden=1 WHERE id=?',(review['id'],))
+        self.assertEqual(self.route(None,'GET','/api/review-hub/home')['items'],[])
     def test_marketplace_edit_duplicate_and_product_scores_exclude_sandbox(self):
         oid,iid=self.market_order();r=self.route(self.buyer,'POST','/api/reviews',{'item_id':iid,'rating':4,'body':'Matches the description.'})
         with self.assertRaises(app.HttpError):self.route(self.other,'PATCH','/api/reviews/'+r['id'],{'rating':1,'body':'Unauthorized edit.'})

@@ -5,6 +5,44 @@ const vm = require('node:vm');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '../static/app.js'), 'utf8');
 
+test('Home buyer reviews sits between the catalogue and getting started',()=>{
+ const catalogue=source.indexOf('<section class="home-catalog"');
+ const reviews=source.indexOf('<section data-home-reviews>');
+ const guide=source.indexOf('<section class="home-guide"');
+ assert.ok(catalogue>=0&&reviews>catalogue&&guide>reviews);
+});
+
+test('guest Home review cards escape buyer text and clearly label test feedback',async()=>{
+ const rail={scrollWidth:300,clientWidth:300,scrollLeft:0,addEventListener(){}};
+ const host={isConnected:true,innerHTML:'',setAttribute(){},querySelector:selector=>selector==='.home-review-rail'?rail:{},querySelectorAll:()=>[]};
+ const context={window:{},ResizeObserver:class{observe(){}},api:async path=>{assert.equal(path,'/review-hub/home');return {count:0,rating:null,items:[{reviewer_name:'A***z',body:'<script>unsafe()</script>',rating:1,created_at:'2026-10-25T00:00:00Z',product_title:'<img src=x>',product_url:null,game_name:'PUBG Mobile',game_image_url:'https://images.gamestorehub.com/pubg.webp',test_only:true}]}},adminText:(_u,_r,en)=>en,esc:v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;'),icon:()=>'',parseServerDate:v=>new Date(v),localeTag:()=> 'en-US'};
+ vm.createContext(context);vm.runInContext(source.slice(source.indexOf('function marketAvatarMarkup('),source.indexOf('\nfunction updateProfileAvatar(')),context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/purchase-reviews.js'),'utf8'),context);
+ await context.window.ReviewHub.home(host);
+ assert.match(host.innerHTML,/Test review/);assert.match(host.innerHTML,/alt="PUBG Mobile"/);assert.match(host.innerHTML,/pubg.webp/);
+ assert.match(host.innerHTML,/&lt;script&gt;/);assert.doesNotMatch(host.innerHTML,/<script>|<img src=x>|verified reviews/);
+});
+
+test('header and profile menu render the uploaded photo with the shared avatar renderer',()=>{
+ const button={classList:{toggle(){}},setAttribute(){}};
+ const context={me:{id:'current-user',display_name:'Test Buyer',email:'buyer@example.test',avatar_url:'https://images.example.com/current.webp',created_at:'2026-10-01',email_verified:true},$:selector=>selector==='#account-button'?button:null,adminText:(_u,_r,en)=>en,esc:v=>String(v??''),parseServerDate:v=>new Date(v),localeTag:()=> 'en-US',icon:()=>''};
+ vm.createContext(context);
+ vm.runInContext(source.slice(source.indexOf('function marketAvatarMarkup('),source.indexOf('\nfunction updateProfileAvatar(')),context);
+ vm.runInContext(source.slice(source.indexOf('function syncProfileTrigger('),source.indexOf('async function refreshProfileBonusBalance(')),context);
+ context.syncProfileTrigger();assert.match(button.innerHTML,/src="https:\/\/images.example.com\/current.webp"/);
+ assert.match(context.profileMenuMarkup(),/class="profile-avatar user-avatar"[^>]*>[\s\S]*?src="https:\/\/images.example.com\/current.webp"/);
+ context.me.avatar_url='';context.syncProfileTrigger();assert.doesNotMatch(button.innerHTML,/<img/);assert.match(button.innerHTML,/>TB<\/span>/);
+});
+
+test('a new avatar refreshes only the current owner and updates the header immediately',()=>{
+ const own={className:'market-seller-avatar user-avatar',dataset:{avatarOwner:'current-user'},outerHTML:'old'},other={className:'market-seller-avatar user-avatar',dataset:{avatarOwner:'another-user'},outerHTML:'unchanged'};
+ let refreshed=0;
+ const context={me:{id:'current-user',display_name:'Test Buyer'},document:{querySelectorAll:()=>[own,other]},syncProfileTrigger(){refreshed++},esc:v=>String(v??'')};
+ vm.createContext(context);vm.runInContext(source.slice(source.indexOf('function marketAvatarMarkup('),source.indexOf('\nfunction marketCardFacts(')),context);
+ context.updateProfileAvatar('https://images.example.com/new.webp');
+ assert.equal(context.me.avatar_url,'https://images.example.com/new.webp');assert.equal(refreshed,1);
+ assert.match(own.outerHTML,/new.webp/);assert.equal(other.outerHTML,'unchanged');
+});
+
 test('admin navigation uses the server role for every administrator email', () => {
   const definition = source.match(/function syncAdminLink\(\)\{[^\n]*/)[0];
   for (const [user, hidden] of [
@@ -297,7 +335,7 @@ test('home paints banner and search before slow catalogue responses; abandoned r
  for(const abandoned of [false,true]){
   const pending=[];const slot={innerHTML:'',setAttribute(){}};
   const root={isConnected:true},category={insertAdjacentHTML(){}};
-  const context={app:{innerHTML:'',classList:{add(){}}},document:{body:{classList:{add(){}}}},
+  const context={window:{},app:{innerHTML:'',classList:{add(){}}},document:{body:{classList:{add(){}}}},
    bootstrapSessionReady:null,URLSearchParams,Promise,marketGameLinks:[],
    api:()=>new Promise(resolve=>pending.push(resolve)),adminText:(uz,ru,en)=>en,
    syncRouteBack(){},marketSidebarMarkup:()=>'<aside></aside>',esc:String,icon:()=>'',

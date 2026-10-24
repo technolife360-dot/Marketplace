@@ -85,7 +85,7 @@ def alert_publication(db, lid, core):
 
 
 def profile(db, sid, uid, core):
-    row=db.execute("SELECT s.user_id id,s.shop_name,s.bio,s.created_at,s.verification_status,CASE WHEN s.identity_provider='didit' AND s.identity_status='verified' THEN 1 ELSE 0 END identity_verified FROM seller_profiles s JOIN users u ON u.id=s.user_id WHERE s.user_id=? AND u.suspended=0",(sid,)).fetchone()
+    row=db.execute("SELECT s.user_id id,s.shop_name,u.display_name,COALESCE(av.value,'') avatar_url,s.bio,s.created_at,s.verification_status,CASE WHEN s.identity_provider='didit' AND s.identity_status='verified' THEN 1 ELSE 0 END identity_verified FROM seller_profiles s JOIN users u ON u.id=s.user_id LEFT JOIN platform_config av ON av.key='public_avatar:'||u.id WHERE s.user_id=? AND u.suspended=0",(sid,)).fetchone()
     if not row: raise core['HttpError'](404,'Do‘kon topilmadi.')
     out=dict(row)
     stats=db.execute('SELECT COUNT(*) review_count,AVG(rating) rating,COALESCE(SUM(CASE WHEN rating>=4 THEN 1 ELSE 0 END),0) positive FROM visible_reviews WHERE seller_id=?',(sid,)).fetchone()
