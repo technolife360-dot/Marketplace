@@ -118,6 +118,23 @@ class HTTPWorkflows(unittest.TestCase):
         self.assertIn('product type',result['error'])
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM listings').fetchone()[0],before)
 
+    def test_topups_reference_migration_restores_missing_category_and_accepts_offer(self):
+        self.db.execute("DELETE FROM categories WHERE id='top-ups'")
+        migration=(Path(app.ROOT)/'supabase/migrations/20261024000000_seller_topups_category.sql').read_text().replace('public.categories','categories')
+        self.db.executescript(migration)
+        self.db.executescript(migration)
+        status,categories,_=self.guest.request('GET','/api/categories')
+        self.assertEqual(status,200)
+        self.assertEqual(len([c for c in categories if c['slug']=='top-ups']),1)
+        data={**self.offer_data(),'category_id':'top-ups','title':'PUBG Mobile 325 UC top-up',
+              'attributes':{'amount':'325'}}
+        status,offer,_=self.seller.request('POST','/api/listings',data)
+        self.assertEqual(status,201,offer)
+        self.assertEqual((offer['category_id'],offer['product_type'],offer['status']),('top-ups','currency','pending_review'))
+        self.db.execute("UPDATE categories SET active=0 WHERE id='top-ups'")
+        self.db.executescript(migration)
+        self.assertEqual(self.db.execute("SELECT active FROM categories WHERE id='top-ups'").fetchone()[0],0)
+
     def test_new_offer_saves_myr_price_eight_photos_and_account_details(self):
         data = self.offer_data()
         status, result, _ = self.seller.request('POST','/api/listings',data)
