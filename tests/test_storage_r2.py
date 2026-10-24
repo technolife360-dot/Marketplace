@@ -16,6 +16,23 @@ R2_ENV = {
 
 
 class R2StorageTests(unittest.TestCase):
+    def test_catalogue_art_is_immutable_and_separate_from_listing_uploads(self):
+        client=MagicMock();body=b'RIFF'+b'\x00'*4+b'WEBP'+b'example-image'
+        with patch.dict(os.environ,R2_ENV),patch.object(storage_r2,'_client',return_value=client):
+            url=storage_r2.put_catalog_art('pubg-mobile',body)
+            self.assertTrue(url.startswith('https://assets.gamestorehub.com/admin-images/catalogue-icons/v1/pubg-mobile-'))
+            self.assertFalse(storage_r2.is_listing_url(url))
+        call=client.put_object.call_args.kwargs
+        self.assertEqual(call['CacheControl'],'public, max-age=31536000, immutable')
+        self.assertEqual(call['ContentType'],'image/webp')
+        self.assertEqual(call['Bucket'],R2_ENV['R2_LISTING_BUCKET'])
+
+    def test_catalogue_art_rejects_unsafe_paths_and_large_or_non_webp_data(self):
+        with patch.object(storage_r2,'_client') as client:
+            for slug,body in [('../private',b'RIFFxxxxWEBPimage'),('game',b'png'),('game',b'RIFFxxxxWEBP'+b'x'*24576)]:
+                with self.assertRaises(ValueError):storage_r2.put_catalog_art(slug,body)
+            client.assert_not_called()
+
     def test_public_photo_deletion_is_restricted_to_application_object_urls(self):
         key='visitor-images/'+'a'*20+'/'+'b'*40+'.webp'
         client=MagicMock()

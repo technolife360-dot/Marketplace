@@ -33,6 +33,7 @@ import oauth_service
 import seagm_supplier
 import storage_r2
 import public_assets
+import seller_catalog
 from asia_markets import ASIA_COUNTRIES, ASIA_COUNTRY_CURRENCIES, ASIA_CURRENCIES
 
 SUPPORTED_LANGUAGES = frozenset({'en', 'uz', 'ru'})
@@ -949,6 +950,10 @@ def resolve_game_id(db, value):
     name=clean_text(value,'O‘yin yoki platforma',2,80)
     existing=db.execute('SELECT id FROM games WHERE lower(name)=lower(?) OR lower(id)=lower(?) ORDER BY active DESC,id LIMIT 1',(name,name)).fetchone()
     if existing: return existing['id']
+    choice=seller_catalog.find(name)
+    if choice:
+        db.execute('INSERT OR IGNORE INTO games(id,slug,name,active) VALUES(?,?,?,1)',(choice['id'],choice['id'],choice['name']))
+        return choice['id']
     slug='custom-'+hashlib.sha256(name.casefold().encode('utf-8')).hexdigest()[:24]
     db.execute('INSERT OR IGNORE INTO games(id,slug,name,active) VALUES(?,?,?,0)',(slug,slug,name))
     row=db.execute('SELECT id FROM games WHERE slug=?',(slug,)).fetchone()
@@ -1890,6 +1895,7 @@ class Handler(BaseHTTPRequestHandler):
                 args=[]
             rows=db.execute(f"SELECT DISTINCT g.id,g.slug,g.name FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id JOIN seller_profiles s ON s.user_id=l.seller_id WHERE {' AND '.join(where)} ORDER BY g.name",tuple(args)).fetchall()
             return [dict(row) for row in rows]
+        if path=='/api/seller/catalog' and method=='GET': return seller_catalog.public_games()
         if path=='/api/games' and method=='GET': return [dict(x) for x in db.execute('SELECT id,slug,name FROM games WHERE active=1 ORDER BY name')]
         if path=='/api/categories' and method=='GET': return [dict(x) for x in db.execute('SELECT id,slug,name,product_type FROM categories WHERE active=1 ORDER BY name')]
         if path=='/api/top-up/catalog' and method=='GET':
@@ -2499,6 +2505,7 @@ class Handler(BaseHTTPRequestHandler):
             stock=data.get('stock',1)
             if isinstance(stock,bool) or not isinstance(stock,int) or stock<0 or stock>10000: raise HttpError(400,'Qoldiq miqdori noto‘g‘ri.')
             typ=db.execute('SELECT product_type FROM categories WHERE id=?',(cat,)).fetchone()['product_type']
+            seller_catalog.validate_selection(db,game_name,cat,HttpError)
             if typ=='account' and data.get('accept_account_terms') is not True:
                 raise HttpError(400,'Akkaunt e’lonidan oldin egalik, noshir qoidalari va taqiqlangan holatlar bo‘yicha sotuvchi tasdig‘i kerak.')
             attributes=validate_listing_attributes(data.get('attributes',{}),typ,submit_for_review)
@@ -2531,6 +2538,7 @@ class Handler(BaseHTTPRequestHandler):
             action=data.get('action')
             if action=='pause' and l['status']=='published': target='paused'
             elif action=='reopen' and l['status']=='paused':
+                seller_catalog.validate_selection(db,l['game_id'],l['category_id'],HttpError)
                 target='pending_review'
                 if l['product_type']=='account' and l['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION:
                     raise HttpError(400,'Akkaunt bo‘yicha yangilangan sotuvchi shartlarini tasdiqlang.')
@@ -2544,6 +2552,7 @@ class Handler(BaseHTTPRequestHandler):
             require_verified(ctx); seller_ok(db,uid); lid=m.group(1); l=db.execute('SELECT * FROM listings WHERE id=? AND seller_id=?',(lid,uid)).fetchone()
             if not l: raise HttpError(404,'E’lon topilmadi.')
             if l['status'] not in ('draft','rejected','paused'): raise HttpError(409,'Bu e’lon hozir moderatsiyaga yuborilmaydi.')
+            seller_catalog.validate_selection(db,l['game_id'],l['category_id'],HttpError)
             if l['product_type']=='account' and l['seller_account_terms_version']!=ACCOUNT_SELLER_TERMS_VERSION:
                 raise HttpError(400,'Akkaunt e’lonini yuborishdan oldin sotuvchi shartlarini tasdiqlash kerak.')
             if l['product_type']=='digital':
@@ -2579,7 +2588,9 @@ class Handler(BaseHTTPRequestHandler):
                 images=listing_image_urls(fields.pop('images')); attrs['images']=images; fields['image_url']=images[0] if images else ''
             if 'linked_accounts' in fields: attrs['linked_accounts']=linked_account_providers(fields.pop('linked_accounts'))
             if 'images' in data or 'image_url' in data: require_listing_images_on_r2(attrs.get('images',[]),previous_images)
-            if 'game_name' in fields: fields['game_id']=resolve_game_id(db,fields.pop('game_name'))
+            if 'game_name' in fields:
+                seller_catalog.validate_selection(db,fields['game_name'],l['category_id'],HttpError)
+                fields['game_id']=resolve_game_id(db,fields.pop('game_name'))
             game_row=db.execute('SELECT slug FROM games WHERE id=?',(fields.get('game_id',l['game_id']),)).fetchone()
             catalogue_experience.validate_game(attrs,game_row['slug'] if game_row else '',l['product_type'],globals())
             risk_flags=listing_risk_flags(db,uid,fields.get('game_id',l['game_id']),l['product_type'],fields.get('title',l['title']),fields.get('description',l['description']),lid)

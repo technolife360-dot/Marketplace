@@ -127,3 +127,22 @@ def put_listing(key, body, *, audience='visitor'):
     _client().put_object(Bucket=bucket, Key=key, Body=body, ContentType='image/webp',
                          CacheControl='public, max-age=31536000, immutable')
     return f'{public_base}/{quote(key, safe="/")}'
+
+
+def put_catalog_art(slug, body):
+    """Maintenance-only small public artwork, isolated from visitor uploads.
+
+    The image importer validates/re-encodes raster inputs before calling this.
+    Content-addressed keys allow immutable caching without overwriting artwork.
+    """
+    import hashlib
+    if not isinstance(slug,str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,98}[a-z0-9]',slug):
+        raise ValueError('Invalid catalogue identity')
+    if not isinstance(body,bytes) or not 12<len(body)<=24*1024 or body[:4]!=b'RIFF' or body[8:12]!=b'WEBP':
+        raise ValueError('Invalid catalogue WebP thumbnail')
+    digest=hashlib.sha256(body).hexdigest()[:20]
+    key=f'admin-images/catalogue-icons/v1/{slug}-{digest}.webp'
+    _,_,_,bucket,_,public_base=_settings()
+    _client().put_object(Bucket=bucket,Key=key,Body=body,ContentType='image/webp',
+                         CacheControl='public, max-age=31536000, immutable')
+    return f'{public_base}/{key}'

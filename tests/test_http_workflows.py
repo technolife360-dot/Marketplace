@@ -102,6 +102,22 @@ class HTTPWorkflows(unittest.TestCase):
                 'attributes':{'account_level':'65','tier':'Ace','original_email_included':'yes'},
                 'images':[f'https://images.example.com/photo-{i}.webp' for i in range(8)],'submit_for_review':True}
 
+    def test_seller_catalogue_is_available_without_bulk_seeding_games(self):
+        before=self.db.execute('SELECT COUNT(*) FROM games').fetchone()[0]
+        status,result,_=self.guest.request('GET','/api/seller/catalog')
+        self.assertEqual(status,200,result)
+        self.assertEqual(len(result),700)
+        self.assertIn('accounts',next(game for game in result if game['id']=='pubg-mobile')['supported_categories'])
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM games').fetchone()[0],before)
+
+    def test_listing_api_rejects_known_brand_in_wrong_category(self):
+        data=self.offer_data();data['game_name']='Apple'
+        before=self.db.execute('SELECT COUNT(*) FROM listings').fetchone()[0]
+        status,result,_=self.seller.request('POST','/api/listings',data)
+        self.assertEqual(status,400,result)
+        self.assertIn('product type',result['error'])
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM listings').fetchone()[0],before)
+
     def test_new_offer_saves_myr_price_eight_photos_and_account_details(self):
         data = self.offer_data()
         status, result, _ = self.seller.request('POST','/api/listings',data)

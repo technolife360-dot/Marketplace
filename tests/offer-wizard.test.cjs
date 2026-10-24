@@ -35,6 +35,27 @@ function resultContext(api){
  vm.createContext(ctx);vm.runInContext(source,ctx);return {ctx,button,error};
 }
 const submitted={id:'real-offer-id',status:'pending_review',title:'PUBG Mobile account',currency:'MYR',price_minor:12990,game_name:'PUBG Mobile'};
+test('catalogue search combines category eligibility with name, alias and punctuation matching',()=>{
+ const {ctx}=resultContext();const wizard=ctx.window.OfferWizard;
+ const games=[{id:'counter-strike-2',name:'Counter-Strike 2',aliases:['CS2','CSGO'],supported_categories:['accounts','items']},{id:'apple',name:'Apple',aliases:['iTunes'],supported_categories:['codes']},{id:'old-school-runescape',name:'Old School RuneScape',aliases:['OSRS'],supported_categories:['accounts','currency']}];
+ assert.equal(wizard.filterGames(games,'accounts','csgo')[0].id,'counter-strike-2');
+ assert.equal(wizard.filterGames(games,'items','Counter strike')[0].id,'counter-strike-2');
+ assert.equal(wizard.filterGames(games,'accounts','itunes').length,0);
+ assert.equal(wizard.filterGames(games,'codes','itunes')[0].id,'apple');
+ assert.equal(wizard.findGame(games,'OSRS').id,'old-school-runescape');
+ assert.equal(wizard.supportsCategory(wizard.findGame(games,'itunes'),'accounts'),false);
+ assert.equal(wizard.filterGames(games,'accounts','does not exist').length,0);
+});
+test('game artwork reserves its layout and waits for visibility before any image request',()=>{
+ const {ctx}=resultContext();
+ const html=ctx.window.OfferWizard.gameMark({name:'Example game',image_url:'https://images.gamestorehub.com/example.webp'});
+ assert.ok(html.includes('data-ow-src="https://images.gamestorehub.com/example.webp"'));
+ assert.ok(!html.includes(' src='));
+ assert.ok(html.includes('width="48" height="48"'));
+ assert.ok(html.includes('decoding="async"'));
+ assert.ok(html.includes('loading="lazy"'));
+ assert.ok(html.includes('EG'));
+});
 test('submission result distinguishes a queued offer from publication and uses the listings dashboard',()=>{
  const {ctx}=resultContext();
  for(const status of ['pending_review','approved_private','published','rejected']){

@@ -66,7 +66,16 @@ body #app .offer-wizard .ow-rail nav button b{color:inherit!important}
 body #app .offer-wizard .ow-rail nav button:not(:last-child):after{background:#42454d!important}
 body #app .offer-wizard .ow-divider{background:#292a2e!important}
 body #app .offer-wizard .ow-choice[data-ow-category="digital"]{grid-column:1/-1;min-height:42px;padding:8px 16px!important;font-size:12px}
-body #app .offer-wizard .ow-games{max-height:265px;overflow:auto;padding:2px;scrollbar-width:thin;scrollbar-color:#444 #111}
+body #app .offer-wizard .ow-games{max-height:340px;overflow:auto;padding:2px;scrollbar-width:thin;scrollbar-color:#444 #111;align-content:start;overscroll-behavior:contain}
+.ow-game-count{font-size:12px;margin:8px 0 12px;min-height:18px}
+body #app .offer-wizard .ow-more-games{display:block;margin:12px auto 0;padding:10px 18px!important;min-height:44px;border:1px solid #383838!important;border-radius:8px;color:#f1f1f1!important;background:#181818!important}
+body #app .offer-wizard .ow-game{min-width:0}
+.ow-game>span:last-child{overflow-wrap:anywhere;text-align:left;line-height:1.4}
+.offer-wizard .ow-game-art{display:inline-flex;position:relative;align-items:center;justify-content:center;width:48px;height:48px;min-width:48px;flex:none;border-radius:8px;overflow:hidden;background:#202125;color:#b6bbc4}
+.offer-wizard .ow-game-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#101011;opacity:0;transition:opacity .12s ease}
+.offer-wizard .ow-game-art img.is-loaded{opacity:1}
+.offer-wizard .ow-game-initials{font-size:14px;font-weight:600;letter-spacing:.3px}
+@media(max-width:700px){.offer-wizard .ow-game-art{width:36px;height:36px;min-width:36px}.offer-wizard .ow-game-initials{font-size:12px}}
 body #app .offer-wizard .ow-footer>.ow-primary{background:#ff9b42!important;color:#111!important;border-color:#ff9b42!important}
 body #app .offer-wizard .ow-error{background:#281516!important;color:#ffb2b2!important;border-color:#743132!important}
 body #app .offer-wizard .ow-info{background:#181a1d!important;color:#aaa!important}

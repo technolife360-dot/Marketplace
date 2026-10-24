@@ -361,6 +361,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
             category=db.execute('SELECT product_type FROM categories WHERE id=?',(row.get('category_id'),)).fetchone()
             if not category:errors.append({'row':i,'fields':{'category_id':'Mavjud kategoriya ID sini tanlang.'}});continue
             try:
+                core['seller_catalog'].validate_selection(db,row.get('game_name',''),row.get('category_id'),error)
                 core['validate_listing_attributes'](row['attributes'],category['product_type'],True)
                 validate_game(row['attributes'],game_query(row.get('game_name','')) or '',category['product_type'],core)
             except error as exc:errors.append({'row':i,'fields':{'attributes':exc.message}})
