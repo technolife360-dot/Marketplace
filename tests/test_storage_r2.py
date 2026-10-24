@@ -16,6 +16,15 @@ R2_ENV = {
 
 
 class R2StorageTests(unittest.TestCase):
+    def test_public_photo_deletion_is_restricted_to_application_object_urls(self):
+        key='visitor-images/'+'a'*20+'/'+'b'*40+'.webp'
+        client=MagicMock()
+        with patch.dict(os.environ,R2_ENV),patch.object(storage_r2,'_client',return_value=client):
+            storage_r2.delete_listing('https://assets.gamestorehub.com/'+key)
+            for url in ('https://other.example.com/'+key,'https://assets.gamestorehub.com/site-assets/logo.png'):
+                with self.assertRaises(ValueError): storage_r2.delete_listing(url)
+        client.delete_object.assert_called_once_with(Bucket='sentryloot-listing-images',Key=key)
+
     def test_evidence_requires_a_separate_nonpublic_bucket_configuration(self):
         for changes in (
             {'R2_EVIDENCE_BUCKET': 'sentryloot-listing-images'},

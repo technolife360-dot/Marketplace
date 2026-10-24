@@ -53,6 +53,38 @@ class PurchaseReviewFlows(unittest.TestCase):
         self.assertEqual((items[0]['product_rating'],items[0]['product_review_count']),(5.0,1))
         r=self.route(None,'GET','/api/review-hub/listing/'+self.listing)
         self.assertEqual(r['count'],1)
+
+    def test_card_seller_stats_count_real_completed_units_across_offers_without_review_multiplication(self):
+        _,first=self.market_order()
+        self.db.execute('UPDATE order_items SET quantity=3 WHERE id=?',(first,))
+        self.route(self.buyer,'POST','/api/reviews',{'item_id':first,'rating':5,'body':'A real completed purchase.'})
+        second_listing=app.ident()
+        self.db.execute("""INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,stock,status)
+            VALUES(?,?,'valorant','accounts','Another offer','Another account from this seller.','account',100,1,'published')""",(second_listing,self.seller))
+        _,second=self.market_order()
+        self.db.execute('UPDATE order_items SET listing_id=? WHERE id=?',(second_listing,second))
+        self.route(self.buyer,'POST','/api/reviews',{'item_id':second,'rating':3,'body':'Another verified purchase.'})
+        for status,mode in [('cancelled','stripe'),('paid','stripe'),('completed','sandbox'),('completed','disabled'),('completed','stripe_test')]:
+            _,excluded=self.market_order(status,mode)
+            self.db.execute('UPDATE order_items SET quantity=100 WHERE id=?',(excluded,))
+        _,hidden=self.market_order()
+        review=self.route(self.buyer,'POST','/api/reviews',{'item_id':hidden,'rating':1,'body':'This review will be hidden.'})
+        self.db.execute('UPDATE reviews SET hidden=1 WHERE id=?',(review['id'],))
+        items=[{'id':self.listing,'seller_id':self.seller,'product_type':'account'},
+               {'id':second_listing,'seller_id':self.seller,'product_type':'account'},
+               {'id':'different-type','seller_id':self.seller,'product_type':'item'},
+               {'id':'different-seller','seller_id':self.other,'product_type':'account'}]
+        reviews.add_listing_scores(self.db,items)
+        for item in items[:2]:
+            self.assertEqual((item['seller_card_rating'],item['seller_card_review_count'],item['seller_sales_count']),(4.0,2,5))
+        self.assertEqual(items[2]['seller_sales_count'],0)
+        self.assertEqual((items[3]['seller_card_rating'],items[3]['seller_card_review_count'],items[3]['seller_sales_count']),(None,0,0))
+        detail=self.route(None,'GET','/api/listings/'+self.listing)
+        self.assertEqual((detail['seller_card_rating'],detail['seller_sales_count']),(4.0,5))
+        related=next(item for item in detail['related'] if item['id']==second_listing)
+        self.assertEqual((related['seller_card_rating'],related['seller_sales_count']),(4.0,5))
+        catalogue=self.route(None,'GET','/api/listings')['items']
+        self.assertEqual(next(item for item in catalogue if item['id']==self.listing)['seller_sales_count'],5)
     def test_reports_seller_reply_and_moderation_preserve_one_review_per_purchase(self):
         _,iid=self.market_order();r=self.route(self.buyer,'POST','/api/reviews',{'item_id':iid,'rating':3,'body':'The buyer describes the delivery.'})
         with self.assertRaises(app.HttpError):self.route(self.other,'POST','/api/reviews/'+r['id']+'/reply',{'body':'Not the seller.'})

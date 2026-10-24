@@ -81,6 +81,15 @@ def is_listing_url(value):
         return False
 
 
+def delete_listing(public_url):
+    """Delete an application-owned public image; never accept another domain."""
+    if not is_listing_url(public_url):
+        raise ValueError('Invalid public image URL')
+    _, _, _, bucket, _, public_base = _settings()
+    key = _listing_key(public_url[len(public_base) + 1:])
+    _client().delete_object(Bucket=bucket, Key=key)
+
+
 def check_evidence_bucket():
     _, _, _, _, bucket, _ = _settings()
     _client().head_bucket(Bucket=bucket)

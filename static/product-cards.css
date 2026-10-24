@@ -1,0 +1,151 @@
+/* Shared marketplace cards. Keep these paints in the site's theme layer. */
+@layer sentryloot-theme {
+body #app .product-grid:has(> .market-product-card) {
+  display:grid !important; grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+  align-items:stretch !important; gap:16px !important;
+}
+body #app .product-card.market-product-card {
+  position:relative !important; display:flex !important; flex-direction:column !important; min-width:0 !important; height:100% !important; overflow:hidden !important;
+  border:1px solid #292929 !important; border-radius:14px !important;
+  background:#0B0B0B !important; box-shadow:none !important;
+  transition:transform .2s ease,border-color .2s ease !important;
+}
+body #app .product-card.market-product-card:is(:hover,:focus-within) { border-color:#FF9B42 !important; }
+@media (hover:hover) {
+  body #app .product-card.market-product-card:hover { transform:translateY(-3px) !important; }
+  body #app .market-product-card:hover .market-card-cover>img { transform:scale(1.035) !important; }
+}
+body #app .product-card.market-product-card .market-card-cover {
+  position:relative !important; display:block !important; flex:none !important; width:100% !important; height:auto !important; min-height:0 !important;
+  aspect-ratio:4/3 !important; padding:0 !important; overflow:hidden !important; border-radius:0 !important; background:#141414 !important;
+}
+body #app .market-product-card .market-card-cover::after { display:none !important; }
+body #app .product-card.market-product-card .market-card-cover>img {
+  display:block !important; width:100% !important; height:100% !important; object-fit:cover !important; object-position:center !important; opacity:1 !important;
+  transition:transform .25s ease !important;
+}
+body #app .market-product-card .market-card-art-empty { display:grid !important; height:100% !important; place-items:center !important; }
+body #app .market-product-card .market-card-art-empty .icon { color:#AAAAAA !important; }
+body #app .product-card.market-product-card .favorite-card-button {
+  position:static !important; z-index:auto !important; inset:auto !important; display:grid !important; flex:0 0 44px !important; place-items:center !important; margin:0 0 0 auto !important;
+  width:44px !important; height:44px !important; min-height:44px !important; padding:0 !important;
+  border:0 !important; border-radius:50% !important;
+  background:transparent !important; color:#F1F1F1 !important; backdrop-filter:none !important; box-shadow:none !important;
+}
+body #app .market-product-card .favorite-card-button:is(:hover,.saved) { border:0 !important; background:transparent !important; color:#FF9B42 !important; }
+body #app .market-product-card .favorite-card-button .icon { color:inherit !important; fill:none !important; }
+body #app .market-product-card .favorite-card-button.saved .icon { fill:currentColor !important; }
+body #app .product-card.market-product-card .product-card-body {
+  display:flex !important; flex:1 !important; flex-direction:column !important; width:auto !important; min-width:0 !important; min-height:0 !important;
+  height:auto !important; gap:6px !important; padding:14px 14px 0 !important; background:transparent !important;
+}
+body #app .market-product-card .market-card-category {
+  display:flex !important; align-items:center !important; gap:6px !important; min-width:0 !important; margin:0 !important; overflow:hidden !important;
+  font-size:10px !important; line-height:18px !important; letter-spacing:.025em !important; text-transform:uppercase !important;
+}
+body #app .market-product-card .market-card-category>span { color:#AAAAAA !important; white-space:nowrap !important; overflow:hidden !important; text-overflow:ellipsis !important; }
+body #app .market-product-card .market-card-category>span:first-child { flex:0 1 auto !important; }
+body #app .product-card.market-product-card .product-title {
+  display:-webkit-box !important; min-height:2.7em !important; height:auto !important; margin:0 !important;
+  overflow:hidden !important; color:#F1F1F1 !important; font-size:15px !important; font-weight:600 !important;
+  line-height:1.35 !important; white-space:normal !important; overflow-wrap:anywhere !important;
+  -webkit-box-orient:vertical !important; -webkit-line-clamp:2 !important;
+}
+body #app .market-product-card .product-title a { color:inherit !important; text-decoration:none !important; }
+body #app .market-product-card .market-card-facts {
+  display:flex !important; align-items:center !important; gap:6px !important; min-width:0 !important; min-height:20px !important; margin:0 !important;
+  font-size:12px !important; line-height:20px !important; overflow:hidden !important;
+}
+body #app .market-product-card .market-card-facts>span { color:#AAAAAA !important; overflow:hidden !important; text-overflow:ellipsis !important; white-space:nowrap !important; }
+body #app .market-product-card .market-card-delivery {
+  display:flex !important; align-items:center !important; gap:6px !important; min-width:0 !important; min-height:24px !important; margin:0 !important; font-size:12px !important; line-height:24px !important;
+}
+body #app .market-product-card .market-card-delivery>span { flex:1 !important; min-width:0 !important; overflow:hidden !important; text-overflow:ellipsis !important; white-space:nowrap !important; color:#AAAAAA !important; }
+body #app .market-product-card .market-card-delivery>.icon { flex:none !important; color:#AAAAAA !important; }
+body #app .product-card.market-product-card .market-card-footer {
+  display:flex !important; flex-direction:row !important; flex-wrap:nowrap !important; align-items:center !important; justify-content:space-between !important; width:auto !important; height:auto !important;
+  min-width:0 !important; min-height:52px !important; gap:6px !important; margin:6px 0 0 !important; padding:10px 0 !important;
+  border-top:1px solid #292929 !important;
+}
+body #app .market-product-card .market-seller-link { display:flex !important; flex:1 1 auto !important; align-items:center !important; gap:8px !important; min-width:0 !important; text-decoration:none !important; }
+body #app .market-product-card .market-seller-copy { display:flex !important; flex:1 !important; flex-direction:column !important; min-width:0 !important; gap:1px !important; }
+body #app .market-product-card .market-seller-name-row { display:flex !important; align-items:center !important; min-width:0 !important; gap:3px !important; }
+body #app .market-product-card .market-card-sales {
+  color:#AAAAAA !important; font-size:10px !important; line-height:16px !important; white-space:normal !important; overflow-wrap:anywhere !important;
+}
+body #app .product-card.market-product-card .market-seller-avatar, body #app .ops-profile-avatar {
+  position:relative !important; display:grid !important; flex:0 0 32px !important; place-items:center !important; width:32px !important; height:32px !important;
+  overflow:hidden !important; border:0 !important; border-radius:50% !important; background:#2A2018 !important;
+  color:#FF9B42 !important; font-size:12px !important; font-weight:600 !important; line-height:1 !important;
+}
+body #app :is(.market-seller-avatar,.ops-profile-avatar)>span { color:inherit !important; }
+body #app :is(.market-seller-avatar,.ops-profile-avatar)>img { position:absolute !important; inset:0 !important; display:block !important; width:100% !important; height:100% !important; border-radius:inherit !important; object-fit:cover !important; }
+body #app .product-card.market-product-card .market-seller-name {
+  display:block !important; min-width:0 !important; overflow:hidden !important; text-overflow:ellipsis !important; white-space:nowrap !important;
+  color:#F1F1F1 !important; font-size:12px !important; line-height:24px !important;
+}
+body #app .product-card.market-product-card .market-seller-verified {
+  display:grid !important; flex:none !important; width:24px !important; height:24px !important; place-items:center !important; color:#45D69C !important;
+}
+body #app .product-card.market-product-card .market-seller-verified .icon { color:inherit !important; fill:none !important; }
+body #app .product-card.market-product-card .market-card-rating {
+  display:inline-flex !important; flex:none !important; align-self:flex-start !important; align-items:center !important; gap:3px !important; min-height:24px !important; margin:0 !important;
+  padding:0 !important; border:0 !important; border-radius:0 !important; background:transparent !important;
+  font-size:11px !important; line-height:24px !important; white-space:nowrap !important;
+}
+body #app .market-product-card .market-card-rating>.icon { color:#FF9B42 !important; fill:currentColor !important; }
+body #app .market-product-card .market-card-rating small { color:#AAAAAA !important; font-size:11px !important; }
+body #app .product-card.market-product-card .market-card-bottom {
+  display:flex !important; flex-wrap:wrap !important; align-items:center !important; justify-content:space-between !important; gap:10px !important; min-width:0 !important;
+  margin-top:auto !important; padding:12px 14px !important; border-top:1px solid #292929 !important;
+}
+body #app .product-card.market-product-card .market-card-bottom>.price {
+  display:block !important; flex:1 0 auto !important; min-width:0 !important; max-width:100% !important; height:auto !important; min-height:28px !important; max-height:none !important;
+  margin:0 !important; padding:0 !important; overflow:visible !important; white-space:normal !important; overflow-wrap:anywhere !important;
+  color:#F1F1F1 !important; font-family:Roboto,Arial,sans-serif !important; font-size:20px !important; font-weight:700 !important; line-height:28px !important; font-variant-numeric:tabular-nums !important;
+}
+body #app .product-card.market-product-card .market-card-view {
+  display:inline-flex !important; flex-direction:row !important; flex:none !important; align-items:center !important; justify-content:center !important; gap:8px !important; min-width:0 !important;
+  min-height:44px !important; padding:10px 12px !important; border:1px solid #FF9B42 !important;
+  border-radius:9px !important; background:#FF9B42 !important; color:#000000 !important;
+  font-size:13px !important; font-weight:600 !important; line-height:22px !important; text-decoration:none !important; white-space:nowrap !important;
+}
+body #app .market-product-card .market-card-view>span { color:#000000 !important; }
+body #app .market-product-card .market-card-view:hover { background:#FFAF64 !important; border-color:#FFAF64 !important; }
+body #app .market-product-card :is(a,button):focus-visible { outline:2px solid #FF9B42 !important; outline-offset:3px !important; }
+body #app .market-product-card .market-sold-out {
+  position:absolute !important; inset:auto auto 12px 12px !important; padding:6px 10px !important; border-radius:6px !important;
+  background:#171717E6 !important; color:#F1F1F1 !important; font-size:12px !important;
+}
+body #app .ops-avatar-settings { display:flex !important; align-items:center !important; gap:16px !important; margin:22px 0 !important; }
+body #app .ops-profile-avatar { flex-basis:64px !important; width:64px !important; height:64px !important; font-size:22px !important; }
+body #app .ops-avatar-settings>div { min-width:0 !important; }
+body #app .ops-avatar-settings .field-hint { margin:8px 0 0 !important; color:#AAAAAA !important; font-size:12px !important; line-height:1.5 !important; }
+body #app .ops-avatar-settings [hidden] { display:none !important; }
+body #app .ops-avatar-error { margin:8px 0 0 !important; color:#FF7777 !important; font-size:13px !important; }
+@media(max-width:1200px) {
+  body #app .product-grid:has(> .market-product-card) { grid-template-columns:repeat(3,minmax(0,1fr)) !important; }
+}
+@media(max-width:900px) {
+  body #app .product-grid:has(> .market-product-card) { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+}
+@media(max-width:600px) {
+  body #app .product-grid:has(> .market-product-card) { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:12px !important; }
+  body #app .product-card.market-product-card .product-card-body { padding:12px 10px 0 !important; gap:6px !important; }
+  body #app .product-card.market-product-card .product-title { font-size:15px !important; }
+  body #app .market-product-card .market-card-category { font-size:9px !important; gap:4px !important; }
+  body #app .market-product-card :is(.market-card-facts,.market-card-delivery) { font-size:11px !important; gap:3px !important; }
+  body #app .product-card.market-product-card .market-card-footer { flex-wrap:wrap !important; align-content:center !important; gap:6px !important; min-height:70px !important; padding:10px 0 !important; }
+  body #app .market-product-card .market-seller-link { flex-basis:100% !important; gap:5px !important; }
+  body #app .product-card.market-product-card .market-seller-name { font-size:11px !important; }
+  body #app .product-card.market-product-card .market-card-bottom { flex-direction:column !important; align-items:stretch !important; gap:10px !important; padding:12px 10px !important; }
+  body #app .product-card.market-product-card .market-card-bottom>.price { font-size:20px !important; }
+  body #app .product-card.market-product-card .market-card-view { width:100% !important; padding:10px 8px !important; font-size:12px !important; }
+}
+@media(max-width:360px) {
+  body #app .product-grid:has(> .market-product-card) { grid-template-columns:minmax(0,1fr) !important; }
+}
+@media(prefers-reduced-motion:reduce) {
+  body #app .product-card.market-product-card,body #app .market-product-card .market-card-cover>img { transition:none !important; transform:none !important; }
+}
+}

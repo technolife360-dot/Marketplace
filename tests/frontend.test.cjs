@@ -180,8 +180,8 @@ test('seller wallet links remain role-specific without seller dashboard or admin
   assert.doesNotMatch(sidebarMarkup({seller: null, is_admin: true}), /href="\/#(?:seller|admin)"/);
 });
 
-test('home product cards show verified product scores and omit empty or seller-only ratings', () => {
-  const start = source.indexOf('function marketCard(');
+test('home cards show verified seller reputation and sales without inventing ratings', () => {
+  const start = source.indexOf('function marketSellerIdentity(');
   const context = {
     adminText: (_uz, _ru, en) => en, esc: value => String(value ?? ''),
     icon: name => `<svg data-icon="${name}"></svg>`, fmt: value => String(value), categoryLabel: value => value,
@@ -189,10 +189,40 @@ test('home product cards show verified product scores and omit empty or seller-o
   vm.createContext(context);
   vm.runInContext(source.slice(start, source.indexOf('\nfunction setupMarketSidebarToggle(', start)), context);
   const item = {id: 'listing', title: 'Game item', available: 1, stock: 1, reserved: 0, status: 'published', attributes: {}, seller_rating: 4.9, review_count: 200};
-  assert.doesNotMatch(context.marketCard(item), /market-seller-stats/);
-  const rated = context.marketCard({...item, product_review_count: 3, product_rating: 4.3});
-  assert.match(rated, /4\.3\s*<small>(?:·\s*3|\(3\))<\/small>/);
-  assert.doesNotMatch(rated, /4\.9/);
+  const empty=context.marketCard(item);
+  assert.match(empty,/Not rated yet/);
+  assert.doesNotMatch(empty,/4\.9/);
+  const rated = context.marketCard({...item, product_type:'account', seller_card_review_count:28, seller_card_rating:4.9, seller_sales_count:42, product_review_count:3, product_rating:4.3});
+  assert.match(rated, /4\.9\s*<small>\(28\)<\/small>/);
+  assert.match(rated,/42 accounts sold/);
+  assert.doesNotMatch(rated, /4\.3/);
+  assert.match(context.marketCard({...item,product_type:'account',seller_sales_count:1}),/1 account sold/);
+  assert.match(context.marketCard({...item,product_type:'item',seller_sales_count:7}),/7 sold/);
+});
+
+test('market cards show the actual owner name and photo with a safe initials fallback', () => {
+  const start=source.indexOf('function marketSellerIdentity(');
+  const context={adminText:(_uz,_ru,en)=>en,esc:value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),icon:name=>`<svg data-icon="${name}"></svg>`,fmt:()=> 'RM 129.90',categoryLabel:value=>value};
+  vm.createContext(context);
+  vm.runInContext(source.slice(start,source.indexOf('\nasync function showMarketListingDetails(',start)),context);
+  const item={id:'offer',seller_id:'actual-owner',title:'Level 65 account',product_type:'account',game_name:'PUBG Mobile',platform:'Android / iOS',attributes:{original_email_included:'yes'},seller_name:'A shop name',seller_display_name:'Shuxrat Aliev',seller_avatar_url:'https://images.example.com/owner.webp',available:1};
+  const html=context.marketCard(item);
+  assert.match(html,/Shuxrat Aliev/);
+  assert.match(html,/src="https:\/\/images.example.com\/owner.webp"/);
+  assert.match(html,/href="\/store\/actual-owner"/);
+  assert.doesNotMatch(html,/A shop name|SentryLoot|No reviews|Min\./);
+  assert.match(html,/Android \/ iOS/);
+  assert.match(html,/Email included/);
+  const noPhoto=context.marketCard({...item,seller_avatar_url:''});
+  assert.doesNotMatch(noPhoto,/data-seller-avatar/);
+  assert.match(noPhoto,/>SA<\/span>/);
+  const unsafe=context.marketCard({...item,seller_display_name:'<script>alert(1)</script>',seller_avatar_url:'javascript:alert(1)'});
+  assert.doesNotMatch(unsafe,/<script|src="javascript:/);
+  assert.match(unsafe,/&lt;script&gt;/);
+  const sold=context.marketCard({...item,available:0,is_favorite:true});
+  assert.match(sold,/market-sold-out/);
+  assert.match(sold,/aria-pressed="true"/);
+  assert.match(sold,/href="\/listing\/offer"/);
 });
 
 test('Top Up admin excludes deleted packages until the hidden filter is selected', () => {

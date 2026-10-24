@@ -66,6 +66,27 @@ def add_listing_scores(db, items):
         score=scores.get(item['id'])
         item['product_review_count']=score['n'] if score else 0
         item['product_rating']=float(score['rating']) if score else None
+    add_seller_card_stats(db, items)
+
+
+def add_seller_card_stats(db, items):
+    """Batch public seller reputation and units sold; never count test payments."""
+    sellers=list(dict.fromkeys(item['seller_id'] for item in items if item.get('seller_id')))
+    if not sellers:
+        return
+    marks=','.join('?' for _ in sellers)
+    ratings={row['seller_id']:row for row in db.execute(f'''SELECT i.seller_id,COUNT(*) n,AVG(r.rating) rating
+        FROM reviews r JOIN order_items i ON i.id=r.order_item_id JOIN orders o ON o.id=i.order_id
+        WHERE r.hidden=0 AND {MARKET_REAL} AND i.seller_id IN ({marks}) GROUP BY i.seller_id''',tuple(sellers))}
+    sales={(row['seller_id'],row['product_type']):int(row['quantity']) for row in db.execute(f'''
+        SELECT i.seller_id,l.product_type,SUM(i.quantity) quantity FROM order_items i
+        JOIN orders o ON o.id=i.order_id JOIN listings l ON l.id=i.listing_id
+        WHERE {MARKET_REAL} AND i.seller_id IN ({marks}) GROUP BY i.seller_id,l.product_type''',tuple(sellers))}
+    for item in items:
+        score=ratings.get(item.get('seller_id'))
+        item['seller_card_review_count']=int(score['n']) if score else 0
+        item['seller_card_rating']=float(score['rating']) if score else None
+        item['seller_sales_count']=sales.get((item.get('seller_id'),item.get('product_type')),0)
 
 
 def topup_scores(db):

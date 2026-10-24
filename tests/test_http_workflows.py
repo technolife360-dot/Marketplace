@@ -296,6 +296,54 @@ class HTTPWorkflows(unittest.TestCase):
         lid = self.published_item()
         self.assertEqual(buyer.request('POST', '/api/cart', {'listing_id': lid, 'quantity': True})[0], 400)
 
+    def test_profile_avatar_upload_is_private_to_its_owner_and_public_cards_use_owner_identity(self):
+        from PIL import Image
+        image=io.BytesIO()
+        Image.new('RGB',(480,300),'#335577').save(image,format='PNG')
+        raw=image.getvalue()
+        avatar='https://images.example.com/actual-owner.webp'
+        with patch.object(app.storage_r2,'is_configured',return_value=True), patch.object(app.storage_r2,'put_listing',return_value=avatar) as upload:
+            self.assertEqual(self.guest.request('POST','/api/profile/avatar',raw=raw,content_type='image/png')[0],401)
+            self.assertEqual(self.seller.request('POST','/api/profile/avatar',raw=raw,content_type='image/png',csrf=False)[0],403)
+            self.assertEqual(self.seller.request('POST','/api/profile/avatar',raw=raw,content_type='image/svg+xml')[0],415)
+            self.assertEqual(self.seller.request('POST','/api/profile/avatar',raw=raw,content_type='image/jpeg')[0],415)
+            self.assertEqual(self.seller.request('POST','/api/profile/avatar',raw=b'not an image',content_type='image/png')[0],400)
+            self.assertEqual(self.seller.request('POST','/api/profile/avatar',raw=b'',length=str(app.MAX_IMAGE_BODY+1),content_type='image/png')[0],413)
+            status,result,_=self.seller.request('POST','/api/profile/avatar?user_id='+self.admin_id,raw=raw,content_type='image/png')
+            self.assertEqual(status,201,result)
+            uploaded_image=Image.open(io.BytesIO(upload.call_args.args[1]))
+            self.assertEqual((uploaded_image.format,uploaded_image.size),('WEBP',(256,256)))
+            self.assertEqual(self.seller.request('GET','/api/me')[1]['user']['avatar_url'],avatar)
+            self.assertEqual(self.admin.request('GET','/api/me')[1]['user']['avatar_url'],'')
+            upload.assert_called_once()
+            upload.side_effect=RuntimeError('storage unavailable')
+            self.assertEqual(self.seller.request('POST','/api/profile/avatar',raw=raw,content_type='image/png')[0],502)
+            self.assertEqual(self.seller.request('GET','/api/me')[1]['user']['avatar_url'],avatar)
+        self.db.execute("UPDATE users SET display_name='Shuxrat Aliev' WHERE id=?",(self.seller_id,))
+        lid=self.published_item()
+        for listing in (self.guest.request('GET','/api/listings')[1]['items'][0],self.guest.request('GET','/api/listings/'+lid)[1]):
+            self.assertEqual(listing['seller_display_name'],'Shuxrat Aliev')
+            self.assertEqual(listing['seller_avatar_url'],avatar)
+            self.assertNotIn('seller_email',listing)
+            self.assertNotIn('phone',listing)
+        self.assertEqual(self.guest.request('GET','/static/product-cards.css')[0],200)
+
+    def test_account_erasure_removes_the_public_avatar_and_retries_storage_failures(self):
+        avatar='https://images.example.com/profile.webp'
+        previous_avatar='https://images.example.com/previous-profile.webp'
+        self.db.execute('INSERT INTO platform_config(key,value) VALUES(?,?)',('public_avatar:'+self.seller_id,avatar))
+        self.db.execute('INSERT INTO platform_config(key,value) VALUES(?,?)',(app.account_avatar_prefix(self.seller_id)+'old',previous_avatar))
+        self.db.execute('INSERT INTO platform_config(key,value) VALUES(?,?)',(app.account_avatar_prefix(self.seller_id)+'current',avatar))
+        with patch.object(app.storage_r2,'delete_listing',side_effect=RuntimeError('storage unavailable')):
+            with self.assertRaises(app.HttpError): app.erase_account_personal_data(self.db,self.seller_id)
+        self.assertEqual(self.db.execute('SELECT display_name FROM users WHERE id=?',(self.seller_id,)).fetchone()[0],'seller')
+        with patch.object(app.storage_r2,'delete_listing') as remove:
+            app.erase_account_personal_data(self.db,self.seller_id)
+        self.assertEqual({call.args[0] for call in remove.call_args_list},{avatar,previous_avatar})
+        self.assertEqual(remove.call_count,2)
+        self.assertIsNone(self.db.execute('SELECT value FROM platform_config WHERE key=?',('public_avatar:'+self.seller_id,)).fetchone())
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM platform_config WHERE key LIKE ?',(app.account_avatar_prefix(self.seller_id)+'%',)).fetchone()[0],0)
+
     def test_store_follow_discovery_and_private_photo_guards_through_http(self):
         buyer=self.registered_buyer();lid=self.published_item()
         status,listing,_=buyer.request('GET','/api/listings/'+lid)
