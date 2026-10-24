@@ -34,6 +34,13 @@ and creates a payment-pending order. It does not mark a payment successful.
   moderator approval. Cancellation/dispute pauses and service milestones remain
   enforced by the server. Secondary evidence, appeals and cancellation controls
   live in one accordion rather than the current-step card.
+- The owner-authorized exception lets only the email-verified, existing full
+  administrator `admin@gamestorehub.com` approve their own paid test account order.
+  Production admin MFA, both private screenshots, review state and test-payment
+  checks still apply. The audit entry records `test_self_approval: true`. Other
+  administrators, live payments, disputes, payouts, seller KYC and non-approval
+  review actions retain their independent-review requirements. Email matching
+  alone never grants admin access.
 
 ## Isolated wallet
 

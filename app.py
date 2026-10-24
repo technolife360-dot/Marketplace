@@ -786,6 +786,13 @@ def require_independent_admin(ctx, buyer_id=None, seller_ids=()):
     if uid==buyer_id or uid in seller_ids:
         raise HttpError(403,'Mustaqil moderator kerak.')
     return uid
+def can_self_approve_test_account_review(db, uid, oid):
+    """Owner-authorized exception for one verified admin and paid test orders only."""
+    admin=db.execute('SELECT u.email,u.email_verified FROM users u JOIN admin_accounts a ON a.user_id=u.id WHERE u.id=?',(uid,)).fetchone()
+    if not admin or not admin['email_verified'] or admin['email'].casefold()!='admin@gamestorehub.com': return False
+    return bool(db.execute("""SELECT 1 FROM orders o JOIN payments p ON p.order_id=o.id
+        WHERE o.id=? AND o.status='under_review' AND o.payment_mode IN ('sandbox','stripe_test')
+        AND p.provider=o.payment_mode AND p.status='succeeded'""",(oid,)).fetchone())
 def seller_ok(db,uid):
     p=db.execute('SELECT * FROM seller_profiles WHERE user_id=?',(uid,)).fetchone()
     if not p: raise HttpError(403,'Avval sotuvchi profilini yarating.')
@@ -2889,7 +2896,9 @@ class Handler(BaseHTTPRequestHandler):
             review=db.execute("SELECT * FROM account_reviews WHERE order_id=? AND status='pending'",(oid,)).fetchone()
             order=db.execute("SELECT * FROM orders WHERE id=? AND status='under_review'",(oid,)).fetchone()
             if not review or not order: raise HttpError(404,'Moderator ko‘rigida turgan akkaunt buyurtmasi topilmadi.')
-            require_independent_admin(ctx,order['buyer_id'],[r['seller_id'] for r in db.execute('SELECT seller_id FROM order_items WHERE order_id=?',(oid,))])
+            sellers=[r['seller_id'] for r in db.execute('SELECT seller_id FROM order_items WHERE order_id=?',(oid,))]
+            self_approval=action=='approve' and (aid==order['buyer_id'] or aid in sellers) and can_self_approve_test_account_review(db,aid,oid)
+            if not self_approval: require_independent_admin(ctx,order['buyer_id'],sellers)
             evidence=db.execute('SELECT slot,object_path FROM account_review_evidence WHERE order_id=? ORDER BY slot',(oid,)).fetchall()
             if len(evidence)!=2 or [row['slot'] for row in evidence]!=[1,2]: raise HttpError(409,'Ikkala maxfiy skrinshot ham mavjud bo‘lishi shart.')
             payment=db.execute('SELECT * FROM payments WHERE order_id=?',(oid,)).fetchone()
@@ -2918,7 +2927,7 @@ class Handler(BaseHTTPRequestHandler):
                     db.execute("UPDATE payments SET status='sandbox_refunded',updated_at=CURRENT_TIMESTAMP WHERE order_id=? AND provider='sandbox'",(oid,))
                     event(db,oid,aid,'under_review','refunded','Moderator sandbox qaytarimini qayd etdi: '+note)
                     result='refund_pending' if payment['provider']=='stripe_test' else 'refunded'
-                audit(db,aid,'account_review_'+action,'order',oid,{'note':note,'evidence_count':2})
+                audit(db,aid,'account_review_'+action,'order',oid,{'note':note,'evidence_count':2,'test_self_approval':bool(self_approval)})
                 if action=='approve': notify(db,review['buyer_id'],'account_review','Akkaunt tekshiruvi yakunlandi','Moderator ikkala skrinshotni ko‘rib, buyurtmani tasdiqladi. Bu keyinchalik akkaunt tiklanmasligiga kafolat bermaydi.','/order/'+oid)
                 elif action=='refund_buyer': notify(db,review['buyer_id'],'account_review','Sandbox qaytarimi qayd etildi','Moderator sandbox qaytarimini qayd etdi; haqiqiy pul o‘tkazilmagan.','/order/'+oid)
                 for seller in db.execute('SELECT DISTINCT seller_id FROM order_items WHERE order_id=?',(oid,)).fetchall():
