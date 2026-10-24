@@ -148,7 +148,7 @@ class HTTPWorkflows(unittest.TestCase):
         self.assertEqual(self.seller.request('POST','/api/listings',{**data,'images':data['images']+['https://images.example.com/ninth.webp']})[0],400)
         self.assertEqual(self.seller.request('POST','/api/listings',{**data,'attributes':{'original_email_included':'maybe'}})[0],400)
         self.assertEqual(self.seller.request('POST','/api/listings',{**data,'accept_account_terms':False})[0],400)
-        for path in ('/static/offer-wizard.js','/static/offer-wizard.css'):
+        for path in ('/static/offer-wizard.js','/static/offer-wizard.css','/static/listing-detail.js','/static/listing-detail.css'):
             self.assertEqual(self.guest.request('GET',path)[0],200,path)
 
     def test_review_notifications_reach_every_active_admin_and_admin_queue(self):
