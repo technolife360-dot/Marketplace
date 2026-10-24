@@ -42,8 +42,8 @@ window.OrderFlow = (() => {
     if(button?.disabled)return;
     if(button)button.disabled=true;
     const root=button?.closest('form, .of-card, .of-stage')||app;
-    root.querySelector('.of-error')?.remove();
-    try{await fn()}catch(err){const p=document.createElement('p');p.className='of-error';p.setAttribute('role','alert');p.textContent=err.message;root.append(p)}finally{if(button?.isConnected)button.disabled=false}
+    root.querySelector('.of-action-error')?.remove();
+    try{await fn()}catch(err){const p=document.createElement('p');p.className='of-error of-action-error';p.setAttribute('role','alert');p.textContent=err.message;root.append(p)}finally{if(button?.isConnected)button.disabled=false}
   }
   function bind(form,fn){if(!form)return;form.addEventListener('submit',event=>{event.preventDefault();if(!form.reportValidity())return;action(event.submitter,()=>fn(Object.fromEntries(new FormData(form)),form))})}
   function click(selector,fn){app.querySelectorAll(selector).forEach(b=>b.onclick=()=>action(b,()=>fn(b)))}

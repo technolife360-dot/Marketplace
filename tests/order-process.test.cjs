@@ -34,3 +34,25 @@ test('an older request cannot replace the page after the buyer navigates away',a
   assert.equal(app.innerHTML,'New page');
  }
 });
+test('checkout retries preserve compatibility warnings and replace only action errors',async()=>{
+ const source=fs.readFileSync('static/order-process.js','utf8');
+ const definition=source.slice(source.indexOf('  async function action('),source.indexOf('  function bind('));
+ const warning={className:'ex-compat-warning of-error',hidden:true},children=[warning];
+ const root={querySelector(selector){return children.find(node=>node.className.split(' ').includes(selector.slice(1)))||null},append(node){children.push(node)}};
+ const document={createElement(){return {setAttribute(){},remove(){children.splice(children.indexOf(this),1)}}}};
+ const action=vm.runInNewContext('('+definition+')',{document,app:root});
+ const button={disabled:false,isConnected:true,closest:()=>root};
+ for(let attempt=0;attempt<2;attempt++){
+  await action(button,async()=>{
+   const retained=root.querySelector('.ex-compat-warning');
+   retained.hidden=false;
+   throw Error('Check the platform and region compatibility.');
+  });
+  assert.equal(children.includes(warning),true);
+  assert.equal(children.filter(node=>node.className.includes('of-action-error')).length,1);
+  assert.equal(children.at(-1).textContent,'Check the platform and region compatibility.');
+  assert.equal(button.disabled,false);
+ }
+ let continued=false;await action(button,async()=>{root.querySelector('.ex-compat-warning').hidden=true;continued=true});
+ assert.equal(continued,true);assert.deepEqual(children,[warning]);
+});
