@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 function flow(overrides={}){
- const context={window:{},adminText:(_u,_r,en)=>en,esc:v=>String(v??'').replaceAll('<','&lt;').replaceAll('"','&quot;'),fmt:(n,c)=>`${c} ${n/100}`,icon:n=>`<svg data-icon="${n}"></svg>`,...overrides};
+ const context={window:{},document:{addEventListener(){}},adminText:(_u,_r,en)=>en,esc:v=>String(v??'').replaceAll('<','&lt;').replaceAll('"','&quot;'),fmt:(n,c)=>`${c} ${n/100}`,icon:n=>`<svg data-icon="${n}"></svg>`,...overrides};
  vm.createContext(context);vm.runInContext(fs.readFileSync('static/order-process.js','utf8'),context);return context.window.OrderFlow;
 }
 test('buyer/seller stages derive from server state, including terminal exceptions',()=>{
@@ -55,4 +55,33 @@ test('checkout retries preserve compatibility warnings and replace only action e
  }
  let continued=false;await action(button,async()=>{root.querySelector('.ex-compat-warning').hidden=true;continued=true});
  assert.equal(continued,true);assert.deepEqual(children,[warning]);
+});
+test('review requires an explicit 1–5 rating and a nonblank review before saving',()=>{
+ const source=fs.readFileSync('static/order-process.js','utf8');
+ const definition=source.slice(source.indexOf('  function reviewReady('),source.indexOf('  function requireReview('));
+ const valid=vm.runInNewContext('('+definition+')');
+ const form=(rating,body)=>({elements:{rating:{value:rating},body:{value:body}}});
+ for(const rating of ['',0,6,2.5,'not-a-rating'])assert.equal(valid(form(rating,'A useful review.')),false);
+ for(const body of ['', '     ', ' bad '])assert.equal(valid(form('5',body)),false);
+ for(const rating of [1,2,3,4,5])assert.equal(valid(form(String(rating),'An honest review.')),true);
+});
+test('required review survives navigation attempts without erasing the typed draft',async()=>{
+ const location={href:'http://localhost/#home',pathname:'/',hash:'#home'};
+ let calls=0,focused=false;
+ const form={draft:'My unsaved review',scrollIntoView(){},querySelector:()=>({focus(){focused=true}})};
+ const app={innerHTML:'Draft is still rendered',querySelector:selector=>selector==='#of-test-review'?form:{dataset:{ofOrder:'pending-review'}}};
+ const history={state:null,replaceState(_s,_title,path){location.hash=path.slice(1);location.href='http://localhost'+path}};
+ const f=flow({location,app,history,me:{id:'buyer'},toast(){},api:async path=>{assert.equal(path,'/orders/review-required');calls++;return {order_id:'pending-review'}}});
+ assert.equal(await f.guardNavigation(),true);
+ assert.equal(location.hash,'#order/pending-review');assert.equal(f.reviewRequired(),true);
+ assert.equal(app.innerHTML,'Draft is still rendered');assert.equal(form.draft,'My unsaved review');assert.equal(focused,true);
+ location.hash='#orders';assert.equal(await f.guardNavigation(),true);assert.equal(calls,1);
+ location.hash='#order/pending-review';assert.equal(await f.guardNavigation(),false);
+});
+test('users without a pending review can navigate normally',async()=>{
+ const location={href:'http://localhost/#home',pathname:'/',hash:'#home'};
+ const f=flow({location,me:{id:'buyer'},api:async()=>({order_id:null})});
+ assert.equal(await f.guardNavigation(),false);assert.equal(f.reviewRequired(),false);
+ const guest=flow({location,me:null,api:()=>{throw Error('Guest must not query private orders')}});
+ assert.equal(await guest.guardNavigation(),false);
 });

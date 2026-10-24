@@ -77,3 +77,17 @@ database: pay with a Stripe test card → pending credit → seller delivery →
 confirmation → available credit → simulated payout failure → credit restored.
 No live funds, real supplier fulfillment, production migration or deployment
 is part of this local verification.
+
+## Required completion review
+
+Completed Stripe test purchases require an explicit 1–5 rating and a review of
+at least five non-whitespace characters before the buyer leaves the order flow.
+The server's buyer-scoped `/api/orders/review-required` endpoint restores the
+required step after reload; navigation attempts preserve the typed form. Saving
+invalid or missing fields is disabled in the UI and rejected by the server.
+A successful save replaces the order screen with Home. Test feedback remains
+private and does not inflate public ratings. Browser/tab closing is not blocked.
+
+Public catalogue, saved cards, comparison lists and related offers omit listings
+with no available stock. Sold listings and their order snapshots remain readable
+for purchase history; listings with remaining stock stay available.

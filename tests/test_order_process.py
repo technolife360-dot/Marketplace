@@ -160,6 +160,44 @@ class OrderProcessFlows(unittest.TestCase):
         with self.assertRaises(app.HttpError):
             self.route(self.other, 'GET', path)
 
+    def test_required_review_is_buyer_scoped_and_clears_only_after_valid_save(self):
+        self.start(); self.pay()
+        pending = '/api/orders/review-required'
+        self.assertIsNone(self.route(self.buyer, 'GET', pending)['order_id'])
+        self.finish()
+        self.assertEqual(self.route(self.buyer, 'GET', pending)['order_id'], self.oid)
+        self.assertIsNone(self.route(self.seller, 'GET', pending)['order_id'])
+        self.assertIsNone(self.route(self.other, 'GET', pending)['order_id'])
+        with self.assertRaises(app.HttpError):
+            self.route(None, 'GET', pending)
+        path = '/api/orders/'+self.oid+'/test-review'
+        for data in ({'body': 'A clear review.'}, {'rating': 0, 'body': 'A clear review.'}, {'rating': 5, 'body': '   '}, {'rating': 1, 'body': 'bad'}):
+            with self.assertRaises(app.HttpError): self.route(self.buyer, 'POST', path, data)
+            self.assertEqual(self.route(self.buyer, 'GET', pending)['order_id'], self.oid)
+        self.route(self.buyer, 'POST', path, {'rating': 1, 'body': 'Delivery was slower than expected.'})
+        self.assertIsNone(self.route(self.buyer, 'GET', pending)['order_id'])
+        self.assertEqual(self.route(self.buyer, 'GET', path)['rating'], 1)
+
+    def test_purchased_last_unit_disappears_from_catalogue_saved_and_related_cards(self):
+        self.start()
+        other = app.ident()
+        self.db.execute("""INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,currency,stock,status)
+            SELECT ?,seller_id,game_id,category_id,'Another available item',description,product_type,price_minor,currency,2,'published'
+            FROM listings WHERE id=?""", (other, self.listing))
+        self.db.execute('INSERT INTO favorites(user_id,listing_id) VALUES(?,?)', (self.buyer, self.listing))
+        self.db.execute("INSERT INTO account_collections(user_id,kind,listing_id) VALUES(?,'compare',?)", (self.buyer, self.listing))
+        self.pay()
+        self.assertNotIn(self.listing, [i['id'] for i in self.route(None, 'GET', '/api/listings')['items']])
+        self.assertEqual(self.route(self.buyer, 'GET', '/api/favorites'), [])
+        self.assertEqual(self.route(self.buyer, 'GET', '/api/collections/compare')['ids'], [])
+        self.assertNotIn(self.listing, [i['id'] for i in self.route(None, 'GET', '/api/listings/'+other)['related']])
+        self.assertEqual(self.route(self.buyer, 'GET', '/api/listings/'+self.listing)['status'], 'sold_out')
+        self.assertEqual(len(self.route(self.buyer, 'GET', '/api/orders/'+self.oid)['items']), 1)
+        # Hidden cards do not delete the listing or the user's saved reference.
+        self.db.execute("UPDATE listings SET status='published',stock=2,reserved=0 WHERE id=?", (self.listing,))
+        self.assertIn(self.listing, [i['id'] for i in self.route(None, 'GET', '/api/listings')['items']])
+        self.assertEqual(self.route(self.buyer, 'GET', '/api/collections/compare')['ids'], [self.listing])
+
     def test_wallet_ownership_is_exact_even_when_user_id_contains_like_wildcards(self):
         p = {'id': 'a'*32, 'seller_id': 'sellerXtest', 'amount_minor': 10000,
              'currency': 'MYR', 'status': 'processing', 'created_at': app.now_iso()}

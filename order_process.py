@@ -95,6 +95,14 @@ def payout(db, uid, data, core):
 
 def route(db, ctx, method, path, data, core):
     uid = ctx['uid']
+    if path == '/api/orders/review-required' and method == 'GET':
+        core['require_user'](ctx)
+        row = db.execute("""SELECT o.id FROM orders o JOIN payments p ON p.order_id=o.id
+            WHERE o.buyer_id=? AND o.status='completed' AND o.payment_mode='stripe_test'
+            AND p.provider='stripe_test' AND p.status='succeeded'
+            AND NOT EXISTS(SELECT 1 FROM platform_config c WHERE c.key='stripe_test:review:'||o.id)
+            ORDER BY o.updated_at DESC,o.id DESC LIMIT 1""", (uid,)).fetchone()
+        return {'order_id': row['id'] if row else None}
     match = re.fullmatch(r'/api/orders/([A-Za-z0-9_-]+)/test-review', path)
     if match and method in ('GET', 'POST'):
         core['require_verified'](ctx)

@@ -220,9 +220,8 @@ test('market cards show the actual owner name and photo with a safe initials fal
   assert.doesNotMatch(unsafe,/<script|src="javascript:/);
   assert.match(unsafe,/&lt;script&gt;/);
   const sold=context.marketCard({...item,available:0,is_favorite:true});
-  assert.match(sold,/market-sold-out/);
-  assert.match(sold,/aria-pressed="true"/);
-  assert.match(sold,/href="\/listing\/offer"/);
+  assert.equal(sold,'');
+  assert.equal(context.marketCard({...item,status:'sold_out',available:1}),'');
 });
 
 test('Top Up admin excludes deleted packages until the hidden filter is selected', () => {
@@ -324,7 +323,7 @@ test('home bootstrap does not wait for account collections before showing the pa
  // Extract only bootstrap, without adjacent unrelated route helpers.
  const stop=bootstrapSource.indexOf('\n}',bootstrapSource.indexOf('async function bootstrap'))+2;
  let sessionResolve,painted=false;
- const context={localStorage:{getItem:()=>null},localeKey:'language',supportedLocales:new Set(['en']),
+ const context={window:{},localStorage:{getItem:()=>null},localeKey:'language',supportedLocales:new Set(['en']),
   location:{pathname:'/',hash:'',search:''},loadAsiaMarkets:async()=>{},
   api:()=>new Promise(resolve=>sessionResolve=resolve),
   navigate:async()=>{painted=true},ExperienceUX:{sync:()=>new Promise(()=>{})},

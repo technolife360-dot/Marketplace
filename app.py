@@ -1044,7 +1044,7 @@ def parse_json(body):
     return value
 
 def catalogue_predicates(db,qs,uid=None):
-    where=["l.status='published'"]; args=[]
+    where=["l.status='published'",'l.stock>l.reserved']; args=[]
     if MODE=='production':where.append(launch_readiness.TEST_SQL)
     if qs.get('_match_listing',[''])[0]:where.append('l.id=?');args.append(qs['_match_listing'][0])
     if MODE=='production' and not internal_testing_enabled():
@@ -2044,7 +2044,7 @@ class Handler(BaseHTTPRequestHandler):
                 CASE WHEN s.identity_provider='didit' AND s.identity_status='verified' THEN 1 ELSE 0 END AS identity_verified
                 FROM listings l JOIN games g ON g.id=l.game_id JOIN categories c ON c.id=l.category_id JOIN users u ON u.id=l.seller_id
                 LEFT JOIN seller_profiles s ON s.user_id=l.seller_id LEFT JOIN platform_config av ON av.key='public_avatar:'||l.seller_id
-                WHERE l.game_id=? AND l.status='published' AND l.id<>? AND ({related_public}) ORDER BY l.created_at DESC LIMIT 4""",(item['game_id'],lid))]
+                WHERE l.game_id=? AND l.status='published' AND l.stock>l.reserved AND l.id<>? AND ({related_public}) ORDER BY l.created_at DESC LIMIT 4""",(item['game_id'],lid))]
             for related in item['related']:
                 related['attributes']={key:value for key,value in json.loads(related.pop('attributes_json') or '{}').items() if not key.startswith('_')}
             purchase_reviews.add_listing_scores(db,item['related'])
@@ -2160,7 +2160,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/notifications' and method=='GET':
             require_user(ctx); return [dict(x) for x in db.execute('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 50',(uid,))]
         if path=='/api/favorites' and method=='GET':
-            require_user(ctx); return [item for x in db.execute('SELECT listing_id FROM favorites WHERE user_id=? ORDER BY created_at DESC',(uid,)) if (item:=listing_detail(db,x['listing_id'],uid))]
+            require_user(ctx); return [item for x in db.execute("SELECT f.listing_id FROM favorites f JOIN listings l ON l.id=f.listing_id WHERE f.user_id=? AND l.status='published' AND l.stock>l.reserved ORDER BY f.created_at DESC",(uid,)) if (item:=listing_detail(db,x['listing_id'],uid))]
         if path=='/api/admin/top-up' and method=='GET':
             require_admin(ctx)
             seed_topup_catalog(db)

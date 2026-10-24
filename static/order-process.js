@@ -12,6 +12,33 @@ window.OrderFlow = (() => {
   const check=(name,label)=>`<label class="of-check"><input type="checkbox" name="${name}" required><span>${label}</span></label>`;
   const testBadge=()=>`<span class="of-test-badge">${tr('TEST MODE · no real money','SINOV REJIMI · haqiqiy pul emas','ТЕСТОВЫЙ РЕЖИМ · без реальных денег')}</span>`;
   const emptyState=message=>`<div class="of-empty">${icon('box')}<p>${message}</p><a href="/browse">${tr('Browse listings','E’lonlarni ko‘rish','Посмотреть предложения')} →</a></div>`;
+  let reviewGate=null,reviewGateUser=null,reviewGateChecked=false,reviewGateRequest=null;
+  function reviewReady(form){const rating=Number(form.elements.rating.value),body=form.elements.body.value.trim();return Number.isInteger(rating)&&rating>=1&&rating<=5&&body.length>=5&&body.length<=1500}
+  function requireReview(id){reviewGate=id;reviewGateUser=me.id;reviewGateChecked=true}
+  function reviewRequired(){return !!me&&reviewGateUser===me.id&&!!reviewGate}
+  function focusReview(){const form=app.querySelector('#of-test-review');form?.scrollIntoView({block:'center',behavior:'smooth'});(form?.querySelector('.site-select-trigger')||form?.querySelector('[name=rating]'))?.focus();toast(tr('Select a rating and write your review before leaving.','Chiqishdan oldin baho tanlang va sharhingizni yozing.','Перед выходом выберите оценку и напишите отзыв.'))}
+  async function guardNavigation(){
+    if(!me){reviewGate=null;reviewGateUser=null;reviewGateChecked=false;reviewGateRequest=null;return false}
+    if(reviewGateUser!==me.id){reviewGate=null;reviewGateUser=me.id;reviewGateChecked=false;reviewGateRequest=null}
+    if(!reviewGateChecked){
+      const uid=me.id;
+      if(!reviewGateRequest)reviewGateRequest=api('/orders/review-required');
+      try{const pending=await reviewGateRequest;if(me?.id!==uid)return false;reviewGate=pending.order_id;reviewGateChecked=true}catch{return false}finally{reviewGateRequest=null}
+    }
+    if(!reviewRequired())return false;
+    const target='/#order/'+enc(reviewGate);
+    if(location.pathname+location.hash===target)return false;
+    history.replaceState(history.state,'',target);
+    if(app.querySelector('[data-of-order]')?.dataset.ofOrder===reviewGate&&app.querySelector('#of-test-review')){focusReview();return true}
+    return false;
+  }
+  document.addEventListener('click',event=>{
+    if(!reviewRequired())return;
+    const link=event.target.closest('a[href]');if(!link)return;
+    const destination=new URL(link.href,location.href);
+    if(destination.origin!==location.origin||destination.pathname+destination.hash==='/#order/'+enc(reviewGate))return;
+    event.preventDefault();event.stopImmediatePropagation();focusReview();
+  },true);
   function phase(o,buyer){
     if(['cancelled','refunded','refund_pending','disputed'].includes(o.status))return -1;
     if(o.status==='completed')return 3;
@@ -43,7 +70,7 @@ window.OrderFlow = (() => {
     if(button)button.disabled=true;
     const root=button?.closest('form, .of-card, .of-stage')||app;
     root.querySelector('.of-action-error')?.remove();
-    try{await fn()}catch(err){const p=document.createElement('p');p.className='of-error of-action-error';p.setAttribute('role','alert');p.textContent=err.message;root.append(p)}finally{if(button?.isConnected)button.disabled=false}
+    try{await fn()}catch(err){const p=document.createElement('p');p.className='of-error of-action-error';p.setAttribute('role','alert');p.textContent=err.message;root.append(p)}finally{if(button?.isConnected)button.disabled=button.form?.id==='of-test-review'?!reviewReady(button.form):false}
   }
   function bind(form,fn){if(!form)return;form.addEventListener('submit',event=>{event.preventDefault();if(!form.reportValidity())return;action(event.submitter,()=>fn(Object.fromEntries(new FormData(form)),form))})}
   function click(selector,fn){app.querySelectorAll(selector).forEach(b=>b.onclick=()=>action(b,()=>fn(b)))}
@@ -92,6 +119,7 @@ window.OrderFlow = (() => {
     const route=location.href,[o,w]=await Promise.all([api(url(id)),api(url(id)+'/workflow')]);if(location.href!==route)return;
     const buyer=w.order.buyer,current=phase(o,buyer),observer=!buyer&&!w.items.some(i=>i.seller_id===me.id);
     app.innerHTML=`<section class="page order-process" data-of-order="${s(id)}"><header class="of-page-heading"><div><a class="route-back-link" href="/#orders">← ${tr('Orders','Buyurtmalar','Заказы')}</a><h1>${tr('Order','Buyurtma','Заказ')} ${s(o.reference)}</h1><p class="of-muted">${when(o.created_at)} · ${money(o.total_minor,o.currency)}</p></div>${o.funds?.test_only?testBadge():''}</header>${o.payment?.provider==='sandbox'?notice(tr('This older order used the local simulator, not Stripe. Start a new purchase to use Stripe test checkout.','Bu eski buyurtma Stripe orqali emas, mahalliy simulyatorda yaratilgan. Stripe test to‘lovi uchun yangi xarid boshlang.','Этот старый заказ создан в локальном симуляторе, а не в Stripe. Для тестовой оплаты Stripe начните новую покупку.')):''}${steps(current,buyer)}<div class="of-layout"><main class="of-card of-stage" id="of-stage">${observer?notice(tr('Moderator view. Delivery credentials remain private.','Moderator ko‘rinishi. Kirish ma’lumotlari maxfiy qoladi.','Режим модератора. Данные доступа остаются приватными.')):''}${observer?`<h2>${tr('Order review','Buyurtma tekshiruvi','Проверка заказа')}</h2><p class="of-muted">${s(statusLabel(o.status))}</p>${funds(o,false)}<a class="of-secondary" href="/#admin">${tr('Open admin review','Admin tekshiruvini ochish','Открыть проверку администратора')}</a>`:stageMarkup(o,w,buyer)}</main><aside><section class="of-card of-summary"><h2>${tr('Order summary','Buyurtma hisobi','Сумма заказа')}</h2>${o.items.map(i=>product(i,o.currency)).join('')}${totals(o,buyer)}<div class="of-chat-actions">${(buyer?[...new Set(o.items.map(i=>i.store_id))]:observer?[]:[me.id]).map(seller=>button(icon('message')+' '+(buyer?tr('Message seller','Sotuvchiga yozish','Написать продавцу'):tr('Message buyer','Xaridorga yozish','Написать покупателю')),`data-of-chat="${s(seller)}"`)).join('')}</div>${button(icon('refresh')+' '+tr('Refresh status','Holatni yangilash','Обновить статус'),'data-of-refresh')}</section><details class="of-card of-history"><summary>${tr('Order history','Buyurtma tarixi','История заказа')}</summary>${o.events.map(event=>`<article><b>${s(statusLabel(event.to_status))}</b><time>${when(event.created_at)}</time><p>${s(event.note)}</p></article>`).join('')}</details></aside></div><details class="of-card of-tools" ${w.is_paused?'open':''}><summary>${tr('Evidence, cancellation & after-sale support','Dalillar, bekor qilish va sotuvdan keyingi yordam','Доказательства, отмена и поддержка после продажи')}</summary><div class="ux-order-guide" hidden></div></details><div data-launch-progress></div></section>`;
+    if(buyer&&o.status==='completed'&&o.payment?.provider==='stripe_test')requireReview(o.id);
     // Preserve existing evidence, cancellation, appeals and after-sale endpoints.
     // Their forms live in one secondary accordion, not over the current step.
     await TradeUX.order(o,w);
@@ -129,8 +157,11 @@ window.OrderFlow = (() => {
     const host=app.querySelector('[data-of-review]');if(!host)return;
     if(o.payment?.provider==='stripe_test'){
       const existing=await api(url(o.id)+'/test-review');if(!host.isConnected)return;
-      host.innerHTML=`<h3>${tr('Leave a test review','Test sharhini qoldirish','Оставить тестовый отзыв')}</h3><p class="of-muted">${tr('Optional. Test reviews stay private to this order and do not change public ratings.','Ixtiyoriy. Test sharhi faqat buyurtmada qoladi va ommaviy reytingga ta’sir qilmaydi.','Необязательно. Тестовые отзывы остаются в заказе и не влияют на публичный рейтинг.')}</p><form id="of-test-review"><label class="of-field"><span>${tr('Rating','Baho','Оценка')}</span><select name="rating" required><option value="">${tr('Choose a rating','Bahoni tanlang','Выберите оценку')}</option>${[5,4,3,2,1].map(n=>`<option value="${n}" ${existing.rating===n?'selected':''}>${'★'.repeat(n)}</option>`).join('')}</select></label><label class="of-field"><span>${tr('Your review','Sharhingiz','Ваш отзыв')}</span><textarea name="body" minlength="5" maxlength="1500" required>${s(existing.body||'')}</textarea></label><button class="of-primary" type="submit">${tr('Save test review','Test sharhini saqlash','Сохранить тестовый отзыв')}</button></form>`;
-      bind(host.querySelector('form'),async d=>{await post(url(o.id)+'/test-review',{rating:Number(d.rating),body:d.body});toast(tr('Test review saved','Test sharhi saqlandi','Тестовый отзыв сохранён'))});
+      if(existing.rating&&existing.body?.trim().length>=5){if(reviewGate===o.id)reviewGate=null}else requireReview(o.id);
+      host.innerHTML=`<h3>${tr('Leave a test review','Test sharhini qoldirish','Оставить тестовый отзыв')}</h3><p class="of-muted">${tr('Select a rating and write your review to finish. Test reviews stay private and do not change public ratings.','Yakunlash uchun baho tanlang va sharhingizni yozing. Test sharhlari maxfiy qoladi va ommaviy reytingga ta’sir qilmaydi.','Для завершения выберите оценку и напишите отзыв. Тестовые отзывы остаются приватными и не влияют на публичный рейтинг.')}</p><form id="of-test-review"><label class="of-field"><span>${tr('Rating','Baho','Оценка')}</span><select name="rating" required><option value="">${tr('Choose a rating','Bahoni tanlang','Выберите оценку')}</option>${[5,4,3,2,1].map(n=>`<option value="${n}" ${existing.rating===n?'selected':''}>${'★'.repeat(n)}</option>`).join('')}</select></label><label class="of-field"><span>${tr('Your review','Sharhingiz','Ваш отзыв')}</span><textarea name="body" minlength="5" maxlength="1500" required>${s(existing.body||'')}</textarea></label><button class="of-primary" type="submit" disabled>${tr('Save test review','Test sharhini saqlash','Сохранить тестовый отзыв')}</button></form>`;
+      const form=host.querySelector('form'),save=form.querySelector('[type=submit]');
+      const sync=()=>{save.disabled=!reviewReady(form)};form.addEventListener('input',sync);form.addEventListener('change',sync);sync();
+      bind(form,async d=>{if(!reviewReady(form))return;await post(url(o.id)+'/test-review',{rating:Number(d.rating),body:d.body.trim()});reviewGate=null;reviewGateChecked=false;toast(tr('Test review saved','Test sharhi saqlandi','Тестовый отзыв сохранён'));location.replace('/#home')});
     }else host.innerHTML=`<a class="of-primary" href="/#my-reviews">${tr('Leave a review','Sharh qoldirish','Оставить отзыв')} ${icon('star')}</a>`;
   }
   async function walletPage(){
@@ -140,5 +171,5 @@ window.OrderFlow = (() => {
     app.querySelectorAll('[data-of-payout]').forEach(form=>{const key=crypto.randomUUID();bind(form,async d=>{await post('/seller/test-wallet/payouts',{amount_minor:Math.round(Number(d.amount)*(form.dataset.ofPayout==='UZS'?1:100)),currency:form.dataset.ofPayout,request_key:key,test_only:true});await walletPage()})});
     click('[data-of-payout-result]',async b=>{await post('/seller/test-wallet/payouts/'+b.dataset.ofPayoutResult,{outcome:b.dataset.outcome,test_only:true});await walletPage()});
   }
-  return {cart,order,wallet:walletPage,phase,steps,stageMarkup,totals,statusLabel};
+  return {cart,order,wallet:walletPage,phase,steps,stageMarkup,totals,statusLabel,guardNavigation,reviewRequired};
 })();

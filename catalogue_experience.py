@@ -323,7 +323,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
                 db.execute('INSERT INTO experience_preferences(user_id,settings_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET settings_json=excluded.settings_json',(uid,json.dumps(prefs)))
                 db.execute('COMMIT')
             except Exception:db.execute('ROLLBACK');raise
-        return {'initialized':kind in settings(db,uid).get('collections_initialized',[]),'ids':[r['listing_id'] for r in db.execute('SELECT listing_id FROM account_collections WHERE user_id=? AND kind=? ORDER BY updated_at DESC',(uid,kind))]}
+        return {'initialized':kind in settings(db,uid).get('collections_initialized',[]),'ids':[r['listing_id'] for r in db.execute("SELECT a.listing_id FROM account_collections a JOIN listings l ON l.id=a.listing_id WHERE a.user_id=? AND a.kind=? AND l.status='published' AND l.stock>l.reserved ORDER BY a.updated_at DESC",(uid,kind))]}
     match=re.fullmatch(r'/api/price-watches/([^/]+)',path)
     if match and method in ('GET','POST','DELETE'):
         require(ctx);lid=match.group(1)
