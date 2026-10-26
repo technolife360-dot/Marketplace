@@ -7,6 +7,8 @@
   .mobile-listing-delivery-view { display:none; }
   .market-mobile-sales,.mobile-design-icon,.mobile-account-tools,.mobile-topup-short-name,.mobile-browse-title,.mobile-catalog-search,.mobile-browse-toolbar,.mobile-category-chips,.mobile-context-header,.mobile-admin-toggle { display:none; }
   @media(max-width:840px) {
+    /* Mobile pages use inline status text without an animated loading wheel. */
+    body.mobile-site #app .spinner { display:none!important; }
     body.mobile-site { --mobile-edge:18px; --mobile-gap:12px; --mobile-dock-space:0px; background:#000!important; color:#f1f1f1!important; font:14px/normal Roboto,Arial,sans-serif!important; padding-bottom:0!important; }
     body.mobile-site [hidden] { display:none!important; }
     body.mobile-site.mobile-has-dock { padding-bottom:calc(var(--mobile-dock-space) + env(safe-area-inset-bottom,0px))!important; }
