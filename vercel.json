@@ -13,5 +13,8 @@
       "path": "/api/cron/order-deadlines",
       "schedule": "7 3 * * *"
     }
+  ],
+  "regions": [
+    "icn1"
   ]
 }

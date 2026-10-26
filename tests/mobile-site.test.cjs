@@ -10,12 +10,12 @@ function harness({url='http://localhost/',user=null,mobile=true,reduced=false,st
   const body=node();body.append=(element)=>nodes.push(element);
   const document={body,createElement:node,addEventListener(){},querySelector(selector){return nodes.find(n=>selector==='.'+n.className)||null}};
   const app={querySelector(){return null},querySelectorAll(){return []}};
-  const context={window:{scrollTo(){}},document,app,location,me:user,locale:'en',adminText:(u,r,e)=>e,icon:()=>'<svg/>',esc:String,currentPageAnchor:()=>/^#purchase-reviews-topup-/.test(location.hash)?location.hash.slice(1):'',matchMedia:q=>({matches:q.includes('reduced-motion')?reduced:mobile,addEventListener(){}}),sessionStorage:{getItem:k=>storedValues.get(k),setItem:(k,v)=>storedValues.set(k,v)},setTimeout:(callback,ms)=>{timers.push({callback,ms});return timers.length},clearTimeout(){},requestAnimationFrame:cb=>cb(),MutationObserver:class{observe(){}},setLanguage(){},navigate(){}};
+  const context={URLSearchParams,window:{scrollTo(){}},document,app,location,me:user,locale:'en',adminText:(u,r,e)=>e,icon:()=>'<svg/>',esc:String,currentPageAnchor:()=>/^#purchase-reviews-topup-/.test(location.hash)?location.hash.slice(1):'',matchMedia:q=>({matches:q.includes('reduced-motion')?reduced:mobile,addEventListener(){}}),sessionStorage:{getItem:k=>storedValues.get(k),setItem:(k,v)=>storedValues.set(k,v)},setTimeout:(callback,ms)=>{timers.push({callback,ms});return timers.length},clearTimeout(){},requestAnimationFrame:cb=>cb(),MutationObserver:class{observe(){}},setLanguage(){},navigate(){}};
   vm.createContext(context);vm.runInContext(source,context);
   return {site:context.window.MobileSite,location,nodes,timers,context};
 }
-test('anonymous first mobile opening waits 3.4 seconds before sign-in',()=>{
-  const h=harness();h.site.init();h.site.sessionReady();
+test('explicit welcome preview can replay the approved animation',()=>{
+  const h=harness({url:'http://localhost/?intro=1'});h.site.init();h.site.sessionReady();
   assert.equal(h.nodes.filter(n=>n.className==='mobile-welcome').length,1);
   assert.deepEqual(h.timers.map(t=>t.ms),[2800,3400]);
   h.timers[0].callback();assert.equal(h.location.hash,'');
@@ -23,7 +23,7 @@ test('anonymous first mobile opening waits 3.4 seconds before sign-in',()=>{
   assert.equal(h.nodes.filter(n=>n.className==='mobile-welcome').length,0);
 });
 test('the welcome never redirects signed-in accounts',()=>{
-  const h=harness({user:{id:'buyer'}});h.site.init();h.site.sessionReady();h.timers.forEach(t=>t.callback());assert.equal(h.location.hash,'');
+  const h=harness({url:'http://localhost/?intro=1',user:{id:'buyer'}});h.site.init();h.site.sessionReady();h.timers.forEach(t=>t.callback());assert.equal(h.location.hash,'');
 });
 test('payment, verification and order deep links are never intercepted',()=>{
   for(const url of ['http://localhost/?payment=success#order/abc','http://localhost/#verify/abc','http://localhost/#order/abc','http://localhost/top-up/pubg-mobile','http://localhost/#login']){
@@ -31,13 +31,13 @@ test('payment, verification and order deep links are never intercepted',()=>{
   }
 });
 test('welcome does not replay in the same session or on desktop',()=>{
-  for(const options of [{stored:true},{mobile:false}]){const h=harness(options);h.site.init();assert.equal(h.timers.length,0);}
+  for(const options of [{stored:true},{mobile:false}]){const h=harness({url:'http://localhost/?intro=1',...options});h.site.init();assert.equal(h.timers.length,0);}
 });
 test('leaving home while the session resolves preserves the chosen route',()=>{
-  const h=harness();h.site.init();h.location.hash='browse';h.site.sessionReady();h.timers.forEach(t=>t.callback());assert.equal(h.location.hash,'#browse');
+  const h=harness({url:'http://localhost/?intro=1'});h.site.init();h.location.hash='browse';h.site.sessionReady();h.timers.forEach(t=>t.callback());assert.equal(h.location.hash,'#browse');
 });
 test('reduced motion uses a short static welcome',()=>{
-  const h=harness({reduced:true});h.site.init();assert.deepEqual(h.timers.map(t=>t.ms),[150,150]);
+  const h=harness({url:'http://localhost/?intro=1',reduced:true});h.site.init();assert.deepEqual(h.timers.map(t=>t.ms),[150,150]);
 });
 test('page anchors keep Top Up selected and purchase routes hide the dock',()=>{
   const h=harness({url:'http://localhost/top-up/pubg-mobile#purchase-reviews-topup-pubg-mobile'});h.site.init();assert.equal(h.context.document.body.dataset.mobileRoute,'top-up/pubg-mobile');
@@ -46,7 +46,7 @@ test('page anchors keep Top Up selected and purchase routes hide the dock',()=>{
 });
 
 test('welcome restores keyboard access after its overlay closes',()=>{
-  const h=harness(),underlay={inert:false};h.context.document.body.children.push(underlay);
+  const h=harness({url:'http://localhost/?intro=1'}),underlay={inert:false};h.context.document.body.children.push(underlay);
   h.site.init();assert.equal(underlay.inert,true);h.timers[1].callback();assert.equal(underlay.inert,false);
 });
 
@@ -127,7 +127,7 @@ test('mobile notification icons and ages follow real notification metadata',()=>
 });
 
 test('purchase cards filter the buyer orders by real status and retain item snapshots and totals',()=>{
-  const h=harness({user:{id:'buyer'}}),ctx=h.context;
+  const h=harness({url:'http://localhost/?intro=1',user:{id:'buyer'}}),ctx=h.context;
   ctx.parseServerDate=value=>new Date(value);ctx.localeTag=()=> 'en-US';ctx.fmt=(n,c)=>c+' '+(n/100).toFixed(2);
   ctx.marketGameLinks=[['pubg-mobile','PUBG Mobile','https://images.gamestorehub.com/site-assets/market-game-pubg-mobile.png']];
   ctx.window.OrderFlow={statusLabel:status=>({paid:'Payment confirmed',completed:'Completed',refunded:'Refunded'}[status]||status)};
@@ -158,4 +158,8 @@ test('the header menu replaces the bottom dock on every mobile route',()=>{
     assert.equal(classes.get('mobile-has-dock'),false,route);
   }
   assert.equal(removed,true);assert.equal(h.nodes.some(node=>node.className==='ux-mobile-nav'),false);
+});
+
+test('normal mobile and desktop visits have no welcome delay or forced login',()=>{
+ for(const mobile of [true,false])for(const user of [null,{id:'buyer'}]){const h=harness({mobile,user});h.site.init();h.site.sessionReady();assert.equal(h.timers.length,0);assert.equal(h.nodes.some(n=>n.className==='mobile-welcome'),false);assert.equal(h.location.hash,'');}
 });

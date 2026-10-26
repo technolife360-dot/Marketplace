@@ -89,3 +89,14 @@ test('writes are not aborted by a read deadline and caller cancellation is prese
  await context.apiRequest('/checkout',{method:'POST'});assert.equal(timers,0);assert.equal(seenSignal,undefined);
  await context.apiRequest('/listings',{signal:controller.signal});assert.equal(timers,0);assert.equal(seenSignal,controller.signal);
 });
+
+test('public discovery starts before profile lookup while protected routes wait for the session',async()=>{
+ for(const route of ['/browse','/top-up','/top-up/pubg-mobile','/top-up/pubg-mobile/660-uc','/games/pubg-mobile','/#browse','/#top-up','/#account','/#seller','/#cart','/#orders','/#admin']){
+  const url=new URL('https://example.test'+route),isPublic=!['#account','#seller','#cart','#orders','#admin'].includes(url.hash);
+  let resolveSession,navigations=0;
+  const context={window:{MobileSite:{sessionReady(){}}},location:{pathname:url.pathname,hash:url.hash,search:''},localStorage:{getItem:()=>null},localeKey:'language',supportedLocales:new Set(['en']),loadAsiaMarkets:async()=>{},api:()=>new Promise(resolve=>{resolveSession=resolve;}),syncProfileTrigger(){},syncLanguageMenu(){},syncSellItemButton(){},syncAdminLink(){},renderSupportWidget(){},document:{documentElement:{}},isHomeLocation:()=>false,navigate:async()=>{navigations++;},ExperienceUX:{sync:async()=>{}},URLSearchParams,localizeDOM(){},refreshCart(){},refreshNotifications(){}};
+  vm.createContext(context);const start=appSource.indexOf('async function bootstrap(){');vm.runInContext(appSource.slice(start,appSource.indexOf('\n}',start)+2),context);
+  const pending=context.bootstrap();assert.equal(navigations,isPublic?1:0,route);
+  resolveSession({user:{id:'buyer'},csrf:'test'});await pending;assert.equal(navigations,1,route+' should render once');
+ }
+});

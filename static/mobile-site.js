@@ -138,7 +138,8 @@ window.MobileSite = (() => {
     finishIntroNavigation();
   }
   function showIntro() {
-    if (!isMobile() || location.pathname !== '/' || !['', '#home'].includes(location.hash) || location.search) return;
+    // Never delay normal visits; the animation is available only by explicit preview.
+    if (!isMobile() || location.pathname !== '/' || !['', '#home'].includes(location.hash) || new URLSearchParams(location.search).get('intro') !== '1') return;
     try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch {}
     initialUrl = location.href;
     introEligible = true;

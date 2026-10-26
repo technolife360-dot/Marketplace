@@ -339,12 +339,15 @@ async function bootstrap(){
   await marketsReady;
   document.documentElement.lang=locale;document.documentElement.dir=locale==='ar'?'rtl':'ltr';syncLanguageMenu();syncSellItemButton();syncAdminLink();renderSupportWidget();
  })();
- // Paint the public home shell while session and catalogue requests run in parallel.
- const initialHome=isHomeLocation()?navigate():null;
+ // Public discovery pages can load their data alongside session verification.
+ // Protected account, selling and payment routes still wait for that session.
+ const initialLocation=location.pathname+location.hash;
+ const publicRoute=location.hash?location.hash.slice(1):location.pathname.replace(/^\/|\/$/g,'');
+ const initialPublic=(isHomeLocation()||/^(?:browse|top-up(?:\/[^/]+){0,2}|games\/[^/]+(?:\/[^/]+)?)$/.test(publicRoute))?navigate():null;
  await bootstrapSessionReady;
  window.MobileSite?.sessionReady();
  const collectionsReady=ExperienceUX.sync().catch(()=>{});
- if(initialHome){await initialHome;await window.OrderFlow?.guardNavigation();if(!isHomeLocation())await navigate()}else{if(location.hash==='#compare'||location.pathname==='/compare')await collectionsReady;await navigate()}
+ if(initialPublic){await initialPublic;await window.OrderFlow?.guardNavigation();if(initialLocation!==location.pathname+location.hash)await navigate()}else{if(location.hash==='#compare'||location.pathname==='/compare')await collectionsReady;await navigate()}
  const linkedProvider=new URLSearchParams(location.search).get('oauth_linked');if(linkedProvider==='facebook'){toast('Facebook hisobingiz SentryLoot profilingizga bog‘landi.');history.replaceState(history.state,'',location.pathname+'#home')}
  localizeDOM();refreshCart();refreshNotifications();
 }
