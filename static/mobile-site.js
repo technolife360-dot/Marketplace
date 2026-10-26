@@ -31,6 +31,7 @@ window.MobileSite = (() => {
     "arrow": "<path d=\"M4 12h16m-6-6 6 6-6 6\"/>",
     "truck": "<path d=\"M1 4h13v13H1V4ZM14 9h5l4 5v3h-9M5 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm14 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z\"/>",
     "wallet": "<path d=\"M3 7V4l15-3v6M3 7h18v15H3V7ZM16 12h5v6h-5v-6Z\"/><path d=\"M18 15h.01\"/>",
+    "menu": "<path d=\"M3 6h18M3 12h18M3 18h18\"/>",
     "filter": "<path d=\"M3 6h18M6 12h12M9 18h6\"/>",
     "check": "<path d=\"m5 12 4 4L19 6\"/>",
     "home": "<path d=\"m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V10Z\"/>"
@@ -46,9 +47,9 @@ window.MobileSite = (() => {
     const path = location.pathname.replace(/^\/+|\/+$/g, '');
     return path || 'home';
   }
-  function navHidden(route) {
-    return /^(?:account\/|menu$|search$|games\/|top-up\/|login|register|check-email|password-reset|verify\/|email-change\/|security-unlock|contact-details|cart$|notifications$|orders$|order\/|topup-order\/|listing\/|listing-review\/|conversation\/|admin|top-up-admin|review-moderation|order-case|catalog-readiness|launch-settings|staff|stripe-test)/.test(route)
-      || Boolean(document.querySelector('#app .offer-create-page'));
+  function navHidden() {
+    // Main navigation now lives in the header menu on mobile.
+    return true;
   }
   function navKey(route) {
     if (route === 'home') return 'home';
@@ -65,29 +66,9 @@ window.MobileSite = (() => {
     document.body.classList.toggle('mobile-has-dock', !hidden);
     document.body.classList.toggle('mobile-context-auth', /^(?:login|register|check-email|password-reset|verify\/|security-unlock|contact-details|email-change\/)/.test(route));
     document.body.classList.toggle('mobile-context-admin', /^(?:admin|top-up-admin|review-moderation|order-case|catalog-readiness|launch-settings|staff|stripe-test)/.test(route));
-    let nav = document.querySelector('.ux-mobile-nav');
-    if (nav && nav.dataset.locale !== locale) { nav.remove(); nav = null; }
-    if (!nav) {
-      nav = document.createElement('nav');
-      nav.dataset.locale = locale;
-      nav.className = 'ux-mobile-nav';
-      nav.setAttribute('aria-label', t('Asosiy navigatsiya', 'Главная навигация', 'Main navigation'));
-      nav.innerHTML = [
-        ['/#home', 'home', t('Bosh sahifa', 'Главная', 'Home'), 'home'],
-        ['/browse', 'box', t('Marketplace', 'Маркетплейс', 'Marketplace'), 'browse'],
-        ['/top-up', 'coins', 'Top Up', 'topup'],
-        ['/#messages', 'message', t('Xabarlar', 'Сообщения', 'Messages'), 'messages'],
-        ['/#account', 'user', t('Hisob', 'Аккаунт', 'Account'), 'account'],
-      ].map(([href, glyph, label, section]) => `<a href="${href}" data-mobile-section="${section}">${designIcon(glyph === 'message' ? 'chat' : glyph)}<span>${esc(label)}</span>${section === 'messages' ? '<i id="ux-unread" hidden></i>' : ''}</a>`).join('');
-      document.body.append(nav);
-    }
-    nav.hidden = hidden;
-    const active = navKey(route);
-    nav.querySelectorAll('[data-mobile-section]').forEach(link => {
-      if (link.dataset.mobileSection === active) link.setAttribute('aria-current', 'page');
-      else link.removeAttribute('aria-current');
-    });
+    document.querySelector('.ux-mobile-nav')?.remove();
   }
+
   function accountRow(glyph, label, href) {
     return `<a class="mobile-account-row" href="${href}">${designIcon(glyph)}<span>${esc(label)}</span>${designIcon('right')}</a>`;
   }
@@ -193,7 +174,7 @@ window.MobileSite = (() => {
     if(context&&routeFromLocation()==='notifications'){context.querySelector('span').textContent=t('Hisobingiz','Ваш аккаунт','Your account');context.querySelector('a').href='/#account';}
     if(context&&/^games\//.test(routeFromLocation()))context.querySelector('a').href='/browse';
     if(context){const back=context.querySelector('a'),isMenu=routeFromLocation()==='menu';if(isMenu){context.querySelector('span').textContent=t('Menyu','Меню','Menu');back.href='/#home';if(!back.dataset.menuClose){back.innerHTML='<svg class="mobile-design-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg>';back.dataset.menuClose='1';}}else if(back.dataset.menuClose){back.innerHTML=designIcon('arrow');delete back.dataset.menuClose;}}
-    [['#cart-button','cart'],['#notifications-button','bell'],['#mobile-search-toggle','search']].forEach(([selector,glyph]) => {
+    [['#cart-button','cart'],['#notifications-button','bell'],['#mobile-search-toggle','search'],['#mobile-menu-toggle','menu']].forEach(([selector,glyph]) => {
       const button = header.querySelector(selector);
       if (button && !button.querySelector('.mobile-design-icon')) button.insertAdjacentHTML('beforeend', designIcon(glyph));
     });

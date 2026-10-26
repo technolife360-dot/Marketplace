@@ -147,3 +147,15 @@ test('purchase cards filter the buyer orders by real status and retain item snap
   assert.equal(h.site.purchaseGroup({status:'cancelled'}),'cancelled');
   assert.equal(h.site.navHidden('orders'),true);
 });
+
+test('the header menu replaces the bottom dock on every mobile route',()=>{
+  const h=harness(),classes=new Map();let removed=false;
+  h.context.document.body.classList.toggle=(name,value)=>classes.set(name,value);
+  h.nodes.push({className:'ux-mobile-nav',remove(){removed=true;h.nodes.splice(h.nodes.indexOf(this),1)}});
+  for(const route of ['home','browse','account','messages','top-up','orders','cart']){
+    h.site.syncNavigation(route);
+    assert.equal(h.site.navHidden(route),true,route);
+    assert.equal(classes.get('mobile-has-dock'),false,route);
+  }
+  assert.equal(removed,true);assert.equal(h.nodes.some(node=>node.className==='ux-mobile-nav'),false);
+});

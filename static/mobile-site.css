@@ -7,7 +7,7 @@
   .mobile-listing-delivery-view { display:none; }
   .market-mobile-sales,.mobile-design-icon,.mobile-account-tools,.mobile-topup-short-name,.mobile-browse-title,.mobile-catalog-search,.mobile-browse-toolbar,.mobile-category-chips,.mobile-context-header,.mobile-admin-toggle { display:none; }
   @media(max-width:840px) {
-    body.mobile-site { --mobile-edge:18px; --mobile-gap:12px; --mobile-dock-space:112px; background:#000!important; color:#f1f1f1!important; font:14px/normal Roboto,Arial,sans-serif!important; padding-bottom:0!important; }
+    body.mobile-site { --mobile-edge:18px; --mobile-gap:12px; --mobile-dock-space:0px; background:#000!important; color:#f1f1f1!important; font:14px/normal Roboto,Arial,sans-serif!important; padding-bottom:0!important; }
     body.mobile-site [hidden] { display:none!important; }
     body.mobile-site.mobile-has-dock { padding-bottom:calc(var(--mobile-dock-space) + env(safe-area-inset-bottom,0px))!important; }
     body.mobile-site #app { width:100%!important; max-width:none!important; min-width:0!important; margin:0!important; padding:0!important; background:#000!important; }
@@ -36,25 +36,26 @@
     body.mobile-site #app .actions { flex-wrap:wrap!important; gap:10px!important; }
     body.mobile-site #app .empty { padding:28px 16px!important; border-radius:14px!important; font-size:13px!important; }
 
-    /* One 56px header: crest + wordmark, cart, notifications, search. */
+    /* Compact mobile header: wordmark, cart, notifications, search, menu. */
     body.mobile-site .site-header { position:sticky!important; top:0!important; z-index:70!important; background:#000!important; }
-    body.mobile-site .site-header .topbar { grid-template-columns:minmax(0,1fr) repeat(3,42px)!important; grid-template-rows:44px!important; padding:6px max(16px,env(safe-area-inset-right)) 6px max(16px,env(safe-area-inset-left))!important; min-height:55px!important; height:55px!important; }
+    body.mobile-site .site-header .topbar { grid-template-columns:42px minmax(0,1fr) repeat(3,42px)!important; grid-template-rows:44px!important; padding:6px max(16px,env(safe-area-inset-right)) 6px max(16px,env(safe-area-inset-left))!important; min-height:55px!important; height:55px!important; }
+    body.mobile-site .site-header .header-start { grid-column:2!important; }
     body.mobile-site .site-header .brand { gap:8px!important; }
     body.mobile-site .mobile-design-icon { display:block!important; width:24px; height:24px; fill:none!important; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; overflow:visible; }
-    body.mobile-site .site-header :is(#cart-button,#notifications-button,#mobile-search-toggle) { width:42px!important; min-width:42px!important; height:44px!important; }
-    body.mobile-site .site-header :is(#cart-button,#notifications-button,#mobile-search-toggle)>.icon { display:none!important; }
+    body.mobile-site .site-header :is(#cart-button,#notifications-button,#mobile-search-toggle,#mobile-menu-toggle) { width:42px!important; min-width:42px!important; height:44px!important; }
+    body.mobile-site .site-header :is(#cart-button,#notifications-button,#mobile-search-toggle,#mobile-menu-toggle)>.icon { display:none!important; }
     body.mobile-site .site-header .mobile-design-icon { width:22px!important; height:22px!important; }
     body.mobile-site .site-header { border-bottom:1px solid #202022!important; }
-    body.mobile-site .site-header .brand-mark { width:31px!important; height:31px!important; flex:0 0 31px!important; }
+    body.mobile-site .site-header .brand-mark { display:none!important; }
     body.mobile-site .site-header .brand>span:last-child { display:inline!important; font-size:18px!important; font-weight:750!important; line-height:1!important; letter-spacing:-.6px!important; white-space:nowrap!important; }
-    body.mobile-site .site-header #cart-button { grid-column:2!important; }
-    body.mobile-site .site-header #notifications-button { grid-column:3!important; }
-    body.mobile-site .site-header #mobile-search-toggle { grid-column:4!important; }
-    body.mobile-site .site-header #mobile-menu-toggle { display:none!important; }
+    body.mobile-site .site-header #cart-button { grid-column:3!important; }
+    body.mobile-site .site-header #notifications-button { grid-column:4!important; }
+    body.mobile-site .site-header #mobile-search-toggle { grid-column:5!important; }
+    body.mobile-site .site-header #mobile-menu-toggle { display:grid!important; place-items:center!important; grid-column:1!important; grid-row:1!important; max-width:42px!important; border:0!important; background:none!important; box-shadow:none!important; }
     body.mobile-site .site-header.mobile-search-open :is(#cart-button,#notifications-button) { visibility:hidden!important; pointer-events:none!important; }
     body.mobile-site .site-header.mobile-search-open .brand>span:last-child { visibility:hidden!important; }
     body.mobile-site .site-header.mobile-search-open #search-form.header-search { grid-column:1 / -1!important; width:calc(100% - 44px)!important; max-width:360px!important; padding-right:44px!important; justify-self:end!important; }
-    body.mobile-site .site-header.mobile-search-open #mobile-search-toggle { grid-column:4!important; }
+    body.mobile-site .site-header.mobile-search-open #mobile-search-toggle { grid-column:5!important; }
     body.mobile-site #route-back { width:100%!important; margin:0!important; padding:10px 18px 0!important; }
     body.mobile-site #route-back .route-back-link { min-height:32px!important; display:inline-flex!important; align-items:center!important; background:none!important; border:0!important; font-size:12px!important; }
     body.mobile-site[data-mobile-route=home] #route-back,body.mobile-site[data-mobile-route=browse] #route-back,body.mobile-site[data-mobile-route=account] #route-back,body.mobile-site[data-mobile-route=top-up] #route-back,body.mobile-site[data-mobile-route=messages] #route-back { display:none!important; }
@@ -103,14 +104,9 @@
     body.mobile-site #app .mobile-search-listing small { display:block!important; margin-top:4px!important; color:#aaa!important; font-size:11px!important; }
     body.mobile-site #app .mobile-search-listing>.mobile-design-icon:last-child { width:16px!important; height:16px!important; color:#777!important; }
     body.mobile-site #app .mobile-search-feedback { font-size:12px!important; line-height:1.55!important; color:#ffb16b!important; margin-top:20px!important; }
-    /* One floating glass dock. Hidden on checkout, handover, auth, chat and admin screens. */
-    body.mobile-site .ux-mobile-nav { position:fixed!important; inset:auto 14px max(28px,env(safe-area-inset-bottom,0px))!important; width:auto!important; max-width:480px!important; height:66px!important; margin:0 auto!important; display:grid!important; grid-template-columns:repeat(5,minmax(0,1fr))!important; gap:3px!important; padding:7px 8px!important; z-index:65!important; border:1px solid #ffffff2b!important; border-radius:999px!important; background:rgba(30,30,33,.66)!important; -webkit-backdrop-filter:blur(24px) saturate(150%)!important; backdrop-filter:blur(24px) saturate(150%)!important; box-shadow:inset 0 1px 0 #ffffff12,0 6px 22px #0006!important; }
-    body.mobile-site .ux-mobile-nav[hidden] { display:none!important; }
-    body.mobile-site .ux-mobile-nav a { min-width:0!important; min-height:50px!important; gap:4px!important; justify-content:center!important; border:0!important; border-radius:999px!important; background:transparent!important; color:#c4c4cb!important; font-size:9px!important; font-weight:400!important; line-height:normal!important; text-align:center!important; padding:0!important; }
-    body.mobile-site .ux-mobile-nav a :is(.icon,.mobile-design-icon) { width:21px!important; height:21px!important; flex:0 0 21px!important; color:inherit!important; }
-    body.mobile-site .ux-mobile-nav a[aria-current=page] { color:#ffb16b!important; background:#ffffff0d!important; }
-    body.mobile-site .ux-mobile-nav i { top:-2px!important; right:12%!important; min-width:16px!important; height:16px!important; padding:1px 4px!important; border:1px solid #131313!important; border-radius:10px!important; background:#e50032!important; color:#fff!important; font-size:9px!important; line-height:12px!important; }
-    body.mobile-site .ux-mobile-nav a:focus-visible { outline:2px solid #ffb16b!important; outline-offset:1px!important; }
+    body.mobile-site #mobile-navigation { inset:0 auto auto 0!important; border-left:0!important; border-right:1px solid #292929!important; border-radius:0 0 16px 0!important; }
+    /* Header menu replaces the old bottom navigation. */
+    body.mobile-site .ux-mobile-nav { display:none!important; }
     body.mobile-site:has(.mobile-welcome) #support-dock { display:none!important; }
     body.mobile-site.mobile-context-auth #support-dock { display:none!important; }
     body.mobile-site #support-dock .support-launcher { width:40px!important; height:40px!important; min-width:40px!important; min-height:40px!important; }
@@ -752,7 +748,7 @@
     body.mobile-site:is([data-mobile-route=messages],[data-mobile-route^="conversation/"]) #route-back { display:none!important; }
     body.mobile-site:is([data-mobile-route=messages],[data-mobile-route^="conversation/"]) { height:100dvh!important; overflow:hidden!important; overscroll-behavior:none!important; padding-bottom:0!important; }
     body.mobile-site[data-mobile-route=messages] #app { height:calc(100dvh - 56px)!important; }
-    body.mobile-site[data-mobile-route=messages] #app>.ux-messages { display:flex!important; flex-direction:column!important; height:100%!important; padding-bottom:calc(112px + env(safe-area-inset-bottom,0px))!important; overflow:hidden!important; }
+    body.mobile-site[data-mobile-route=messages] #app>.ux-messages { display:flex!important; flex-direction:column!important; height:100%!important; padding-bottom:calc(22px + env(safe-area-inset-bottom,0px))!important; overflow:hidden!important; }
     body.mobile-site[data-mobile-route=messages] #app .message-layout { flex:1!important; overflow:hidden!important; }
     body.mobile-site[data-mobile-route=messages] #app .conversation-list { min-height:0!important; overflow-y:auto!important; overscroll-behavior:contain!important; }
     body.mobile-site[data-mobile-route^="conversation/"] #app { height:calc(100dvh - 55px)!important; overflow:hidden!important; }

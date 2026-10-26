@@ -188,7 +188,7 @@ test('top-up totals reject invalid quantities and never invent an unset price', 
 });
 
 function sidebarMarkup(user, options) {
-  const context = {me: user, adminText: (_uz, _ru, en) => en, icon: name => `<svg data-icon="${name}"></svg>`};
+  const context = {me: user, location:{pathname:'/',hash:'#home'}, adminText: (_uz, _ru, en) => en, icon: name => `<svg data-icon="${name}"></svg>`};
   vm.createContext(context);
   const start = source.indexOf('function marketSidebarMarkup(');
   vm.runInContext(source.slice(start, source.indexOf('\nfunction marketBannerMarkup(', start)), context);
@@ -425,4 +425,14 @@ test('notification routes normalize stored hash links without accepting external
  for(const href of ['/#my-reviews','/my-reviews','#my-reviews'])assert.equal(context.notificationRoute(href),'my-reviews');
  assert.equal(context.notificationRoute('/order/real-order'),'order/real-order');
  assert.equal(context.notificationRoute('https://example.com/'),'account');
+});
+
+test('the mobile drawer includes Home and the previous dock destinations without changing the desktop sidebar',()=>{
+ const context={me:{id:'buyer',seller:false},location:{pathname:'/',hash:'#home'},adminText:(u,r,e)=>e,icon:()=>'<svg/>'};
+ vm.createContext(context);
+ vm.runInContext(source.slice(source.indexOf('function marketSidebarMarkup('),source.indexOf('\nfunction marketBannerMarkup(')),context);
+ const mobile=context.marketSidebarMarkup({}, {mobile:true}),desktop=context.marketSidebarMarkup();
+ for(const href of ['/#home','/browse','/top-up','/#messages'])assert.ok(mobile.includes('href="'+href+'"'),href);
+ assert.doesNotMatch(desktop,/href="\/#home"/);
+ assert.match(mobile,/id="mobile-market-sidebar"/);assert.match(desktop,/id="market-sidebar"/);
 });
