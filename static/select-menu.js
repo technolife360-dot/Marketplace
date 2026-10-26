@@ -12,15 +12,15 @@ window.SelectMenus=(()=>{
   let signature='',options=[];
   const state={picker,sync,close,position};states.set(select,state);
   function label(){const nativeLabel=select.labels?.[0];if(nativeLabel){if(!nativeLabel.id)nativeLabel.id=id+'-label';trigger.setAttribute('aria-labelledby',nativeLabel.id);return}trigger.setAttribute('aria-label',select.getAttribute('aria-label')||select.title||select.name||text('Tanlang','Выберите','Choose an option'))}
-  function filter(){const query=search.value.trim().normalize('NFKD').toLocaleLowerCase();options.forEach(button=>button.hidden=select.options[Number(button.dataset.option)].hidden||!button.textContent.normalize('NFKD').toLocaleLowerCase().includes(query));empty.hidden=options.some(button=>!button.hidden)}
+  function filter(){const query=search.value.trim().normalize('NFKD').toLocaleLowerCase();options.forEach(button=>{const hidden=select.options[Number(button.dataset.option)].hidden||!button.textContent.normalize('NFKD').toLocaleLowerCase().includes(query);if(button.hidden!==hidden)button.hidden=hidden;});const hideEmpty=options.some(button=>!button.hidden);if(empty.hidden!==hideEmpty)empty.hidden=hideEmpty}
   function sync(){
    if(!picker.isConnected)return;
-   label();trigger.disabled=select.disabled;trigger.setAttribute('aria-required',String(select.required));
+   label();if(trigger.disabled!==select.disabled)trigger.disabled=select.disabled;trigger.setAttribute('aria-required',String(select.required));
    const caption=[...select.selectedOptions].map(option=>option.label).join(', ')||text('Tanlang','Выберите','Choose an option');if(value.textContent!==caption)value.textContent=caption;
    const snapshot=JSON.stringify([...select.options].map(o=>[o.label,o.value,o.disabled,o.parentElement.disabled||false,o.hidden,o.selected]));
    if(signature!==snapshot){signature=snapshot;list.innerHTML=[...select.options].map((o,index)=>`<button type="button" role="option" data-option="${index}" aria-selected="${o.selected}" ${o.disabled||o.parentElement.disabled?'disabled':''}><span>${escape(o.label)}</span><span class="site-select-check" aria-hidden="true">✓</span></button>`).join('');options=[...list.children];filter()}
    const hint=text('Qidirish…','Поиск…','Search options…');if(search.placeholder!==hint){search.placeholder=hint;search.setAttribute('aria-label',hint)}
-   search.hidden=select.options.length<=8;const noResults=text('Natija topilmadi','Ничего не найдено','No options found');if(empty.textContent!==noResults)empty.textContent=noResults;
+   const hideSearch=select.options.length<=8;if(search.hidden!==hideSearch)search.hidden=hideSearch;const noResults=text('Natija topilmadi','Ничего не найдено','No options found');if(empty.textContent!==noResults)empty.textContent=noResults;
    if(select.multiple)list.setAttribute('aria-multiselectable','true');
    if(select.disabled&&active===state)close();
   }
@@ -57,6 +57,13 @@ window.SelectMenus=(()=>{
  document.addEventListener('click',event=>{const label=event.target.closest('label');if(label?.control?.tagName==='SELECT'&&!event.target.closest('.site-select')){const state=states.get(label.control);if(state){event.preventDefault();state.picker.querySelector('button').focus()}}});
  document.addEventListener('scroll',event=>{if(active&&!active.picker.contains(event.target))active.position()},true);
  window.addEventListener('resize',()=>active?.close());
- new MutationObserver(schedule).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['disabled','label','selected','hidden','lang']});
+ function relevantMutation(record){
+  if(record.type==='attributes')return record.target===document.documentElement||record.target.matches('select,option,optgroup');
+  if(record.target.closest?.('select,optgroup,option'))return true;
+  return [...record.addedNodes,...record.removedNodes].some(node=>node.nodeType===1&&(node.matches('select')||node.querySelector('select')));
+ }
+ const observer=new MutationObserver(records=>{if(records.some(relevantMutation))schedule();});
+ observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['disabled','label','selected','hidden']});
+ observer.observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
  schedule();return {enhance,refresh};
 })();

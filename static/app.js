@@ -37,7 +37,7 @@ document.addEventListener('click',e=>{
  }
 }
 const CRISP_DIRECT_CHAT_URL='https://go.crisp.chat/chat/embed/?website_id=23d64f2d-3d3a-4e73-bca1-4e24795ba125';
-function localizeDOM(root=document.body){if(!root)return;const skip='.product-title,.detail-desc,.bubble,.conversation-item,.seller-mini,.product-cover strong,.product-game,[data-user-content],#language-menu';const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode()){if(!node.data.trim()||node.parentElement?.closest(skip))continue;let rec=copyTextCache.get(node);if(!rec)rec={source:node.data,last:node.data};else if(node.data!==rec.last)rec={source:node.data,last:node.data};const next=localized(rec.source);if(next!==node.data)node.data=next;rec.last=next;copyTextCache.set(node,rec)}for(const el of $$('[placeholder],[aria-label],[title],[alt]',root)){if(el.closest(skip))continue;let rec=copyAttrCache.get(el)||{};for(const attr of ['placeholder','aria-label','title','alt']){if(!el.hasAttribute(attr))continue;const value=el.getAttribute(attr);if(!rec[attr]||value!==rec[attr].last)rec[attr]={source:value,last:value};const next=localized(rec[attr].source);if(next!==value)el.setAttribute(attr,next);rec[attr].last=next}copyAttrCache.set(el,rec)}document.documentElement.lang=locale;document.documentElement.dir=locale==='ar'?'rtl':'ltr';syncLanguageMenu();const skipLink=$('[data-skip-to-content]');if(skipLink){const label=adminText('Asosiy mazmunga o‘tish','Перейти к основному содержимому','Skip to main content');if(skipLink.textContent!==label)skipLink.textContent=label}}
+function localizeDOM(root=document.body){if(!root)return;const skip='.product-title,.detail-desc,.bubble,.conversation-item,.seller-mini,.product-cover strong,.product-game,[data-user-content],#language-menu,.crisp-client,#qa-vitals';const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode()){if(!node.data.trim()||node.parentElement?.closest(skip))continue;let rec=copyTextCache.get(node);if(!rec)rec={source:node.data,last:node.data};else if(node.data!==rec.last)rec={source:node.data,last:node.data};const next=localized(rec.source);if(next!==node.data)node.data=next;rec.last=next;copyTextCache.set(node,rec)}for(const el of $$('[placeholder],[aria-label],[title],[alt]',root)){if(el.closest(skip))continue;let rec=copyAttrCache.get(el)||{};for(const attr of ['placeholder','aria-label','title','alt']){if(!el.hasAttribute(attr))continue;const value=el.getAttribute(attr);if(!rec[attr]||value!==rec[attr].last)rec[attr]={source:value,last:value};const next=localized(rec[attr].source);if(next!==value)el.setAttribute(attr,next);rec[attr].last=next}copyAttrCache.set(el,rec)}if(document.documentElement.lang!==locale)document.documentElement.lang=locale;const direction=locale==='ar'?'rtl':'ltr';if(document.documentElement.dir!==direction)document.documentElement.dir=direction;syncLanguageMenu();const skipLink=$('[data-skip-to-content]');if(skipLink){const label=adminText('Asosiy mazmunga o‘tish','Перейти к основному содержимому','Skip to main content');if(skipLink.textContent!==label)skipLink.textContent=label}}
 let localizeQueued=false;new MutationObserver(()=>{if(localizeQueued)return;localizeQueued=true;requestAnimationFrame(()=>{localizeQueued=false;localizeDOM()})}).observe(document.body,{childList:true,subtree:true});
 function esc(x=''){return String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function icon(name,extra=''){return `<svg class="icon ${extra}" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-${name}" x="3" y="3" width="18" height="18"></use></svg>`}
@@ -119,7 +119,18 @@ function toast(message,kind='success'){
 }
 function promptLocale(message,defaultValue=''){return window.prompt(localized(message),defaultValue)}
 function confirmLocale(message){return window.confirm(localized(message))}
-async function api(path,opt={}){const headers={'Content-Type':'application/json',...(opt.headers||{})};if(opt.method&&opt.method!=='GET'&&csrf)headers['X-CSRF-Token']=csrf;let r=await fetch('/api'+path,{...opt,headers});let j=await r.json().catch(()=>({error:'Server javobi o‘qilmadi'}));if(!r.ok){const error=Error(localized(j.error||`Xatolik ${r.status}`));error.status=r.status;error.fields=Object.fromEntries(Object.entries(j.fields||{}).map(([key,value])=>[key,localized(value)]));window.ExperienceUX?.errorFromApi(error);throw error}return j}
+const referenceCache=new Map(),referencePending=new Map();let referenceGeneration=0;
+const referenceCopy=value=>JSON.parse(JSON.stringify(value));
+async function api(path,opt={}){
+ const method=(opt.method||'GET').toUpperCase(),reference=method==='GET'&&['/games','/categories'].includes(path)&&!opt.signal;
+ if(method!=='GET'){referenceGeneration++;referenceCache.clear();referencePending.clear();}
+ if(!reference)return apiRequest(path,opt);
+ const cached=referenceCache.get(path);if(cached&&cached.until>Date.now())return referenceCopy(cached.value);
+ let pending=referencePending.get(path);
+ if(!pending){const generation=referenceGeneration;pending=apiRequest(path,opt).then(value=>{if(generation===referenceGeneration)referenceCache.set(path,{value:referenceCopy(value),until:Date.now()+60000});return value;});referencePending.set(path,pending);pending.finally(()=>{if(referencePending.get(path)===pending)referencePending.delete(path);}).catch(()=>{});}
+ return referenceCopy(await pending);
+}
+async function apiRequest(path,opt={}){const headers={'Content-Type':'application/json',...(opt.headers||{})};if(opt.method&&opt.method!=='GET'&&csrf)headers['X-CSRF-Token']=csrf;let r=await fetch('/api'+path,{...opt,headers});let j=await r.json().catch(()=>({error:'Server javobi o‘qilmadi'}));if(!r.ok){const error=Error(localized(j.error||`Xatolik ${r.status}`));error.status=r.status;error.fields=Object.fromEntries(Object.entries(j.fields||{}).map(([key,value])=>[key,localized(value)]));window.ExperienceUX?.errorFromApi(error);throw error}return j}
 function btn(text,action,cls='button-secondary',attrs=''){return `<button class="${cls}" data-action="${action}" ${attrs}>${text}</button>`}
 function status(s){return `<span class="status ${esc(s)}">${esc(({pending_payment:'To‘lov kutilmoqda',paid:'To‘langan',awaiting_delivery:'Yetkazish kutilmoqda',delivered:'Yetkazildi',completed:'Yakunlandi',cancelled:'Bekor qilindi',disputed:'Nizoda',pending_review:'Tekshiruvda',approved_private:'Tasdiqlangan · yashirin',published:'Faol',rejected:'Rad etildi',draft:'Qoralama',paused:'To‘xtatilgan',not_public:'Bozorda ko‘rinmaydi',open:'Ochiq',pending:'Kutilmoqda',approved:'Tasdiqlandi',paid_out:'To‘landi'})[s]||s)}</span>`}
 function cover(it){const image=it.image_url?`<img src="${esc(it.image_url)}" alt="${esc(it.title)}" loading="lazy" referrerpolicy="no-referrer">`:`<span class="product-cover-placeholder" aria-hidden="true">${icon('gamepad')}</span>`;return `<div class="product-cover ${it.image_url?'':'product-cover-empty'}">${image}</div>`}
@@ -308,8 +319,9 @@ function isHomeLocation(){return location.pathname==='/'&&(!location.hash||locat
 async function bootstrap(){
  locale=localStorage.getItem(localeKey)||'en';if(!supportedLocales.has(locale))locale='en';
  bootstrapSessionReady=(async()=>{
-  await loadAsiaMarkets();
+  const marketsReady=loadAsiaMarkets();
   try{const m=await api('/me');me=m.user;csrf=m.csrf||'';if(m.mfa_required)location.hash='security-unlock';locale=localStorage.getItem(localeKey)||me?.language||'en';if(!supportedLocales.has(locale))locale='en';syncProfileTrigger()}catch{}
+  await marketsReady;
   document.documentElement.lang=locale;document.documentElement.dir=locale==='ar'?'rtl':'ltr';syncLanguageMenu();syncSellItemButton();syncAdminLink();renderSupportWidget();
  })();
  // Paint the public home shell while session and catalogue requests run in parallel.
@@ -317,7 +329,7 @@ async function bootstrap(){
  await bootstrapSessionReady;
  window.MobileSite?.sessionReady();
  const collectionsReady=ExperienceUX.sync().catch(()=>{});
- if(initialHome){await initialHome;await window.OrderFlow?.guardNavigation();if(!isHomeLocation())await navigate()}else{if(location.hash!=='#admin')await collectionsReady;await navigate()}
+ if(initialHome){await initialHome;await window.OrderFlow?.guardNavigation();if(!isHomeLocation())await navigate()}else{if(location.hash==='#compare'||location.pathname==='/compare')await collectionsReady;await navigate()}
  const linkedProvider=new URLSearchParams(location.search).get('oauth_linked');if(linkedProvider==='facebook'){toast('Facebook hisobingiz SentryLoot profilingizga bog‘landi.');history.replaceState(history.state,'',location.pathname+'#home')}
  localizeDOM();refreshCart();refreshNotifications();
 }
@@ -522,6 +534,7 @@ async function renderHome(filters={}){
    [t('Buyurtmani kuzating','Следите за заказом','Follow your order'),t('Yetkazish va keyingi qadamlar bir joyda.','Доставка и следующие шаги в одном месте.','Delivery and next steps, all in one place.')]
   ].map(([title,copy],i)=>`<li><span>${String(i+1).padStart(2,'0')}</span><div><h3>${title}</h3><p>${copy}</p></div></li>`).join('')}</ol></section>
  </div></div></section>`;
+ window.MobileSite?.sync('home');
  const search=$('#hero-search-form');search.onsubmit=event=>{event.preventDefault();openBrowse(Object.fromEntries(new FormData(search)))};
  const root=$('.home-storefront',app),slot=$('[data-home-listings]',root);
  setupMarketBanner();

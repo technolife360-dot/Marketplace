@@ -33,9 +33,10 @@
   }
   function syncLabels() {
     var copy = words();
-    hint.querySelector('strong').textContent = copy[0];
-    hint.querySelector('p').textContent = copy[1];
-    hint.querySelector('.support-hint-open').textContent = copy[2];
+    ['strong', 'p', '.support-hint-open'].forEach(function (selector, index) {
+      var element = hint.querySelector(selector);
+      if (element.textContent !== copy[index]) element.textContent = copy[index];
+    });
     launcher.setAttribute('aria-label', document.documentElement.dataset.supportChatOpen ? copy[4] : copy[3]);
     hint.querySelector('.support-hint-dismiss').setAttribute('aria-label', copy[4]);
   }

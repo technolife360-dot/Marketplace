@@ -8,7 +8,7 @@
     "start": "python3 app.py",
     "dev": "python3 app.py",
     "seed": "python3 seed.py",
-    "test": "node --test tests/mobile-site.test.cjs tests/frontend.test.cjs tests/offer-wizard.test.cjs tests/listing-detail.test.cjs tests/order-process.test.cjs && python3 -m unittest discover -s tests -v",
+    "test": "node --test tests/performance.test.cjs tests/mobile-site.test.cjs tests/frontend.test.cjs tests/offer-wizard.test.cjs tests/listing-detail.test.cjs tests/order-process.test.cjs && python3 -m unittest discover -s tests -v",
     "backup": "python3 scripts/backup_sqlite.py"
   },
   "engines": {
