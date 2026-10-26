@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 3
     env:
       PUSH_DISPATCH_TOKEN: ${{ secrets.PUSH_DISPATCH_TOKEN }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
     steps:
       - uses: actions/setup-python@v7
         with:
@@ -23,11 +24,20 @@ jobs:
         run: |
           python - <<'PY'
           import os,json
-          from urllib.request import Request,urlopen
+          from urllib.request import Request,build_opener,HTTPRedirectHandler
+          from urllib.error import HTTPError
           token=os.environ.get('PUSH_DISPATCH_TOKEN','')
           if not token:raise SystemExit('Scoped push dispatcher token is missing.')
-          request=Request('https://gamestorehub.com/api/cron/push-delivery',data=b'{}',headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'},method='POST')
-          with urlopen(request,timeout=90) as response:result=json.load(response)
+          bypass=os.environ.get('VERCEL_AUTOMATION_BYPASS_SECRET','').strip()
+          if not bypass:raise SystemExit('VERCEL_AUTOMATION_BYPASS_SECRET is required for the protected deployment.')
+          # Do not forward either credential to a redirect destination.
+          class NoRedirect(HTTPRedirectHandler):
+              def redirect_request(self,*args,**kwargs):return None
+          request=Request('https://gamestorehub.com/api/cron/push-delivery',data=b'{}',headers={'Authorization':'Bearer '+token,'Content-Type':'application/json','x-vercel-protection-bypass':bypass},method='POST')
+          try:
+              with build_opener(NoRedirect()).open(request,timeout=90) as response:result=json.load(response)
+          except HTTPError as error:
+              raise SystemExit('Push endpoint returned HTTP '+str(error.code)+'. Check the Vercel automation secret and scoped dispatcher token.') from None
           print('Push accepted:',result.get('sent',0),'Failed:',result.get('failed',0))
           if result.get('failed'):raise SystemExit('A push provider rejected a delivery; retry on the next run.')
           PY
