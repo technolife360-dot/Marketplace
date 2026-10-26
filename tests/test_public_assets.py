@@ -51,3 +51,13 @@ class PublicArtworkTests(unittest.TestCase):
         response, body = self.request('/static/assets/roboto-variable.ttf')
         self.assertEqual(response['status'], 200)
         self.assertTrue(body)
+
+    def test_compressed_font_is_preloaded_and_served_as_woff2(self):
+        response, page = self.request('/')
+        self.assertEqual(response['status'], 200)
+        self.assertIn(b'href="/static/assets/roboto-variable.woff2" as="font" type="font/woff2" crossorigin', page)
+        response, body = self.request('/static/assets/roboto-variable.woff2')
+        self.assertEqual(response['status'], 200)
+        self.assertEqual(response['headers']['Content-Type'], 'font/woff2')
+        self.assertTrue(response['headers']['Cache-Control'].startswith('public,'))
+        self.assertTrue(body.startswith(b'wOF2'))
