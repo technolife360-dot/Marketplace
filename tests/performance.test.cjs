@@ -28,7 +28,7 @@ test('dropdown mutation filtering ignores picker output while preserving native 
 });
 
 function apiHarness(){
- let count=0,now=0;const context={window:{},csrf:'',localized:String,Date:{now:()=>now},fetch:async(url,opt)=>{count++;return {ok:true,json:async()=>({url,method:opt.method||'GET',items:[{name:'Original'}]})};}};
+ let count=0,now=0;const context={window:{},csrf:'',localized:String,AbortController,setTimeout,clearTimeout,adminText:(_u,_r,en)=>en,Date:{now:()=>now},fetch:async(url,opt)=>{count++;return {ok:true,json:async()=>({url,method:opt.method||'GET',items:[{name:'Original'}]})};}};
  vm.createContext(context);const start=appSource.indexOf('const referenceCache=');const end=appSource.indexOf('\nfunction ',appSource.indexOf('async function apiRequest(',start));vm.runInContext(appSource.slice(start,end),context);
  return {context,count:()=>count,tick:()=>{now+=60001;}};
 }
@@ -67,4 +67,25 @@ test('Crisp labels stay unchanged on repeated language notifications but update 
  vm.createContext(context);vm.runInContext(source.slice(source.indexOf('  function syncLabels()'),source.indexOf('  function dismissHint()')),context);
  context.syncLabels();context.syncLabels();assert.equal(writes,0);
  copy=['Yordam kerakmi?','Savolingizni bizga yozing.','Chatni ochish','Yordam chatini ochish','Yopish'];context.syncLabels();context.syncLabels();assert.equal(writes,3);assert.equal(nodes.strong.textContent,copy[0]);
+});
+
+test('a stalled read stops loading after the deadline, including a stalled response body',async()=>{
+ for(const stalledBody of [false,true]){
+  let deadline,cleared=false;
+  const context={window:{},csrf:'',localized:String,AbortController,adminText:(_u,_r,en)=>en,setTimeout:(callback,ms)=>{assert.equal(ms,15000);deadline=callback;return 7;},clearTimeout:id=>{assert.equal(id,7);cleared=true;},fetch:async(_url,opt)=>{
+   const stalled=()=>new Promise((_resolve,reject)=>opt.signal.addEventListener('abort',()=>reject(Object.assign(Error('Aborted'),{name:'AbortError'}))));
+   if(!stalledBody)return stalled();return {ok:true,json:stalled};
+  }};
+  vm.createContext(context);vm.runInContext(appSource.slice(appSource.indexOf('async function apiRequest('),appSource.indexOf('\nfunction btn(')),context);
+  const request=context.apiRequest('/me');await new Promise(resolve=>setImmediate(resolve));deadline();
+  await assert.rejects(request,/server took too long/);assert.equal(cleared,true);
+ }
+});
+
+test('writes are not aborted by a read deadline and caller cancellation is preserved',async()=>{
+ let timers=0,seenSignal;const controller=new AbortController();
+ const context={window:{},csrf:'csrf',localized:String,AbortController,adminText:(_u,_r,en)=>en,setTimeout:()=>{timers++;},clearTimeout(){},fetch:async(_url,opt)=>{seenSignal=opt.signal;return {ok:true,json:async()=>({ok:true})};}};
+ vm.createContext(context);vm.runInContext(appSource.slice(appSource.indexOf('async function apiRequest('),appSource.indexOf('\nfunction btn(')),context);
+ await context.apiRequest('/checkout',{method:'POST'});assert.equal(timers,0);assert.equal(seenSignal,undefined);
+ await context.apiRequest('/listings',{signal:controller.signal});assert.equal(timers,0);assert.equal(seenSignal,controller.signal);
 });

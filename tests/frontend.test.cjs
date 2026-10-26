@@ -342,14 +342,14 @@ test('stored security notifications render in the current language',()=>{
   }
 });
 
-test('home paints banner and search before slow catalogue responses; abandoned requests cannot replace another page', async()=>{
+test('home paints public listings without waiting for the profile; abandoned requests cannot replace another page', {timeout:1000}, async()=>{
  const start=source.indexOf('async function renderHome(filters={}){');
  const homeSource=source.slice(start,source.indexOf('\nasync function renderComparison',start));
  for(const abandoned of [false,true]){
   const pending=[];const slot={innerHTML:'',setAttribute(){}};
   const root={isConnected:true},category={insertAdjacentHTML(){}};
   const context={window:{},app:{innerHTML:'',classList:{add(){}}},document:{body:{classList:{add(){}}}},
-   bootstrapSessionReady:null,URLSearchParams,Promise,marketGameLinks:[],
+   bootstrapSessionReady:new Promise(()=>{}),URLSearchParams,Promise,marketGameLinks:[],
    api:()=>new Promise(resolve=>pending.push(resolve)),adminText:(uz,ru,en)=>en,
    syncRouteBack(){},marketSidebarMarkup:()=>'<aside></aside>',esc:String,icon:()=>'',
    setupMarketBanner(){},marketCard:item=>'<article>'+item.title+'</article>',

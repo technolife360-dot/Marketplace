@@ -130,7 +130,22 @@ async function api(path,opt={}){
  if(!pending){const generation=referenceGeneration;pending=apiRequest(path,opt).then(value=>{if(generation===referenceGeneration)referenceCache.set(path,{value:referenceCopy(value),until:Date.now()+60000});return value;});referencePending.set(path,pending);pending.finally(()=>{if(referencePending.get(path)===pending)referencePending.delete(path);}).catch(()=>{});}
  return referenceCopy(await pending);
 }
-async function apiRequest(path,opt={}){const headers={'Content-Type':'application/json',...(opt.headers||{})};if(opt.method&&opt.method!=='GET'&&csrf)headers['X-CSRF-Token']=csrf;let r=await fetch('/api'+path,{...opt,headers});let j=await r.json().catch(()=>({error:'Server javobi o‘qilmadi'}));if(!r.ok){const error=Error(localized(j.error||`Xatolik ${r.status}`));error.status=r.status;error.fields=Object.fromEntries(Object.entries(j.fields||{}).map(([key,value])=>[key,localized(value)]));window.ExperienceUX?.errorFromApi(error);throw error}return j}
+async function apiRequest(path,opt={}){
+ const headers={'Content-Type':'application/json',...(opt.headers||{})};if(opt.method&&opt.method!=='GET'&&csrf)headers['X-CSRF-Token']=csrf;
+ // A stalled read must stop loading. Writes retain their existing semantics:
+ // aborting a payment or order submission could hide a successful server write.
+ const controller=!opt.signal&&(opt.method||'GET').toUpperCase()==='GET'?new AbortController():null;
+ const timer=controller?setTimeout(()=>controller.abort(),15000):null;
+ let r,j;
+ try{
+  r=await fetch('/api'+path,{...opt,headers,...(controller?{signal:controller.signal}:{})});
+  j=await r.json().catch(error=>{if(error.name==='AbortError')throw error;return {error:'Server javobi o‘qilmadi'};});
+ }catch(error){
+  if(controller?.signal.aborted)throw Error(adminText('Server javobi kechikdi. Qayta urinib ko‘ring.','Сервер не ответил вовремя. Попробуйте ещё раз.','The server took too long to respond. Please try again.'));
+  throw error;
+ }finally{if(timer!==null)clearTimeout(timer);}
+ if(!r.ok){const error=Error(localized(j.error||`Xatolik ${r.status}`));error.status=r.status;error.fields=Object.fromEntries(Object.entries(j.fields||{}).map(([key,value])=>[key,localized(value)]));window.ExperienceUX?.errorFromApi(error);throw error}return j;
+}
 function btn(text,action,cls='button-secondary',attrs=''){return `<button class="${cls}" data-action="${action}" ${attrs}>${text}</button>`}
 function status(s){return `<span class="status ${esc(s)}">${esc(({pending_payment:'To‘lov kutilmoqda',paid:'To‘langan',awaiting_delivery:'Yetkazish kutilmoqda',delivered:'Yetkazildi',completed:'Yakunlandi',cancelled:'Bekor qilindi',disputed:'Nizoda',pending_review:'Tekshiruvda',approved_private:'Tasdiqlangan · yashirin',published:'Faol',rejected:'Rad etildi',draft:'Qoralama',paused:'To‘xtatilgan',not_public:'Bozorda ko‘rinmaydi',open:'Ochiq',pending:'Kutilmoqda',approved:'Tasdiqlandi',paid_out:'To‘landi'})[s]||s)}</span>`}
 function cover(it){const image=it.image_url?`<img src="${esc(it.image_url)}" alt="${esc(it.title)}" loading="lazy" referrerpolicy="no-referrer">`:`<span class="product-cover-placeholder" aria-hidden="true">${icon('gamepad')}</span>`;return `<div class="product-cover ${it.image_url?'':'product-cover-empty'}">${image}</div>`}
@@ -540,10 +555,11 @@ async function renderHome(filters={}){
  setupMarketBanner();
  window.ReviewHub?.home(root.querySelector('[data-home-reviews]'));
  const [listingResult,categoryResult]=await dataReady;
- if(bootstrapSessionReady)await bootstrapSessionReady;
  if(!root.isConnected)return;
- // Refresh account navigation only after the authenticated session is known.
- const sidebar=$('#market-sidebar',root);if(sidebar){const holder=document.createElement('div');holder.innerHTML=marketSidebarMarkup(filters);sidebar.replaceWith(holder.firstElementChild)}
+ // Public catalogue content need not wait for the profile request.
+ // Personal navigation is refreshed only after that session is known.
+ const syncSidebar=()=>{if(!root.isConnected)return;const sidebar=$('#market-sidebar',root);if(sidebar){const holder=document.createElement('div');holder.innerHTML=marketSidebarMarkup(filters);sidebar.replaceWith(holder.firstElementChild)}};
+ if(bootstrapSessionReady)bootstrapSessionReady.then(syncSidebar).catch(()=>{});else syncSidebar();
  const category=$('#home-category',root);
  if(categoryResult.status==='fulfilled')category.insertAdjacentHTML('beforeend',categoryResult.value.map(c=>`<option value="${esc(c.slug)}" ${filters.category===c.slug?'selected':''}>${esc(categoryLabel(c.name))}</option>`).join(''));
  const items=listingResult.status==='fulfilled'?(listingResult.value.items||[]):[];
