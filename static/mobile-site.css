@@ -1,6 +1,7 @@
 /* Phone dimensions follow the approved 393 × 852 design. Desktop rules stay scoped out. */
 @layer sentryloot-theme {
   .mobile-home-review-meta,.mobile-home-review-check,.mobile-home-review-product-name { display:none; }
+  @media(max-width:840px){.desktop-conversation-avatar{display:none!important}}
   .mobile-welcome,.home-phone-title,.mobile-browse-sort,.mobile-topup-intro,.mobile-browse-categories { display:none; }
   .topup-game-cover picture { display:contents; }
   .mobile-purchase-dock,.market-card-reputation { display:contents; }

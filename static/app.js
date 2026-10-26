@@ -330,6 +330,51 @@ function empty(text,cta=''){return `<div class="empty">${esc(text)}${cta?`<div c
 function syncSellItemButton(){const button=$('#sell-item-button');if(!button)return;const label=adminText('E’lon joylash','Продать товар','Sell Item');button.textContent=label;button.setAttribute('aria-label',label)}
 function syncAdminLink(){const link=$('#admin-nav-link');if(!link)return;link.hidden=!me?.is_admin;const label=adminText('Admin paneli','Панель администратора','Admin panel');link.setAttribute('aria-label',label);link.title=label}
 let bootstrapSessionReady=null;
+// Keep every Back link on the browser's actual route history, including filters.
+window.SiteNavigation=(()=>{
+ const key='sentrylootBackDepth';let initialized=false,depth=0;
+ const label=()=>adminText('Orqaga','Назад','Back');
+ const explicit='#route-back-link,.route-back-link,.market-browse-back,.phone-back,.listing-breadcrumbs>a:first-child,.mobile-context-header>a:not(.auth-close)';
+ function isBack(link){return link.matches(explicit)||/^\s*(?:←|Back(?:\s+to\b|$)|Вернуться(?:\s|$)|Назад(?:\s|$))/i.test(link.textContent)||/qaytish\s*$/i.test(link.textContent);}
+ function sync(root=document){
+  const links=[...(root.matches?.('a[href]')?[root]:[]),...root.querySelectorAll('a[href]')];
+  for(const link of links){
+   if(!isBack(link)&&!link.hasAttribute('data-site-back'))continue;
+   link.dataset.siteBack='';link.setAttribute('aria-label',label());
+   if(link.closest('.mobile-context-header'))continue;
+   if(link.id==='route-back-link'){
+    const caption=link.querySelector('#route-back-label');if(caption&&caption.textContent!==label())caption.textContent=label();
+   }else if(link.dataset.siteBackLabel!==label()){
+    link.innerHTML='<span aria-hidden="true">←</span> <span>'+esc(label())+'</span>';link.dataset.siteBackLabel=label();
+   }
+  }
+  const bar=document.getElementById('route-back');
+  if(bar&&!bar.hidden&&[...document.querySelectorAll('#app a[data-site-back]')].some(link=>link.getClientRects().length))bar.hidden=true;
+ }
+ function init(){
+  if(initialized)return;initialized=true;
+  let sameSite=false;try{sameSite=!!document.referrer&&new URL(document.referrer).origin===location.origin;}catch{}
+  depth=Number(history.state?.[key]??(sameSite&&history.length>1?1:0));
+  const push=history.pushState.bind(history),replace=history.replaceState.bind(history);
+  const stamp=()=>replace({...history.state,[key]:depth},'',location.href);
+  stamp();
+  history.pushState=(state,title,url)=>{push({...state,[key]:depth+1},title,url);depth++;};
+  history.replaceState=(state,title,url)=>replace({...state,[key]:depth},title,url);
+  window.addEventListener('popstate',()=>{if(Number.isInteger(history.state?.[key]))depth=history.state[key];else{depth++;stamp();}});
+  window.addEventListener('hashchange',()=>{if(!Number.isInteger(history.state?.[key])){depth++;stamp();}});
+  document.addEventListener('click',event=>{
+   const link=event.target.closest('a[data-site-back]');
+   if(!link||event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||link.target==='_blank')return;
+   // Panel-level Back handlers (reviews, delivery, etc.) run before this listener.
+   event.preventDefault();
+   if(depth>0&&history.length>1)history.back();
+   else {const target=new URL(link.href,location.href);if(target.href===location.href)target.href=location.origin+'/';location.assign(target.href);}
+  });
+  new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)if(node.nodeType===1&&(node.matches('a[href]')||node.querySelector('a[href]')))sync(node);}).observe(document.body,{childList:true,subtree:true});
+  sync();
+ }
+ return {init,sync};
+})();
 function isHomeLocation(){return location.pathname==='/'&&(!location.hash||location.hash==='#home')}
 async function bootstrap(){
  locale=localStorage.getItem(localeKey)||'en';if(!supportedLocales.has(locale))locale='en';
@@ -403,7 +448,7 @@ async function navigate(){if(me&&await window.OrderFlow?.guardNavigation())retur
  if(route.startsWith('topup-order/'))return await renderStripeTopupOrder(decodeURIComponent(route.slice(12)));
  if(route.startsWith('order/'))return await renderOrder(decodeURIComponent(route.slice(6)));
  return await renderHome();
- }catch(e){app.innerHTML=`<section class="page">${pageTitle('Xatolik')}<div class="notice error">${esc(e.message)}</div><a class="button-secondary" href="#home">Bosh sahifa</a></section>`}finally{window.OperationsUX?.enhance();window.TradeUX?.enhance();window.ExperienceUX?.enhance();window.MobileSite?.sync(route);app.dataset.routeReady=route;app.setAttribute('aria-busy','false')}}
+ }catch(e){app.innerHTML=`<section class="page">${pageTitle('Xatolik')}<div class="notice error">${esc(e.message)}</div><a class="button-secondary" href="#home">Bosh sahifa</a></section>`}finally{window.OperationsUX?.enhance();window.TradeUX?.enhance();window.ExperienceUX?.enhance();window.MobileSite?.sync(route);window.SiteNavigation?.sync();app.dataset.routeReady=route;app.setAttribute('aria-busy','false')}}
 function renderHeroBlank(){return '<div class="hero-visual" aria-hidden="true"><canvas class="hero-art-canvas"></canvas></div>'}
 let homeCanvasFrame=0,homeCanvasResize=null,homeCanvasActive=false;
 const homeBackgroundImage=new Image();
@@ -840,11 +885,14 @@ async function setLanguage(language){if(!supportedLocales.has(language))return;l
 $('#language-toggle').onclick=()=>{const menu=$('#language-menu');menu.hidden=!menu.hidden;syncLanguageMenu();if(!menu.hidden)menu.querySelector(`[data-language="${locale}"]`)?.focus()};$('#language-menu').addEventListener('click',e=>{const option=e.target.closest('[data-language]');if(option)setLanguage(option.dataset.language)});document.addEventListener('click',e=>{if(!e.target.closest('.language-control'))closeLanguageMenu()});
 $('#account-button').addEventListener('click',()=>{if(!me){location.hash='login';return}if($('#profile-dropdown'))closeProfileMenu();else openProfileMenu()});document.body.addEventListener('click',e=>{const a=e.target.closest('[data-go]');if(a)location.hash=a.dataset.go});const profileRoot=$('#profile-menu-root');profileRoot.addEventListener('click',e=>{if(e.target.closest('[data-profile-close]')){closeProfileMenu();return}const action=e.target.closest('[data-action]');if(action){e.preventDefault();doAction(action)}});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#profile-dropdown')){closeProfileMenu();$('#account-button')?.focus()}});
 document.addEventListener('click',event=>{if(!event.target.closest('[data-skip-to-content]'))return;event.preventDefault();app.focus();app.scrollIntoView()});
-window.addEventListener('popstate',()=>{if(window.OrderFlow?.reviewRequired()||location.pathname==='/browse'||/^\/top-up(?:\/[a-z0-9-]+){0,2}$/.test(location.pathname))navigate().then(()=>localizeDOM())});
-window.addEventListener('hashchange',()=>{closeProfileMenu();const anchor=currentPageAnchor();if(anchor&&document.getElementById(anchor)){scrollToPageAnchor(anchor);return}navigate().then(()=>localizeDOM());refreshNotifications()});
+let historyRouteQueued=false;
+function scheduleHistoryRoute(){if(historyRouteQueued)return;historyRouteQueued=true;requestAnimationFrame(()=>{historyRouteQueued=false;closeProfileMenu();const anchor=currentPageAnchor();if(anchor&&document.getElementById(anchor)){scrollToPageAnchor(anchor);return}navigate().then(()=>localizeDOM());refreshNotifications();});}
+window.addEventListener('popstate',scheduleHistoryRoute);
+window.addEventListener('hashchange',scheduleHistoryRoute);
 document.addEventListener('submit',async e=>{if(e.target.id==='profile-form'){e.preventDefault();const d=Object.fromEntries(new FormData(e.target));try{const x=await api('/profile',{method:'POST',body:JSON.stringify(d)});me=x.user;locale=supportedLocales.has(me.language)?me.language:locale;localStorage.setItem(localeKey,locale);document.documentElement.lang=locale;document.documentElement.dir=locale==='ar'?'rtl':'ltr';syncLanguageMenu();syncSellItemButton();syncProfileTrigger();renderSupportWidget();toast('Profil yangilandi');if($('#profile-dropdown'))openProfileMenu();else await navigate()}catch(x){toast(x.message,'error')}}});
 MarketUX.init();
 setupMarketSidebarToggle();
+window.SiteNavigation?.init();
 window.MobileHeader?.init();
 window.MobileSite?.init();
 bootstrap();
@@ -852,7 +900,7 @@ bootstrap();
 async function renderStripeTestAdmin(){
  if(!me){location.hash='login';return;}
  const data=await api('/admin/payments/stripe-test');
- app.innerHTML=`<section class="page ops-account"><a class="route-back-link" href="/#admin">← ${adminText('Admin panel','Админ-панель','Admin panel')}</a>${pageTitle('Stripe sandbox',adminText('Sinov to‘lovlari va yetkazishdan keyingi hisob-kitob','Тестовые платежи и расчёты после доставки','Test payments and settlement after delivery'))}<div class="notice ${data.configured?'':'warn'}">${data.configured?'Stripe test configured · no real money.':'Stripe test credentials or webhook are not configured yet. Live payments remain disabled.'}</div><section class="panel"><h2>Settlement queue</h2><p class="help">Seller transfers are held until the order is completed. Refunds reverse existing test transfers before returning the test charge.</p><div class="actions"><button class="button-primary" data-stripe-process ${data.configured?'':'disabled'}>Process test queue</button><button class="button-secondary" data-stripe-refresh>Refresh</button></div>${data.jobs.length?data.jobs.map(job=>`<div class="order-line"><div class="order-head"><a href="#${job.kind==='topup_refund'?'topup-order/':'order/'}${encodeURIComponent(job.order_id)}">${esc(job.order_id)}</a><b>${esc(job.kind)} · ${esc(job.status)}</b></div>${job.error?`<p class="help">${esc(job.error)}</p>`:''}</div>`).join(''):'<p class="empty">No pending test settlements.</p>'}</section><section class="panel"><h2>Seller test Connect accounts</h2><a class="button-secondary" href="#stripe-test-connect">Open my seller test setup</a><p class="help">Link only an active test account controlled by this Stripe sandbox. No bank payout is enabled here.</p>${data.sellers.map(seller=>`<form class="order-line" data-stripe-seller="${esc(seller.user_id)}"><div class="field"><label>${esc(seller.shop_name)}</label><input name="account_id" placeholder="acct_…" value="${esc(seller.account_id)}" required pattern="acct_[A-Za-z0-9]+" ${seller.account_id?'readonly':''}></div><button class="button-secondary" ${data.configured?'':'disabled'}>Link test account</button></form>`).join('')}</section><section class="panel"><h2>Top Up test delivery</h2><p class="help">These actions simulate delivery only. They never call the supplier or send UC.</p>${data.topups.length?data.topups.map(order=>`<div class="order-line"><div class="order-head"><b>${esc(order.reference)} · ${esc(order.game_name)} × ${order.quantity}</b><span>${esc(order.status)}</span></div><div class="actions">${order.status==='paid_test'?`<button class="button-secondary" data-stripe-topup="${esc(order.id)}" data-choice="deliver">Simulate delivery</button>`:''}${['paid_test','delivered_test','completed'].includes(order.status)?`<button class="button-secondary" data-stripe-topup="${esc(order.id)}" data-choice="refund">Request test refund</button>`:''}</div></div>`).join(''):'<p class="empty">No test Top Up orders yet.</p>'}</section></section>`;
+ app.innerHTML=`<section class="page ops-account"><a class="route-back-link" href="/#admin">← ${adminText('Admin panel','Админ-панель','Admin panel')}</a>${pageTitle('Stripe',adminText('Sinov to‘lovlari va yetkazishdan keyingi hisob-kitob','Тестовые платежи и расчёты после доставки','Test payments and settlement after delivery'))}<div class="notice ${data.configured?'':'warn'}">${data.configured?'Stripe test configured · no real money.':'Stripe test credentials or webhook are not configured yet. Live payments remain disabled.'}</div><section class="panel"><h2>Settlement queue</h2><p class="help">Seller transfers are held until the order is completed. Refunds reverse existing test transfers before returning the test charge.</p><div class="actions"><button class="button-primary" data-stripe-process ${data.configured?'':'disabled'}>Process test queue</button><button class="button-secondary" data-stripe-refresh>Refresh</button></div>${data.jobs.length?data.jobs.map(job=>`<div class="order-line"><div class="order-head"><a href="#${job.kind==='topup_refund'?'topup-order/':'order/'}${encodeURIComponent(job.order_id)}">${esc(job.order_id)}</a><b>${esc(job.kind)} · ${esc(job.status)}</b></div>${job.error?`<p class="help">${esc(job.error)}</p>`:''}</div>`).join(''):'<p class="empty">No pending test settlements.</p>'}</section><section class="panel"><h2>Seller test Connect accounts</h2><a class="button-secondary" href="#stripe-test-connect">Open my seller test setup</a><p class="help">Link only an active test account controlled by this Stripe sandbox. No bank payout is enabled here.</p>${data.sellers.map(seller=>`<form class="order-line" data-stripe-seller="${esc(seller.user_id)}"><div class="field"><label>${esc(seller.shop_name)}</label><input name="account_id" placeholder="acct_…" value="${esc(seller.account_id)}" required pattern="acct_[A-Za-z0-9]+" ${seller.account_id?'readonly':''}></div><button class="button-secondary" ${data.configured?'':'disabled'}>Link test account</button></form>`).join('')}</section><section class="panel"><h2>Top Up test delivery</h2><p class="help">These actions simulate delivery only. They never call the supplier or send UC.</p>${data.topups.length?data.topups.map(order=>`<div class="order-line"><div class="order-head"><b>${esc(order.reference)} · ${esc(order.game_name)} × ${order.quantity}</b><span>${esc(order.status)}</span></div><div class="actions">${order.status==='paid_test'?`<button class="button-secondary" data-stripe-topup="${esc(order.id)}" data-choice="deliver">Simulate delivery</button>`:''}${['paid_test','delivered_test','completed'].includes(order.status)?`<button class="button-secondary" data-stripe-topup="${esc(order.id)}" data-choice="refund">Request test refund</button>`:''}</div></div>`).join(''):'<p class="empty">No test Top Up orders yet.</p>'}</section></section>`;
  app.querySelector('[data-stripe-refresh]').onclick=()=>renderStripeTestAdmin();
  app.querySelector('[data-stripe-process]').onclick=async event=>{event.currentTarget.disabled=true;try{await api('/admin/payments/stripe-test/process',{method:'POST',body:'{}'});await renderStripeTestAdmin()}catch(error){toast(error.message,'error');event.currentTarget.disabled=false}};
  app.querySelectorAll('[data-stripe-seller]').forEach(form=>form.onsubmit=async event=>{event.preventDefault();const button=form.querySelector('button');button.disabled=true;try{await api('/admin/payments/stripe-test/sellers/'+encodeURIComponent(form.dataset.stripeSeller),{method:'POST',body:JSON.stringify({account_id:new FormData(form).get('account_id')})});await renderStripeTestAdmin()}catch(error){toast(error.message,'error');button.disabled=false}});
@@ -863,7 +911,7 @@ async function renderStripeTestAdmin(){
 async function renderStripeTestConnect(){
  if(!me){location.hash='login';return;}
  const data=await api('/seller/stripe-test/connect');
- app.innerHTML=`<section class="page ops-account"><a class="route-back-link" href="#wallet">← Wallet</a>${pageTitle('Stripe sandbox · Seller setup','Test accounts and simulated payouts only.')}<section class="panel"><p class="notice warn">No real funds or bank payouts are enabled. Use Stripe sandbox test information only. Complete any Stripe agreement yourself.</p><p>${data.connected?esc(data.account_id)+' · '+(data.transfers_active?'Transfers active':'Onboarding required'):'No test Connect account linked yet.'}</p><button class="button-primary" data-stripe-onboard>${data.connected?'Continue test onboarding':'Set up test Connect account'}</button></section><section class="panel"><h2>Available test balance</h2>${data.balances.length?data.balances.map(balance=>`<div class="order-line"><b>${fmt(balance.amount,balance.currency.toUpperCase())}</b>${data.payouts_enabled&&balance.amount>0?`<button class="button-secondary" data-test-payout-amount="${balance.amount}" data-currency="${esc(balance.currency.toUpperCase())}">Simulate payout</button>`:''}</div>`).join(''):'<p class="empty">No available test balance yet. A completed test order and seller transfer must come first.</p>'}</section></section>`;
+ app.innerHTML=`<section class="page ops-account"><a class="route-back-link" href="#wallet">← Wallet</a>${pageTitle('Stripe · Seller setup','Test accounts and simulated payouts only.')}<section class="panel"><p class="notice warn">No real funds or bank payouts are enabled. Use Stripe sandbox test information only. Complete any Stripe agreement yourself.</p><p>${data.connected?esc(data.account_id)+' · '+(data.transfers_active?'Transfers active':'Onboarding required'):'No test Connect account linked yet.'}</p><button class="button-primary" data-stripe-onboard>${data.connected?'Continue test onboarding':'Set up test Connect account'}</button></section><section class="panel"><h2>Available test balance</h2>${data.balances.length?data.balances.map(balance=>`<div class="order-line"><b>${fmt(balance.amount,balance.currency.toUpperCase())}</b>${data.payouts_enabled&&balance.amount>0?`<button class="button-secondary" data-test-payout-amount="${balance.amount}" data-currency="${esc(balance.currency.toUpperCase())}">Simulate payout</button>`:''}</div>`).join(''):'<p class="empty">No available test balance yet. A completed test order and seller transfer must come first.</p>'}</section></section>`;
  app.querySelector('[data-stripe-onboard]').onclick=async event=>{const button=event.currentTarget;button.disabled=true;try{const result=await api('/seller/stripe-test/connect',{method:'POST',body:JSON.stringify({test_only:true})});location.assign(result.onboarding_url)}catch(error){toast(error.message,'error');button.disabled=false}};
  app.querySelectorAll('[data-test-payout-amount]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{const result=await api('/seller/stripe-test/payout',{method:'POST',body:JSON.stringify({amount_minor:Number(button.dataset.testPayoutAmount),currency:button.dataset.currency,request_key:crypto.randomUUID(),test_only:true})});toast('Stripe TEST payout · '+result.status);await renderStripeTestConnect()}catch(error){toast(error.message,'error');button.disabled=false}});
 }

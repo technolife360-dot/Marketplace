@@ -1874,3 +1874,78 @@ body .auth-page.is-login #auth-form .field-control.has-icon > :is(input,textarea
  #phone-change{display:block;margin:12px auto 0}
  @media(max-width:480px){.phone-verification-page{padding:24px 16px!important}.phone-verification-card{padding:24px 20px}.phone-verification-card h1{font-size:25px}}
 }
+
+
+/* Completed desktop layouts share the compact controls of the approved phone UI. */
+@layer sentryloot-theme {
+ @media(min-width:841px) {
+  body #app>.page:not(.auth-page,.listing-detail-page,.topup-page,.ow-page) {width:100%!important;max-width:1200px!important;margin:0 auto!important;padding:28px 32px 48px!important;min-width:0!important;}
+  body #route-back {max-width:1200px!important;margin:20px auto 0!important;padding:0 32px!important;}
+  body #route-back a,body #app a[data-site-back] {display:inline-flex!important;align-items:center!important;gap:8px!important;font-size:13px!important;font-weight:500!important;color:#b9b9c1!important;text-decoration:none!important;}
+  body #app a[data-site-back]:hover {color:#ffab5e!important;}
+  body #app>.page:not(.auth-page,.listing-detail-page) .page-header {margin:0 0 24px!important;gap:16px!important;}
+  body #app>.page:not(.auth-page,.listing-detail-page) h1 {font-size:28px!important;line-height:1.25!important;letter-spacing:-.6px!important;}
+  body #app>.page:not(.auth-page,.listing-detail-page) .page-subtitle {font-size:14px!important;line-height:1.6!important;color:#a4a4ae!important;margin-top:8px!important;}
+  body #app>.page :is(.panel,.form-card) {border-color:#28282d!important;border-radius:14px!important;background:#0d0d0f!important;box-shadow:none!important;}
+  body #app>.page :is(.button-primary,.button-secondary,.button-accent,.of-primary,.of-secondary) {min-height:44px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;font-size:13px!important;line-height:1.3!important;border-radius:10px!important;}
+  body #app :is(.button-primary,.button-accent,.auth-submit,.of-primary,.ow-primary),body .site-header #sell-item-button {background:#ff9b42!important;background-image:none!important;border-color:#ff9b42!important;color:#080808!important;box-shadow:none!important;}
+  body #app :is(.button-primary,.button-accent,.auth-submit,.of-primary,.ow-primary):hover,body .site-header #sell-item-button:hover {background:#ffad65!important;}
+  body #app :is(.panel,.form-card) .field {margin-bottom:18px!important;min-width:0!important;}
+  body #app :is(.field>label,.field>span,.of-field>span) {font-size:12px!important;line-height:1.5!important;margin-bottom:8px!important;}
+  body #app .site-select-trigger {min-height:44px!important;}
+  body #app :is(.ux-store-header,.ops-profile,.ops-security) {background:#0d0d0f!important;}
+  body #app .ops-account-grid {gap:20px!important;align-items:start!important;}
+  body #app .ops-account-grid>.panel {padding:24px!important;}
+  body #app .ops-account-shortcuts {gap:8px!important;margin:20px 0!important;flex-wrap:wrap!important;}
+  body #app .of-layout {grid-template-columns:minmax(0,1fr) 340px!important;gap:24px!important;align-items:start!important;}
+  body #app .of-layout>.of-summary {position:sticky!important;top:104px!important;}
+  body #app .of-card {border-radius:14px!important;border-color:#28282d!important;background:#0d0d0f!important;}
+  body #app .of-field input {font-size:14px!important;min-height:44px!important;}
+  body #app .ux-store-header {padding:28px!important;border-radius:16px!important;}
+  body #app .ux-filter-bottom {gap:16px!important;align-items:center!important;}
+  body #app :is(.market-game-tabs a.active,.ux-tabs button.active) {background:#ff9b421a!important;border-color:#ff9b4270!important;color:#ffac63!important;}
+  body #app .ux-messages .message-layout {display:grid!important;grid-template-columns:300px minmax(0,1fr)!important;height:min(760px,calc(100dvh - 240px))!important;min-height:520px!important;overflow:hidden!important;border:1px solid #28282d!important;border-radius:16px!important;background:#0d0d0f!important;}
+  body #app .ux-messages .conversation-list {display:block!important;max-height:none!important;overflow-y:auto!important;overscroll-behavior:contain!important;border-right:1px solid #28282d!important;min-width:0!important;}
+  body #app #ex-conversation-search {display:grid!important;grid-template-columns:1fr auto!important;gap:10px!important;padding:16px!important;margin:0!important;border-bottom:1px solid #28282d!important;background:#0d0d0f!important;}
+  body #app #ex-conversation-search>.field {grid-column:1/-1!important;margin:0!important;}
+  body #app #ex-conversation-search>label:not(.field) {display:flex!important;align-items:center!important;gap:8px!important;font-size:12px!important;margin:0!important;}
+  body #app #ex-conversation-search>button {min-height:32px!important;padding:6px 14px!important;font-size:12px!important;}
+  body #app .ux-messages .conversation-item {position:relative!important;display:grid!important;grid-template-columns:40px minmax(0,1fr) auto!important;grid-template-areas:"avatar name time" "avatar preview preview"!important;gap:5px 10px!important;align-items:center!important;width:100%!important;padding:16px!important;text-align:left!important;border:0!important;border-bottom:1px solid #252529!important;background:none!important;}
+  body #app .desktop-conversation-avatar {grid-area:avatar!important;display:grid!important;place-items:center!important;width:40px!important;height:40px!important;min-width:40px!important;border-radius:50%!important;overflow:hidden!important;color:#ffb273!important;background:#ff9b421c!important;font-size:13px!important;font-weight:600!important;}
+  body #app .desktop-conversation-avatar img {width:100%!important;height:100%!important;object-fit:cover!important;}
+  body #app .ux-messages .conversation-item>b {grid-area:name!important;min-width:0!important;overflow:hidden!important;white-space:nowrap!important;text-overflow:ellipsis!important;font-size:13px!important;}
+  body #app .ux-messages .conversation-item>time {grid-area:time!important;color:#9898a2!important;font-size:10px!important;white-space:nowrap!important;}
+  body #app .ux-messages .conversation-item>p {grid-area:preview!important;margin:0!important;font-size:12px!important;color:#a3a3ad!important;}
+  body #app .ux-messages .conversation-item.active {background:#ff9b4210!important;border-left:2px solid #ff9b42!important;padding-left:14px!important;}
+  body #app .ux-messages .conversation-item>.status {position:absolute!important;right:14px!important;bottom:12px!important;min-width:16px!important;padding:2px 5px!important;font-size:10px!important;}
+  body #app .ux-messages .chat {height:100%!important;min-height:0!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;}
+  body #app .ux-chat-header {display:flex!important;flex-wrap:wrap!important;align-items:center!important;gap:8px 12px!important;padding:14px 18px!important;flex-shrink:0!important;border-bottom:1px solid #28282d!important;}
+  body #app .ux-chat-header>b {flex:1!important;font-size:15px!important;}
+  body #app :is(.ex-chat-controls,.ops-chat-controls) {display:flex!important;align-items:center!important;gap:6px!important;flex-wrap:wrap!important;}
+  body #app :is(.ex-chat-controls,.ops-chat-controls) :is(button,a) {font-size:11px!important;min-height:30px!important;}
+  body #app .ux-chat-context {display:flex!important;align-items:center!important;flex-shrink:0!important;gap:12px!important;padding:12px!important;margin:14px 18px 0!important;min-height:68px!important;background:#141416!important;border:1px solid #28282d!important;border-radius:10px!important;}
+  body #app .ux-chat-context>img {width:42px!important;height:42px!important;flex-shrink:0!important;object-fit:cover!important;border-radius:8px!important;}
+  body #app .ux-chat-context>span {flex:1!important;min-width:0!important;}
+  body #app .ux-chat-context b {display:block!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;font-size:13px!important;}
+  body #app .ux-chat-context-arrow {width:16px!important;height:16px!important;flex-shrink:0!important;fill:none!important;stroke:currentColor!important;}
+  body #app .ex-message-search {margin:12px 18px 0!important;display:flex!important;align-items:center!important;gap:8px!important;flex-shrink:0!important;}
+  body #app .ex-message-search>label {flex:1!important;min-width:0!important;}
+  body #app .ex-message-search input {width:100%!important;height:36px!important;font-size:12px!important;}
+  body #app .ex-message-search button {min-height:32px!important;padding:6px 10px!important;font-size:11px!important;}
+  body #app .ux-messages .chat-messages {flex:1!important;min-height:0!important;max-height:none!important;height:auto!important;overflow-y:auto!important;overscroll-behavior:contain!important;padding:18px!important;gap:12px!important;}
+  body #app .ux-messages .bubble {font-size:13px!important;line-height:1.6!important;max-width:min(78%,560px)!important;border:0!important;background:#222226!important;}
+  body #app .ux-messages .bubble.mine {background:#342516!important;}
+  body #app .ux-messages .chat-form {flex-shrink:0!important;padding:12px 18px!important;gap:10px!important;border-top:1px solid #28282d!important;align-items:center!important;}
+  body #app .ux-messages .chat-form>input {height:44px!important;border-radius:22px!important;padding:0 16px!important;font-size:13px!important;background:#141416!important;}
+  body #app .ux-messages .chat-form>.button-primary {width:44px!important;height:44px!important;padding:0!important;border-radius:50%!important;flex-shrink:0!important;}
+  body #app .ux-messages #ex-message-error {margin:0!important;}
+  body #app .ux-messages .chat>.ex-panel {flex-shrink:0!important;max-height:160px!important;overflow:auto!important;}
+ }
+ @media(min-width:841px) and (max-width:1100px) {
+  body #app .ux-messages .message-layout {grid-template-columns:250px minmax(0,1fr)!important;}
+  body #app .of-layout {grid-template-columns:minmax(0,1fr) 300px!important;gap:18px!important;}
+ }
+}
+
+/* Remove development status decorations from the customer interface. */
+.ops-mode-notice,.of-test-badge,.home-review-badge.is-test,[data-home-status]:empty {display:none!important;}
