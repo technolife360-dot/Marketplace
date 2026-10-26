@@ -1002,7 +1002,7 @@ LISTING_PUBLIC_ATTRIBUTES={
     'behavior_score','rank_medal','premier_rating','prime_status','inventory_summary',
     'current_rank','server_id','item_name','item_variant','transfer_method','amount',
     'unit','service_scope','service_duration','code_kind','redemption_region','expiry',
-    'product_format','access_method','original_email_included'
+    'product_format','access_method','original_email_included','transferable'
 }
 LISTING_TYPE_ATTRIBUTES={
     'item':{'item_name','item_variant','transfer_method','item_type','condition','float_value','rarity','pattern'},
@@ -1021,6 +1021,8 @@ def validate_listing_attributes(attributes, product_type, require_details=False)
         cleaned[key]=clean_text(value,key,0,160)
     if cleaned.get('original_email_included') and cleaned['original_email_included'] not in ('yes','no'):
         raise HttpError(400,'Original email inclusion must be yes or no.')
+    if cleaned.get('transferable') and cleaned['transferable'] not in ('yes','no'):
+        raise HttpError(400,'Transferable must be yes or no.')
     if cleaned.get('amount') and not re.fullmatch(r'[1-9][0-9]{0,11}',cleaned['amount']):
         raise HttpError(400,'Bir to‘plamdagi valyuta miqdori musbat butun son bo‘lsin.')
     if cleaned.get('float_value'):
@@ -1032,7 +1034,7 @@ def validate_listing_attributes(attributes, product_type, require_details=False)
     for key in LISTING_TYPE_ATTRIBUTES.keys()-{product_type}:
         if any(field in cleaned for field in LISTING_TYPE_ATTRIBUTES[key]-allowed):
             raise HttpError(400,'E’lon turi va ma’lumotlari mos kelmaydi.')
-    if product_type!='account' and any(key in cleaned for key in ('rank','account_level','competitive_rank','tier','platform_binding','mmr','behavior_score','rank_medal','premier_rating','prime_status','inventory_summary','current_rank','server_id','original_email_included')):
+    if product_type!='account' and any(key in cleaned for key in ('rank','account_level','competitive_rank','tier','platform_binding','mmr','behavior_score','rank_medal','premier_rating','prime_status','inventory_summary','current_rank','server_id','original_email_included','transferable')):
         raise HttpError(400,'Akkaunt ma’lumotlari boshqa mahsulot turiga mos emas.')
     if require_details and product_type=='digital' and any(not cleaned.get(key) for key in ('product_format','access_method')):
         raise HttpError(400,'Raqamli mahsulot formati va yetkazish tafsilotlarini kiriting.')
@@ -1042,6 +1044,37 @@ def parse_json(body):
     except (ValueError,UnicodeError): raise HttpError(400,'JSON so‘rovi noto‘g‘ri.')
     if not isinstance(value,dict): raise HttpError(400,'JSON so‘rovi obyekt bo‘lishi kerak.')
     return value
+
+def catalogue_price_bounds(qs):
+    """Explicit storefront amounts keep MYR cents separate from legacy raw filters."""
+    currency=qs.get('currency',[''])[0].strip().upper()
+    if currency and currency not in ASIA_CURRENCIES:
+        raise HttpError(400,'Invalid price filter currency.')
+    major_low=qs.get('min_major',[''])[0].strip()
+    major_high=qs.get('max_major',[''])[0].strip()
+    if major_low or major_high:
+        if not currency:
+            raise HttpError(400,'Choose a currency for the price range.')
+        if qs.get('min',[''])[0] or qs.get('max',[''])[0]:
+            raise HttpError(400,'Use one price range format at a time.')
+        from decimal import Decimal
+        scale=100 if currency=='MYR' else 1
+        pattern=r'\d{1,13}(?:\.\d{1,2})?' if scale==100 else r'\d{1,13}'
+        def amount(value):
+            if not value:return None
+            if not re.fullmatch(pattern,value):raise HttpError(400,'Enter a valid price in the selected currency.')
+            result=int(Decimal(value)*scale)
+            if result>1_000_000_000_000:raise HttpError(400,'Price filter is above the allowed limit.')
+            return result
+        low,high=amount(major_low),amount(major_high)
+        if low is not None and high is not None and low>high:
+            raise HttpError(400,'The minimum price must not exceed the maximum price.')
+        return currency,low,high
+    try:
+        low=qs.get('min',[''])[0];high=qs.get('max',[''])[0]
+        return currency,max(0,int(low)) if low else None,max(0,int(high)) if high else None
+    except ValueError:
+        raise HttpError(400,'Narx filtri butun son bo‘lishi kerak.')
 
 def catalogue_predicates(db,qs,uid=None):
     where=["l.status='published'",'l.stock>l.reserved']; args=[]
@@ -1103,7 +1136,7 @@ def catalogue_predicates(db,qs,uid=None):
     if delivery:
         try: minutes=int(delivery)
         except ValueError: raise HttpError(400,'Yetkazish muddati noto‘g‘ri.')
-        if minutes not in (5,60,360,1440): raise HttpError(400,'Yetkazish muddati noto‘g‘ri.')
+        if minutes not in (5,15,60,360,1440): raise HttpError(400,'Yetkazish muddati noto‘g‘ri.')
         where.append('l.delivery_minutes<=?');args.append(minutes)
     search=qs.get('q',[''])[0].strip()
     if search and catalogue_experience.game_query(search):
@@ -1117,11 +1150,10 @@ def catalogue_predicates(db,qs,uid=None):
             where.append("(l.search_vector @@ plainto_tsquery('simple', ?) OR lower(g.name) LIKE ? OR lower(s.shop_name) LIKE ? OR lower(l.platform) LIKE ? OR lower(l.region) LIKE ? OR lower(l.attributes_json) LIKE ?)"); args += [search,qlike,qlike,qlike,qlike,qlike]
         else:
             where.append('(l.rowid IN (SELECT rowid FROM listing_search WHERE listing_search MATCH ?) OR lower(g.name) LIKE ? OR lower(s.shop_name) LIKE ? OR lower(l.platform) LIKE ? OR lower(l.region) LIKE ? OR lower(l.attributes_json) LIKE ?)'); args += [phrase,qlike,qlike,qlike,qlike,qlike]
-    low=qs.get('min',[''])[0]; high=qs.get('max',[''])[0]
-    try:
-        if low: where.append('l.price_minor>=?'); args.append(max(0,int(low)))
-        if high: where.append('l.price_minor<=?'); args.append(max(0,int(high)))
-    except ValueError: raise HttpError(400,'Narx filtri butun son bo‘lishi kerak.')
+    currency,low,high=catalogue_price_bounds(qs)
+    if currency:where.append('l.currency=?');args.append(currency)
+    if low is not None:where.append('l.price_minor>=?');args.append(low)
+    if high is not None:where.append('l.price_minor<=?');args.append(high)
     return where,args
 
 def listing_detail(db, lid, viewer=None):
@@ -1563,7 +1595,7 @@ class Handler(BaseHTTPRequestHandler):
                 payload=seo_listing_html(listing_match.group(1))
                 if payload is None: self.send_error(404); return
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
-            f={'/static/order-process.js':'order-process.js','/static/order-process.css':'order-process.css','/static/listing-detail.css':'listing-detail.css','/static/listing-detail.js':'listing-detail.js','/static/product-cards.css':'product-cards.css','/static/offer-wizard.js':'offer-wizard.js','/static/offer-wizard.css':'offer-wizard.css','/static/seller-verification.js':'seller-verification.js','/static/seller-verification.css':'seller-verification.css','/static/purchase-reviews.js':'purchase-reviews.js','/static/assets/pubg-uid-guide.png':'assets/pubg-uid-guide.png','/static/select-menu.js':'select-menu.js','/static/monochrome-theme.css':'monochrome-theme.css','/static/assets/roboto-variable.ttf':'assets/roboto-variable.ttf','/static/assets/roboto-OFL.txt':'assets/roboto-OFL.txt','/push-worker.js':'push-worker.js','/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/qa-vitals.js':'qa-vitals.js','/static/vendor/web-vitals.iife.js':'vendor/web-vitals.iife.js','/static/launch-readiness.js':'launch-readiness.js','/static/launch-readiness.css':'launch-readiness.css','/static/experience.js':'experience.js','/static/experience.css':'experience.css','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup-detail.js':'topup-detail.js','/static/topup-detail.css':'topup-detail.css','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-uc-660.png':'assets/topup-uc-660.png','/static/assets/topup-uc-1800.png':'assets/topup-uc-1800.png','/static/assets/topup-uc-3850.png':'assets/topup-uc-3850.png','/static/assets/topup-uc-8100.png':'assets/topup-uc-8100.png','/static/assets/topup-uc-60.png':'assets/topup-uc-60.png','/static/assets/topup-uc-325.png':'assets/topup-uc-325.png','/static/assets/topup-weekly-deal-1.png':'assets/topup-weekly-deal-1.png','/static/assets/topup-weekly-deal-2.png':'assets/topup-weekly-deal-2.png','/static/assets/topup-weekly-mythic.png':'assets/topup-weekly-mythic.png','/static/assets/topup-elite-pass.png':'assets/topup-elite-pass.png','/static/assets/topup-pubg-banner.jpg':'assets/topup-pubg-banner.jpg','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.webp':'assets/market-banner-soldier.webp','/static/assets/market-banner-games.webp':'assets/market-banner-games.webp','/static/assets/market-banner-worlds.webp':'assets/market-banner-worlds.webp','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
+            f={'/static/assets/mobile-topup-pubg.webp':'assets/mobile-topup-pubg.webp','/static/mobile-site.js':'mobile-site.js','/static/mobile-site.css':'mobile-site.css','/static/mobile-header.js':'mobile-header.js','/static/mobile-header.css':'mobile-header.css','/static/order-process.js':'order-process.js','/static/order-process.css':'order-process.css','/static/listing-detail.css':'listing-detail.css','/static/listing-detail.js':'listing-detail.js','/static/product-cards.css':'product-cards.css','/static/offer-wizard.js':'offer-wizard.js','/static/offer-wizard.css':'offer-wizard.css','/static/seller-verification.js':'seller-verification.js','/static/seller-verification.css':'seller-verification.css','/static/purchase-reviews.js':'purchase-reviews.js','/static/assets/pubg-uid-guide.png':'assets/pubg-uid-guide.png','/static/select-menu.js':'select-menu.js','/static/monochrome-theme.css':'monochrome-theme.css','/static/assets/roboto-variable.ttf':'assets/roboto-variable.ttf','/static/assets/roboto-OFL.txt':'assets/roboto-OFL.txt','/push-worker.js':'push-worker.js','/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/qa-vitals.js':'qa-vitals.js','/static/vendor/web-vitals.iife.js':'vendor/web-vitals.iife.js','/static/launch-readiness.js':'launch-readiness.js','/static/launch-readiness.css':'launch-readiness.css','/static/experience.js':'experience.js','/static/experience.css':'experience.css','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup-detail.js':'topup-detail.js','/static/topup-detail.css':'topup-detail.css','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-uc-660.png':'assets/topup-uc-660.png','/static/assets/topup-uc-1800.png':'assets/topup-uc-1800.png','/static/assets/topup-uc-3850.png':'assets/topup-uc-3850.png','/static/assets/topup-uc-8100.png':'assets/topup-uc-8100.png','/static/assets/topup-uc-60.png':'assets/topup-uc-60.png','/static/assets/topup-uc-325.png':'assets/topup-uc-325.png','/static/assets/topup-weekly-deal-1.png':'assets/topup-weekly-deal-1.png','/static/assets/topup-weekly-deal-2.png':'assets/topup-weekly-deal-2.png','/static/assets/topup-weekly-mythic.png':'assets/topup-weekly-mythic.png','/static/assets/topup-elite-pass.png':'assets/topup-elite-pass.png','/static/assets/topup-pubg-banner.jpg':'assets/topup-pubg-banner.jpg','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.webp':'assets/market-banner-soldier.webp','/static/assets/market-banner-games.webp':'assets/market-banner-games.webp','/static/assets/market-banner-worlds.webp':'assets/market-banner-worlds.webp','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
             if not f: self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/webp' if f.endswith('.webp') else 'image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))

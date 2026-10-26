@@ -68,7 +68,7 @@ window.OrderFlow = (() => {
   async function action(button,fn){
     if(button?.disabled)return;
     if(button)button.disabled=true;
-    const root=button?.closest('form, .of-card, .of-stage')||app;
+    const root=button?.form||button?.closest('form, .of-card, .of-stage')||app;
     root.querySelector('.of-action-error')?.remove();
     try{await fn()}catch(err){const p=document.createElement('p');p.className='of-error of-action-error';p.setAttribute('role','alert');p.textContent=err.message;root.append(p)}finally{if(button?.isConnected)button.disabled=button.form?.id==='of-test-review'?!reviewReady(button.form):false}
   }
@@ -94,6 +94,7 @@ window.OrderFlow = (() => {
       payload.request_key=requestKey(JSON.stringify({items:c.items.map(i=>[i.id,i.quantity,i.price_minor]),...payload}));
       const result=await post('/checkout',payload);try{sessionStorage.removeItem('sentryloot-checkout:v2:'+me.id)}catch{}await refreshCart();location.hash='order/'+enc(result.id);
     });
+    window.MobileSite?.cart?.(c);
   }
   function reviewUpload(o){
     const reviewed=o.account_review,ready=!reviewed||['collecting','needs_info'].includes(reviewed.status);

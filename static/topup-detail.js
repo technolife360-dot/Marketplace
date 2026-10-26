@@ -57,6 +57,7 @@ function renderTopUpDetail(game, initialPackage) {
       <section class="tu-seller"><div class="tu-seller-heading"><img src="https://images.gamestorehub.com/site-assets/sentryloot-app-icon.png" alt=""><div><h2>SentryLoot <span>${t('Platforma','Платформа','Platform')}</span></h2><p>${t('Top Up yordami','Помощь с Top Up','Top-up support')}</p></div></div><div class="tu-seller-actions"><a class="button-secondary" href="/help/payments">${icon('message')} ${t('Bog‘lanish','Связаться','Contact support')}</a><a class="button-secondary" href="/top-up">${icon('gamepad')} ${t('Barcha o‘yinlar','Все игры','All games')}</a></div><details><summary>${t('Xizmat haqida','О сервисе','Service information')} <span aria-hidden="true">›</span></summary><p>${noCheckout} ${t('Hozircha buyurtma ochilmaydi va pul yechilmaydi.','Заказы пока не создаются, деньги не списываются.','No orders are created and no money is charged.')}</p><a href="/terms">${t('Foydalanish shartlari','Условия использования','Terms of service')}</a></details></section>
     </div></div></section>`;
   const root=app.querySelector('.topup-product-page'), q=selector=>root.querySelector(selector), all=selector=>Array.from(root.querySelectorAll(selector));
+  root.dataset.gameCurrency=game.currency||'';
   root.addEventListener('error',event=>{const image=event.target;if(image.dataset?.tuFallback&&image.getAttribute('src')!==image.dataset.tuFallback)image.src=image.dataset.tuFallback;},true);
   const quantity=q('#tu-quantity');
   function invalidatePreview(){q('#topup-details-preview').hidden=true;}
@@ -80,7 +81,9 @@ function renderTopUpDetail(game, initialPackage) {
   let testRequestKey=crypto.randomUUID();
   function updateTestCheckout(){
     const ready=selected.payment_ready&&selected.payment_mode==='stripe_test';
-    testBuy.disabled=!ready;testTerms.hidden=!ready;
+    root.dataset.checkoutReady=String(Boolean(ready));
+    testBuy.disabled=!ready||topupQuantity(quantity.value)===null;testTerms.hidden=!ready;
+    if(!ready){testBuy.textContent=t('Xarid qilish','Купить сейчас','Buy now');q('.tu-checkout-state span').textContent=noCheckout;}
     if(ready){testBuy.textContent=t('Stripe test xaridi','Тестовая покупка Stripe','Stripe test checkout');q('.tu-checkout-state span').textContent=t('Sinov rejimi · haqiqiy pul va UC ishlatilmaydi.','Тестовый режим · без реальных денег и UC.','Test mode · no real money or UC delivery.');}
   }
   testBuy.addEventListener('click',async()=>{
@@ -93,8 +96,9 @@ function renderTopUpDetail(game, initialPackage) {
       location.hash='topup-order/'+encodeURIComponent(order.id);
       const payment=await api('/top-up/test-orders/'+encodeURIComponent(order.id)+'/checkout',{method:'POST',body:'{}'});
       location.assign(payment.checkout_url);
-    }catch(error){toast(error.message,'error')}finally{testBuy.disabled=false;}
+    }catch(error){toast(error.message,'error')}finally{updateTestCheckout();}
   });
+  quantity.addEventListener('input',updateTestCheckout);
   form.addEventListener('input',()=>{testRequestKey=crypto.randomUUID()});
   all('[data-tu-package]').forEach(button=>button.addEventListener('click',()=>{testRequestKey=crypto.randomUUID();updateTestCheckout()}));
   choosePackage(selected,false);showGallery();updateLaunchAlert();updateTestCheckout();

@@ -246,11 +246,15 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
                 try:message['image_url']=core['storage_r2'].evidence_url(attachments[message['id']])
                 except Exception:message['image_unavailable']=True
         other=conv['seller_id'] if uid==conv['buyer_id'] else conv['buyer_id']
-        out={'conversation':dict(conv),'messages':messages,'blocked':marketplace_operations.blocked(db,uid,other),'can_message':True,'has_more':has_more,'next_before':messages[0]['id'] if messages else None}
+        other_profile=db.execute("SELECT u.display_name,COALESCE(av.value,'') avatar_url FROM users u LEFT JOIN platform_config av ON av.key='public_avatar:'||u.id WHERE u.id=?",(other,)).fetchone()
+        out={'other_name':other_profile['display_name'] if other_profile else '', 'other_avatar_url':other_profile['avatar_url'] if other_profile else '', 'conversation':dict(conv),'messages':messages,'blocked':marketplace_operations.blocked(db,uid,other),'can_message':True,'has_more':has_more,'next_before':messages[0]['id'] if messages else None}
         try: marketplace_operations.chat_allowed(db,conv,uid,core)
         except error: out['can_message']=False
         if conv['listing_id']:
             listing=db.execute('SELECT id,title,image_url,price_minor,currency FROM listings WHERE id=?',(conv['listing_id'],)).fetchone()
+            if listing:out['listing']=dict(listing)
+        if conv['order_id'] and not out.get('listing'):
+            listing=db.execute('SELECT l.id,l.title,l.image_url,l.price_minor,l.currency FROM order_items oi JOIN listings l ON l.id=oi.listing_id WHERE oi.order_id=? ORDER BY oi.id LIMIT 1',(conv['order_id'],)).fetchone()
             if listing:out['listing']=dict(listing)
         if conv['order_id']:
             order=db.execute('SELECT id,reference,status FROM orders WHERE id=?',(conv['order_id'],)).fetchone()

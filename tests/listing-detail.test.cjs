@@ -51,3 +51,25 @@ test('untrusted titles, descriptions, identities and attributes remain text',()=
   assert.ok(html.includes('&lt;b&gt;Seller&lt;/b&gt;'));
   assert.ok(html.includes('&lt;img src=x&gt;'));
 });
+
+test('original email is disclosed from the seller declaration and never assumed',()=>{
+  const d=detail();
+  assert.ok(d.facts(item).some(([k,v])=>k==='Original email'&&v==='Included'));
+  assert.ok(d.facts({...item,attributes:{original_email_included:'no'}}).some(([k,v])=>k==='Original email'&&v==='Not included'));
+  assert.ok(d.facts({...item,attributes:{}}).some(([k,v])=>k==='Original email'&&v==='Not specified'));
+  assert.ok(!d.deliveryMarkup({...item,product_type:'item',attributes:{}}).includes('Original email included'));
+  assert.ok(d.deliveryMarkup({...item,attributes:{original_email_included:'yes'},delivery_method:'manual',delivery_eta:'15 minutes'}).includes('Original email included'));
+});
+
+test('account Details has the seven requested rows in order with declared values',()=>{
+  const rows=detail().facts({...item,region:'Global',platform:'Android / iOS',attributes:{account_level:'65',rank:'Ace',original_email_included:'yes',linked_accounts:['google'],transferable:'yes'}});
+  assert.deepEqual(JSON.parse(JSON.stringify(rows)),[['Region','Global'],['Platform','Android / iOS'],['Account level','65'],['Rank','Ace'],['Original email','Included'],['Linked services','Google'],['Transferable','Yes']]);
+  const missing=detail().facts({...item,attributes:{}});
+  assert.equal(missing.find(([key])=>key==='Transferable')[1],'Not specified');
+  assert.equal(detail().facts({...item,attributes:{transferable:'no'}}).find(([key])=>key==='Transferable')[1],'No');
+});
+
+test('listing overview keeps Original email immediately below Platform',()=>{
+  const rows=detail().facts({...item,product_type:'item',attributes:{}});
+  assert.equal(rows[2][0],'Original email');assert.equal(rows[2][1],'Not specified');
+});

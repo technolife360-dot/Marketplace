@@ -91,7 +91,7 @@ test('failed asynchronous page requests render an error instead of leaving the l
     const context = {
       location: {hash: '#' + route, pathname: '/', search: ''},
       history: {state: null, replaceState() {}},
-      app: {classList: {remove() {}, toggle() {}}, innerHTML: ''}, me: null,
+      app: {classList: {remove() {}, toggle() {}}, dataset: {}, setAttribute() {}, innerHTML: ''}, me: null,
       document: {body: {classList: {remove() {}}}}, window: {},
       currentPageAnchor: () => '', updateRouteMetadata() {}, syncRouteBack() {}, stopHomeCanvas() {},
       pageTitle: text => '<h1>' + text + '</h1>', esc: text => String(text),
@@ -102,6 +102,7 @@ test('failed asynchronous page requests render an error instead of leaving the l
     await assert.doesNotReject(context.navigate(), route);
     assert.match(context.app.innerHTML, /Test API request failed/, route);
     assert.doesNotMatch(context.app.innerHTML, /class="loading"/, route);
+    assert.equal(context.app.dataset.routeReady, route);
   }
 });
 
@@ -186,12 +187,12 @@ test('top-up totals reject invalid quantities and never invent an unset price', 
   assert.equal(context.topupDetailPrice({price_minor:0},3),'Price not set');
 });
 
-function sidebarMarkup(user) {
+function sidebarMarkup(user, options) {
   const context = {me: user, adminText: (_uz, _ru, en) => en, icon: name => `<svg data-icon="${name}"></svg>`};
   vm.createContext(context);
   const start = source.indexOf('function marketSidebarMarkup(');
   vm.runInContext(source.slice(start, source.indexOf('\nfunction marketBannerMarkup(', start)), context);
-  return context.marketSidebarMarkup({});
+  return context.marketSidebarMarkup({}, options);
 }
 
 test('sidebar shows guests a sign-in route without personal or seller links', () => {
@@ -216,6 +217,18 @@ test('seller wallet links remain role-specific without seller dashboard or admin
   assert.match(seller, /href="\/#payout-options"/);
   assert.doesNotMatch(seller, /href="\/#(?:seller|admin)"/);
   assert.doesNotMatch(sidebarMarkup({seller: null, is_admin: true}), /href="\/#(?:seller|admin)"/);
+});
+
+test('mobile menu reuses seller routes without duplicate desktop IDs or a drag divider', () => {
+  const user = {id: 'seller', seller: {id: 'seller'}, is_admin: true};
+  const desktop = sidebarMarkup(user), mobile = sidebarMarkup(user, {mobile: true});
+  assert.match(mobile, /id="mobile-market-sidebar"/);
+  assert.doesNotMatch(mobile, /id="market-sidebar(?:-handle)?"/);
+  assert.match(desktop, /id="market-sidebar-handle"/);
+  for (const route of ['messages', 'orders', 'favorites', 'my-reviews', 'requests', 'wallet', 'payout-options']) {
+    assert.ok(mobile.includes(`href="/#${route}"`));
+  }
+  assert.doesNotMatch(mobile, /href="\/#(?:seller|admin)"/);
 });
 
 test('home cards show verified seller reputation and sales without inventing ratings', () => {
@@ -404,4 +417,12 @@ test('admin loads only the requested section and deduplicates pending requests',
  const users=context.loadAdminView('users');root.isConnected=false;
  pending[4].resolve([]);pending[5].resolve([]);await users;
  assert.equal(panels.get('users').innerHTML,'<p>Loading</p>','late responses cannot fill a replaced page');
+});
+
+test('notification routes normalize stored hash links without accepting external targets',()=>{
+ const context={};vm.createContext(context);
+ vm.runInContext(source.slice(source.indexOf('function notificationRoute('),source.indexOf('\nasync function renderNotifications(')),context);
+ for(const href of ['/#my-reviews','/my-reviews','#my-reviews'])assert.equal(context.notificationRoute(href),'my-reviews');
+ assert.equal(context.notificationRoute('/order/real-order'),'order/real-order');
+ assert.equal(context.notificationRoute('https://example.com/'),'account');
 });

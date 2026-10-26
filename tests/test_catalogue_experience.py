@@ -82,6 +82,27 @@ class ExperienceFlows(unittest.TestCase):
         first=self.route(self.seller,'POST','/api/conversations/'+cid+'/messages',{'body':'A response','request_key':'same-draft'});again=self.route(self.seller,'POST','/api/conversations/'+cid+'/messages',{'body':'A response','request_key':'same-draft'})
         self.assertEqual(first['id'],again['id']);self.assertTrue(again['idempotent'])
         with self.assertRaises(app.HttpError):self.route(self.other,'GET','/api/conversations/'+cid+'?q=special')
+    def test_conversation_cards_use_participant_avatar_and_latest_message_without_marking_read(self):
+        cid=self.conversation()
+        avatar='https://images.gamestorehub.com/site-assets/sentryloot-app-icon.png'
+        self.db.execute('INSERT INTO platform_config(key,value) VALUES(?,?)',('public_avatar:'+self.seller,avatar))
+        self.db.execute("INSERT INTO messages(id,conversation_id,sender_id,body,created_at) VALUES(?,?,?,?,?)",('latest-mobile-message',cid,self.seller,'Actual latest message','2026-10-26 00:30:00'))
+        row=self.route(self.buyer,'GET','/api/conversations')[0]
+        self.assertEqual(row['last_message'],'Actual latest message')
+        self.assertEqual(row['last_message_at'],'2026-10-26 00:30:00')
+        self.assertEqual(row['other_avatar_url'],avatar)
+        self.assertEqual(row['unread'],1)
+        self.assertIsNone(self.db.execute("SELECT read_at FROM messages WHERE id='latest-mobile-message'").fetchone()['read_at'])
+        self.assertEqual(self.route(self.other,'GET','/api/conversations'),[])
+        detail=self.route(self.buyer,'GET','/api/conversations/'+cid)
+        self.assertEqual(detail['other_name'],row['other_name'])
+        self.assertEqual(detail['listing']['id'],self.listing)
+        oid=self.order()
+        self.db.execute('UPDATE conversations SET listing_id=NULL,order_id=? WHERE id=?',(oid,cid))
+        order_detail=self.route(self.buyer,'GET','/api/conversations/'+cid)
+        self.assertEqual(order_detail['listing']['id'],self.listing)
+        self.assertEqual(order_detail['order']['id'],oid)
+
     def test_chat_archive_mute_report_and_saved_replies(self):
         cid=self.conversation();self.route(self.buyer,'POST',f'/api/conversations/{cid}/preferences',{'archived':True,'muted':True})
         self.assertEqual(self.route(self.buyer,'GET','/api/conversations'),[]);self.assertEqual(self.route(self.buyer,'GET','/api/conversations?archived=1')[0]['id'],cid)

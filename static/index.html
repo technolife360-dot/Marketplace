@@ -17,6 +17,8 @@
   <link rel="stylesheet" href="/static/product-cards.css?v=10">
   <link rel="stylesheet" href="/static/listing-detail.css?v=10">
 <link rel="stylesheet" href="/static/order-process.css?v=5">
+<link rel="stylesheet" href="/static/mobile-header.css?v=19">
+<link rel="stylesheet" href="/static/mobile-site.css?v=96">
 </head>
 <body>
 <a class="skip-link" href="#app" data-skip-to-content>Skip to main content</a>
@@ -24,10 +26,11 @@
 <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 8a8 8 0 1 0 .5 7M20 3v5h-5"/></symbol>
 <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
 <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></symbol>
-<symbol id="i-header-globe" viewBox="3 3 18 18" preserveAspectRatio="none"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3c2.2 2.4 3.3 5.4 3.3 9s-1.1 6.6-3.3 9c-2.2-2.4-3.3-5.4-3.3-9S9.8 5.4 12 3Z"/></symbol>
-<symbol id="i-header-shield" viewBox="4 3 16 18" preserveAspectRatio="none"><path d="M12 3 20 6v5.2c0 4.6-3.1 8.1-8 9.8-4.9-1.7-8-5.2-8-9.8V6l8-3Z"/><path d="m8.7 11.8 2.1 2.1 4.6-4.7"/></symbol>
-<symbol id="i-header-bell" viewBox="3 3 18 18" preserveAspectRatio="none"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></symbol>
-<symbol id="i-header-cart" viewBox="3 4 18 16.4" preserveAspectRatio="none"><path d="M3 4h2l2.1 10.1a2 2 0 0 0 2 1.6h8.8a2 2 0 0 0 1.9-1.5L21 8H6"/><circle cx="9.5" cy="19.2" r="1.2"/><circle cx="17.4" cy="19.2" r="1.2"/></symbol>
+<symbol id="i-header-globe" viewBox="0 0 18 18" overflow="visible" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="7.4"/><path d="M2 6.5h14M2 11.5h14M9 1.6c1.8 2 2.7 4.5 2.7 7.4s-.9 5.4-2.7 7.4C7.2 14.4 6.3 11.9 6.3 9s.9-5.4 2.7-7.4Z"/></symbol>
+<symbol id="i-header-shield" viewBox="0 0 18 18" overflow="visible" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1.5 15.5 4v4.3c0 3.7-2.5 6.5-6.5 8.2-4-1.7-6.5-4.5-6.5-8.2V4L9 1.5Z"/><path d="m6.3 8.7 1.8 1.8 3.7-3.8"/></symbol>
+<symbol id="i-header-search" viewBox="0 0 18 18" overflow="visible" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="7.5" r="5.5"/><path d="m11.5 11.5 5 5"/></symbol>
+<symbol id="i-header-bell" viewBox="0 0 18 18" overflow="visible" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6A5 5 0 0 0 4 6c0 5.6-2.5 5.6-2.5 7.5h15C16.5 11.6 14 11.6 14 6M7.3 16.5h3.4"/></symbol>
+<symbol id="i-header-cart" viewBox="0 0 18 18" overflow="visible" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.2 2h1.7l1.9 8.2a1.7 1.7 0 0 0 1.7 1.4h7.8a1.7 1.7 0 0 0 1.6-1.3l.9-4.8H3.7"/><circle cx="6" cy="15.3" r=".8"/><circle cx="13" cy="15.3" r=".8"/></symbol>
 <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 4h2l2.1 10.1a2 2 0 0 0 2 1.6h8.8a2 2 0 0 0 1.9-1.5L21 8H6"/><circle cx="9.5" cy="19.2" r="1.2"/><circle cx="17.4" cy="19.2" r="1.2"/></symbol>
 <symbol id="i-message" viewBox="0 0 24 24"><path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.7 8.7 0 0 1-3.6-.8L4 20l1.3-3.7A7.1 7.1 0 0 1 4 12c0-4.4 3.6-8 8-8s8 3.1 8 7.5Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></symbol>
 <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></symbol>
@@ -35,6 +38,7 @@
 <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
 <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
 <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+<symbol id="i-mobile-menu" viewBox="0 0 18 18" overflow="visible" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 3h15M1.5 9h15M1.5 15h15"/></symbol>
 <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
 <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10m-7 6h4"/><circle cx="8" cy="6" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="12" cy="18" r="1.5"/></symbol>
 <symbol id="i-arrow-up-right" viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"/></symbol>
@@ -56,11 +60,15 @@
 <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></symbol>
 <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.8 20v-1.4A5.2 5.2 0 0 1 8 13.4h2a5.2 5.2 0 0 1 5.2 5.2V20M16 4.8a3.5 3.5 0 0 1 0 6.8M17 14h.7a4.5 4.5 0 0 1 4.5 4.5V20"/></symbol>
 <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="m19.4 15 .1.1 1.1 1.9-1.6 2.7-2.2-.5a8.2 8.2 0 0 1-1.5.9l-.6 2h-3.2l-.6-2a8.2 8.2 0 0 1-1.5-.9l-2.2.5-1.6-2.7 1.1-1.9a8 8 0 0 1 0-1.8l-1.1-1.9 1.6-2.7 2.2.5a8.2 8.2 0 0 1 1.5-.9l.6-2h3.2l.6 2a8.2 8.2 0 0 1 1.5.9l2.2-.5 1.6 2.7-1.1 1.9a8 8 0 0 1 0 1.8Z" transform="translate(-1 -1) scale(1.08)"/></symbol>
+<symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V10Z"/></symbol>
+<symbol id="i-coins" viewBox="0 0 24 24"><ellipse cx="15" cy="5" rx="6" ry="3"/><path d="M9 5v8c0 4 12 4 12 0V5M9 9c0 4 12 4 12 0"/><ellipse cx="7" cy="13" rx="5" ry="3"/><path d="M2 13v6c0 4 10 4 10 0v-6"/></symbol>
+<symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
 </svg>
 <header class="site-header"><div class="topbar"><div class="header-start"><button id="market-sidebar-toggle" class="market-sidebar-toggle" type="button" aria-label="Toggle sidebar" aria-controls="market-sidebar" aria-expanded="true" hidden><svg data-slot="geist-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true"><path d="M.5 1.5h15v11a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-11ZM5.5 1.5v13" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button><a class="brand" href="/#home" aria-label="SentryLoot — GameStoreHub marketplace" title="SentryLoot · gamestorehub.com"><span class="brand-mark"><img src="https://images.gamestorehub.com/site-assets/sentryloot-logo-crest.jpg?v=1" alt=""></span><span>Sentry<span class="brand-dot">Loot</span></span></a></div>
 <form id="search-form" class="header-search"><label class="sr-only" for="global-search">E’lon qidirish</label><svg class="icon search-icon" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-search"/></svg><input id="global-search" name="q" placeholder="O‘yin, buyum yoki xizmat qidiring…"><button type="submit" aria-label="Qidirish"><svg class="icon" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-arrow-up-right"/></svg></button></form>
-<div class="top-actions"><button id="sell-item-button" class="sell-item-button" data-go="seller">E’lon joylash</button><button id="cart-button" class="icon-button" data-go="cart" aria-label="Savatcha"><svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-cart"/></svg><span id="cart-count" class="count" hidden>0</span></button><button id="notifications-button" class="icon-button" data-go="notifications" aria-label="Bildirishnomalar"><svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-bell"/></svg><span id="notification-count" class="count" hidden>0</span></button><a id="admin-nav-link" class="icon-button" href="/#admin" aria-label="Admin paneli" title="Admin paneli" hidden><svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-shield"/></svg></a><div class="language-control"><button id="language-toggle" class="language-toggle icon-button" type="button" aria-label="Tilni tanlash" aria-expanded="false" aria-controls="language-menu"><svg class="icon globe-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-globe"/></svg></button><div id="language-menu" class="language-menu" role="menu" aria-label="Language" hidden><button type="button" role="menuitemradio" data-language="en" aria-checked="true"><span>English</span><small>EN</small></button><button type="button" role="menuitemradio" data-language="uz" aria-checked="false"><span>O‘zbekcha</span><small>UZ</small></button><button type="button" role="menuitemradio" data-language="ru" aria-checked="false"><span>Русский</span><small>RU</small></button></div></div><button id="account-button" class="account-button" aria-label="Kirish" aria-expanded="false" aria-controls="profile-menu-root">Kirish</button></div>
+<div class="top-actions"><button id="sell-item-button" class="sell-item-button" data-go="seller">E’lon joylash</button><button id="mobile-search-toggle" class="icon-button mobile-search-toggle" type="button" aria-label="Open search" aria-controls="search-form" aria-expanded="false"><svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-search"/></svg></button><button id="cart-button" class="icon-button" data-go="cart" aria-label="Savatcha"><svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-cart"/></svg><span id="cart-count" class="count" hidden>0</span></button><button id="notifications-button" class="icon-button" data-go="notifications" aria-label="Bildirishnomalar"><svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-bell"/></svg><span id="notification-count" class="count" hidden>0</span></button><a id="admin-nav-link" class="icon-button" href="/#admin" aria-label="Admin paneli" title="Admin paneli" hidden><svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-shield"/></svg></a><div class="language-control"><button id="language-toggle" class="language-toggle icon-button" type="button" aria-label="Tilni tanlash" aria-expanded="false" aria-controls="language-menu"><svg class="icon globe-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-globe"/></svg></button><div id="language-menu" class="language-menu" role="menu" aria-label="Language" hidden><button type="button" role="menuitemradio" data-language="en" aria-checked="true"><span>English</span><small>EN</small></button><button type="button" role="menuitemradio" data-language="uz" aria-checked="false"><span>O‘zbekcha</span><small>UZ</small></button><button type="button" role="menuitemradio" data-language="ru" aria-checked="false"><span>Русский</span><small>RU</small></button></div></div><button id="account-button" class="account-button" aria-label="Kirish" aria-expanded="false" aria-controls="profile-menu-root">Kirish</button><button id="mobile-menu-toggle" class="icon-button mobile-menu-toggle" type="button" aria-label="Open menu" aria-controls="mobile-navigation" aria-expanded="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-mobile-menu"/></svg></button></div>
  </div></header>
+<dialog id="mobile-navigation" class="mobile-navigation" aria-labelledby="mobile-menu-title"><header class="mobile-menu-heading"><h2 id="mobile-menu-title">Menu</h2><button type="button" class="icon-button" data-mobile-menu-close aria-label="Close menu"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-close"/></svg></button></header><div class="mobile-menu-scroll" data-mobile-menu-content></div></dialog>
 <div id="profile-menu-root" hidden></div>
 <nav id="route-back" class="route-back" aria-label="Back navigation" hidden><a id="route-back-link" href="/"><span aria-hidden="true">←</span><span id="route-back-label">Marketplace</span></a></nav>
 <main id="app" tabindex="-1"><div class="loading"><span class="spinner"></span> Yuklanmoqda…</div></main>
@@ -112,16 +120,18 @@
 <script src="/static/info-pages.js?v=2" defer></script>
 <script src="/static/legal-translations.js?v=4" defer></script>
 <script src="/static/account-operations.js?v=24" defer></script>
-<script src="/static/marketplace-ux.js?v=21" defer></script>
-<script src="/static/experience.js?v=21" defer></script>
+<script src="/static/marketplace-ux.js?v=26" defer></script>
+<script src="/static/experience.js?v=messages-25" defer></script>
 <script src="/static/launch-readiness.js?v=9" defer></script>
 <script src="/static/qa-vitals.js?v=2" defer></script>
-<script src="/static/topup-detail.js?v=34" defer></script>
-<script src="/static/topup.js?v=32" defer></script>
+<script src="/static/topup-detail.js?v=compact-34" defer></script>
+<script src="/static/topup.js?v=33" defer></script>
 <script src="/static/select-menu.js?v=5" defer></script>
-<script src="/static/purchase-reviews.js?v=14" defer></script>
-<script src="/static/offer-wizard.js?v=13" defer></script>
-<script src="/static/listing-detail.js?v=4" defer></script>
-<script src="/static/order-process.js?v=10" defer></script>
-<script src="/static/app.js?v=261" defer></script>
+<script src="/static/purchase-reviews.js?v=visible-mobile-reviews-14-mobile-home2" defer></script>
+<script src="/static/offer-wizard.js?v=transferable-13" defer></script>
+<script src="/static/listing-detail.js?v=email-row-4" defer></script>
+<script src="/static/order-process.js?v=mobile-10" defer></script>
+<script src="/static/mobile-header.js?v=8" defer></script>
+<script src="/static/mobile-site.js?v=53" defer></script>
+<script src="/static/app.js?v=281" defer></script>
 </body></html>
