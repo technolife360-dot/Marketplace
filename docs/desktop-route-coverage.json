@@ -1,0 +1,699 @@
+{
+  "environment": "isolated local preview; fixture users, no production modifications",
+  "date": "2026-10-27",
+  "scope": "route rendering and visible structure; not every possible record or interaction",
+  "checked_routes": [
+    {
+      "route": "/#home",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Your space",
+        "Your game. Your next find.Your nextgame upgrade.",
+        "Popular games",
+        "Latest listings",
+        "Buyer reviews",
+        "Getting started is easy"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/browse",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Your space",
+        "All listings"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/top-up",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Power up your game",
+        "PUBG Mobile",
+        "Mobile Legends: Bang Bang",
+        "Free Fire",
+        "Honor of Kings"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/top-up/pubg-mobile",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Description",
+        "Reviews",
+        "PUBG Mobile",
+        "Select package",
+        "Elite Pass",
+        "Weekly packs",
+        "SentryLoot Platform"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/top-up/pubg-mobile/660-uc",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Description",
+        "Reviews",
+        "PUBG Mobile",
+        "Select package",
+        "Elite Pass",
+        "Weekly packs",
+        "SentryLoot Platform"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/games/pubg-mobile",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Search help",
+        "PUBG Mobile"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/listing/qa_order_item",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "About this product",
+        "Buyer reviews0",
+        "PUBG Mobile test item",
+        "Order protection",
+        "Delivery & requirements",
+        "What you receive",
+        "After purchase"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/store/qa_seller",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Test seller",
+        "Completed sales",
+        "Buyer reviews"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/blog",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "SentryLoot blog",
+        "Check publisher rules before transferring a game account",
+        "Writing a clear, trustworthy listing",
+        "Spotting phishing and fake support messages"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/guide",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "How buying works",
+        "1. Review the listing",
+        "2. Ask the seller",
+        "3. Current order status",
+        "4. If something goes wrong"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/fees",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Fees and payments",
+        "Current status",
+        "How will prices and fees be shown?",
+        "Off-site payments and Top Up"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/policies",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Marketplace policies",
+        "Product requirements",
+        "Listing quality and moderation",
+        "Safe conduct",
+        "Current status"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/support",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Search help",
+        "Help center",
+        "Orders and delivery",
+        "Payments",
+        "Refunds and disputes",
+        "Contact"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/help/orders",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Search help",
+        "Orders and delivery help",
+        "Find an order",
+        "Delivery question",
+        "Report an issue",
+        "A simple buying sequence"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/help/payments",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Search help",
+        "Payment help",
+        "Live payments are off",
+        "If you see a charge",
+        "If asked to pay off-site"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/help/refunds",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Search help",
+        "Refund and dispute help",
+        "When to contact us",
+        "How to submit",
+        "Review and outcome",
+        "A simple buying sequence"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/help/chat",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Search help",
+        "Chat support",
+        "Open chat",
+        "What to include",
+        "Other contact options",
+        "A simple buying sequence"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/selling",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Start selling",
+        "What to check first",
+        "Prepare the listing",
+        "Review and status",
+        "Next step"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/contact",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Contact us",
+        "Email",
+        "Chat",
+        "Send information safely"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#account",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "My account",
+        "Shuxrat A.",
+        "Two-step verification",
+        "Copy of my data",
+        "Notifications with the site closed"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#account/settings",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "My account",
+        "Shuxrat A.",
+        "Two-step verification",
+        "Copy of my data",
+        "Notifications with the site closed"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#contact-details",
+      "role": "buyer",
+      "render_ready": false,
+      "headings": [
+        "Your space",
+        "Your game. Your next find.Your nextgame upgrade.",
+        "Popular games",
+        "Latest listings",
+        "Buyer reviews",
+        "Getting started is easy"
+      ],
+      "note": "Redirected after already-completed contact setup"
+    },
+    {
+      "route": "/#notification-settings",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Notification settings",
+        "Notifications with the site closed"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#notifications",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Notifications"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#favorites",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Saved listings",
+        "Stores you follow"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#saved-searches",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Saved searches"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#compare",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Compare products"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#messages",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Messages"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#my-reviews",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "My reviews"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#requests",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Item requests",
+        "Open requests",
+        "Send a request"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#support-tickets",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "My support requests",
+        "New request"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#topup-saved",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Saved Top Up packages"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#benefits",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Invitations and membership",
+        "0 points",
+        "My invitation code",
+        "I was invited"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#service-status",
+      "role": "buyer",
+      "render_ready": true,
+      "headings": [
+        "Service status",
+        "Status not yet reported by the operator",
+        "Support and operator"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#seller/dashboard",
+      "role": "seller",
+      "render_ready": true,
+      "headings": [
+        "Seller dashboard",
+        "Store performance",
+        "Create a new offer",
+        "Store availability"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#seller",
+      "role": "seller",
+      "render_ready": true,
+      "headings": [
+        "What would you like to sell?",
+        "Product type",
+        "Choose a game or platform",
+        "Show your product clearly",
+        "Delivery"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#wallet",
+      "role": "seller",
+      "render_ready": true,
+      "headings": [
+        "Seller wallet",
+        "MYR",
+        "transactions",
+        "payout history"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#payout-options",
+      "role": "seller",
+      "render_ready": true,
+      "headings": [
+        "Seller wallet",
+        "MYR",
+        "transactions",
+        "payout history"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#seller-checklist",
+      "role": "seller",
+      "render_ready": true,
+      "headings": [
+        "Seller checklist",
+        "Seller checklist"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#seller-pricing",
+      "role": "seller",
+      "render_ready": true,
+      "headings": [
+        "Seller pricing tools",
+        "Product coupon",
+        "Service milestones"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#orders",
+      "role": "seller",
+      "render_ready": true,
+      "headings": [
+        "Orders",
+        "PUBG Mobile test item",
+        "PUBG Mobile test item"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#admin",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Overview",
+        "Order activity",
+        "Needs attention",
+        "Recent orders"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#admin-blog",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Blog management",
+        "O‘yin akkauntini sotishdan oldin rasmiy qoidalarni tekshiring",
+        "Aniq va ishonchli e’lon yozish",
+        "Fishing va soxta yordam xabarlarini tanish"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#admin-support",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Support queue",
+        "New request"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#catalog-readiness",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Catalogue readiness",
+        "Offers by game"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#order-cases",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Cases and cancellations"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#review-moderation",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Review reports"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#staff",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Staff workspace"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#launch-settings",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Launch settings",
+        "Update service status",
+        "Package presentation",
+        "Staff permissions",
+        "listing isolation"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#top-up-admin",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Top Up management",
+        "Manage packages"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/terms",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Terms of use",
+        "Service and operator",
+        "User accounts",
+        "Listings and third-party rules",
+        "Money, disputes and changes"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/refunds",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Refund and dispute policy",
+        "Current limitation",
+        "Submitting a dispute",
+        "Review",
+        "Before live sales"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/seller-policy",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Seller policy",
+        "Right to sell",
+        "Description and delivery",
+        "Conduct and data safety",
+        "Review and payouts"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/prohibited-items",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Prohibited items and accounts",
+        "General prohibitions",
+        "Account-sale rule",
+        "Services with official restrictions"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#privacy-policy",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Privacy policy"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#data-deletion",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Data deletion instructions"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#login",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Step into your gaming worldwith confidence.",
+        "Sign in to your account"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#register",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Step into your gaming worldwith confidence.",
+        "Create account"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#password-reset",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Reset password"
+      ],
+      "note": ""
+    },
+    {
+      "route": "/#stripe-test",
+      "role": "admin",
+      "render_ready": true,
+      "headings": [
+        "Stripe",
+        "Settlement queue",
+        "Seller test Connect accounts",
+        "Top Up test delivery",
+        "Copy of my data",
+        "Notifications with the site closed"
+      ],
+      "note": ""
+    }
+  ]
+}

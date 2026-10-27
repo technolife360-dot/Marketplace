@@ -230,6 +230,31 @@ class HTTPWorkflows(unittest.TestCase):
             self.assertTrue(current['created_at'])
             self.assertTrue(current['last_seen_at'])
 
+    def test_session_read_bursts_do_not_repeat_heartbeat_writes_and_revocation_is_immediate(self):
+        client=self.signed_client(self.seller_id)
+        self.assertEqual(client.request('GET','/api/me')[0],200)
+        original_connect=app.connect;statements=[]
+        def traced_connect():
+            db=original_connect();db.set_trace_callback(statements.append);return db
+        with patch.object(app,'connect',side_effect=traced_connect):
+            for _ in range(10):
+                status,result,_=client.request('GET','/api/me')
+                self.assertEqual(status,200);self.assertEqual(result['user']['id'],self.seller_id)
+        self.assertFalse([sql for sql in statements if sql.startswith(('UPDATE sessions SET last_seen_at','UPDATE users SET last_seen_at'))])
+        # An old heartbeat is refreshed. Authentication itself is never cached.
+        self.db.execute("UPDATE sessions SET last_seen_at='2000-01-01 00:00:00' WHERE user_id=?",(self.seller_id,))
+        self.db.execute("UPDATE users SET last_seen_at='2000-01-01 00:00:00' WHERE id=?",(self.seller_id,))
+        client.request('GET','/api/me')
+        self.assertNotEqual(self.db.execute('SELECT last_seen_at FROM users WHERE id=?',(self.seller_id,)).fetchone()['last_seen_at'],'2000-01-01 00:00:00')
+        self.db.execute('DELETE FROM sessions WHERE user_id=?',(self.seller_id,))
+        self.assertIsNone(client.request('GET','/api/me')[1]['user'])
+
+    def test_session_heartbeat_supports_schema_without_optional_user_presence(self):
+        client=self.signed_client(self.seller_id)
+        self.db.execute('ALTER TABLE users DROP COLUMN last_seen_at')
+        status,result,_=client.request('GET','/api/me')
+        self.assertEqual(status,200);self.assertEqual(result['user']['id'],self.seller_id)
+
     def published_item(self):
         status, result, _ = self.seller.request('POST', '/api/listings', {
             'game_name': 'Counter-Strike 2', 'category_id': 'items', 'title': 'HTTP workflow test item',

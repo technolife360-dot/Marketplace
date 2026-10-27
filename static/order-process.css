@@ -150,3 +150,11 @@
     body .order-process .of-stage>.of-primary{width:100%!important}
   }
 }
+
+@media(min-width:841px){
+ body .order-process .of-cart-quantity{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 0;margin:8px 0;border-block:1px solid #292929}
+ body .order-process .of-cart-quantity>span{font-size:13px;color:#aaa}
+ body .order-process .of-cart-quantity>div{display:flex;align-items:center;gap:12px}
+ body .order-process .of-cart-quantity button{width:36px;min-width:36px;height:36px!important;min-height:36px!important;padding:0!important;font-size:22px!important;line-height:1!important;display:grid!important;place-items:center;text-decoration:none!important}
+ body .order-process .of-cart-quantity output{min-width:24px;text-align:center;font-size:15px;font-variant-numeric:tabular-nums}
+}

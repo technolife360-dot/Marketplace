@@ -85,3 +85,27 @@ test('users without a pending review can navigate normally',async()=>{
  const guest=flow({location,me:null,api:()=>{throw Error('Guest must not query private orders')}});
  assert.equal(await guest.guardNavigation(),false);
 });
+
+test('buyer payment and refund amounts never show the seller net earnings',()=>{
+ const order={status:'delivered',currency:'MYR',total_minor:13639,payment:{status:'succeeded',amount_minor:13639},funds:{state:'pending',seller_net_minor:12341}};
+ let html=flow().funds(order,true);assert.match(html,/Payment received/);assert.match(html,/MYR 136.39/);assert.doesNotMatch(html,/MYR 123.41|Pending order earnings/);
+ html=flow().funds({...order,status:'refunded',payment:{...order.payment,status:'refunded'},funds:{...order.funds,state:'refunded'}},true);
+ assert.match(html,/Payment refunded/);assert.match(html,/MYR 136.39/);assert.doesNotMatch(html,/MYR 123.41|Unavailable while delivery/);
+});
+
+test('released order earnings are historical amounts rather than the current wallet balance',()=>{
+ const html=flow().funds({status:'completed',currency:'MYR',payment:{status:'succeeded',amount_minor:13639},funds:{state:'available',seller_net_minor:12341}},false);
+ assert.match(html,/Order earnings released/);assert.match(html,/MYR 123.41/);assert.match(html,/current balance after payouts and adjustments/);assert.doesNotMatch(html,/>Available balance</);
+ const refunded=flow().funds({status:'refunded',currency:'MYR',payment:{status:'refunded'},funds:{state:'refunded',seller_net_minor:12341}},false);
+ assert.match(refunded,/Earnings reversed/);assert.match(refunded,/no longer contributes/);
+});
+
+test('cart quantity controls respect stock and minimum quantities',()=>{
+ const f=flow();
+ const single=f.cartQuantity({id:'one',quantity:1,min_quantity:1,available:1});
+ assert.match(single,/data-delta="-1"[^>]+disabled/);assert.match(single,/data-delta="1"[^>]+disabled/);
+ const pack=f.cartQuantity({id:'pack',quantity:5,min_quantity:5,available:10});
+ assert.match(pack,/data-delta="-1"[^>]+disabled/);assert.doesNotMatch(pack,/data-delta="1"[^>]+disabled/);
+ const middle=f.cartQuantity({id:'middle',quantity:6,min_quantity:5,available:10});
+ assert.doesNotMatch(middle,/disabled/);assert.match(middle,/>6<\/output>/);
+});

@@ -404,7 +404,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
                         entry['image_url']=core['storage_r2'].evidence_url(attachment['object_path'])
                         entry['media_type']='video' if attachment['object_path'].endswith('.mp4') else 'image'
                     except Exception:entry['image_unavailable']=True
-            return {'order':{'id':oid,'reference':order['reference'],'status':order['status']},'report':dict(report) if report else None,'entries':entries,'can_reply':order['status']=='disputed','can_manage':core['is_admin'](db,uid)}
+            return {'order':{'id':oid,'reference':order['reference'],'status':order['status']},'report':dict(report) if report else None,'entries':entries,'can_open':not report and order['buyer_id']==uid and order['status'] in ('paid','awaiting_delivery','delivered'),'can_reply':order['status']=='disputed','can_manage':core['is_admin'](db,uid)}
         verified(ctx);core['check_rate'](db,'dispute_reply',uid,30,3600)
         if not report or order['status']!='disputed':raise error(409,'Nizo hali ochilmagan yoki allaqachon yopilgan.')
         eid=ident();key=None

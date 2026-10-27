@@ -1,0 +1,972 @@
+{
+  "local": {
+    "scope": "disposable local SQLite + threaded Python HTTP server, warm requests, no think time",
+    "seeded_orders": 10000,
+    "seeded_registered_users": 1000000,
+    "history_sessions": "purchases authenticated as the buyer; sales authenticated as the seller",
+    "http_listener_backlog": 128,
+    "phases": [
+      {
+        "concurrency": 1,
+        "requests": 192,
+        "seconds": 1.155,
+        "max_response_bytes": 10267,
+        "requests_per_second": 166.26,
+        "failed": 0,
+        "status_counts": {
+          "200": 192
+        },
+        "latency_ms": {
+          "p50": 2.13,
+          "p95": 19.51,
+          "p99": 24.7,
+          "max": 35.43
+        },
+        "operations": {
+          "/api/me": {
+            "requests": 32,
+            "seconds": 1.155,
+            "max_response_bytes": 438,
+            "requests_per_second": 27.7,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 1.35,
+              "p95": 1.87,
+              "p99": 2.12,
+              "max": 2.12
+            }
+          },
+          "/api/listings?limit=12": {
+            "requests": 32,
+            "seconds": 1.155,
+            "max_response_bytes": 908,
+            "requests_per_second": 27.7,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 19.24,
+              "p95": 24.7,
+              "p99": 35.43,
+              "max": 35.43
+            }
+          },
+          "/api/orders?paged=1&role=purchases&limit=20": {
+            "requests": 32,
+            "seconds": 1.155,
+            "max_response_bytes": 10267,
+            "requests_per_second": 27.7,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 2.31,
+              "p95": 2.8,
+              "p99": 3.2,
+              "max": 3.2
+            }
+          },
+          "/api/orders?paged=1&role=sales&limit=20": {
+            "requests": 32,
+            "seconds": 1.155,
+            "max_response_bytes": 9987,
+            "requests_per_second": 27.7,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 8.99,
+              "p95": 9.74,
+              "p99": 13.14,
+              "max": 13.14
+            }
+          },
+          "/api/categories": {
+            "requests": 32,
+            "seconds": 1.155,
+            "max_response_bytes": 601,
+            "requests_per_second": 27.7,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 1.57,
+              "p95": 1.99,
+              "p99": 2.0,
+              "max": 2.0
+            }
+          },
+          "/api/catalogue/facets": {
+            "requests": 32,
+            "seconds": 1.155,
+            "max_response_bytes": 131,
+            "requests_per_second": 27.7,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 1.44,
+              "p95": 1.87,
+              "p99": 2.06,
+              "max": 2.06
+            }
+          }
+        }
+      },
+      {
+        "concurrency": 4,
+        "requests": 192,
+        "seconds": 0.452,
+        "max_response_bytes": 10267,
+        "requests_per_second": 425.08,
+        "failed": 0,
+        "status_counts": {
+          "200": 192
+        },
+        "latency_ms": {
+          "p50": 3.57,
+          "p95": 27.67,
+          "p99": 39.24,
+          "max": 58.43
+        },
+        "operations": {
+          "/api/me": {
+            "requests": 32,
+            "seconds": 0.452,
+            "max_response_bytes": 438,
+            "requests_per_second": 70.83,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 1.85,
+              "p95": 4.99,
+              "p99": 15.51,
+              "max": 15.51
+            }
+          },
+          "/api/listings?limit=12": {
+            "requests": 32,
+            "seconds": 0.452,
+            "max_response_bytes": 908,
+            "requests_per_second": 70.83,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 26.19,
+              "p95": 37.98,
+              "p99": 58.43,
+              "max": 58.43
+            }
+          },
+          "/api/orders?paged=1&role=purchases&limit=20": {
+            "requests": 32,
+            "seconds": 0.452,
+            "max_response_bytes": 10267,
+            "requests_per_second": 70.83,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 4.06,
+              "p95": 6.31,
+              "p99": 21.18,
+              "max": 21.18
+            }
+          },
+          "/api/orders?paged=1&role=sales&limit=20": {
+            "requests": 32,
+            "seconds": 0.452,
+            "max_response_bytes": 9987,
+            "requests_per_second": 70.82,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 13.97,
+              "p95": 17.92,
+              "p99": 39.24,
+              "max": 39.24
+            }
+          },
+          "/api/categories": {
+            "requests": 32,
+            "seconds": 0.452,
+            "max_response_bytes": 601,
+            "requests_per_second": 70.82,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 2.81,
+              "p95": 5.21,
+              "p99": 11.54,
+              "max": 11.54
+            }
+          },
+          "/api/catalogue/facets": {
+            "requests": 32,
+            "seconds": 0.452,
+            "max_response_bytes": 131,
+            "requests_per_second": 70.82,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 2.17,
+              "p95": 3.97,
+              "p99": 8.06,
+              "max": 8.06
+            }
+          }
+        }
+      },
+      {
+        "concurrency": 8,
+        "requests": 192,
+        "seconds": 0.872,
+        "max_response_bytes": 10267,
+        "requests_per_second": 220.06,
+        "failed": 0,
+        "status_counts": {
+          "200": 192
+        },
+        "latency_ms": {
+          "p50": 24.16,
+          "p95": 75.53,
+          "p99": 98.81,
+          "max": 105.33
+        },
+        "operations": {
+          "/api/me": {
+            "requests": 32,
+            "seconds": 0.873,
+            "max_response_bytes": 438,
+            "requests_per_second": 36.67,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 18.98,
+              "p95": 42.5,
+              "p99": 43.52,
+              "max": 43.52
+            }
+          },
+          "/api/listings?limit=12": {
+            "requests": 32,
+            "seconds": 0.873,
+            "max_response_bytes": 908,
+            "requests_per_second": 36.67,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 69.64,
+              "p95": 98.81,
+              "p99": 105.33,
+              "max": 105.33
+            }
+          },
+          "/api/orders?paged=1&role=purchases&limit=20": {
+            "requests": 32,
+            "seconds": 0.873,
+            "max_response_bytes": 10267,
+            "requests_per_second": 36.67,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 25.77,
+              "p95": 33.85,
+              "p99": 38.45,
+              "max": 38.45
+            }
+          },
+          "/api/orders?paged=1&role=sales&limit=20": {
+            "requests": 32,
+            "seconds": 0.873,
+            "max_response_bytes": 9987,
+            "requests_per_second": 36.67,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 52.48,
+              "p95": 63.78,
+              "p99": 75.53,
+              "max": 75.53
+            }
+          },
+          "/api/categories": {
+            "requests": 32,
+            "seconds": 0.873,
+            "max_response_bytes": 601,
+            "requests_per_second": 36.67,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 19.66,
+              "p95": 26.17,
+              "p99": 48.0,
+              "max": 48.0
+            }
+          },
+          "/api/catalogue/facets": {
+            "requests": 32,
+            "seconds": 0.873,
+            "max_response_bytes": 131,
+            "requests_per_second": 36.67,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 21.02,
+              "p95": 27.41,
+              "p99": 49.41,
+              "max": 49.41
+            }
+          }
+        }
+      },
+      {
+        "concurrency": 16,
+        "requests": 192,
+        "seconds": 0.818,
+        "max_response_bytes": 10267,
+        "requests_per_second": 234.78,
+        "failed": 0,
+        "status_counts": {
+          "200": 192
+        },
+        "latency_ms": {
+          "p50": 24.47,
+          "p95": 274.31,
+          "p99": 388.43,
+          "max": 394.17
+        },
+        "operations": {
+          "/api/me": {
+            "requests": 32,
+            "seconds": 0.818,
+            "max_response_bytes": 438,
+            "requests_per_second": 39.12,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 17.18,
+              "p95": 67.24,
+              "p99": 91.23,
+              "max": 91.23
+            }
+          },
+          "/api/listings?limit=12": {
+            "requests": 32,
+            "seconds": 0.818,
+            "max_response_bytes": 908,
+            "requests_per_second": 39.12,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 211.01,
+              "p95": 388.43,
+              "p99": 394.17,
+              "max": 394.17
+            }
+          },
+          "/api/orders?paged=1&role=purchases&limit=20": {
+            "requests": 32,
+            "seconds": 0.818,
+            "max_response_bytes": 10267,
+            "requests_per_second": 39.12,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 24.0,
+              "p95": 80.02,
+              "p99": 86.38,
+              "max": 86.38
+            }
+          },
+          "/api/orders?paged=1&role=sales&limit=20": {
+            "requests": 32,
+            "seconds": 0.818,
+            "max_response_bytes": 9987,
+            "requests_per_second": 39.12,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 63.63,
+              "p95": 223.32,
+              "p99": 239.04,
+              "max": 239.04
+            }
+          },
+          "/api/categories": {
+            "requests": 32,
+            "seconds": 0.818,
+            "max_response_bytes": 601,
+            "requests_per_second": 39.12,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 17.46,
+              "p95": 61.01,
+              "p99": 72.75,
+              "max": 72.75
+            }
+          },
+          "/api/catalogue/facets": {
+            "requests": 32,
+            "seconds": 0.818,
+            "max_response_bytes": 131,
+            "requests_per_second": 39.12,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 19.56,
+              "p95": 58.36,
+              "p99": 70.2,
+              "max": 70.2
+            }
+          }
+        }
+      },
+      {
+        "concurrency": 32,
+        "requests": 192,
+        "seconds": 0.882,
+        "max_response_bytes": 10267,
+        "requests_per_second": 217.66,
+        "failed": 0,
+        "status_counts": {
+          "200": 192
+        },
+        "latency_ms": {
+          "p50": 59.37,
+          "p95": 544.07,
+          "p99": 724.29,
+          "max": 756.31
+        },
+        "operations": {
+          "/api/me": {
+            "requests": 32,
+            "seconds": 0.882,
+            "max_response_bytes": 438,
+            "requests_per_second": 36.27,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 23.16,
+              "p95": 108.04,
+              "p99": 116.04,
+              "max": 116.04
+            }
+          },
+          "/api/listings?limit=12": {
+            "requests": 32,
+            "seconds": 0.882,
+            "max_response_bytes": 908,
+            "requests_per_second": 36.27,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 442.99,
+              "p95": 724.29,
+              "p99": 756.31,
+              "max": 756.31
+            }
+          },
+          "/api/orders?paged=1&role=purchases&limit=20": {
+            "requests": 32,
+            "seconds": 0.882,
+            "max_response_bytes": 10267,
+            "requests_per_second": 36.27,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 31.28,
+              "p95": 140.84,
+              "p99": 196.83,
+              "max": 196.83
+            }
+          },
+          "/api/orders?paged=1&role=sales&limit=20": {
+            "requests": 32,
+            "seconds": 0.882,
+            "max_response_bytes": 9987,
+            "requests_per_second": 36.27,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 209.66,
+              "p95": 486.31,
+              "p99": 504.55,
+              "max": 504.55
+            }
+          },
+          "/api/categories": {
+            "requests": 32,
+            "seconds": 0.882,
+            "max_response_bytes": 601,
+            "requests_per_second": 36.27,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 23.19,
+              "p95": 138.8,
+              "p99": 233.21,
+              "max": 233.21
+            }
+          },
+          "/api/catalogue/facets": {
+            "requests": 32,
+            "seconds": 0.882,
+            "max_response_bytes": 131,
+            "requests_per_second": 36.27,
+            "failed": 0,
+            "status_counts": {
+              "200": 32
+            },
+            "latency_ms": {
+              "p50": 22.99,
+              "p95": 133.83,
+              "p99": 149.79,
+              "max": 149.79
+            }
+          }
+        }
+      }
+    ],
+    "last_item_race": {
+      "buyers": 8,
+      "available_stock": 1,
+      "successful_reservations": 1,
+      "conflict_responses": 7,
+      "reserved_after": 1,
+      "passed": true
+    },
+    "soak": {
+      "concurrency": 16,
+      "target_seconds": 60,
+      "stopped_early": false,
+      "requests": 14684,
+      "seconds": 60.056,
+      "max_response_bytes": 10267,
+      "requests_per_second": 244.51,
+      "failed": 0,
+      "status_counts": {
+        "200": 14684
+      },
+      "latency_ms": {
+        "p50": 24.09,
+        "p95": 291.16,
+        "p99": 380.4,
+        "max": 743.29
+      }
+    },
+    "idempotency_race": {
+      "simultaneous_requests": 8,
+      "unique_orders": 1,
+      "new_database_orders": 1,
+      "passed": true
+    },
+    "passed": true,
+    "recorded_at_utc": "2026-10-27T10:49:48Z"
+  },
+  "postgres_readonly": {
+    "scope": "configured PostgreSQL via local client, all transactions READ ONLY; not deployed HTTP throughput",
+    "cold_connection_and_readonly_setup_ms": 886.12,
+    "pool_connections": 4,
+    "row_estimates_not_exact_counts": {
+      "listings": 1,
+      "order_items": 1,
+      "orders": -1,
+      "users": 8
+    },
+    "order_index_names": [
+      "idx_order_items_seller",
+      "idx_orders_buyer",
+      "order_items_pkey",
+      "orders_pkey",
+      "orders_reference_key",
+      "review_order_items_listing"
+    ],
+    "phases": [
+      {
+        "concurrency": 1,
+        "requests": 16,
+        "seconds": 12.3,
+        "requests_per_second": 1.3,
+        "failed": 0,
+        "status_counts": {
+          "200": 16
+        },
+        "latency_ms": {
+          "p50": 569.57,
+          "p95": 2187.02,
+          "p99": 2187.02,
+          "max": 2187.02
+        },
+        "operations": {
+          "roundtrip": {
+            "requests": 4,
+            "seconds": 12.301,
+            "requests_per_second": 0.33,
+            "failed": 0,
+            "status_counts": {
+              "200": 4
+            },
+            "latency_ms": {
+              "p50": 632.65,
+              "p95": 2064.63,
+              "p99": 2064.63,
+              "max": 2064.63
+            }
+          },
+          "purchases": {
+            "requests": 4,
+            "seconds": 12.301,
+            "requests_per_second": 0.33,
+            "failed": 0,
+            "status_counts": {
+              "200": 4
+            },
+            "latency_ms": {
+              "p50": 592.38,
+              "p95": 2187.02,
+              "p99": 2187.02,
+              "max": 2187.02
+            }
+          },
+          "sales": {
+            "requests": 4,
+            "seconds": 12.301,
+            "requests_per_second": 0.33,
+            "failed": 0,
+            "status_counts": {
+              "200": 4
+            },
+            "latency_ms": {
+              "p50": 577.63,
+              "p95": 790.23,
+              "p99": 790.23,
+              "max": 790.23
+            }
+          },
+          "search": {
+            "requests": 4,
+            "seconds": 12.301,
+            "requests_per_second": 0.33,
+            "failed": 0,
+            "status_counts": {
+              "200": 4
+            },
+            "latency_ms": {
+              "p50": 489.63,
+              "p95": 562.81,
+              "p99": 562.81,
+              "max": 562.81
+            }
+          }
+        }
+      },
+      {
+        "concurrency": 2,
+        "requests": 16,
+        "seconds": 4.758,
+        "requests_per_second": 3.36,
+        "failed": 0,
+        "status_counts": {
+          "200": 16
+        },
+        "latency_ms": {
+          "p50": 525.77,
+          "p95": 1062.71,
+          "p99": 1062.71,
+          "max": 1062.71
+        },
+        "operations": {
+          "roundtrip": {
+            "requests": 4,
+            "seconds": 4.758,
+            "requests_per_second": 0.84,
+            "failed": 0,
+            "status_counts": {
+              "200": 4
+            },
+            "latency_ms": {
+              "p50": 480.69,
+              "p95": 483.9,
+              "p99": 483.9,
+              "max": 483.9
+            }
+          },
+          "purchases": {
+            "requests": 4,
+            "seconds": 4.758,
+            "requests_per_second": 0.84,
+            "failed": 0,
+            "status_counts": {
+              "200": 4
+            },
+            "latency_ms": {
+              "p50": 699.18,
+              "p95": 1062.71,
+              "p99": 1062.71,
+              "max": 1062.71
+            }
+          },
+          "sales": {
+            "requests": 4,
+            "seconds": 4.758,
+            "requests_per_second": 0.84,
+            "failed": 0,
+            "status_counts": {
+              "200": 4
+            },
+            "latency_ms": {
+              "p50": 565.4,
+              "p95": 634.54,
+              "p99": 634.54,
+              "max": 634.54
+            }
+          },
+          "search": {
+            "requests": 4,
+            "seconds": 4.758,
+            "requests_per_second": 0.84,
+            "failed": 0,
+            "status_counts": {
+              "200": 4
+            },
+            "latency_ms": {
+              "p50": 483.57,
+              "p95": 492.46,
+              "p99": 492.46,
+              "max": 492.46
+            }
+          }
+        }
+      },
+      {
+        "concurrency": 4,
+        "requests": 16,
+        "seconds": 4.698,
+        "requests_per_second": 3.41,
+        "failed": 0,
+        "status_counts": {
+          "200": 16
+        },
+        "latency_ms": {
+          "p50": 857.45,
+          "p95": 2601.26,
+          "p99": 2601.26,
+          "max": 2601.26
+        },
+        "operations": {
+          "roundtrip": {
+            "requests": 4,
+            "seconds": 4.699,
+            "requests_per_second": 0.85,
+            "failed": 0,
+            "status_counts": {
+              "200": 4
+            },
+            "latency_ms": {
+              "p50": 950.35,
+              "p95": 1673.9,
+              "p99": 1673.9,
+              "max": 1673.9
+            }
+          },
+          "purchases": {
+            "requests": 4,
+            "seconds": 4.699,
+            "requests_per_second": 0.85,
+            "failed": 0,
+            "status_counts": {
+              "200": 4
+            },
+            "latency_ms": {
+              "p50": 763.23,
+              "p95": 1873.22,
+              "p99": 1873.22,
+              "max": 1873.22
+            }
+          },
+          "sales": {
+            "requests": 4,
+            "seconds": 4.699,
+            "requests_per_second": 0.85,
+            "failed": 0,
+            "status_counts": {
+              "200": 4
+            },
+            "latency_ms": {
+              "p50": 1362.83,
+              "p95": 2601.26,
+              "p99": 2601.26,
+              "max": 2601.26
+            }
+          },
+          "search": {
+            "requests": 4,
+            "seconds": 4.699,
+            "requests_per_second": 0.85,
+            "failed": 0,
+            "status_counts": {
+              "200": 4
+            },
+            "latency_ms": {
+              "p50": 755.87,
+              "p95": 2469.02,
+              "p99": 2469.02,
+              "max": 2469.02
+            }
+          }
+        }
+      },
+      {
+        "concurrency": 8,
+        "requests": 16,
+        "seconds": 2.561,
+        "requests_per_second": 6.25,
+        "failed": 0,
+        "status_counts": {
+          "200": 16
+        },
+        "latency_ms": {
+          "p50": 580.52,
+          "p95": 2559.39,
+          "p99": 2559.39,
+          "max": 2559.39
+        },
+        "operations": {
+          "roundtrip": {
+            "requests": 4,
+            "seconds": 2.562,
+            "requests_per_second": 1.56,
+            "failed": 0,
+            "status_counts": {
+              "200": 4
+            },
+            "latency_ms": {
+              "p50": 526.9,
+              "p95": 2033.31,
+              "p99": 2033.31,
+              "max": 2033.31
+            }
+          },
+          "purchases": {
+            "requests": 4,
+            "seconds": 2.562,
+            "requests_per_second": 1.56,
+            "failed": 0,
+            "status_counts": {
+              "200": 4
+            },
+            "latency_ms": {
+              "p50": 604.69,
+              "p95": 2559.39,
+              "p99": 2559.39,
+              "max": 2559.39
+            }
+          },
+          "sales": {
+            "requests": 4,
+            "seconds": 2.562,
+            "requests_per_second": 1.56,
+            "failed": 0,
+            "status_counts": {
+              "200": 4
+            },
+            "latency_ms": {
+              "p50": 611.62,
+              "p95": 2280.25,
+              "p99": 2280.25,
+              "max": 2280.25
+            }
+          },
+          "search": {
+            "requests": 4,
+            "seconds": 2.562,
+            "requests_per_second": 1.56,
+            "failed": 0,
+            "status_counts": {
+              "200": 4
+            },
+            "latency_ms": {
+              "p50": 521.3,
+              "p95": 2470.64,
+              "p99": 2470.64,
+              "max": 2470.64
+            }
+          }
+        }
+      }
+    ],
+    "passed": true,
+    "recorded_at_utc": "2026-10-27T10:40:16Z"
+  },
+  "production_http": {
+    "status": 302,
+    "destination": "Vercel SSO",
+    "application_load_tested": false
+  },
+  "regression_suite": {
+    "tests_run": 301,
+    "skipped": 1,
+    "result": "OK"
+  },
+  "build": "passed",
+  "limitations": [
+    "Local synthetic SQLite is not a million-row PostgreSQL benchmark.",
+    "Short ramps and a 60-second soak do not establish production peak capacity.",
+    "No production writes, migrations or real payment operations were performed."
+  ]
+}

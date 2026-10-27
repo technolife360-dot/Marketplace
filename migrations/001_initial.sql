@@ -128,3 +128,9 @@ CREATE TABLE IF NOT EXISTS bonus_entries (
  UNIQUE(user_id,source_type,source_id,entry_type)
 );
 CREATE INDEX IF NOT EXISTS idx_bonus_entries_user ON bonus_entries(user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_orders_buyer_page ON orders(buyer_id,created_at DESC,id DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_page ON orders(created_at DESC,id DESC);
+CREATE INDEX IF NOT EXISTS idx_order_items_order_page ON order_items(order_id,id);
+CREATE INDEX IF NOT EXISTS idx_orders_buyer_status_page ON orders(buyer_id,status,created_at DESC,id DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_buyer_active_page ON orders(buyer_id,created_at DESC,id DESC) WHERE status NOT IN ('completed','cancelled','refunded');

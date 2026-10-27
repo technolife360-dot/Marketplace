@@ -134,6 +134,22 @@ class OperationsFlows(unittest.TestCase):
         self.assertEqual(result['updated'],1)
         row=self.db.execute('SELECT status,price_minor,delivery_minutes FROM listings WHERE id=?',(self.listing,)).fetchone();self.assertEqual(tuple(row),('pending_review',60000,120))
         with self.assertRaises(app.HttpError):self.route(self.other,'POST','/api/seller/listings/bulk-update',{'ids':[self.listing],'fields':{'stock':1}})
+    def test_dispute_open_capability_matches_buyer_role_and_order_stage(self):
+        oid=self.make_order()
+        for user in (self.buyer,self.seller,self.admin):
+            self.assertFalse(self.route(user,'GET','/api/disputes/'+oid)['can_open'])
+        self.route(self.buyer,'POST','/api/orders/'+oid+'/sandbox-complete',{})
+        self.assertTrue(self.route(self.buyer,'GET','/api/disputes/'+oid)['can_open'])
+        for user in (self.seller,self.admin):
+            self.assertFalse(self.route(user,'GET','/api/disputes/'+oid)['can_open'])
+        with self.assertRaises(app.HttpError):self.route(self.other,'GET','/api/disputes/'+oid)
+        self.route(self.buyer,'POST','/api/orders/'+oid+'/dispute',{'details':'The received delivery does not match the listing.'})
+        self.assertFalse(self.route(self.buyer,'GET','/api/disputes/'+oid)['can_open'])
+        self.assertTrue(self.route(self.buyer,'GET','/api/disputes/'+oid)['can_reply'])
+        self.route(self.admin,'POST','/api/admin/disputes/'+oid,{'action':'refund_buyer','note':'Reviewed evidence and approved the refund.'})
+        self.assertFalse(self.route(self.buyer,'GET','/api/disputes/'+oid)['can_open'])
+        self.assertFalse(self.route(self.buyer,'GET','/api/disputes/'+oid)['can_reply'])
+
     def test_dispute_case_is_private_and_resolved_records_are_read_only(self):
         oid=self.make_order();self.route(self.buyer,'POST','/api/orders/'+oid+'/sandbox-complete',{})
         self.route(self.buyer,'POST','/api/orders/'+oid+'/dispute',{'details':'This delivery needs a moderator investigation.'})

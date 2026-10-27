@@ -86,8 +86,8 @@ test('dynamic account and order copy is translated in English and Russian', () =
 
 test('failed asynchronous page requests render an error instead of leaving the loading state', async () => {
   const start = source.indexOf('async function navigate(');
-  const navigateSource = source.slice(start, source.indexOf('\nfunction renderHeroBlank(', start));
-  for (const [route, renderer] of [['listing/test', 'renderListing'], ['messages', 'renderMessages'], ['cart', 'renderCart'], ['unknown', 'renderHome']]) {
+  const navigateSource = source.slice(start, source.indexOf('\nfunction renderNotFound(', start));
+  for (const [route, renderer] of [['listing/test', 'renderListing'], ['messages', 'renderMessages'], ['cart', 'renderCart'], ['unknown', 'renderNotFound']]) {
     const context = {
       location: {hash: '#' + route, pathname: '/', search: ''},
       history: {state: null, replaceState() {}},
@@ -435,4 +435,28 @@ test('the mobile drawer includes Home and the previous dock destinations without
  for(const href of ['/#home','/browse','/top-up','/#messages'])assert.ok(mobile.includes('href="'+href+'"'),href);
  assert.doesNotMatch(desktop,/href="\/#home"/);
  assert.match(mobile,/id="mobile-market-sidebar"/);assert.match(desktop,/id="market-sidebar"/);
+});
+
+test('seller overview uses wallet currency balances without converting or hiding debt',()=>{
+ const start=source.indexOf('function sellerDashboardSummary('),end=source.indexOf('let sellerRenderVersion=',start);
+ const context={adminText:(_u,_r,en)=>en,fmt:(n,c)=>`${c}:${n}`};vm.createContext(context);vm.runInContext(source.slice(start,end),context);
+ const html=context.sellerDashboardSummary({stripe_test_enabled:true,listings:[{count:2}],orders:[{count:3}],wallet:{currency:'UZS',available_minor:999},test_wallet:{balances:[{currency:'MYR',pending_minor:12990,available_minor:-100},{currency:'USD',pending_minor:0,available_minor:450}]}});
+ assert.match(html,/MYR:12990/);assert.match(html,/MYR:-100/);assert.match(html,/USD:450/);assert.doesNotMatch(html,/UZS:999|≈|escrow/i);
+ const legacy=context.sellerDashboardSummary({wallet:{currency:'UZS',held_minor:100,available_minor:200}});assert.match(legacy,/UZS:100/);assert.match(legacy,/UZS:200/);
+});
+
+test('seller enhancement retries do not add duplicate panels or requests',async()=>{
+ const root={dataset:{sellerEnhanced:'1',experienceEnhanced:'1',operationsEnhanced:'1'}};
+ for(const [file,name]of [['marketplace-ux.js','MarketUX'],['experience.js','ExperienceUX'],['account-operations.js','OperationsUX']]){
+  const context={window:{},document:{addEventListener(){}},encodeURIComponent,app:{querySelectorAll:()=>[]},$:()=>root};vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../static',file),'utf8'),context);
+  await context.window[name].seller([]);
+ }
+});
+
+test('desktop order labels keep financial exceptions active',()=>{
+ const start=source.indexOf('function desktopOrderGroup('),end=source.indexOf('async function renderOrders(',start),context={};vm.createContext(context);vm.runInContext(source.slice(start,end),context);
+ const item={reference:'BG-42',buyer_id:'buyer',status:'refund_pending',items:[{title:'PUBG Mobile 660 UC'}]};
+ for(const status of ['pending_payment','paid','awaiting_delivery','delivered','under_review','disputed','refund_pending'])assert.equal(context.desktopOrderGroup({...item,status}),'active');
+ assert.equal(context.desktopOrderGroup({...item,status:'completed'}),'completed');
+ for(const status of ['cancelled','refunded'])assert.equal(context.desktopOrderGroup({...item,status}),'closed');
 });
