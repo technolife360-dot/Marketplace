@@ -19,7 +19,7 @@
   var dock = document.createElement('aside');
   dock.id = 'support-dock';
   dock.setAttribute('aria-label', 'Support');
-  dock.innerHTML = '<div class="support-hint" hidden><button class="support-hint-dismiss" type="button" aria-label="Close">×</button><strong></strong><p></p><button class="support-hint-open" type="button"></button></div><button class="support-launcher" type="button" aria-label="Open support chat"><img class="support-launcher-logo" src="/static/assets/sentryloot-mark-256.webp?v=1" alt=""><svg class="support-launcher-close" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="support-unread" hidden></span></button>';
+  dock.innerHTML = '<div class="support-hint" hidden><button class="support-hint-dismiss" type="button" aria-label="Close">×</button><strong></strong><p></p><button class="support-hint-open" type="button"></button></div><button class="support-launcher" type="button" aria-label="Open support chat"><img class="support-launcher-logo" src="https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/sentryloot-mark-256.webp?v=1" alt=""><svg class="support-launcher-close" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="support-unread" hidden></span></button>';
   document.body.appendChild(dock);
   var hint = dock.querySelector('.support-hint');
   var launcher = dock.querySelector('.support-launcher');

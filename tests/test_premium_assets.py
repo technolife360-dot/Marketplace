@@ -1,6 +1,7 @@
 """The deployed WSGI allowlist must serve new UI assets without exposing files."""
 import unittest
 import app
+import public_assets
 from test_http_workflows import BrowserClient
 
 
@@ -26,6 +27,10 @@ class PremiumAssets(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 status, payload, headers = client.request('GET', path)
+                if path in public_assets.IMAGE_MANIFEST:
+                    self.assertEqual(status, 308)
+                    self.assertEqual(headers['Location'], public_assets.image_url(path))
+                    continue
                 self.assertEqual(status, 200)
                 self.assertTrue(headers['Content-Type'].startswith(mime))
                 self.assertGreater(len(payload), 100)

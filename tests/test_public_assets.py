@@ -43,11 +43,12 @@ class PublicArtworkTests(unittest.TestCase):
         self.assertEqual(result['stock'], 2)
         self.assertEqual(value['images'][0], '/static/assets/topup-uc.png?v=3')
 
-    def test_html_uses_new_local_brand_mark_and_font_stays_local(self):
+    def test_html_uses_r2_brand_mark_and_font_stays_local(self):
         response, body = self.request('/')
         self.assertEqual(response['status'], 200)
-        self.assertIn(b'/static/assets/sentryloot-mark-256.webp?v=1', body)
-        self.assertIn(b'/static/assets/sentryloot-mark-128.png?v=1', body)
+        self.assertIn(public_assets.image_url('/static/assets/sentryloot-mark-256.webp?v=1').encode(), body)
+        self.assertIn(public_assets.image_url('/static/assets/sentryloot-mark-128.png?v=1').encode(), body)
+        self.assertNotIn(b'"/static/assets/sentryloot-mark', body)
         self.assertNotIn(b'/static/assets/sentryloot-logo-crest.jpg', body)
         response, body = self.request('/static/assets/roboto-variable.ttf')
         self.assertEqual(response['status'], 200)

@@ -9,6 +9,231 @@
     "size": 1294597,
     "sha256": "7777b2a86823fa17f744f2f018b1955895ae8600af68956eb50202364d59f5e1"
   },
+  "/static/assets/game-art/call-of-duty-mobile-1280.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/call-of-duty-mobile-1280.webp",
+    "size": 86976,
+    "sha256": "1216b597b0d19988f160aff91ea0dfc5a5513907094c370669dbfc6465f954d2"
+  },
+  "/static/assets/game-art/call-of-duty-mobile-3840.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/call-of-duty-mobile-3840.webp",
+    "size": 620680,
+    "sha256": "488cc444b8cb2a80b0a84d1c0f5bb40a6080a622b834fea1cb70c613ca47ad11"
+  },
+  "/static/assets/game-art/call-of-duty-mobile-640.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/call-of-duty-mobile-640.webp",
+    "size": 31838,
+    "sha256": "e207054f29ef835dfae58d2deb61b30b4a96953449d75bce01de7ca5d53512fc"
+  },
+  "/static/assets/game-art/cs2-1280.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/cs2-1280.webp",
+    "size": 104384,
+    "sha256": "c512a134fff461f68bb9647fd6b570c8a3eb3622232ee7763443a1fd47e7cbc8"
+  },
+  "/static/assets/game-art/cs2-3840.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/cs2-3840.webp",
+    "size": 681904,
+    "sha256": "9fa7bc758878f166263cd82147e54428104193c6927f49ce68094eb8804eed84"
+  },
+  "/static/assets/game-art/cs2-640.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/cs2-640.webp",
+    "size": 29748,
+    "sha256": "76489b18877297a6d9c519ee0ceb659790c2647d3ed900fd7b913199de80f67d"
+  },
+  "/static/assets/game-art/dota-2-1280.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/dota-2-1280.webp",
+    "size": 312864,
+    "sha256": "46aa9c45f570109fdac8db0ed603b2bf3274ebe9c407c136e0f58be143eb22f8"
+  },
+  "/static/assets/game-art/dota-2-3840.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/dota-2-3840.webp",
+    "size": 1762348,
+    "sha256": "aa009f364a9a51b5cb9f65ff6b14b808f7aac194f0e41e13f23a81d3294e3dbe"
+  },
+  "/static/assets/game-art/dota-2-640.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/dota-2-640.webp",
+    "size": 99314,
+    "sha256": "c1a4ac7d22602f05f4cb2b628eab45c5e08fa9cf4ee5ff388f37925853919e9a"
+  },
+  "/static/assets/game-art/ea-sports-fc-1280.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/ea-sports-fc-1280.webp",
+    "size": 164632,
+    "sha256": "9e1fca63fc0fa8e196d5fd140501c3daa41e0660fe83def3a8cbb2fc6296e191"
+  },
+  "/static/assets/game-art/ea-sports-fc-3840.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/ea-sports-fc-3840.webp",
+    "size": 1522832,
+    "sha256": "fb6bd8b21e2dad532d118c03ad63ef823521e7ac6c2733be0e5f706d68363c5d"
+  },
+  "/static/assets/game-art/ea-sports-fc-640.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/ea-sports-fc-640.webp",
+    "size": 53082,
+    "sha256": "e94477f85f1cbb7f2cca2bd3878ba18cc6b7e5af44474be8a1f7482b6faa537b"
+  },
+  "/static/assets/game-art/fortnite-1280.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/fortnite-1280.webp",
+    "size": 162494,
+    "sha256": "3991b7a2a45ec2de3725a72e0921407ab65fa9d8ef7c66124cb0be87e98ec095"
+  },
+  "/static/assets/game-art/fortnite-3840.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/fortnite-3840.webp",
+    "size": 766386,
+    "sha256": "c48896ee81214cc731d748b3fd9852c4304a01f168fdcb85ee093181d1e6f5fc"
+  },
+  "/static/assets/game-art/fortnite-640.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/fortnite-640.webp",
+    "size": 57202,
+    "sha256": "8a70a397abf15af1c634688c38f0ffe76c28a2c80f29ea8f7d1a20e9f2209594"
+  },
+  "/static/assets/game-art/free-fire-1280.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/free-fire-1280.webp",
+    "size": 150752,
+    "sha256": "205c9a0517cfa618bd336fa0af83602c7bd2c45645a6235f8247844829ef0306"
+  },
+  "/static/assets/game-art/free-fire-3840.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/free-fire-3840.webp",
+    "size": 1426506,
+    "sha256": "2c79ddcf13aeb149f764029ded975e4d49c943e458c0e1879425285f979ddb2c"
+  },
+  "/static/assets/game-art/free-fire-640.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/free-fire-640.webp",
+    "size": 52336,
+    "sha256": "45cb07b8986087f6458031a7baae180b1c3644c01807d317e45f4537fdd4b8e4"
+  },
+  "/static/assets/game-art/genshin-impact-1280.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/genshin-impact-1280.webp",
+    "size": 183822,
+    "sha256": "45cf3e2d392e1df04fde677855520efde60d4ac2731c8c094a63194761722eb3"
+  },
+  "/static/assets/game-art/genshin-impact-3840.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/genshin-impact-3840.webp",
+    "size": 1279724,
+    "sha256": "5aa88fedf796bddc6018e04a234b3bbc2bafdbe83e2534d80270359cb3665b35"
+  },
+  "/static/assets/game-art/genshin-impact-640.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/genshin-impact-640.webp",
+    "size": 62342,
+    "sha256": "be2bdefe928dc338b1330bb914f4f9ac7cb35c407f6d56730f980fd9e1d94991"
+  },
+  "/static/assets/game-art/gta-5-1280.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/gta-5-1280.webp",
+    "size": 174226,
+    "sha256": "ec0e7c55d10a39a7f4295a6efdc1beccb7799b6f3d0182a0b998dc9ee439edb5"
+  },
+  "/static/assets/game-art/gta-5-3840.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/gta-5-3840.webp",
+    "size": 1398118,
+    "sha256": "c6f73bc919c0233e8d3b329d737dc044303e29af4379656cf2c98d89af718bb0"
+  },
+  "/static/assets/game-art/gta-5-640.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/gta-5-640.webp",
+    "size": 50218,
+    "sha256": "d38938cc5edf5c61f0c56637cdd08dcd28941271d42d19390d9138028033940b"
+  },
+  "/static/assets/game-art/honor-of-kings-1280.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/honor-of-kings-1280.webp",
+    "size": 116000,
+    "sha256": "62f2f774c6cd9fdb9f8a967fad2668362e57fc27cdc75f9d725e6c10b6974907"
+  },
+  "/static/assets/game-art/honor-of-kings-3840.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/honor-of-kings-3840.webp",
+    "size": 941992,
+    "sha256": "c2f8617c5c5b90deed146e62eace0e36fbe6ddbbdde3d84063bb2b54bb08c6ce"
+  },
+  "/static/assets/game-art/honor-of-kings-640.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/honor-of-kings-640.webp",
+    "size": 41806,
+    "sha256": "6326453c1ec9da3dd17639862d152afa82e4cee6bca81e8ed2731e6fa22f8ac6"
+  },
+  "/static/assets/game-art/league-of-legends-1280.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/league-of-legends-1280.webp",
+    "size": 102472,
+    "sha256": "666a94943d518a649ac0e7dbb71ac64998ddf2803ca61507a572d1c4b213da17"
+  },
+  "/static/assets/game-art/league-of-legends-3840.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/league-of-legends-3840.webp",
+    "size": 635452,
+    "sha256": "4f6794f2ec5667732ff22e3507fe0e4ef20ac3d8a3b4c69ee988fe77fed22452"
+  },
+  "/static/assets/game-art/league-of-legends-640.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/league-of-legends-640.webp",
+    "size": 39172,
+    "sha256": "14025f61a06143a27c7aa90d3590bc3befc30507da4451f3bc7442b125905f8a"
+  },
+  "/static/assets/game-art/minecraft-1280.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/minecraft-1280.webp",
+    "size": 153214,
+    "sha256": "74364987ab4138b0928e6bb949b2d88fcaefdd4719f43f646170e742afbe8366"
+  },
+  "/static/assets/game-art/minecraft-3840.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/minecraft-3840.webp",
+    "size": 534166,
+    "sha256": "c62f9bcce3bc77bb47a80fcdb3ffc58b700fbc751e32af1629dc7c51a58fe3b5"
+  },
+  "/static/assets/game-art/minecraft-640.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/minecraft-640.webp",
+    "size": 65614,
+    "sha256": "b1fd353aaaee2c5731b397c2554bd6473258ed3ed436fd89e20a913b9898e214"
+  },
+  "/static/assets/game-art/mobile-legends-1280.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/mobile-legends-1280.webp",
+    "size": 146026,
+    "sha256": "7dba9a84560bb688c9dcac11b9cf3906c0ae0422d1184d99934446faede2c3d8"
+  },
+  "/static/assets/game-art/mobile-legends-3840.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/mobile-legends-3840.webp",
+    "size": 758020,
+    "sha256": "75919cf6e628574ead048fb31a0d1057926c4cd664fe069fc5a56cb3dbf10c59"
+  },
+  "/static/assets/game-art/mobile-legends-640.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/mobile-legends-640.webp",
+    "size": 53706,
+    "sha256": "3fe911abe5495dda2f670668baae3546311b75a1755e9d798843cef60eab2bd3"
+  },
+  "/static/assets/game-art/pubg-mobile-1280.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/pubg-mobile-1280.webp",
+    "size": 117114,
+    "sha256": "cf3e4ceadff3a99fc8e67cf010f60b88c3556b0d75b404287ce2cdb6e088c2c7"
+  },
+  "/static/assets/game-art/pubg-mobile-3840.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/pubg-mobile-3840.webp",
+    "size": 733504,
+    "sha256": "3ec85185a3a3c6ca491984299ab4a4f442e2143942c3f7b8a33d939ae01d0d0b"
+  },
+  "/static/assets/game-art/pubg-mobile-640.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/pubg-mobile-640.webp",
+    "size": 41392,
+    "sha256": "69a4cf1e5b0285a3874bd36302c58e179db5400731e3d724c11f413c0758ddd6"
+  },
+  "/static/assets/game-art/roblox-1280.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/roblox-1280.webp",
+    "size": 107874,
+    "sha256": "b98c55a7966420586f0a2449fafdccdb7a32ff46be8a6e407bf52ee1c12229f9"
+  },
+  "/static/assets/game-art/roblox-3840.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/roblox-3840.webp",
+    "size": 491940,
+    "sha256": "75f93581d84e3e50d5bfe368dd7df56734656f1180a42d2946d88489f407bfc0"
+  },
+  "/static/assets/game-art/roblox-640.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/roblox-640.webp",
+    "size": 43852,
+    "sha256": "88ea53fd5c791a1f51c3e079fb386591352b8be9c8315491b8e7a4e93da55466"
+  },
+  "/static/assets/game-art/valorant-1280.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/valorant-1280.webp",
+    "size": 63972,
+    "sha256": "dcad78df858f694674b48581b3f8ffa9f223458261097086fbe678094100f7bb"
+  },
+  "/static/assets/game-art/valorant-3840.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/valorant-3840.webp",
+    "size": 332082,
+    "sha256": "b0d5e6cfcec8b1c1b1dd854f6a8ccb262a22dd198b80d97d3b8c2565f849c150"
+  },
+  "/static/assets/game-art/valorant-640.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/valorant-640.webp",
+    "size": 28110,
+    "sha256": "8a0233b849c1dd0c7201c929aa18a68d7e497e5c441328a0e824675845a2c1ab"
+  },
   "/static/assets/hero-background.jpg": {
     "url": "https://images.gamestorehub.com/site-assets/hero-background.jpg",
     "size": 1236433,
@@ -103,6 +328,26 @@
     "url": "https://images.gamestorehub.com/site-assets/sentryloot-logo-full.jpg",
     "size": 69894,
     "sha256": "7fc63e99b9fa3a01b003c3e142d705e4290732f93641ec01163d8e142cb51ab7"
+  },
+  "/static/assets/sentryloot-mark-128.png": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/sentryloot-mark-128.png",
+    "size": 16428,
+    "sha256": "98b65ee39c01cfb3ddea6ee8ef4451c0a700638117d023f7b444b06cc8ed6305"
+  },
+  "/static/assets/sentryloot-mark-256.webp": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/sentryloot-mark-256.webp",
+    "size": 16330,
+    "sha256": "2b2f06f358f72cde360e6cb757f2259580409d866a4a046ba8d952182ce760f6"
+  },
+  "/static/assets/sentryloot-mark-512.png": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/sentryloot-mark-512.png",
+    "size": 149535,
+    "sha256": "4220b34bdccd9d15a8a391fc96d9ed4ba518d5d0accd20f1f6b9122e1962689a"
+  },
+  "/static/assets/sentryloot-mark.png": {
+    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/sentryloot-mark.png",
+    "size": 794557,
+    "sha256": "c510e0ae39a66258579d0e3dc4b28450c000658d0697453b073e4a818b39bd72"
   },
   "/static/assets/topup-elite-pass.png": {
     "url": "https://images.gamestorehub.com/site-assets/topup-elite-pass.png",
