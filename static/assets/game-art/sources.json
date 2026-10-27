@@ -1,0 +1,501 @@
+{
+  "schemaVersion": 1,
+  "preparedAt": "2026-10-28",
+  "processing": "Pixel-preserving resampling and WebP encoding only. No creative edits, crops, AI generation, or upscaling. Master files retain source aspect ratio.",
+  "rights": "Game artwork remains the property of its respective rights holders. Source URLs establish provenance and do not themselves grant commercial usage rights.",
+  "games": [
+    {
+      "slug": "pubg-mobile",
+      "master": "pubg-mobile-3840.webp",
+      "width": 3840,
+      "height": 2160,
+      "sourceWidth": 3840,
+      "sourceHeight": 2160,
+      "sourceUrl": "https://wallpapercat.com/w/full/f/4/b/2856341-3840x2160-desktop-4k-pubg-mobile-wallpaper-photo.jpg",
+      "sourcePage": "https://wallpapercat.com/pubg-mobile-wallpapers",
+      "publisherHosted": false,
+      "description": "Classic PUBG helmeted survivor key art with explosion and Battlegrounds wordmark.",
+      "variants": [
+        {
+          "file": "pubg-mobile-3840.webp",
+          "width": 3840,
+          "height": 2160,
+          "bytes": 733504
+        },
+        {
+          "file": "pubg-mobile-1280.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 117114
+        },
+        {
+          "file": "pubg-mobile-640.webp",
+          "width": 640,
+          "height": 360,
+          "bytes": 41392
+        }
+      ],
+      "provenanceNote": "Third-party game-art wallpaper archive; downloaded source pixel dimensions verified. Earlier publication and source-side processing history are not established."
+    },
+    {
+      "slug": "mobile-legends",
+      "master": "mobile-legends-3840.webp",
+      "width": 3840,
+      "height": 2160,
+      "sourceWidth": 3840,
+      "sourceHeight": 2160,
+      "sourceUrl": "https://wallpapercat.com/w/full/5/9/4/3115539-3840x2160-desktop-hd-mobile-legends-bang-bang-wallpaper-image.jpg",
+      "sourcePage": "https://wallpapercat.com/mobile-legends-bang-bang-wallpapers",
+      "publisherHosted": false,
+      "description": "Freya futuristic winged armor splash artwork.",
+      "variants": [
+        {
+          "file": "mobile-legends-3840.webp",
+          "width": 3840,
+          "height": 2160,
+          "bytes": 758020
+        },
+        {
+          "file": "mobile-legends-1280.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 146026
+        },
+        {
+          "file": "mobile-legends-640.webp",
+          "width": 640,
+          "height": 360,
+          "bytes": 53706
+        }
+      ],
+      "provenanceNote": "Third-party game-art wallpaper archive; downloaded source pixel dimensions verified. Earlier publication and source-side processing history are not established."
+    },
+    {
+      "slug": "valorant",
+      "master": "valorant-3840.webp",
+      "width": 3840,
+      "height": 2160,
+      "sourceWidth": 3840,
+      "sourceHeight": 2160,
+      "sourceUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/news_live/41a9316861671756f6f2bdedcde60f99e37de0d4-3840x2160.jpg",
+      "sourcePage": "https://playvalorant.com/en-us/media/",
+      "publisherHosted": true,
+      "description": "Official Killjoy wallpaper.",
+      "variants": [
+        {
+          "file": "valorant-3840.webp",
+          "width": 3840,
+          "height": 2160,
+          "bytes": 332082
+        },
+        {
+          "file": "valorant-1280.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 63972
+        },
+        {
+          "file": "valorant-640.webp",
+          "width": 640,
+          "height": 360,
+          "bytes": 28110
+        }
+      ]
+    },
+    {
+      "slug": "free-fire",
+      "master": "free-fire-3840.webp",
+      "width": 3840,
+      "height": 2160,
+      "sourceWidth": 3840,
+      "sourceHeight": 2160,
+      "sourceUrl": "https://wallpapercat.com/w/full/f/b/b/1868358-3840x2160-desktop-4k-garena-free-fire-wallpaper-image.jpg",
+      "sourcePage": "https://wallpapercat.com/garena-free-fire-wallpapers",
+      "publisherHosted": false,
+      "description": "Colorful Free Fire masked character game artwork.",
+      "variants": [
+        {
+          "file": "free-fire-3840.webp",
+          "width": 3840,
+          "height": 2160,
+          "bytes": 1426506
+        },
+        {
+          "file": "free-fire-1280.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 150752
+        },
+        {
+          "file": "free-fire-640.webp",
+          "width": 640,
+          "height": 360,
+          "bytes": 52336
+        }
+      ],
+      "provenanceNote": "Third-party game-art wallpaper archive; downloaded source pixel dimensions verified. Earlier publication and source-side processing history are not established."
+    },
+    {
+      "slug": "cs2",
+      "master": "cs2-3840.webp",
+      "width": 3840,
+      "height": 2160,
+      "sourceWidth": 3840,
+      "sourceHeight": 2160,
+      "sourceUrl": "https://images8.alphacoders.com/132/1329760.jpeg",
+      "sourcePage": "https://wall.alphacoders.com/big.php?i=1329760",
+      "publisherHosted": false,
+      "description": "Counter-Strike 2 key art with two operators and orange/white backdrop.",
+      "variants": [
+        {
+          "file": "cs2-3840.webp",
+          "width": 3840,
+          "height": 2160,
+          "bytes": 681904
+        },
+        {
+          "file": "cs2-1280.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 104384
+        },
+        {
+          "file": "cs2-640.webp",
+          "width": 640,
+          "height": 360,
+          "bytes": 29748
+        }
+      ],
+      "provenanceNote": "Third-party game-art wallpaper archive; downloaded source pixel dimensions verified. Earlier publication and source-side processing history are not established."
+    },
+    {
+      "slug": "honor-of-kings",
+      "master": "honor-of-kings-3840.webp",
+      "width": 3840,
+      "height": 2159,
+      "sourceWidth": 6582,
+      "sourceHeight": 3700,
+      "sourceUrl": "https://images5.alphacoders.com/126/1264156.jpg",
+      "sourcePage": "https://wall.alphacoders.com/big.php?i=1264156",
+      "publisherHosted": false,
+      "description": "Honor of Kings moonlit silver-haired character splash artwork.",
+      "variants": [
+        {
+          "file": "honor-of-kings-3840.webp",
+          "width": 3840,
+          "height": 2159,
+          "bytes": 941992
+        },
+        {
+          "file": "honor-of-kings-1280.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 116000
+        },
+        {
+          "file": "honor-of-kings-640.webp",
+          "width": 640,
+          "height": 360,
+          "bytes": 41806
+        }
+      ],
+      "provenanceNote": "Third-party game-art wallpaper archive; downloaded source pixel dimensions verified. Earlier publication and source-side processing history are not established."
+    },
+    {
+      "slug": "roblox",
+      "master": "roblox-3840.webp",
+      "width": 3840,
+      "height": 2160,
+      "sourceWidth": 3840,
+      "sourceHeight": 2160,
+      "sourceUrl": "https://cms-media.roblox.com/assets/otamjmmrsq29idoqd6db.zip",
+      "sourcePage": "https://about.roblox.com/press-kit",
+      "publisherHosted": true,
+      "description": "Official Players on Roblox render with orange neon arena.",
+      "variants": [
+        {
+          "file": "roblox-3840.webp",
+          "width": 3840,
+          "height": 2160,
+          "bytes": 491940
+        },
+        {
+          "file": "roblox-1280.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 107874
+        },
+        {
+          "file": "roblox-640.webp",
+          "width": 640,
+          "height": 360,
+          "bytes": 43852
+        }
+      ],
+      "archiveEntry": "Renders/RENDER_ Players on Roblox.png"
+    },
+    {
+      "slug": "genshin-impact",
+      "master": "genshin-impact-3840.webp",
+      "width": 3840,
+      "height": 2160,
+      "sourceWidth": 3840,
+      "sourceHeight": 2160,
+      "sourceUrl": "https://gmedia.playstation.com/is/image/SIEPDC/genshin-impact-2-1-screenshot-04-en-31aug21?$native$",
+      "sourcePage": "https://www.playstation.com/en-us/games/genshin-impact/",
+      "publisherHosted": true,
+      "description": "Official Genshin Impact Kokomi gameplay screenshot distributed by PlayStation.",
+      "variants": [
+        {
+          "file": "genshin-impact-3840.webp",
+          "width": 3840,
+          "height": 2160,
+          "bytes": 1279724
+        },
+        {
+          "file": "genshin-impact-1280.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 183822
+        },
+        {
+          "file": "genshin-impact-640.webp",
+          "width": 640,
+          "height": 360,
+          "bytes": 62342
+        }
+      ]
+    },
+    {
+      "slug": "dota-2",
+      "master": "dota-2-3840.webp",
+      "width": 3840,
+      "height": 2160,
+      "sourceWidth": 3840,
+      "sourceHeight": 2160,
+      "sourceUrl": "https://wallpapercat.com/w/full/e/a/3/67936-3840x2160-desktop-4k-dota-2-background.jpg",
+      "sourcePage": "https://wallpapercat.com/dota-2-wallpapers",
+      "publisherHosted": false,
+      "description": "Dota 2 hero portrait collage.",
+      "variants": [
+        {
+          "file": "dota-2-3840.webp",
+          "width": 3840,
+          "height": 2160,
+          "bytes": 1762348
+        },
+        {
+          "file": "dota-2-1280.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 312864
+        },
+        {
+          "file": "dota-2-640.webp",
+          "width": 640,
+          "height": 360,
+          "bytes": 99314
+        }
+      ],
+      "provenanceNote": "Third-party game-art wallpaper archive; downloaded source pixel dimensions verified. Earlier publication and source-side processing history are not established."
+    },
+    {
+      "slug": "fortnite",
+      "master": "fortnite-3840.webp",
+      "width": 3840,
+      "height": 2160,
+      "sourceWidth": 3840,
+      "sourceHeight": 2160,
+      "sourceUrl": "https://wallpapercat.com/w/full/2/0/8/1143-3840x2160-desktop-4k-fortnite-background-photo.jpg",
+      "sourcePage": "https://wallpapercat.com/fortnite-wallpapers",
+      "publisherHosted": false,
+      "description": "Fortnite character lineup with neon blue and purple lighting.",
+      "variants": [
+        {
+          "file": "fortnite-3840.webp",
+          "width": 3840,
+          "height": 2160,
+          "bytes": 766386
+        },
+        {
+          "file": "fortnite-1280.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 162494
+        },
+        {
+          "file": "fortnite-640.webp",
+          "width": 640,
+          "height": 360,
+          "bytes": 57202
+        }
+      ],
+      "provenanceNote": "Third-party game-art wallpaper archive; downloaded source pixel dimensions verified. Earlier publication and source-side processing history are not established."
+    },
+    {
+      "slug": "minecraft",
+      "master": "minecraft-3840.webp",
+      "width": 3840,
+      "height": 2160,
+      "sourceWidth": 3840,
+      "sourceHeight": 2160,
+      "sourceUrl": "https://wallpapercat.com/w/full/2/c/f/1123-3840x2160-desktop-4k-minecraft-background.jpg",
+      "sourcePage": "https://wallpapercat.com/minecraft-wallpapers",
+      "publisherHosted": false,
+      "description": "Minecraft Steve and skeleton encounter in a block forest.",
+      "variants": [
+        {
+          "file": "minecraft-3840.webp",
+          "width": 3840,
+          "height": 2160,
+          "bytes": 534166
+        },
+        {
+          "file": "minecraft-1280.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 153214
+        },
+        {
+          "file": "minecraft-640.webp",
+          "width": 640,
+          "height": 360,
+          "bytes": 65614
+        }
+      ],
+      "provenanceNote": "Third-party game-art wallpaper archive; downloaded source pixel dimensions verified. Earlier publication and source-side processing history are not established."
+    },
+    {
+      "slug": "gta-5",
+      "master": "gta-5-3840.webp",
+      "width": 3840,
+      "height": 2160,
+      "sourceWidth": 3840,
+      "sourceHeight": 2160,
+      "sourceUrl": "https://images7.alphacoders.com/564/564932.jpg",
+      "sourcePage": "https://wall.alphacoders.com/big.php?i=564932",
+      "publisherHosted": false,
+      "description": "Grand Theft Auto V Los Santos skyline viewed from the Vinewood sign.",
+      "variants": [
+        {
+          "file": "gta-5-3840.webp",
+          "width": 3840,
+          "height": 2160,
+          "bytes": 1398118
+        },
+        {
+          "file": "gta-5-1280.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 174226
+        },
+        {
+          "file": "gta-5-640.webp",
+          "width": 640,
+          "height": 360,
+          "bytes": 50218
+        }
+      ],
+      "provenanceNote": "Third-party game-art wallpaper archive; downloaded source pixel dimensions verified. Earlier publication and source-side processing history are not established."
+    },
+    {
+      "slug": "league-of-legends",
+      "master": "league-of-legends-3840.webp",
+      "width": 3840,
+      "height": 2160,
+      "sourceWidth": 3840,
+      "sourceHeight": 2160,
+      "sourceUrl": "https://wallpapercat.com/w/full/8/2/f/725-3840x2160-desktop-4k-league-of-legends-background-image.jpg",
+      "sourcePage": "https://wallpapercat.com/league-of-legends-wallpapers",
+      "publisherHosted": false,
+      "description": "League of Legends Riven character artwork with purple spirit effects.",
+      "variants": [
+        {
+          "file": "league-of-legends-3840.webp",
+          "width": 3840,
+          "height": 2160,
+          "bytes": 635452
+        },
+        {
+          "file": "league-of-legends-1280.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 102472
+        },
+        {
+          "file": "league-of-legends-640.webp",
+          "width": 640,
+          "height": 360,
+          "bytes": 39172
+        }
+      ],
+      "provenanceNote": "Third-party game-art wallpaper archive; downloaded source pixel dimensions verified. Earlier publication and source-side processing history are not established."
+    },
+    {
+      "slug": "call-of-duty-mobile",
+      "master": "call-of-duty-mobile-3840.webp",
+      "width": 3840,
+      "height": 2160,
+      "sourceWidth": 3840,
+      "sourceHeight": 2160,
+      "sourceUrl": "https://wallpapercat.com/w/full/8/8/8/2765699-3840x2160-desktop-4k-call-of-duty-mobile-background.jpg",
+      "sourcePage": "https://wallpapercat.com/call-of-duty-mobile-wallpapers",
+      "publisherHosted": false,
+      "description": "Call of Duty: Mobile soldier lineup with yellow emblem and game wordmark.",
+      "variants": [
+        {
+          "file": "call-of-duty-mobile-3840.webp",
+          "width": 3840,
+          "height": 2160,
+          "bytes": 620680
+        },
+        {
+          "file": "call-of-duty-mobile-1280.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 86976
+        },
+        {
+          "file": "call-of-duty-mobile-640.webp",
+          "width": 640,
+          "height": 360,
+          "bytes": 31838
+        }
+      ],
+      "provenanceNote": "Third-party game-art wallpaper archive; downloaded source pixel dimensions verified. Earlier publication and source-side processing history are not established."
+    },
+    {
+      "slug": "ea-sports-fc",
+      "master": "ea-sports-fc-3840.webp",
+      "width": 3840,
+      "height": 2160,
+      "sourceWidth": 3840,
+      "sourceHeight": 2160,
+      "sourceUrl": "https://s25.q4cdn.com/103200307/files/doc_multimedia/2024/7/1008624162/EA_SPORTS_FC_25_-_Cover.jpg",
+      "sourcePage": "https://news.ea.com/press-releases/press-releases-details/2024/Jude-Bellingham-Revealed-as-EA-SPORTS-FC-25-Cover-Star/default.aspx",
+      "publisherHosted": true,
+      "description": "Official EA SPORTS FC 25 cover reveal featuring Jude Bellingham; used for the EA SPORTS FC franchise category.",
+      "variants": [
+        {
+          "file": "ea-sports-fc-3840.webp",
+          "width": 3840,
+          "height": 2160,
+          "bytes": 1522832
+        },
+        {
+          "file": "ea-sports-fc-1280.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 164632
+        },
+        {
+          "file": "ea-sports-fc-640.webp",
+          "width": 640,
+          "height": 360,
+          "bytes": 53082
+        }
+      ],
+      "provenanceNote": "Original 3840×2160 press image linked by Electronic Arts on its official announcement; distributed through the publisher’s Q4 media CDN. Downloaded source pixel dimensions verified."
+    }
+  ]
+}

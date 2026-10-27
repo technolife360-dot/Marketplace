@@ -31,7 +31,7 @@ window.PremiumMotion = (() => {
     const motion = await runtime();
     if (!motion || request !== epoch || !root.isConnected || preference.matches) return;
     status('ready');
-    const elements = [...root.querySelectorAll('.home-intro-copy, .home-mobile-games nav > a, .market-product-card .market-card-cover, .home-guide > ol > li')].filter(element => !seen.has(element));
+    const elements = [...root.querySelectorAll('.home-intro-copy, .market-product-card .market-card-cover, .home-guide > ol > li')].filter(element => !seen.has(element));
     elements.forEach(element => seen.add(element));
     if (!elements.length) return;
     observers.push(motion.inView(elements, element => {

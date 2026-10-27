@@ -103,7 +103,7 @@ test('failed asynchronous page requests render an error instead of leaving the l
       history: {state: null, replaceState() {}},
       app: {classList: {remove() {}, toggle() {}}, dataset: {}, setAttribute() {}, innerHTML: ''}, me: null,
       document: {body: {classList: {remove() {}}}}, window: {},
-      currentPageAnchor: () => '', updateRouteMetadata() {}, syncRouteBack() {}, stopHomeCanvas() {},
+      currentPageAnchor: () => '', updateRouteMetadata() {}, stopHomeCanvas() {},
       pageTitle: text => '<h1>' + text + '</h1>', esc: text => String(text), adminText: (_uz,_ru,en) => en,
       [renderer]: async () => {throw new Error('Test API request failed');},
     };
@@ -362,8 +362,8 @@ test('home paints public listings without waiting for the profile; abandoned req
   const context={window:{},app:{innerHTML:'',classList:{add(){}}},document:{body:{classList:{add(){}}}},
    bootstrapSessionReady:new Promise(()=>{}),URLSearchParams,Promise,marketGameLinks:[],
    api:()=>new Promise(resolve=>pending.push(resolve)),adminText:(uz,ru,en)=>en,
-   syncRouteBack(){},marketSidebarMarkup:()=>'<aside></aside>',esc:String,icon:()=>'',
-   setupMarketBanner(){},marketCard:item=>'<article>'+item.title+'</article>',
+   marketSidebarMarkup:()=>'<aside></aside>',esc:String,icon:()=>'',
+   setupMarketBanner(){},homeGameCarouselMarkup:()=>'<section class="home-mobile-games"></section>',marketCard:item=>'<article>'+item.title+'</article>',
    MarketUX:{home(){}},openBrowse(){},
    $:selector=>selector==='#hero-search-form'?{}:selector==='.home-storefront'?root:selector==='[data-home-listings]'?slot:selector==='#home-category'?category:null};
   vm.createContext(context);vm.runInContext(homeSource,context);

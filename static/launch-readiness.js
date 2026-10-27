@@ -50,7 +50,7 @@ window.LaunchUX=(()=>{
  async function sellerReadiness(){
   if(!me){location.hash='login';return}
   if(!me.email_verified){location.hash='seller';return}
-  app.innerHTML=`<section class="page launch-page seller-readiness-page"><a class="route-back-link" href="/#seller">← ${t('Sotuvchi paneli','Кабинет продавца','Seller dashboard')}</a>${pageTitle(t('Sotishga tayyorgarlik','Подготовка к продаже','Seller checklist'),t('Sotishni boshlash uchun kerakli qadamlar','Шаги, необходимые для начала продаж','Steps to get your shop ready to sell'))}<div class="seller-readiness-content"></div></section>`;
+  app.innerHTML=`<section class="page launch-page seller-readiness-page">${pageTitle(t('Sotishga tayyorgarlik','Подготовка к продаже','Seller checklist'),t('Sotishni boshlash uchun kerakli qadamlar','Шаги, необходимые для начала продаж','Steps to get your shop ready to sell'))}<div class="seller-readiness-content"></div></section>`;
   if(me.seller)await sellerChecklist(app.querySelector('.seller-readiness-content'));
   else app.querySelector('.seller-readiness-content').innerHTML=`<section class="panel launch-checklist">${sellerChecklistMarkup({profile_created:false,identity_verified:false,selling_enabled:false,listings:[]})}</section>`;
  }

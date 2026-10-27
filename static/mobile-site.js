@@ -147,7 +147,7 @@ window.MobileSite = (() => {
     overlay.className = 'mobile-welcome';
     overlay.setAttribute('role', 'status');
     overlay.setAttribute('aria-label', 'Welcome to SentryLoot');
-    overlay.innerHTML = '<div class="mobile-welcome-emblem"><img src="/static/assets/sentryloot-logo-crest.jpg" alt="" width="80" height="80"></div><div class="mobile-welcome-label">Welcome to</div><div class="mobile-welcome-brand">Sentry<span>Loot</span></div><span class="mobile-welcome-rule"></span>';
+    overlay.innerHTML = '<div class="mobile-welcome-emblem"><img src="/static/assets/sentryloot-mark-256.webp?v=1" alt="" width="80" height="80"></div><div class="mobile-welcome-label">Welcome to</div><div class="mobile-welcome-brand">Sentry<span>Loot</span></div><span class="mobile-welcome-rule"></span>';
     document.body.append(overlay);
     const underlying = [...document.body.children].filter(element => element !== overlay).map(element => [element, element.inert]);
     underlying.forEach(([element]) => element.inert = true);
@@ -164,17 +164,27 @@ window.MobileSite = (() => {
     if (!header) return;
     if (!header.querySelector('.mobile-context-header')) {
       const context=document.createElement('div'); context.className='mobile-context-header';
-      context.innerHTML=`<a href="/#home" aria-label="${t('Orqaga','Назад','Back')}">${designIcon('arrow')}</a><span>Marketplace</span>`;
+      context.innerHTML='<span>Marketplace</span>';
       header.append(context);
     }
-    const context=header.querySelector('.mobile-context-header'),accountRoute=/^account\//.test(routeFromLocation()),authRoute=/^(?:(?:login|register|check-email|password-reset)$|verify\/)/.test(routeFromLocation()),cartRoute=routeFromLocation()==='cart',listingRoute=/^listing\//.test(routeFromLocation());
-    if(context){context.querySelector('a').href=routeFromLocation()==='account/settings'?'/#account':'/#account/settings';context.querySelector('span').textContent=authRoute?'':cartRoute?t('Buyurtma ma’lumotlari','Детали заказа','Order details'):accountRoute?t('Hisobingiz','Ваш аккаунт','Your account'):listingRoute?(app.querySelector('.listing-breadcrumbs a:nth-of-type(2)')?.textContent||'Marketplace'):'Marketplace';if(listingRoute)context.querySelector('a').href='/browse';if(cartRoute)context.querySelector('a').href=app.querySelector('.mobile-cart-preview')?'/listing/'+encodeURIComponent(app.querySelector('.mobile-cart-preview').dataset.listing):'/browse';else if(!accountRoute&&!listingRoute)context.querySelector('a').href='/#home';if(routeFromLocation()==='check-email'){context.querySelector('a').href='/#register';let close=context.querySelector('.auth-close');if(!close){context.insertAdjacentHTML('beforeend',`<a class="auth-close" href="/#home" aria-label="${t('Yopish','Закрыть','Close')}">×</a>`);}}if(routeFromLocation()==='password-reset'){context.querySelector('a').href='/#login';const close=context.querySelector('.auth-close');if(close)close.href='/#login';}if(authRoute&&app.querySelector('.auth-page .auth-close'))context.querySelector('.auth-close')?.remove();if(!authRoute)context.querySelector('.auth-close')?.remove();}
-    if(context&&app.querySelector('.topup-product-page')){context.querySelector('span').textContent='Top Up';context.querySelector('a').href='/top-up';}
-    if(context&&app.querySelector('.listing-redesign:is([data-mobile-panel=delivery],[data-mobile-panel=reviews])'))context.querySelector('span').textContent='Marketplace';
-    if(context&&routeFromLocation()==='orders'){context.querySelector('span').textContent=t('Buyurtma ma’lumotlari','Детали заказа','Order details');context.querySelector('a').href='/#account';}
-    if(context&&routeFromLocation()==='notifications'){context.querySelector('span').textContent=t('Hisobingiz','Ваш аккаунт','Your account');context.querySelector('a').href='/#account';}
-    if(context&&/^games\//.test(routeFromLocation()))context.querySelector('a').href='/browse';
-    if(context){const back=context.querySelector('a'),isMenu=routeFromLocation()==='menu';if(isMenu){context.querySelector('span').textContent=t('Menyu','Меню','Menu');back.href='/#home';if(!back.dataset.menuClose){back.innerHTML='<svg class="mobile-design-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg>';back.dataset.menuClose='1';}}else if(back.dataset.menuClose){back.innerHTML=designIcon('arrow');delete back.dataset.menuClose;}}
+    const context=header.querySelector('.mobile-context-header'),route=routeFromLocation();
+    const accountRoute=/^account\//.test(route),authRoute=/^(?:(?:login|register|check-email|password-reset)$|verify\/)/.test(route);
+    if(context){
+      const caption=context.querySelector('span');
+      caption.textContent=authRoute?'':route==='cart'||route==='orders'?t('Buyurtma ma’lumotlari','Детали заказа','Order details'):accountRoute||route==='notifications'?t('Hisobingiz','Ваш аккаунт','Your account'):route==='menu'?t('Menyu','Меню','Menu'):/^listing\//.test(route)?(app.querySelector('.listing-breadcrumbs a:nth-of-type(2)')?.textContent||'Marketplace'):'Marketplace';
+      if(app.querySelector('.topup-product-page'))caption.textContent='Top Up';
+      if(app.querySelector('.listing-redesign:is([data-mobile-panel=delivery],[data-mobile-panel=reviews])'))caption.textContent='Marketplace';
+      if(route==='check-email'&&!context.querySelector('.auth-close'))context.insertAdjacentHTML('beforeend',`<a class="auth-close" href="/#home" aria-label="${t('Yopish','Закрыть','Close')}">×</a>`);
+      if(route==='password-reset'){const close=context.querySelector('.auth-close');if(close)close.href='/#login';}
+      if(!authRoute||app.querySelector('.auth-page .auth-close'))context.querySelector('.auth-close')?.remove();
+      context.querySelector('.mobile-panel-close')?.remove();
+      const listing=app.querySelector('.listing-redesign'),topup=app.querySelector('.mobile-topup-product');
+      const dismiss=route==='menu'?()=>{location.hash='home';}:listing?.dataset.mobilePanel&&listing.dataset.mobilePanel!=='description'?()=>listingPanel():topup?.dataset.mobileReviews==='true'?()=>topupReviews(false):null;
+      if(dismiss){
+        const close=document.createElement('button');close.type='button';close.className='icon-button mobile-panel-close';
+        close.setAttribute('aria-label',t('Yopish','Закрыть','Close'));close.textContent='×';close.onclick=dismiss;context.append(close);
+      }
+    }
     [['#cart-button','cart'],['#notifications-button','bell'],['#mobile-search-toggle','search'],['#mobile-menu-toggle','menu']].forEach(([selector,glyph]) => {
       const button = header.querySelector(selector);
       if (button && !button.querySelector('.mobile-design-icon')) button.insertAdjacentHTML('beforeend', designIcon(glyph));
@@ -296,7 +306,7 @@ window.MobileSite = (() => {
   function topupReviews(open=true){
     const page=app.querySelector('.mobile-topup-product');if(!page)return;
     if(open){page.dataset.mobileReviews='true';}else delete page.dataset.mobileReviews;
-    const back=document.querySelector('.mobile-context-header>a');if(back)back.onclick=event=>{if(page.isConnected&&page.dataset.mobileReviews==='true'){event.preventDefault();topupReviews(false);}};
+    enhanceHeader();
     window.scrollTo({top:0,behavior:'instant'});
   }
   function enhanceTopupProduct(){
@@ -346,7 +356,6 @@ window.MobileSite = (() => {
     let title=page.querySelector('.mobile-listing-panel-title');
     if(!title){title=document.createElement('h1');title.className='mobile-listing-panel-title';page.querySelector('.listing-info-panel').prepend(title);}
     title.textContent=key==='reviews'?t('Xaridorlar sharhlari','Отзывы покупателей','Buyer reviews'):t('Mahsulot tafsilotlari','Подробности товара','Product details');
-    const back=document.querySelector('.mobile-context-header>a');if(back)back.onclick=event=>{if(page.isConnected&&page.dataset.mobilePanel!=='description'){event.preventDefault();listingPanel();}};
     enhanceHeader();window.scrollTo({top:0,behavior:'instant'});
   }
   function gamePage(game,categories,result,category='') {
@@ -444,7 +453,6 @@ window.MobileSite = (() => {
     const heading=document.createElement('header');heading.className='mobile-cart-review-heading';heading.innerHTML=`<span>${t('4 bosqichdan 1','Шаг 1 из 4','Step 1 of 4')} · ${t('Buyurtmani tekshirish','Проверка заказа','Review order')}</span><i></i><h1>${t('Buyurtmani tekshiring','Проверьте заказ','Check your order')}</h1>`;original.prepend(heading);
     const submit=form.querySelector('button[type=submit]'),dock=document.createElement('div');dock.className='mobile-cart-dock mobile-cart-review-dock';submit.setAttribute('form',form.id);dock.append(submit);original.append(dock);
     preview.querySelector('.mobile-cart-dock>button').onclick=()=>{preview.hidden=true;original.hidden=false;window.scrollTo({top:0,behavior:'instant'});};
-    const back=document.querySelector('.mobile-context-header>a');if(back)back.href='/listing/'+encodeURIComponent(data.items[0].id);
   }
   function enhanceAuth() {
     const page=app.querySelector('.auth-page');if(!page||page.dataset.mobileAuth)return;
@@ -504,7 +512,7 @@ window.MobileSite = (() => {
     const pending=pendingVerification;
     const sent=t('Tasdiqlash havolasini '+maskVerificationEmail(pending.email)+' manziliga yubordik.','Ссылка для подтверждения отправлена на '+maskVerificationEmail(pending.email)+'.','We sent a verification link to '+maskVerificationEmail(pending.email)+'.');
     const development=t('Mahalliy sinov: email yuborilmadi.','Локальная проверка: письмо не отправлено.','Local development: no verification email was sent.');
-    app.innerHTML=`<section class="page mobile-email-check"><div class="mobile-reset-brand"><img src="https://images.gamestorehub.com/site-assets/sentryloot-logo-crest.jpg?v=1" width="44" height="44" alt=""><span>Sentry<b>Loot</b></span></div><div class="mobile-email-check-intro"><span class="mobile-email-check-clock" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 3"/></svg></span><h1>${t('Emailingizni tekshiring','Проверьте почту','Check your email')}</h1><p>${esc(pending.development?development:sent)}</p></div><div class="mobile-email-check-help"><h2>${t('Davom etish uchun havolani oching','Откройте ссылку, чтобы продолжить','Open the link to continue')}</h2><p>${t('Inbox va Spam papkalarini tekshiring. Havola hisobingizni tasdiqlaydi.','Проверьте папки «Входящие» и «Спам». Ссылка подтвердит ваш аккаунт.','Check Inbox and Spam. The link opens your verified account.')}</p></div><p class="mobile-email-check-feedback" role="status" hidden></p><button type="button" class="mobile-email-check-resend">${t('Tasdiqlash xatini qayta yuborish','Отправить письмо повторно','Resend verification email')}</button><a href="/#register" class="mobile-email-check-change">${t('Boshqa emaildan foydalanish','Использовать другой email','Use a different email')}</a>${pending.development&&pending.token?`<a class="mobile-email-check-development" href="/#verify/${encodeURIComponent(pending.token)}">${t('Mahalliy tasdiqlash havolasini ochish','Открыть локальную ссылку подтверждения','Open local verification link')}</a>`:''}</section>`;
+    app.innerHTML=`<section class="page mobile-email-check"><div class="mobile-reset-brand"><img src="/static/assets/sentryloot-mark-256.webp?v=1" width="44" height="44" alt=""><span>Sentry<b>Loot</b></span></div><div class="mobile-email-check-intro"><span class="mobile-email-check-clock" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 3"/></svg></span><h1>${t('Emailingizni tekshiring','Проверьте почту','Check your email')}</h1><p>${esc(pending.development?development:sent)}</p></div><div class="mobile-email-check-help"><h2>${t('Davom etish uchun havolani oching','Откройте ссылку, чтобы продолжить','Open the link to continue')}</h2><p>${t('Inbox va Spam papkalarini tekshiring. Havola hisobingizni tasdiqlaydi.','Проверьте папки «Входящие» и «Спам». Ссылка подтвердит ваш аккаунт.','Check Inbox and Spam. The link opens your verified account.')}</p></div><p class="mobile-email-check-feedback" role="status" hidden></p><button type="button" class="mobile-email-check-resend">${t('Tasdiqlash xatini qayta yuborish','Отправить письмо повторно','Resend verification email')}</button><a href="/#register" class="mobile-email-check-change">${t('Boshqa emaildan foydalanish','Использовать другой email','Use a different email')}</a>${pending.development&&pending.token?`<a class="mobile-email-check-development" href="/#verify/${encodeURIComponent(pending.token)}">${t('Mahalliy tasdiqlash havolasini ochish','Открыть локальную ссылку подтверждения','Open local verification link')}</a>`:''}</section>`;
     const clearPending=()=>{pendingVerification=null;try{sessionStorage.removeItem(pendingEmailKey);}catch(_){}};
     app.querySelector('.mobile-email-check-change').addEventListener('click',clearPending);
     const button=app.querySelector('.mobile-email-check-resend'),feedback=app.querySelector('.mobile-email-check-feedback');
@@ -525,7 +533,7 @@ window.MobileSite = (() => {
     const title=verified?t('Email tasdiqlandi','Email подтверждён','Email verified'):failed?t('Havolani tekshirib bo‘lmadi','Не удалось проверить ссылку','Verification link unavailable'):t('Email tekshirilmoqda','Проверяем email','Verifying your email');
     const description=verified?t('Hisobingiz foydalanishga tayyor.','Ваш аккаунт готов к использованию.','Your account is ready to use.'):failed?detail:t('Biroz kuting…','Подождите…','Please wait…');
     const glyph=verified?designIcon('check'):failed?designIcon('help'):'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 3"/></svg>';
-    app.innerHTML=`<section class="page mobile-email-verified ${verified?'is-success':failed?'is-error':'is-loading'}"><div class="mobile-reset-brand"><img src="https://images.gamestorehub.com/site-assets/sentryloot-logo-crest.jpg?v=1" width="44" height="44" alt=""><span>Sentry<b>Loot</b></span></div><div class="mobile-email-check-intro" role="status"><span class="mobile-email-check-clock" aria-hidden="true">${glyph}</span><h1>${esc(title)}</h1><p>${esc(description)}</p></div>${verified||failed?`<div class="mobile-email-verified-dock"><a class="mobile-email-verified-continue" href="/#${verified?(detail||'account'):'login'}">${verified?t('Davom etish','Продолжить','Continue'):t('Kirishga qaytish','Вернуться ко входу','Back to sign in')}${designIcon('arrow')}</a></div>`:''}</section>`;
+    app.innerHTML=`<section class="page mobile-email-verified ${verified?'is-success':failed?'is-error':'is-loading'}"><div class="mobile-reset-brand"><img src="/static/assets/sentryloot-mark-256.webp?v=1" width="44" height="44" alt=""><span>Sentry<b>Loot</b></span></div><div class="mobile-email-check-intro" role="status"><span class="mobile-email-check-clock" aria-hidden="true">${glyph}</span><h1>${esc(title)}</h1><p>${esc(description)}</p></div>${verified||failed?`<div class="mobile-email-verified-dock"><a class="mobile-email-verified-continue" href="/#${verified?(detail||'account'):'login'}">${verified?t('Davom etish','Продолжить','Continue'):t('Kirish','Войти','Sign in')}${designIcon('arrow')}</a></div>`:''}</section>`;
   }
   function enhancePasswordReset() {
     if(routeFromLocation()!=='password-reset')return;
@@ -535,7 +543,7 @@ window.MobileSite = (() => {
     const card=page.querySelector('.auth-card');
     card.querySelector('.identity-mark')?.remove();card.querySelector('.eyebrow')?.remove();
     const title=card.querySelector('h1');title.textContent=t('Parolni tiklash','Сброс пароля','Reset password');
-    title.insertAdjacentHTML('beforebegin',`<div class="mobile-reset-brand"><img src="https://images.gamestorehub.com/site-assets/sentryloot-logo-crest.jpg?v=1" width="44" height="44" alt=""><span>Sentry<b>Loot</b></span></div>`);
+    title.insertAdjacentHTML('beforebegin',`<div class="mobile-reset-brand"><img src="/static/assets/sentryloot-mark-256.webp?v=1" width="44" height="44" alt=""><span>Sentry<b>Loot</b></span></div>`);
     title.insertAdjacentHTML('afterend',`<p class="mobile-reset-subtitle">${t('Tiklash havolasini olish uchun emailingizni kiriting.','Введите email, чтобы получить ссылку для сброса.','Enter your email to receive a reset link.')}</p>`);
     const input=form.querySelector('input[name=email]');input.placeholder='you@example.com';input.dataset.mobileLoginControl='true';
     let control=input.closest('.field-control');
@@ -557,7 +565,7 @@ window.MobileSite = (() => {
     const submit=form.querySelector('button');submit.innerHTML=`${t('Tiklash havolasini yuborish','Отправить ссылку','Send reset link')}${designIcon('arrow')}`;
     const help=card.querySelector(':scope>.help');if(help)help.hidden=true;
     const context=document.querySelector('.mobile-context-header');
-    if(context){context.querySelector('a').href='/#login';if(!context.querySelector('.auth-close'))context.insertAdjacentHTML('beforeend',`<a class="auth-close" href="/#login" aria-label="${t('Yopish','Закрыть','Close')}">×</a>`);}
+    if(context){if(!context.querySelector('.auth-close'))context.insertAdjacentHTML('beforeend',`<a class="auth-close" href="/#login" aria-label="${t('Yopish','Закрыть','Close')}">×</a>`);}
   }
   function purchaseGroup(order) {
     if(order.status==='completed')return 'completed';
@@ -636,7 +644,7 @@ window.MobileSite = (() => {
     if(!route.startsWith('conversation/'))return;
     const header=app.querySelector('.ux-chat-header');if(!header)return;
     const context=document.querySelector('.mobile-context-header');
-    if(context){context.querySelector('span').textContent=header.querySelector('b')?.textContent||t('Suhbat','Чат','Conversation');context.querySelector('a').href='/#messages';}
+    if(context){context.querySelector('span').textContent=header.querySelector('b')?.textContent||t('Suhbat','Чат','Conversation');}
     let tools=header.querySelector('.mobile-chat-tools');
     if(!tools){tools=document.createElement('details');tools.className='mobile-chat-tools';tools.innerHTML=`<summary aria-label="${t('Suhbat sozlamalari','Параметры чата','Conversation options')}">⋯</summary><div class="mobile-chat-tools-body"></div>`;header.append(tools);}
     const body=tools.querySelector('div');

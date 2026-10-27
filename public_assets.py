@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 SITE_ASSET_BASE = 'https://images.gamestorehub.com/site-assets/'
+BRAND_IMAGE_URL = 'https://gamestorehub.com/static/assets/sentryloot-mark.png'
 IMAGE_MANIFEST = json.loads(Path(__file__).with_name('public-image-manifest.json').read_text())
 
 def image_url(value):

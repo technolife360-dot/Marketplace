@@ -1,0 +1,56 @@
+@layer sentryloot-premium {
+  body :is(.brand-mark,.admin-brand-mark) { background:transparent !important; border:0 !important; box-shadow:none !important; overflow:visible !important; }
+  body :is(.brand-mark,.admin-brand-mark) img { width:100% !important; height:100% !important; object-fit:contain !important; border-radius:0 !important; }
+  body .auth-art-core { background:transparent !important; border:0 !important; box-shadow:none !important; transform:none !important; }
+  body .auth-art-core img { width:140px; height:140px; object-fit:contain; }
+  body .support-launcher-logo { border-radius:0 !important; object-fit:contain !important; }
+  body #app .home-mobile-games[data-game-carousel] { margin:24px 0 !important; padding:0 !important; min-width:0; }
+  body #app .home-mobile-games[data-game-carousel] .game-carousel-stage {
+    position:relative !important; display:block !important; width:100% !important; height:272px !important;
+    overflow:clip !important; padding:12px 0 !important; scroll-snap-type:none !important; container-type:inline-size;
+    --game-card-width:clamp(150px,calc((100cqw - 70px)/6),216px); --game-gap:14px;
+    border-radius:14px; touch-action:pan-y;
+  }
+  body #app .game-carousel-track { display:flex !important; flex-wrap:nowrap !important; width:max-content !important; gap:0 !important; padding:0 !important; margin:0 !important; }
+  body #app .game-carousel-group { display:flex; flex:none; gap:var(--game-gap); padding-inline-end:var(--game-gap); }
+  body #app .home-mobile-games[data-enhanced] .game-carousel-track { animation:sentry-game-rail 90s linear infinite; }
+  body #app .home-mobile-games[data-playing="false"] .game-carousel-track { animation-play-state:paused; }
+  body #app .home-mobile-games[data-game-carousel] .game-carousel-stage a {
+    position:relative !important; flex:0 0 var(--game-card-width) !important; width:var(--game-card-width) !important;
+    min-width:0 !important; height:248px !important; min-height:0 !important; margin:0 !important; padding:0 !important;
+    display:flex !important; flex-direction:column !important; justify-content:flex-end !important; align-items:stretch !important;
+    border:1px solid #343b47 !important; border-radius:13px !important; overflow:hidden !important;
+    background:#11151a !important; text-decoration:none !important; transform:none !important; translate:none !important;
+    box-shadow:none !important; scroll-snap-align:none !important; transition:border-color .2s ease;
+  }
+  body #app .home-mobile-games[data-game-carousel] .game-carousel-stage a:is(:hover,:focus-visible) { border-color:#b9a7df !important; }
+  body #app .home-mobile-games[data-game-carousel] .game-carousel-stage a::after { content:""; position:absolute; inset:0; z-index:1; pointer-events:none; background:linear-gradient(0deg,#090b0efa 2%,#090b0e70 35%,transparent 70%) !important; }
+  body #app .home-mobile-games[data-game-carousel] .market-game-mark { position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; padding:0 !important; margin:0 !important; border:0 !important; border-radius:0 !important; }
+  body #app .home-mobile-games[data-game-carousel] .market-game-mark img { width:100% !important; height:100% !important; object-fit:cover !important; opacity:1 !important; transform:none !important; }
+  body #app .home-mobile-games[data-game-carousel] .game-carousel-caption { position:relative !important; z-index:2; display:flex; flex-direction:column; gap:5px; width:100% !important; max-width:none !important; min-width:0; padding:16px !important; text-align:left !important; }
+  body #app .game-carousel-caption strong { color:#fff; font-size:16px; font-weight:650; line-height:1.3; letter-spacing:-.02em; overflow-wrap:normal; }
+  body #app .game-carousel-caption small { color:#d4d7df; font-size:11px; line-height:1.4; }
+  body #app :is([data-game-carousel],.home-intro[data-enhanced]):focus-visible { outline:2px solid #b9a7df; outline-offset:5px; border-radius:14px; }
+  body #app .home-mobile-games:not([data-enhanced]) .game-carousel-stage { display:flex !important; gap:var(--game-gap); overflow-x:auto !important; }
+  body #app .home-mobile-games[data-keyboard="true"] .game-carousel-stage { overflow-x:auto !important; touch-action:auto; }
+  body #app .home-mobile-games[data-keyboard="true"] .game-carousel-track { animation:none !important; transform:none !important; }
+  body #app .home-mobile-games[data-keyboard="true"] [data-loop-copy] { display:none; }
+  @keyframes sentry-game-rail { from {transform:translate3d(0,0,0)} to {transform:translate3d(-50%,0,0)} }
+  body #app :is(.home-intro-image,.market-banner-image) { transform:none !important; transition:opacity 1.25s ease !important; opacity:0 !important; }
+  body #app :is(.home-intro-image,.market-banner-image).active { opacity:1 !important; }
+  @media(max-width:840px) {
+    body #app .home-mobile-games[data-game-carousel] { margin:20px 0 !important; }
+    body #app .home-mobile-games[data-game-carousel] .game-carousel-stage { --game-card-width:clamp(128px,38cqw,172px); --game-gap:10px; height:232px !important; }
+    body #app .home-mobile-games[data-game-carousel] .game-carousel-stage a { height:208px !important; }
+    body #app .home-mobile-games[data-game-carousel] .game-carousel-caption { padding:12px !important; }
+    body #app .game-carousel-caption strong { font-size:14px; }
+    body #app .game-carousel-caption small { font-size:10px; }
+    body .site-header .brand-mark { display:grid !important; width:30px !important; height:30px !important; margin-right:5px !important; }
+  }
+  @media(prefers-reduced-motion:reduce) {
+    body #app .home-mobile-games[data-enhanced] .game-carousel-track { animation:none !important; transform:none !important; }
+    body #app .home-mobile-games[data-game-carousel] .game-carousel-stage { overflow-x:auto !important; touch-action:auto; }
+    body #app .home-mobile-games[data-game-carousel] [data-loop-copy] { display:none; }
+    body #app :is(.home-intro-image,.market-banner-image) { transition:none !important; }
+  }
+}

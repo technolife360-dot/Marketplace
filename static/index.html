@@ -2,14 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#000000"><link rel="icon" type="image/png" sizes="500x500" href="https://images.gamestorehub.com/site-assets/sentryloot-favicon.png?v=1"><link rel="apple-touch-icon" sizes="500x500" href="https://images.gamestorehub.com/site-assets/sentryloot-favicon.png?v=1"><meta name="description" content="A marketplace for permitted game items and digital services. Marketplace sales are currently restricted to approved games and products.">
-<link rel="canonical" href="https://gamestorehub.com/"><meta property="og:type" content="website"><meta property="og:site_name" content="SentryLoot"><meta property="og:title" content="SentryLoot — Game Marketplace"><meta property="og:description" content="A marketplace for permitted game items and digital services. Marketplace sales are currently restricted to approved games and products."><meta property="og:url" content="https://gamestorehub.com/"><meta property="og:image" content="https://images.gamestorehub.com/site-assets/sentryloot-logo-full.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="896"><meta property="og:image:alt" content="SentryLoot GameStore logo"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://images.gamestorehub.com/site-assets/sentryloot-logo-full.jpg">
+<meta name="theme-color" content="#000000"><link rel="icon" type="image/png" sizes="128x128" href="/static/assets/sentryloot-mark-128.png?v=1"><link rel="apple-touch-icon" sizes="512x512" href="/static/assets/sentryloot-mark-512.png?v=1"><meta name="description" content="A marketplace for permitted game items and digital services. Marketplace sales are currently restricted to approved games and products.">
+<link rel="canonical" href="https://gamestorehub.com/"><meta property="og:type" content="website"><meta property="og:site_name" content="SentryLoot"><meta property="og:title" content="SentryLoot — Game Marketplace"><meta property="og:description" content="A marketplace for permitted game items and digital services. Marketplace sales are currently restricted to approved games and products."><meta property="og:url" content="https://gamestorehub.com/"><meta property="og:image" content="https://gamestorehub.com/static/assets/sentryloot-mark.png"><meta property="og:image:width" content="1254"><meta property="og:image:height" content="1254"><meta property="og:image:alt" content="SentryLoot GameStore logo"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://gamestorehub.com/static/assets/sentryloot-mark.png">
 <link rel="preconnect" href="https://images.gamestorehub.com">
 <link rel="preload" href="/static/assets/roboto-variable.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/premium-storefront.css?v=7">
+<link rel="stylesheet" href="/static/storefront-showcase.css?v=10">
 <title>SentryLoot — Game Marketplace</title><link rel="stylesheet" href="/static/style.css?v=192">
 <script src="/static/vercel-insights.js?v=2" defer></script>
-<script src="/static/crisp-loader.js?v=8" defer></script>
+<script src="/static/crisp-loader.js?v=showcase-1" defer></script>
 <link rel="stylesheet" href="/static/marketplace-ux.css?v=25">
 <link rel="stylesheet" href="/static/account-operations.css?v=11">
 <link rel="stylesheet" href="/static/experience.css?v=6">
@@ -69,17 +70,16 @@
 <symbol id="i-coins" viewBox="0 0 24 24"><ellipse cx="15" cy="5" rx="6" ry="3"/><path d="M9 5v8c0 4 12 4 12 0V5M9 9c0 4 12 4 12 0"/><ellipse cx="7" cy="13" rx="5" ry="3"/><path d="M2 13v6c0 4 10 4 10 0v-6"/></symbol>
 <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
 </svg>
-<header class="site-header"><div class="topbar"><div class="header-start"><button id="market-sidebar-toggle" class="market-sidebar-toggle" type="button" aria-label="Toggle sidebar" aria-controls="market-sidebar" aria-expanded="true" hidden><svg data-slot="geist-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true"><path d="M.5 1.5h15v11a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-11ZM5.5 1.5v13" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button><a class="brand" href="/#home" aria-label="SentryLoot — GameStoreHub marketplace" title="SentryLoot · gamestorehub.com"><span class="brand-mark"><img src="https://images.gamestorehub.com/site-assets/sentryloot-logo-crest.jpg?v=1" alt=""></span><span>Sentry<span class="brand-dot">Loot</span></span></a></div>
+<header class="site-header"><div class="topbar"><div class="header-start"><button id="market-sidebar-toggle" class="market-sidebar-toggle" type="button" aria-label="Toggle sidebar" aria-controls="market-sidebar" aria-expanded="true" hidden><svg data-slot="geist-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true"><path d="M.5 1.5h15v11a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-11ZM5.5 1.5v13" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg></button><a class="brand" href="/#home" aria-label="SentryLoot — GameStoreHub marketplace" title="SentryLoot · gamestorehub.com"><span class="brand-mark"><img src="/static/assets/sentryloot-mark-256.webp?v=1" alt=""></span><span>Sentry<span class="brand-dot">Loot</span></span></a></div>
 <form id="search-form" class="header-search"><label class="sr-only" for="global-search">E’lon qidirish</label><svg class="icon search-icon" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-search"/></svg><input id="global-search" name="q" placeholder="O‘yin, buyum yoki xizmat qidiring…"><button type="submit" aria-label="Qidirish"><svg class="icon" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-arrow-up-right"/></svg></button></form>
 <div class="top-actions"><button id="sell-item-button" class="sell-item-button" data-go="seller">E’lon joylash</button><button id="mobile-search-toggle" class="icon-button mobile-search-toggle" type="button" aria-label="Open search" aria-controls="search-form" aria-expanded="false"><svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-search"/></svg></button><button id="cart-button" class="icon-button" data-go="cart" aria-label="Savatcha"><svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-cart"/></svg><span id="cart-count" class="count" hidden>0</span></button><button id="notifications-button" class="icon-button" data-go="notifications" aria-label="Bildirishnomalar"><svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-bell"/></svg><span id="notification-count" class="count" hidden>0</span></button><a id="admin-nav-link" class="icon-button" href="/#admin" aria-label="Admin paneli" title="Admin paneli" hidden><svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-shield"/></svg></a><div class="language-control"><button id="language-toggle" class="language-toggle icon-button" type="button" aria-label="Tilni tanlash" aria-expanded="false" aria-controls="language-menu"><svg class="icon globe-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-header-globe"/></svg></button><div id="language-menu" class="language-menu" role="menu" aria-label="Language" hidden><button type="button" role="menuitemradio" data-language="en" aria-checked="true"><span>English</span><small>EN</small></button><button type="button" role="menuitemradio" data-language="uz" aria-checked="false"><span>O‘zbekcha</span><small>UZ</small></button><button type="button" role="menuitemradio" data-language="ru" aria-checked="false"><span>Русский</span><small>RU</small></button></div></div><button id="account-button" class="account-button" aria-label="Kirish" aria-expanded="false" aria-controls="profile-menu-root">Kirish</button><button id="mobile-menu-toggle" class="icon-button mobile-menu-toggle" type="button" aria-label="Open menu" aria-controls="mobile-navigation" aria-expanded="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-mobile-menu"/></svg></button></div>
  </div></header>
 <dialog id="mobile-navigation" class="mobile-navigation" aria-labelledby="mobile-menu-title"><header class="mobile-menu-heading"><h2 id="mobile-menu-title">Menu</h2><button type="button" class="icon-button" data-mobile-menu-close aria-label="Close menu"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use x="3" y="3" width="18" height="18" href="#i-close"/></svg></button></header><div class="mobile-menu-scroll" data-mobile-menu-content></div></dialog>
 <div id="profile-menu-root" hidden></div>
-<nav id="route-back" class="route-back" aria-label="Back navigation" hidden><a id="route-back-link" href="/"><span aria-hidden="true">←</span><span id="route-back-label">Marketplace</span></a></nav>
 <main id="app" tabindex="-1"><div class="loading"><span class="spinner"></span> Yuklanmoqda…</div></main>
 <footer class="footer">
   <div class="footer-brand">
-    <a class="brand" href="/#home"><span class="brand-mark"><img src="https://images.gamestorehub.com/site-assets/sentryloot-logo-crest.jpg?v=1" alt=""></span><span>Sentry<span class="brand-dot">Loot</span></span></a>
+    <a class="brand" href="/#home"><span class="brand-mark"><img src="/static/assets/sentryloot-mark-256.webp?v=1" alt=""></span><span>Sentry<span class="brand-dot">Loot</span></span></a>
     <p>O‘yin mahsulotlari va xizmatlarini toping. Xariddan oldin e’lon, sotuvchi va o‘yin qoidalarini tekshiring.</p>
     <p class="footer-status">Haqiqiy to‘lovlar hozircha yoqilmagan.</p>
     <a class="footer-email" href="mailto:sentryloot@gamestorehub.com">sentryloot@gamestorehub.com</a>
@@ -124,21 +124,22 @@
 <script src="/static/asia-markets-data.js?v=2" defer></script>
 <script src="/static/info-pages.js?v=2" defer></script>
 <script src="/static/legal-translations.js?v=4" defer></script>
-<script src="/static/account-operations.js?v=workspace-16" defer></script>
-<script src="/static/marketplace-ux.js?v=desktop-scale-14" defer></script>
-<script src="/static/experience.js?v=workspace-17" defer></script>
-<script src="/static/launch-readiness.js?v=desktop-scale-14" defer></script>
+<script src="/static/account-operations.js?v=top-games-navigation-1" defer></script>
+<script src="/static/marketplace-ux.js?v=top-games-navigation-1" defer></script>
+<script src="/static/experience.js?v=top-games-navigation-1" defer></script>
+<script src="/static/launch-readiness.js?v=top-games-navigation-1" defer></script>
 <script src="/static/qa-vitals.js?v=7" defer></script>
-<script src="/static/topup-detail.js?v=desktop-scale-14" defer></script>
-<script src="/static/topup.js?v=33" defer></script>
+<script src="/static/topup-detail.js?v=top-games-navigation-2" defer></script>
+<script src="/static/topup.js?v=top-games-navigation-1" defer></script>
 <script src="/static/select-menu.js?v=6" defer></script>
-<script src="/static/purchase-reviews.js?v=compact-desktop-scale-14" defer></script>
-<script src="/static/offer-wizard.js?v=transferable-13" defer></script>
+<script src="/static/purchase-reviews.js?v=top-games-navigation-1" defer></script>
+<script src="/static/offer-wizard.js?v=top-games-navigation-1" defer></script>
 <script src="/static/listing-detail.js?v=share-5" defer></script>
 <script src="/static/desktop-share.js?v=3" defer></script>
-<script src="/static/order-process.js?v=desktop-scale-14" defer></script>
+<script src="/static/order-process.js?v=top-games-navigation-1" defer></script>
 <script src="/static/mobile-header.js?v=8" defer></script>
-<script src="/static/mobile-site.js?v=desktop-scale-14" defer></script>
-<script src="/static/premium-motion.js?v=2" defer></script>
-<script src="/static/app.js?v=premium-3" defer></script>
+<script src="/static/mobile-site.js?v=top-games-navigation-2" defer></script>
+<script src="/static/premium-motion.js?v=3" defer></script>
+<script src="/static/storefront-showcase.js?v=9" defer></script>
+<script src="/static/app.js?v=showcase-5" defer></script>
 </body></html>
