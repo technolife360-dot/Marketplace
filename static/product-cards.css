@@ -11,6 +11,7 @@ body #app .product-card.market-product-card {
   transition:transform .2s ease,border-color .2s ease !important;
 }
 body #app .product-card.market-product-card:is(:hover,:focus-within) { border-color:#FF9B42 !important; }
+body #app .home-listing-grid .product-card.market-product-card:is(:hover,:focus-within) { border-color:#292929 !important; }
 @media (hover:hover) {
   body #app .product-card.market-product-card:hover { transform:translateY(-3px) !important; }
   body #app .market-product-card:hover .market-card-cover>img { transform:scale(1.035) !important; }

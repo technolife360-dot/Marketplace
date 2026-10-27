@@ -448,7 +448,7 @@ async function navigate(){if(me&&await window.OrderFlow?.guardNavigation())retur
  if(route.startsWith('topup-order/'))return await renderStripeTopupOrder(decodeURIComponent(route.slice(12)));
  if(route.startsWith('order/'))return await renderOrder(decodeURIComponent(route.slice(6)));
  return await renderNotFound();
- }catch(e){app.innerHTML=`<section class="page">${pageTitle('Xatolik')}<div class="notice error">${esc(e.message)}</div><a class="button-secondary" href="#home">Bosh sahifa</a></section>`}finally{window.OperationsUX?.enhance();window.TradeUX?.enhance();window.ExperienceUX?.enhance();window.MobileSite?.sync(route);window.SiteNavigation?.sync();app.dataset.routeReady=route;app.setAttribute('aria-busy','false')}}
+ }catch(e){app.innerHTML=`<section class="page">${pageTitle('Xatolik')}<div class="notice error">${esc(e.message)}</div><a class="button-secondary" href="/#home">${adminText('Bosh sahifa','Главная','Home')}</a></section>`}finally{window.OperationsUX?.enhance();window.TradeUX?.enhance();window.ExperienceUX?.enhance();window.MobileSite?.sync(route);window.SiteNavigation?.sync();app.dataset.routeReady=route;app.setAttribute('aria-busy','false')}}
 function renderNotFound(){
  document.title=adminText('Sahifa topilmadi','Страница не найдена','Page not found')+' | SentryLoot';
  const robots=document.querySelector('meta[name="robots"]');if(robots)robots.content='noindex,nofollow';

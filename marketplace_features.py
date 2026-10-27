@@ -157,6 +157,10 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
             rows=[dict(r) for r in db.execute(f"SELECT r.id,r.rating,r.body,r.created_at,u.display_name reviewer_name,g.name game_name,g.slug game_slug,rr.body reply,rr.updated_at replied_at {joins} WHERE {' AND '.join(where)} ORDER BY {order} LIMIT 12 OFFSET ?",(*args,(page-1)*12))]
             games=[dict(r) for r in db.execute('SELECT DISTINCT g.slug,g.name FROM visible_reviews r JOIN order_items oi ON oi.id=r.order_item_id JOIN listings l ON l.id=oi.listing_id JOIN games g ON g.id=l.game_id WHERE r.seller_id=? ORDER BY g.name',(sid,))]
             types=[dict(r) for r in db.execute('SELECT l.product_type,AVG(r.rating) rating,COUNT(*) count FROM visible_reviews r JOIN order_items oi ON oi.id=r.order_item_id JOIN listings l ON l.id=oi.listing_id WHERE r.seller_id=? GROUP BY l.product_type',(sid,))]
+            # PostgreSQL AVG(integer) returns Decimal; ratings are display values,
+            # so normalize them before the standard JSON encoder sees the result.
+            for product in types:
+                product['rating']=float(product['rating']) if product['rating'] is not None else None
             return {'items':rows,'games':games,'types':types,'total_count':count,'page':page,'has_more':page*12<count,'can_reply':uid==sid}
         if method=='GET' and sub is None:return store
     if path=='/api/following' and method=='GET':

@@ -87,6 +87,21 @@ class MarketplaceUsability(unittest.TestCase):
         self.assertEqual(self.route(None,'GET','/api/stores/'+self.seller+'/reviews?sentiment=negative')['items'],[])
         self.assertEqual(self.route(None,'GET','/api/stores/'+self.seller+'/reviews?game=dota-2')['items'],[])
         self.assertEqual(self.route(None,'GET','/api/stores/'+self.seller)['completed_sales'],1)
+    def test_store_review_averages_from_postgres_remain_json_serializable(self):
+        from decimal import Decimal
+        _,iid=self.order()
+        self.route(self.buyer,'POST','/api/reviews',{'item_id':iid,'rating':5,'body':'A real review fixture for the JSON response.'})
+        actual=self.db
+        class PostgresNumericRows:
+            def execute(self,sql,params=()):
+                cursor=actual.execute(sql,params)
+                if sql.startswith('SELECT l.product_type,AVG(r.rating)'):
+                    return [{**dict(row),'rating':Decimal(str(row['rating']))} for row in cursor]
+                return cursor
+        result=marketplace_features.route(self.handler,PostgresNumericRows(),self.ctx(None),'GET','/api/stores/'+self.seller+'/reviews',{}, {},b'',vars(app))
+        self.assertEqual(result['types'][0]['rating'],5.0)
+        self.assertIsInstance(result['types'][0]['rating'],float)
+        json.dumps(result)
     def test_order_conversation_is_idempotent_private_and_read_receipts_work(self):
         oid,_=self.order();data={'order_id':oid,'seller_id':self.seller}
         conv=self.route(self.buyer,'POST','/api/conversations',data)

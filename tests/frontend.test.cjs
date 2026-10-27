@@ -94,7 +94,7 @@ test('failed asynchronous page requests render an error instead of leaving the l
       app: {classList: {remove() {}, toggle() {}}, dataset: {}, setAttribute() {}, innerHTML: ''}, me: null,
       document: {body: {classList: {remove() {}}}}, window: {},
       currentPageAnchor: () => '', updateRouteMetadata() {}, syncRouteBack() {}, stopHomeCanvas() {},
-      pageTitle: text => '<h1>' + text + '</h1>', esc: text => String(text),
+      pageTitle: text => '<h1>' + text + '</h1>', esc: text => String(text), adminText: (_uz,_ru,en) => en,
       [renderer]: async () => {throw new Error('Test API request failed');},
     };
     vm.createContext(context);
@@ -102,6 +102,7 @@ test('failed asynchronous page requests render an error instead of leaving the l
     await assert.doesNotReject(context.navigate(), route);
     assert.match(context.app.innerHTML, /Test API request failed/, route);
     assert.doesNotMatch(context.app.innerHTML, /class="loading"/, route);
+    assert.match(context.app.innerHTML, /href="\/#home"/, route);
     assert.equal(context.app.dataset.routeReady, route);
   }
 });

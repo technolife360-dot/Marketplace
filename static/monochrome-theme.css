@@ -255,6 +255,16 @@ body #language-toggle.language-toggle.icon-button {
   border: 0 !important;
   box-shadow: none !important;
 }
+/* Header sign-in uses the storefront accent; keep the signed-in avatar separate. */
+@media (min-width:841px) {
+  body .site-header .top-actions #account-button:not(.is-profile-trigger) {
+    background: #ff9b42 !important;
+    color: #111111 !important;
+  }
+  body .site-header .top-actions #account-button:not(.is-profile-trigger) .account-guest-label {
+    color: #111111 !important;
+  }
+}
 /* Signed-in profile trigger has no frame; keyboard focus remains visible. */
 body #account-button.account-button.is-profile-trigger {
   border: 0 !important;
@@ -2062,4 +2072,135 @@ body .auth-page.is-login #auth-form .field-control.has-icon > :is(input,textarea
  body #app .desktop-orders a.desktop-order-card{padding:12px 16px!important;border:0!important;border-bottom:1px solid #292929!important;border-radius:0!important}
  body #app .desktop-orders a.desktop-order-card:last-child{border-bottom:0!important}
  body #app .desktop-orders .desktop-order-roles button[aria-pressed=true],body #app .desktop-orders .desktop-order-filters button[aria-pressed=true]{color:#ffad66!important;border-color:#976333!important;background:#24190f!important}
+}
+
+/* Compact desktop seller analytics; the phone layout keeps its existing rules. */
+@media(min-width:841px){
+ @layer sentryloot-theme {
+  body #app .seller-dashboard .ex-insights{margin:0 0 20px!important;padding:20px!important;border:1px solid #2d2d30!important;border-radius:12px!important;background:#101011!important;min-width:0!important}
+  body #app .ex-insights .ex-insights-header{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:20px!important;margin:0 0 18px!important;padding:0!important;border:0!important;background:none!important}
+  body #app .ex-insights .ex-insights-header h2{margin:0!important;font-size:18px!important;line-height:1.4!important;font-weight:650!important;letter-spacing:-.3px!important}
+  body #app .ex-insights .ex-insights-lead{margin:5px 0 0!important;color:#99999f!important;font-size:12px!important;line-height:1.5!important}
+  body #app .ex-insights .ex-insights-period{display:flex!important;align-items:center!important;gap:8px!important;flex-shrink:0!important;margin:0!important;color:#b1b1b7!important;font-size:12px!important}
+  body #app .ex-insights .ex-insights-period .site-select{width:124px!important;min-width:124px!important;margin:0!important}
+  body #app .ex-insights .ex-insights-period .site-select-trigger{height:44px!important;min-height:44px!important;padding:0 34px 0 12px!important;font-size:12px!important;border-radius:8px!important}
+  body #app .ex-insights .ex-metrics{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:0!important;margin:0 0 22px!important;padding:14px 0!important;border:1px solid #2b2b2e!important;border-radius:10px!important;background:#161618!important}
+  body #app .ex-insights .ex-metrics>div{min-width:0!important;padding:0 16px!important;border:0!important;border-left:1px solid #303034!important;border-radius:0!important;background:none!important}
+  body #app .ex-insights .ex-metrics>div:first-child{border-left:0!important}
+  body #app .ex-insights .ex-metrics small{display:block!important;margin:0!important;color:#a5a5ad!important;font-size:12px!important;line-height:1.5!important}
+  body #app .ex-insights .ex-metrics b{display:block!important;margin:7px 0 0!important;font-size:23px!important;line-height:1.3!important;font-weight:650!important;font-variant-numeric:tabular-nums!important;color:#f1f1f1!important}
+  body #app .ex-insights .ex-insights-table-heading{display:flex!important;justify-content:space-between!important;align-items:baseline!important;gap:12px!important;margin:0 0 12px!important}
+  body #app .ex-insights .ex-insights-table-heading h3{margin:0!important;font-size:14px!important;font-weight:600!important}
+  body #app .ex-insights .ex-insights-table-heading>span{font-size:11px!important;color:#99999f!important}
+  body #app .ex-insights .ex-table-scroll{max-height:none!important;overflow-x:auto!important;border:1px solid #29292d!important;border-radius:8px!important;background:#101011!important}
+  body #app .ex-insights .ex-table-scroll table{width:100%!important;table-layout:fixed!important;border-collapse:collapse!important;margin:0!important;min-width:610px!important;font-variant-numeric:tabular-nums!important}
+  body #app .ex-insights .ex-table-scroll :is(th,td){height:44px!important;padding:10px 12px!important;border:0!important;border-bottom:1px solid #27272b!important;text-align:right!important;font-size:12px!important;line-height:1.5!important;min-width:0!important}
+  body #app .ex-insights .ex-table-scroll thead th{height:36px!important;background:#18181b!important;color:#a5a5ad!important;font-size:11px!important;font-weight:500!important;white-space:nowrap!important}
+  body #app .ex-insights .ex-table-scroll th:first-child{width:42%!important;text-align:left!important}
+  body #app .ex-insights .ex-table-scroll tbody th{font-weight:500!important}
+  body #app .ex-insights .ex-table-scroll th a{display:block!important;overflow:hidden!important;white-space:nowrap!important;text-overflow:ellipsis!important;color:#dddde3!important;text-decoration:none!important}
+  body #app .ex-insights .ex-table-scroll th a:hover{color:#ff9b42!important}
+  body #app .ex-insights .ex-table-scroll tr:last-child>*{border-bottom:0!important}
+  body #app .ex-insights .ex-table-scroll tbody tr:hover{background:#19191c!important}
+  body #app .ex-insights .ex-insights-footer{display:flex!important;justify-content:space-between!important;align-items:center!important;gap:16px!important;flex-wrap:wrap!important;margin:12px 0 0!important;padding:0!important;border:0!important;background:none!important}
+  body #app .ex-insights .ex-insights-footer>p{margin:0!important;font-size:11px!important;line-height:1.5!important;color:#93939b!important}
+  body #app .ex-insights .ex-insights-pager{display:flex!important;align-items:center!important;gap:6px!important;margin-left:auto!important;white-space:nowrap!important}
+  body #app .ex-insights .ex-insights-pager>span{margin-right:6px!important;font-size:11px!important;color:#b0b0b8!important}
+  body #app .ex-insights .ex-insights-pager button{width:32px!important;min-width:32px!important;height:32px!important;min-height:32px!important;padding:0!important;border:1px solid #353539!important;border-radius:7px!important;background:#1a1a1d!important;color:#e9e9ed!important;font-size:22px!important;line-height:1!important}
+  body #app .ex-insights .ex-insights-pager button:disabled{opacity:.35!important;cursor:default!important}
+  body #app .ex-insights .ex-insights-ratings{display:flex!important;gap:10px!important;flex-wrap:wrap!important;margin:14px 0 0!important}
+  body #app .ex-insights .ex-insights-ratings>span{display:inline-flex!important;align-items:center!important;gap:7px!important;padding:5px 9px!important;border:1px solid #303034!important;border-radius:6px!important;font-size:11px!important;color:#bcbcc4!important}
+  body #app .ex-insights .ex-insights-ratings b{font-size:11px!important;color:#ff9b42!important}
+  body #app .ex-insights .ex-insights-empty{padding:24px!important;border:1px dashed #343438!important;border-radius:8px!important;text-align:center!important}
+  body #app .ex-insights .ex-insights-empty strong{font-size:14px!important}
+  body #app .ex-insights .ex-insights-empty p{margin:7px 0 0!important;font-size:12px!important;color:#99999f!important}
+  body #app .ex-insights [data-insights][aria-busy=true]{opacity:.55;pointer-events:none}
+  body #app .ex-insights .ex-insights-error{padding:16px!important;border:1px solid #4a3430!important;border-radius:8px!important;font-size:13px!important}
+ }
+}
+
+/* Desktop inbox: fixed tools, independently scrolling history and a compact composer. */
+@media(min-width:841px){
+ @layer sentryloot-theme {
+  body #app .page.ex-messages{max-width:1480px!important;width:100%!important;padding:20px 28px 28px!important}
+  body #app .ex-messages>.page-header{display:none!important}
+  body #app .ex-messages .message-layout{grid-template-columns:300px minmax(0,1fr)!important;height:calc(100dvh - 190px)!important;max-height:880px!important;min-height:340px!important;border:1px solid #303034!important;border-radius:14px!important;background:#101012!important;box-shadow:none!important}
+  body #app .ex-messages .conversation-list{display:flex!important;flex-direction:column!important;overflow:hidden!important;background:#111113!important;border-right:1px solid #2c2c30!important;padding:0!important;gap:0!important}
+  body #app .ex-messages .ex-inbox-heading{display:flex!important;justify-content:space-between!important;align-items:center!important;gap:12px!important;padding:20px 18px 0!important;flex-shrink:0!important}
+  body #app .ex-messages .ex-inbox-heading h2{margin:0!important;font-size:20px!important;font-weight:650!important;letter-spacing:-.4px!important}
+  body #app .ex-messages .ex-inbox-heading>span{min-width:24px!important;padding:3px 7px!important;border:1px solid #35353a!important;border-radius:7px!important;text-align:center!important;font-size:11px!important;color:#b6b6be!important;background:#1b1b1f!important}
+  body #app .ex-messages #ex-conversation-search{position:relative!important;display:grid!important;grid-template-columns:minmax(0,1fr) 36px!important;gap:8px!important;padding:16px 14px 10px!important;flex-shrink:0!important;border:0!important;background:transparent!important}
+  body #app .ex-messages #ex-conversation-search>.field{grid-column:1/-1!important;margin:0!important}
+  body #app .ex-messages #ex-conversation-search>.field>span{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip-path:inset(50%)!important}
+  body #app .ex-messages #ex-conversation-search input[type=search]{height:44px!important;padding-right:64px!important;font-size:12px!important;border-radius:9px!important;background:#1a1a1e!important}
+  body #app .ex-messages #ex-conversation-search>button{position:absolute!important;top:22px!important;right:20px!important;width:auto!important;min-height:32px!important;height:32px!important;padding:0 8px!important;border:0!important;border-radius:6px!important;background:#29292e!important;color:#c5c5cd!important;font-size:10px!important}
+  body #app .ex-messages #ex-conversation-search>label.ex-archive-checkbox{display:none!important}
+  body #app .ex-messages .ex-inbox-tabs{grid-column:1/-1!important;display:flex!important;gap:4px!important;padding:3px!important;margin-top:4px!important;border:1px solid #2b2b30!important;border-radius:8px!important;background:#18181b!important}
+  body #app .ex-messages .ex-inbox-tabs button{flex:1!important;min-height:32px!important;padding:5px 10px!important;border:0!important;border-radius:5px!important;background:transparent!important;color:#a5a5ad!important;font-size:12px!important;font-weight:500!important}
+  body #app .ex-messages .ex-inbox-tabs button[aria-pressed=true]{background:#2b241d!important;color:#ffae68!important}
+  body #app .ex-messages .ex-conversation-items{flex:1!important;min-height:0!important;overflow-y:auto!important;overscroll-behavior:contain!important;padding:4px 8px 12px!important;scrollbar-width:thin!important;scrollbar-color:#3a3a40 transparent!important}
+  body #app .ex-messages .conversation-item{grid-template-columns:38px minmax(0,1fr) auto!important;gap:4px 10px!important;min-height:68px!important;padding:12px 10px!important;margin:0 0 3px!important;border:0!important;border-radius:9px!important;transition:background 150ms ease}
+  body #app .ex-messages .conversation-item:hover{background:#202024!important}
+  body #app .ex-messages .conversation-item.active{background:#29221b!important;border:0!important;padding-left:10px!important}
+  body #app .ex-messages .conversation-item.active>b{color:#ffc28e!important}
+  body #app .ex-messages .conversation-item>b{font-size:12px!important;font-weight:600!important}
+  body #app .ex-messages .conversation-item>p{display:block!important;overflow:hidden!important;white-space:nowrap!important;text-overflow:ellipsis!important;padding-right:22px!important;font-size:11px!important;line-height:1.5!important}
+  body #app .ex-messages .conversation-item>time{font-size:10px!important;color:#85858f!important}
+  body #app .ex-messages .conversation-item>.status{bottom:10px!important;right:10px!important;min-width:17px!important;height:17px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;background:#ff9b42!important;color:#18110a!important;border:0!important;border-radius:50%!important;padding:0 4px!important;font-weight:600!important;font-size:10px!important;line-height:1!important}
+  body #app .ex-messages .desktop-conversation-avatar{width:38px!important;height:38px!important;min-width:38px!important;font-size:12px!important;background:#35291e!important;color:#ffb677!important}
+  body #app .ex-messages .ex-conversation-support{flex-shrink:0!important;padding:8px!important;border-top:1px solid #2b2b30!important}
+  body #app .ex-messages .ex-conversation-support:empty{display:none!important}
+  body #app .ex-messages .crisp-support-entry{margin:0!important;min-height:60px!important;background:#19191d!important}
+  body #app .ex-messages .chat{position:relative!important;background:#0c0c0e!important;border:0!important}
+  body #app .ex-messages .ex-desktop-chat-header{display:grid!important;grid-template-columns:38px minmax(0,1fr) auto!important;grid-template-areas:'avatar name actions' 'avatar state actions'!important;column-gap:11px!important;row-gap:4px!important;min-height:76px!important;padding:16px 20px!important;background:#121214!important;border-bottom:1px solid #2a2a2f!important;z-index:5!important}
+  body #app .ex-messages .desktop-chat-avatar{grid-area:avatar!important;display:grid!important;place-items:center!important;position:relative!important;width:38px!important;height:38px!important;border-radius:50%!important;overflow:hidden!important;background:#35291e!important;color:#ffb677!important;font-size:12px!important;font-weight:600!important}
+  body #app .ex-messages .desktop-chat-avatar img{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:cover!important}
+  body #app .ex-messages .ex-desktop-chat-header>b{grid-area:name!important;font-size:14px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;font-weight:600!important}
+  body #app .ex-messages #ux-chat-state{grid-area:state!important;font-size:10px!important;line-height:1.3!important;color:#9a9aa4!important}
+  body #app .ex-messages .ex-chat-header-actions{grid-area:actions!important;display:flex!important;align-items:center!important;gap:6px!important}
+  body #app .ex-messages .ex-chat-header-actions :is(.ex-chat-search-toggle,.ex-chat-action-menu>summary){display:flex!important;align-items:center!important;justify-content:center!important;width:36px!important;height:36px!important;min-height:36px!important;padding:0!important;border:1px solid #303035!important;border-radius:8px!important;background:#1b1b1f!important;color:#bdbdc6!important;cursor:pointer!important;list-style:none!important}
+  body #app .ex-messages .ex-chat-action-menu>summary::-webkit-details-marker{display:none!important}
+  body #app .ex-messages .ex-chat-action-menu>summary svg{width:20px!important;height:20px!important;fill:currentColor!important;stroke:none!important}
+  body #app .ex-messages .ex-chat-action-menu{position:relative!important}
+  body #app .ex-messages [data-chat-actions-panel]{position:absolute!important;right:0!important;top:calc(100% + 8px)!important;z-index:20!important;width:216px!important;padding:6px!important;border:1px solid #38383f!important;border-radius:10px!important;background:#1b1b1f!important}
+  body #app .ex-messages [data-chat-actions-panel] :is(.ex-chat-controls,.ops-chat-controls){display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:0!important}
+  body #app .ex-messages [data-chat-actions-panel] .ops-chat-controls{border-top:1px solid #343439!important;margin-top:5px!important;padding-top:5px!important}
+  body #app .ex-messages [data-chat-actions-panel] :is(button,a){display:flex!important;align-items:center!important;justify-content:flex-start!important;width:100%!important;min-height:36px!important;border:0!important;border-radius:5px!important;background:none!important;padding:8px 10px!important;text-align:left!important;text-decoration:none!important;font-size:12px!important;color:#d3d3dc!important}
+  body #app .ex-messages [data-chat-actions-panel] :is(button,a):hover{background:#303036!important}
+  body #app .ex-messages [data-chat-actions-panel] [data-report]{color:#f7a39c!important}
+  body #app .ex-messages .ux-chat-context{min-height:54px!important;margin:12px 20px 0!important;padding:9px 12px!important;border-radius:8px!important;background:#161619!important}
+  body #app .ex-messages .ux-chat-context>img{width:34px!important;height:34px!important;border-radius:6px!important}
+  body #app .ex-messages .ux-chat-context b{font-size:12px!important}
+  body #app .ex-messages .ux-chat-context small{font-size:10px!important;color:#93939d!important}
+  body #app .ex-messages .ex-message-search{margin:10px 20px 0!important;gap:8px!important}
+  body #app .ex-messages .ex-message-search[hidden]{display:none!important}
+  body #app .ex-messages .ex-message-search input{height:44px!important;min-height:44px!important;font-size:12px!important}
+  body #app .ex-messages #ex-load-older{flex-shrink:0!important;align-self:center!important;min-height:28px!important;padding:4px 10px!important;margin:8px auto 0!important;border:1px solid #323239!important;border-radius:99px!important;color:#adadb6!important;font-size:10px!important;background:#17171a!important}
+  body #app .ex-messages #ex-load-older[hidden]{display:none!important}
+  body #app .ex-messages .chat-messages{display:flex!important;flex-direction:column!important;min-height:0!important;gap:10px!important;padding:16px 20px!important;background:#0c0c0e!important;scrollbar-width:thin!important;scrollbar-color:#3a3a40 transparent!important}
+  body #app .ex-messages .ex-chat-day{align-self:center!important;margin:2px 0 10px!important;padding:4px 10px!important;border:1px solid #2b2b30!important;border-radius:99px!important;font-size:10px!important;line-height:1.4!important;color:#93939d!important;background:#151518!important}
+  body #app .ex-messages .bubble{position:relative!important;max-width:min(76%,520px)!important;padding:10px 14px!important;border:1px solid #303035!important;border-radius:12px 12px 12px 3px!important;background:#202024!important;font-size:13px!important;line-height:1.6!important;box-shadow:none!important}
+  body #app .ex-messages .bubble.mine{border-color:#4a3524!important;background:#2d2219!important;border-radius:12px 12px 3px 12px!important}
+  body #app .ex-messages .bubble>p{margin:0!important;padding-right:14px!important;white-space:pre-wrap!important;overflow-wrap:anywhere!important}
+  body #app .ex-messages .bubble>small{display:block!important;margin-top:5px!important;padding:0!important;color:#9999a3!important;font-size:9px!important;line-height:1.4!important;text-align:right!important}
+  body #app .ex-messages .ex-report-message{top:4px!important;right:4px!important;width:22px!important;height:22px!important;min-height:22px!important;padding:0!important;border:0!important;background:none!important;opacity:0;transition:opacity 150ms ease}
+  body #app .ex-messages .bubble:is(:hover,:focus-within) .ex-report-message{opacity:1}
+  body #app .ex-messages .ux-chat-quick{display:flex!important;gap:6px!important;padding:0 20px 8px!important;flex-shrink:0!important;overflow-x:auto!important;scrollbar-width:thin!important;background:#0c0c0e!important}
+  body #app .ex-messages .ux-chat-quick button{flex-shrink:0!important;min-height:28px!important;max-width:240px!important;padding:4px 10px!important;border:1px solid #34343a!important;border-radius:99px!important;background:#18181c!important;color:#b8b8c2!important;font-size:10px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+  body #app .ex-messages .chat-form{flex-shrink:0!important;display:flex!important;align-items:flex-end!important;padding:12px 20px!important;gap:10px!important;border-top:1px solid #2b2b30!important;background:#121214!important}
+  body #app .ex-messages .chat-form .ux-photo-upload{display:grid!important;place-items:center!important;width:40px!important;height:44px!important;flex-shrink:0!important;border:0!important;background:none!important;color:#a5a5af!important;cursor:pointer!important}
+  body #app .ex-messages .chat-form textarea.ex-composer-input{display:block!important;flex:1!important;min-width:0!important;height:44px;min-height:44px!important;max-height:120px!important;padding:11px 14px!important;border:1px solid #3b3b43!important;border-radius:10px!important;background:#1a1a1f!important;color:#ececf0!important;font:13px/20px Roboto,Arial,sans-serif!important;resize:none!important;overflow-y:auto!important;box-sizing:border-box!important}
+  body #app .ex-messages .chat-form textarea.ex-composer-input:focus{outline:0!important;border-color:#b37b4b!important}
+  body #app .ex-messages .chat-form>.button-primary{width:44px!important;min-width:44px!important;height:44px!important;min-height:44px!important;border-radius:10px!important;background:#ff9b42!important;color:#16100b!important;border:0!important}
+  body #app .ex-messages #ex-message-error:empty{display:none!important}
+  body #app .ex-messages #ex-message-error:not(:empty){padding:8px 20px!important;flex-shrink:0!important;background:#251815!important;color:#edaca3!important;font-size:11px!important}
+  body #app .ex-messages .chat>.ex-saved-replies{display:none!important;position:absolute!important;right:20px!important;bottom:82px!important;z-index:10!important;width:min(360px,calc(100% - 40px))!important;max-height:calc(100% - 110px)!important;overflow:auto!important;margin:0!important;border:1px solid #42424a!important;border-radius:10px!important;background:#1b1b20!important}
+  body #app .ex-messages .chat>.ex-saved-replies[open]{display:block!important}
+  body #app .ex-messages .chat>.empty{margin:auto!important;padding:30px!important;max-width:340px!important;background:transparent!important;border:0!important;color:#a5a5ae!important;font-size:14px!important;text-align:center!important}
+  html:not([data-support-chat-open]) body:has(#app .ex-messages) #support-dock{display:none!important}
+  body:has(#app .ex-messages)>.footer{display:none!important}
+ }
+}
+@media(min-width:841px) and (max-width:1100px){
+ @layer sentryloot-theme {body #app .ex-messages .message-layout{grid-template-columns:260px minmax(0,1fr)!important}}
 }

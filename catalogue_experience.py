@@ -348,9 +348,22 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         try:days=int(param('days','30'))
         except ValueError:raise error(400,'Davr noto‘g‘ri.')
         if days not in (7,30,90):raise error(400,'7, 30 yoki 90 kun tanlang.')
+        try:page=int(param('page','1'));limit=int(param('limit','8'))
+        except ValueError:raise error(400,'Check the listing page.')
+        if not 1<=page<=1000000 or not 1<=limit<=50:raise error(400,'Choose 1–50 listings per page.')
+        total=db.execute('SELECT COUNT(*) n FROM listings WHERE seller_id=?',(uid,)).fetchone()['n']
+        page=min(page,max(1,(total+limit-1)//limit))
         cutoff=(now-timedelta(days=days)).date().isoformat()
-        funnel=[dict(r) for r in db.execute('SELECT l.id,l.title,e.kind,COALESCE(SUM(e.total),0) total FROM listings l LEFT JOIN listing_insights e ON e.listing_id=l.id AND e.day>=? WHERE l.seller_id=? GROUP BY l.id,l.title,e.kind ORDER BY l.title',(cutoff,uid))]
-        return {'quality':quality(db,uid,days),'listings':funnel,'reply_seconds':core['marketplace_features'].profile(db,uid,uid,core)['avg_reply_seconds']}
+        # Limit listing IDs before joining events: each page stays bounded even
+        # when a seller owns many listings or has several event kinds per listing.
+        funnel=[dict(r) for r in db.execute('''WITH selected AS (
+            SELECT id,title FROM listings WHERE seller_id=? ORDER BY title,id LIMIT ? OFFSET ?
+        ) SELECT l.id,l.title,e.kind,COALESCE(SUM(e.total),0) total
+            FROM selected l LEFT JOIN listing_insights e ON e.listing_id=l.id AND e.day>=?
+            GROUP BY l.id,l.title,e.kind ORDER BY l.title,l.id,e.kind''',(uid,limit,(page-1)*limit,cutoff))]
+        for row in funnel:row['total']=int(row['total'])
+        return {'quality':quality(db,uid,days),'listings':funnel,'reply_seconds':core['marketplace_features'].profile(db,uid,uid,core)['avg_reply_seconds'],
+                'page':page,'page_size':limit,'total_count':total,'has_more':page*limit<total}
     if path=='/api/seller/import/preview' and method=='POST':
         verify(ctx);core['seller_ok'](db,uid);core['check_rate'](db,'listing_import',uid,10,3600)
         try:rows=parse_import(raw,param('format','csv'));cleaned,errors=validate_import(rows,core)

@@ -152,6 +152,23 @@ class ExperienceFlows(unittest.TestCase):
         self.item();self.route(self.buyer,'POST','/api/catalogue/view',{'listing_id':self.listing});self.route(self.buyer,'POST','/api/catalogue/view',{'listing_id':self.listing})
         r=self.route(self.seller,'GET','/api/seller/insights?days=7');views=[v for v in r['listings'] if v['kind']=='view'];self.assertEqual(views[0]['total'],1);self.assertEqual(r['quality']['orders'],0)
         with self.assertRaises(app.HttpError):self.route(self.buyer,'GET','/api/seller/insights')
+    def test_insights_pages_bound_listing_ids_before_joining_event_kinds(self):
+        for i in range(20):
+            self.db.execute('''INSERT INTO listings(id,seller_id,game_id,category_id,title,description,product_type,price_minor,stock,status)
+                SELECT ?,seller_id,game_id,category_id,?,description,product_type,price_minor,stock,status FROM listings WHERE id=?''',('insight_'+str(i),'Activity '+str(i).zfill(2),self.listing))
+        for kind,total in (('view',100),('favorite',2),('chat',1)):
+            self.db.execute('INSERT INTO listing_insights(listing_id,day,kind,total) VALUES(?,?,?,?)',('insight_0',app.now_iso()[:10],kind,total))
+        seen=[]
+        for page in (1,2,3):
+            result=self.route(self.seller,'GET','/api/seller/insights?limit=8&page='+str(page))
+            ids=list(dict.fromkeys(row['id'] for row in result['listings']))
+            self.assertLessEqual(len(ids),8);seen.extend(ids)
+            self.assertEqual(result['total_count'],21)
+            self.assertEqual(result['has_more'],page<3)
+            if page==1:self.assertEqual({row['kind'] for row in result['listings'] if row['id']=='insight_0'},{'view','favorite','chat'})
+        self.assertEqual(len(set(seen)),21);self.assertEqual(len(seen),21)
+        for query in ('limit=0','limit=51','page=0','page=invalid','days=100'):
+            with self.assertRaises(app.HttpError):self.route(self.seller,'GET','/api/seller/insights?'+query)
     def test_email_is_opt_in_and_queue_never_contains_private_chat_body(self):
         cid=self.conversation();self.route(self.buyer,'POST','/api/experience/settings',{'email':True})
         self.route(self.seller,'POST',f'/api/conversations/{cid}/messages',{'body':'Never put this private message in an email.'})
