@@ -22,6 +22,16 @@ test('guest Home review cards escape buyer text and clearly label test feedback'
  assert.match(host.innerHTML,/&lt;script&gt;/);assert.doesNotMatch(host.innerHTML,/<script>|<img src=x>|verified reviews/);
 });
 
+test('empty Home reviews explain the state without an empty focusable carousel',async()=>{
+ const rail={scrollWidth:0,clientWidth:300,scrollLeft:0,addEventListener(){}};
+ const host={isConnected:true,innerHTML:'',setAttribute(){},querySelector:s=>s==='.home-review-rail'?rail:{},querySelectorAll:()=>[]};
+ const context={window:{},ResizeObserver:class{observe(){}},api:async()=>({count:0,rating:null,items:[]}),adminText:(_u,_r,en)=>en,esc:String,icon:()=>''};
+ vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/purchase-reviews.js'),'utf8'),context);
+ await context.window.ReviewHub.home(host);
+ assert.match(host.innerHTML,/completed purchases/i);
+ assert.doesNotMatch(host.innerHTML,/tabindex|data-review-prev|data-review-next|home-review-rail|verified reviews/);
+});
+
 test('header and profile menu render the uploaded photo with the shared avatar renderer',()=>{
  const button={classList:{toggle(){}},setAttribute(){}};
  const context={me:{id:'current-user',display_name:'Test Buyer',email:'buyer@example.test',avatar_url:'https://images.example.com/current.webp',created_at:'2026-10-01',email_verified:true},$:selector=>selector==='#account-button'?button:null,adminText:(_u,_r,en)=>en,esc:v=>String(v??''),parseServerDate:v=>new Date(v),localeTag:()=> 'en-US',icon:()=>''};
