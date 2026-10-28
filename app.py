@@ -38,6 +38,7 @@ import storage_r2
 import public_assets
 import seller_catalog
 from asia_markets import ASIA_COUNTRIES, ASIA_COUNTRY_CURRENCIES, ASIA_CURRENCIES
+import regional_preferences
 
 SUPPORTED_LANGUAGES = frozenset({'en', 'uz', 'ru'})
 
@@ -1486,8 +1487,12 @@ class Handler(BaseHTTPRequestHandler):
     def send_json(self, code, data, headers=None):
         self._request_status=code
         if hasattr(self,'_request_id'):headers={**(headers or {}),'X-Request-ID':self._request_id}
+        headers=dict(headers or {})
+        cache_control=headers.pop('Cache-Control','no-store')
         payload=json.dumps(public_assets.rewrite_payload(data),ensure_ascii=False,separators=(',',':')).encode()
-        self.send_response(code); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.send_header('Pragma','no-cache'); self.send_header('Vary','Cookie'); self.secure_headers()
+        self.send_response(code); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control',cache_control)
+        if cache_control=='no-store': self.send_header('Pragma','no-cache'); self.send_header('Vary','Cookie')
+        self.secure_headers()
         for k,v in (headers or {}).items():
             for value in (v if isinstance(v,(list,tuple)) else [v]): self.send_header(k,value)
         self.end_headers(); self.wfile.write(payload)
@@ -1547,6 +1552,11 @@ class Handler(BaseHTTPRequestHandler):
         self._request_id=secrets.token_hex(12);self._request_status=500;started=time.monotonic()
         db=None
         try:
+            if path=='/api/exchange-rates' and method=='GET':
+                rates=regional_preferences.exchange_rates()
+                cache='public, max-age=300, s-maxage=3600' if rates['rates'] and not rates['stale'] else 'no-store'
+                self.send_json(200,rates,{'Cache-Control':cache})
+                return
             db=connect()
             ctx=self.context(db)
             if ctx.get('mfa_pending') and path not in ('/api/me','/api/security/unlock','/api/logout'): raise HttpError(403,'Ikki bosqichli tasdiqlash kerak.')
@@ -1613,7 +1623,7 @@ class Handler(BaseHTTPRequestHandler):
                 payload=seo_listing_html(listing_match.group(1))
                 if payload is None: self.send_error(404); return
                 self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(payload))); self.send_header('Cache-Control','no-store'); self.secure_headers(); self.end_headers(); self.wfile.write(payload); return
-            f={'/static/form-controls.css':'form-controls.css','/static/admin-console.js':'admin-console.js','/static/admin-console.css':'admin-console.css','/static/storefront-showcase.js':'storefront-showcase.js','/static/storefront-showcase.css':'storefront-showcase.css','/static/assets/sentryloot-mark.png':'assets/sentryloot-mark.png','/static/assets/sentryloot-mark-256.webp':'assets/sentryloot-mark-256.webp','/static/assets/sentryloot-mark-128.png':'assets/sentryloot-mark-128.png','/static/assets/sentryloot-mark-512.png':'assets/sentryloot-mark-512.png','/static/premium-storefront.css':'premium-storefront.css','/static/premium-motion.js':'premium-motion.js','/static/vendor/motion-14.7.1.min.js':'vendor/motion-14.7.1.min.js','/static/assets/mobile-topup-pubg.webp':'assets/mobile-topup-pubg.webp','/static/mobile-site.js':'mobile-site.js','/static/mobile-site.css':'mobile-site.css','/static/mobile-header.js':'mobile-header.js','/static/mobile-header.css':'mobile-header.css','/static/order-process.js':'order-process.js','/static/order-process.css':'order-process.css','/static/listing-detail.css':'listing-detail.css','/static/listing-detail.js':'listing-detail.js','/static/desktop-share.js':'desktop-share.js','/static/desktop-share.css':'desktop-share.css','/static/product-cards.css':'product-cards.css','/static/offer-wizard.js':'offer-wizard.js','/static/offer-wizard.css':'offer-wizard.css','/static/seller-verification.js':'seller-verification.js','/static/seller-verification.css':'seller-verification.css','/static/purchase-reviews.js':'purchase-reviews.js','/static/assets/pubg-uid-guide.png':'assets/pubg-uid-guide.png','/static/select-menu.js':'select-menu.js','/static/monochrome-theme.css':'monochrome-theme.css','/static/assets/roboto-variable.ttf':'assets/roboto-variable.ttf','/static/assets/roboto-variable.woff2':'assets/roboto-variable.woff2','/static/assets/roboto-OFL.txt':'assets/roboto-OFL.txt','/push-worker.js':'push-worker.js','/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/qa-vitals.js':'qa-vitals.js','/static/vendor/web-vitals.iife.js':'vendor/web-vitals.iife.js','/static/launch-readiness.js':'launch-readiness.js','/static/launch-readiness.css':'launch-readiness.css','/static/experience.js':'experience.js','/static/experience.css':'experience.css','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup-detail.js':'topup-detail.js','/static/topup-detail.css':'topup-detail.css','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-uc-660.png':'assets/topup-uc-660.png','/static/assets/topup-uc-1800.png':'assets/topup-uc-1800.png','/static/assets/topup-uc-3850.png':'assets/topup-uc-3850.png','/static/assets/topup-uc-8100.png':'assets/topup-uc-8100.png','/static/assets/topup-uc-60.png':'assets/topup-uc-60.png','/static/assets/topup-uc-325.png':'assets/topup-uc-325.png','/static/assets/topup-weekly-deal-1.png':'assets/topup-weekly-deal-1.png','/static/assets/topup-weekly-deal-2.png':'assets/topup-weekly-deal-2.png','/static/assets/topup-weekly-mythic.png':'assets/topup-weekly-mythic.png','/static/assets/topup-elite-pass.png':'assets/topup-elite-pass.png','/static/assets/topup-pubg-banner.jpg':'assets/topup-pubg-banner.jpg','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.webp':'assets/market-banner-soldier.webp','/static/assets/market-banner-games.webp':'assets/market-banner-games.webp','/static/assets/market-banner-worlds.webp':'assets/market-banner-worlds.webp','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
+            f={'/static/regional-preferences.js':'regional-preferences.js','/static/regional-preferences.css':'regional-preferences.css','/static/form-controls.css':'form-controls.css','/static/admin-console.js':'admin-console.js','/static/admin-console.css':'admin-console.css','/static/storefront-showcase.js':'storefront-showcase.js','/static/storefront-showcase.css':'storefront-showcase.css','/static/assets/sentryloot-mark.png':'assets/sentryloot-mark.png','/static/assets/sentryloot-mark-256.webp':'assets/sentryloot-mark-256.webp','/static/assets/sentryloot-mark-128.png':'assets/sentryloot-mark-128.png','/static/assets/sentryloot-mark-512.png':'assets/sentryloot-mark-512.png','/static/premium-storefront.css':'premium-storefront.css','/static/premium-motion.js':'premium-motion.js','/static/vendor/motion-14.7.1.min.js':'vendor/motion-14.7.1.min.js','/static/assets/mobile-topup-pubg.webp':'assets/mobile-topup-pubg.webp','/static/mobile-site.js':'mobile-site.js','/static/mobile-site.css':'mobile-site.css','/static/mobile-header.js':'mobile-header.js','/static/mobile-header.css':'mobile-header.css','/static/order-process.js':'order-process.js','/static/order-process.css':'order-process.css','/static/listing-detail.css':'listing-detail.css','/static/listing-detail.js':'listing-detail.js','/static/desktop-share.js':'desktop-share.js','/static/desktop-share.css':'desktop-share.css','/static/product-cards.css':'product-cards.css','/static/offer-wizard.js':'offer-wizard.js','/static/offer-wizard.css':'offer-wizard.css','/static/seller-verification.js':'seller-verification.js','/static/seller-verification.css':'seller-verification.css','/static/purchase-reviews.js':'purchase-reviews.js','/static/assets/pubg-uid-guide.png':'assets/pubg-uid-guide.png','/static/select-menu.js':'select-menu.js','/static/monochrome-theme.css':'monochrome-theme.css','/static/assets/roboto-variable.ttf':'assets/roboto-variable.ttf','/static/assets/roboto-variable.woff2':'assets/roboto-variable.woff2','/static/assets/roboto-OFL.txt':'assets/roboto-OFL.txt','/push-worker.js':'push-worker.js','/':'index.html','/privacy-policy':'privacy-policy.html','/data-deletion':'data-deletion.html','/static/qa-vitals.js':'qa-vitals.js','/static/vendor/web-vitals.iife.js':'vendor/web-vitals.iife.js','/static/launch-readiness.js':'launch-readiness.js','/static/launch-readiness.css':'launch-readiness.css','/static/experience.js':'experience.js','/static/experience.css':'experience.css','/static/account-operations.js':'account-operations.js','/static/account-operations.css':'account-operations.css','/static/marketplace-ux.js':'marketplace-ux.js','/static/marketplace-ux.css':'marketplace-ux.css','/static/app.js':'app.js','/static/info-pages.js':'info-pages.js','/static/topup-detail.js':'topup-detail.js','/static/topup-detail.css':'topup-detail.css','/static/topup.js':'topup.js','/static/crisp-loader.js':'crisp-loader.js','/static/locales.js':'locales.js','/static/locale-extra.js':'locale-extra.js','/static/legal-locale.js':'legal-locale.js','/static/legal-translations.js':'legal-translations.js','/static/asia-markets-data.js':'asia-markets-data.js','/static/asia-markets.json':'asia-markets.json','/static/vercel-insights.js':'vercel-insights.js','/static/style.css':'style.css','/static/favicon.svg':'favicon.svg','/static/assets/sentryloot-app-icon.png':'assets/sentryloot-app-icon.png','/static/assets/sentryloot-favicon.png':'assets/sentryloot-favicon.png','/static/assets/sentryloot-logo-crest.jpg':'assets/sentryloot-logo-crest.jpg','/static/assets/sentryloot-logo-full.jpg':'assets/sentryloot-logo-full.jpg','/static/assets/hero-background.jpg':'assets/hero-background.jpg','/static/assets/fortnite-hero-cutout.png':'assets/fortnite-hero-cutout.png','/static/assets/auth-game-characters.png':'assets/auth-game-characters.png','/static/assets/topup-uc-660.png':'assets/topup-uc-660.png','/static/assets/topup-uc-1800.png':'assets/topup-uc-1800.png','/static/assets/topup-uc-3850.png':'assets/topup-uc-3850.png','/static/assets/topup-uc-8100.png':'assets/topup-uc-8100.png','/static/assets/topup-uc-60.png':'assets/topup-uc-60.png','/static/assets/topup-uc-325.png':'assets/topup-uc-325.png','/static/assets/topup-weekly-deal-1.png':'assets/topup-weekly-deal-1.png','/static/assets/topup-weekly-deal-2.png':'assets/topup-weekly-deal-2.png','/static/assets/topup-weekly-mythic.png':'assets/topup-weekly-mythic.png','/static/assets/topup-elite-pass.png':'assets/topup-elite-pass.png','/static/assets/topup-pubg-banner.jpg':'assets/topup-pubg-banner.jpg','/static/assets/topup-hero.jpg':'assets/topup-hero.jpg','/static/assets/market-banner-soldier.webp':'assets/market-banner-soldier.webp','/static/assets/market-banner-games.webp':'assets/market-banner-games.webp','/static/assets/market-banner-worlds.webp':'assets/market-banner-worlds.webp','/static/assets/market-banner-soldier.jpg':'assets/market-banner-soldier.jpg','/static/assets/market-banner-games.jpg':'assets/market-banner-games.jpg','/static/assets/market-banner-worlds.jpg':'assets/market-banner-worlds.jpg','/static/assets/market-game-cs2.png':'assets/market-game-cs2.png','/static/assets/market-game-pubg-mobile.png':'assets/market-game-pubg-mobile.png','/static/assets/market-game-mobile-legends.png':'assets/market-game-mobile-legends.png','/static/assets/market-game-free-fire.png':'assets/market-game-free-fire.png','/static/assets/market-game-honor-of-kings.png':'assets/market-game-honor-of-kings.png','/static/assets/market-game-roblox.png':'assets/market-game-roblox.png','/static/assets/market-game-valorant.png':'assets/market-game-valorant.png','/static/assets/market-game-genshin-impact.png':'assets/market-game-genshin-impact.png','/static/assets/topup-uc.png':'assets/topup-uc.png','/static/assets/topup-mobile-legends-diamonds.png':'assets/topup-mobile-legends-diamonds.png','/static/assets/topup-free-fire-diamonds.png':'assets/topup-free-fire-diamonds.png','/static/assets/topup-honor-of-kings-tokens.png':'assets/topup-honor-of-kings-tokens.png','/static/assets/topup-pubg-mobile.svg':'assets/topup-pubg-mobile.svg','/static/assets/topup-mobile-legends.svg':'assets/topup-mobile-legends.svg','/static/assets/topup-free-fire.svg':'assets/topup-free-fire.svg','/static/assets/topup-honor-of-kings.svg':'assets/topup-honor-of-kings.svg'}.get(parsed.path)
             if not f and re.fullmatch(r'/static/assets/game-art/(pubg-mobile|mobile-legends|valorant|free-fire|cs2|honor-of-kings|roblox|genshin-impact|fortnite|minecraft|gta-5|league-of-legends|dota-2|call-of-duty-mobile|ea-sports-fc)-(640|1280|3840)\.webp',parsed.path):
                 candidate=parsed.path.removeprefix('/static/')
                 if (ROOT/'static'/candidate).is_file(): f=candidate
@@ -1761,7 +1771,8 @@ class Handler(BaseHTTPRequestHandler):
             audit(db,None,'cron_account_evidence_retention_ok','cron','account-evidence-retention',
                   {'evidence_deleted':removed,'reviews_checked':len(reviews),'retention_days':30})
             return {'ok':True,'evidence_deleted':removed,'reviews_checked':len(reviews),'retention_days':30}
-        if path=='/api/me' and method=='GET': return {'user':ctx['user'],'csrf':ctx['csrf'],'mode':MODE,'mfa_required':ctx.get('mfa_pending',False)}
+        if path=='/api/region' and method=='GET': return regional_preferences.resolve(self.headers,ctx['user'])
+        if path=='/api/me' and method=='GET': return {'user':ctx['user'],'csrf':ctx['csrf'],'mode':MODE,'mfa_required':ctx.get('mfa_pending',False),'region':regional_preferences.resolve(getattr(self,'headers',{}),ctx['user'])}
         if path=='/api/bonuses' and method=='GET':
             require_user(ctx)
             return bonus_summary(db,uid)
@@ -1780,8 +1791,8 @@ class Handler(BaseHTTPRequestHandler):
             if oauth_mode not in ('login','link') or (oauth_mode=='link' and provider!='facebook'): raise HttpError(400,'Facebook bog‘lash so‘rovi noto‘g‘ri.')
             if oauth_mode=='link': require_verified(ctx)
             elif data.get('accept_terms') is not True: raise HttpError(400,'Davom etish uchun foydalanish shartlarini qabul qiling.')
-            country=data.get('country','UZ')
-            if not isinstance(country,str) or country not in ASIA_COUNTRIES: raise HttpError(400,'Osiyo mamlakatini tanlang.')
+            country=data.get('country',regional_preferences.resolve(getattr(self,'headers',{}))['country'])
+            if not isinstance(country,str) or country not in ASIA_COUNTRIES: raise HttpError(400,'Mamlakat yoki hududni tanlang.')
             if provider=='google':
                 client_id=os.environ.get('GOOGLE_CLIENT_ID','')
                 if not client_id or not os.environ.get('GOOGLE_CLIENT_SECRET'): raise HttpError(503,'Google Sign In hali sozlanmagan.')
@@ -1791,7 +1802,9 @@ class Handler(BaseHTTPRequestHandler):
             check_rate(db,'oauth_start_'+provider,self.client_address[0],8)
             base=self.oauth_base_url()
             callback=base+'/api/oauth/'+provider+'/callback'
-            state,nonce=f'{country}.{oauth_mode}.{create_token()}',create_token()
+            oauth_language=data.get('language',regional_preferences.resolve(self.headers)['language'])
+            if oauth_language not in SUPPORTED_LANGUAGES: raise HttpError(400,'Invalid language.')
+            state,nonce=f'{country}.{oauth_mode}.{oauth_language}.{create_token()}',create_token()
             payload=f'{state}.{nonce}.{int(time.time())}'
             signature=hmac.new(SESSION_SECRET.encode(),(provider+'.'+payload).encode(),hashlib.sha256).hexdigest()
             secure='; Secure' if MODE=='production' else ''
@@ -1826,7 +1839,9 @@ class Handler(BaseHTTPRequestHandler):
                 raise HttpError(401,'Google/Facebook hisobini tasdiqlab bo‘lmadi. Qayta urinib ko‘ring.')
             subject,email,name=identity['subject'],identity['email'],clean_text(identity['name'],'Ism',1,80)
             state_parts=saved_state.split('.')
-            oauth_country=state_parts[0] if state_parts else 'UZ'
+            oauth_country=state_parts[0] if state_parts else 'US'
+            oauth_language=state_parts[2] if len(state_parts)>3 else 'en'
+            if oauth_language not in SUPPORTED_LANGUAGES: raise HttpError(400,'Invalid language.')
             oauth_mode=state_parts[1] if len(state_parts)>2 else 'login'
             if oauth_mode not in ('login','link'): raise HttpError(400,'Kirish so‘rovi noto‘g‘ri.')
             if oauth_country not in ASIA_COUNTRIES: raise HttpError(400,'Kirish so‘rovidagi mamlakat noto‘g‘ri.')
@@ -1852,7 +1867,7 @@ class Handler(BaseHTTPRequestHandler):
                     return 302,{'ok':False},{'Location':'/?oauth_error=account_exists#login','Set-Cookie':[clear]}
                 terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']
                 user_id=ident()
-                db.execute('INSERT INTO users(id,email,password_hash,display_name,country,language,currency,email_verified,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,1,?,?)',(user_id,email,password_hash(create_token()),name,oauth_country,'en',ASIA_COUNTRY_CURRENCIES[oauth_country],terms,now_iso()))
+                db.execute('INSERT INTO users(id,email,password_hash,display_name,country,language,currency,email_verified,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,1,?,?)',(user_id,email,password_hash(create_token()),name,oauth_country,oauth_language,ASIA_COUNTRY_CURRENCIES[oauth_country],terms,now_iso()))
                 db.execute('INSERT INTO oauth_identities(provider,subject,user_id) VALUES(?,?,?)',(provider,subject,user_id))
             session_token,csrf=session_create(db,user_id); self.set_session(session_token,db)
             return 302,{'ok':True},{'Location':'/#contact-details' if account_contacts.enabled() and not account_contacts.verified(db,user_id) else '/#home','Set-Cookie':[clear]}
@@ -1898,10 +1913,10 @@ class Handler(BaseHTTPRequestHandler):
             email=clean_text(data.get('email'),'Email',3,254).lower(); name=clean_text(data.get('name'),'Ism',2,80); password=data.get('password','')
             if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email) or not isinstance(password,str) or len(password)<10 or len(password)>256: raise HttpError(400,'To‘g‘ri email va kamida 10 belgili parol kiriting.')
             if email in (os.environ.get('SEED_ADMIN_EMAIL','').lower(),): raise HttpError(409,'Bu email administratorda ishlatiladi.')
-            country=data.get('country','UZ')
-            if not isinstance(country,str) or country not in ASIA_COUNTRIES: raise HttpError(400,'Osiyo mamlakatini tanlang.')
+            country=data.get('country',regional_preferences.resolve(getattr(self,'headers',{}))['country'])
+            if not isinstance(country,str) or country not in ASIA_COUNTRIES: raise HttpError(400,'Mamlakat yoki hududni tanlang.')
             currency=ASIA_COUNTRY_CURRENCIES[country]
-            language=data.get('language','en')
+            language=data.get('language',regional_preferences.resolve(getattr(self,'headers',{}))['language'])
             if language not in ('uz','en','ru'): raise HttpError(400,'Invalid language.')
             user=ident(); terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']; db.execute('INSERT INTO users(id,email,password_hash,display_name,country,language,currency,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,?,?)',(user,email,password_hash(password),name,country,language,currency,terms,now_iso()))
             raw=create_token(); db.execute('INSERT INTO email_tokens(token_hash,user_id,purpose,expires_at) VALUES(?,?,?,?)',(hash_token(raw),user,'verify',(datetime.now(timezone.utc)+timedelta(hours=24)).isoformat()))
@@ -2519,10 +2534,11 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(data['language'],str) or data['language'] not in SUPPORTED_LANGUAGES: raise HttpError(400,'Til tanlovi noto‘g‘ri.')
                 fields['language']=data['language']
             if 'country' in data:
-                if not isinstance(data['country'],str) or data['country'] not in ASIA_COUNTRIES: raise HttpError(400,'Osiyo mamlakatini tanlang.')
+                if not isinstance(data['country'],str) or data['country'] not in ASIA_COUNTRIES: raise HttpError(400,'Mamlakat yoki hududni tanlang.')
                 fields['country']=data['country']
+                if 'currency' not in data: fields['currency']=ASIA_COUNTRY_CURRENCIES[data['country']]
             if 'currency' in data:
-                if not isinstance(data['currency'],str) or data['currency'] not in ASIA_CURRENCIES: raise HttpError(400,'Osiyo valyutasini tanlang.')
+                if not isinstance(data['currency'],str) or data['currency'] not in ASIA_CURRENCIES: raise HttpError(400,'Valyutani tanlang.')
                 fields['currency']=data['currency']
             if fields: db.execute('UPDATE users SET '+', '.join(f'{k}=?' for k in fields)+' WHERE id=?',(*fields.values(),uid))
             return {'user':user_view(db,uid)}

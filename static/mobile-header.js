@@ -51,6 +51,7 @@ window.MobileHeader = (() => {
             <span>${icon('globe')}<span>${t('Til', 'Язык', 'Language')}</span></span>
             <div>${[['en', 'EN', 'English'], ['uz', 'UZ', 'O‘zbekcha'], ['ru', 'RU', 'Русский']].map(([value, label, name]) => `<button type="button" data-mobile-language="${value}" aria-label="${name}" aria-pressed="${locale === value}">${label}</button>`).join('')}</div>
           </div>
+          <button type="button" class="mobile-menu-account-action" data-mobile-region>${icon('globe')}<span>${t('Region va valyuta', 'Регион и валюта', 'Region & currency')}</span></button>
           ${me?.is_admin ? `<a class="mobile-menu-admin" href="/#admin">${icon('shield')}<span>${t('Admin paneli', 'Панель администратора', 'Admin panel')}</span>${icon('arrow-up-right')}</a>` : ''}
           ${me?.email_verified ? `<button type="button" class="mobile-menu-account-action" data-mobile-action data-action="link-facebook"><span class="market-nav-icon" aria-hidden="true"><span class="facebook-mark">f</span></span><span>${t('Facebook’ni ulash', 'Подключить Facebook', 'Link Facebook')}</span></button>` : ''}
           <div class="mobile-menu-account-actions"><button type="button" data-open-support-chat><span class="market-nav-icon" aria-hidden="true">${icon('message')}</span><span>${t('Yordam', 'Поддержка', 'Support')}</span></button>${me ? `<button type="button" class="mobile-menu-sign-out" data-mobile-action data-action="logout"><span class="market-nav-icon" aria-hidden="true">${icon('arrow-up-right')}</span><span>${t('Chiqish', 'Выйти', 'Sign out')}</span></button>` : ''}</div>
@@ -79,6 +80,7 @@ window.MobileHeader = (() => {
       if (event.target.closest('[data-open-support-chat]')) close();
       const action = event.target.closest('[data-mobile-action]');
       if (action) { close(); doAction(action); }
+      if (event.target.closest('[data-mobile-region]')) { close(); window.RegionPreferences?.open(); }
       const language = event.target.closest('[data-mobile-language]');
       if (language) { close(); setLanguage(language.dataset.mobileLanguage); }
     });
