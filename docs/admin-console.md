@@ -46,3 +46,7 @@ SENTRYLOOT_TEST_POSTGRES_TEMP=1 python3 -m unittest tests.test_admin_console_pos
 ```
 
 Without the opt-in variable, these database integration checks are explicitly skipped by the normal test suite. After the fix, the full suite passed: 110 frontend tests; 314 Python tests ran, 311 passed and three opt-in checks skipped. Both new PostgreSQL TEMP-fixture tests also passed in a separate opt-in run.
+
+## Shared admin background
+
+The admin shell, body, workspace, sidebar, cards, tables and existing specialized admin panels share the same `#000000` canvas. Borders and interactive focus/hover states distinguish controls without introducing a second page background. The finance fix was verified through the owner's signed-in Chrome tab: both charts loaded and no internal-error message remained.

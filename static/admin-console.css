@@ -5,8 +5,8 @@ body:has(#app>.admin-premium) :is(.site-header,.footer,#support-dock) { display:
 body #app.admin-context:has(>.admin-premium) { padding-top:0!important; }
 body #app .admin-premium .admin-nav-label { padding:0!important; }
 
-body #app .admin-premium { --ac-bg:#000000!important; --ac-card:#0b0b0b!important; --ac-line:#282828!important; --ac-ink:#f4f6f8!important; --ac-muted:#a3afbf!important; --ac-orange:#ff9b42!important; width:100%!important; max-width:1800px!important; margin:0 auto 36px!important; grid-template-columns:250px minmax(0,1fr)!important; border:0!important; border-radius:0!important; background:var(--ac-bg)!important; color:var(--ac-ink)!important; font-family:Roboto,Arial,sans-serif!important; overflow:visible!important; }
-body #app .admin-premium .admin-sidebar { position:sticky!important; top:0!important; align-self:start!important; height:100dvh!important; max-height:100dvh!important; padding:20px 12px 12px!important; overflow-y:auto!important; background:#080808!important; border-right:1px solid var(--ac-line)!important; scrollbar-width:thin!important; scrollbar-color:#374454 transparent!important; }
+body #app .admin-premium { --ac-bg:#000000!important; --ac-card:#000000!important; --ac-line:#282828!important; --ac-ink:#f4f6f8!important; --ac-muted:#a3afbf!important; --ac-orange:#ff9b42!important; width:100%!important; max-width:1800px!important; margin:0 auto 36px!important; grid-template-columns:250px minmax(0,1fr)!important; border:0!important; border-radius:0!important; background:var(--ac-bg)!important; color:var(--ac-ink)!important; font-family:Roboto,Arial,sans-serif!important; overflow:visible!important; }
+body #app .admin-premium .admin-sidebar { position:sticky!important; top:0!important; align-self:start!important; height:100dvh!important; max-height:100dvh!important; padding:20px 12px 12px!important; overflow-y:auto!important; background:#000000!important; border-right:1px solid var(--ac-line)!important; scrollbar-width:thin!important; scrollbar-color:#374454 transparent!important; }
 body #app .admin-premium .admin-brand { padding:0 9px 22px!important; gap:10px!important; }
 body #app .admin-premium .admin-brand-mark { width:42px!important; height:46px!important; border:0!important; background:transparent!important; box-shadow:none!important; }
 body #app .admin-premium .admin-brand-mark img { width:42px!important; height:42px!important; object-fit:contain!important; }
@@ -228,3 +228,27 @@ body #app .admin-premium :is(.ac-table-scroll,.admin-table-wrap) { overscroll-be
  body #app .admin-premium.ac-menu-open .admin-nav { grid-template-columns:1fr!important; }
  body #app .admin-premium .admin-nav .admin-nav-item b { white-space:normal!important; text-overflow:clip!important; }
 } }
+
+/* The owner requested one shared black canvas across every admin section. */
+@layer admin-premium {
+ body:has(#app.admin-context),
+ body #app.admin-context {
+  background:#000000!important; background-image:none!important;
+ }
+ body #app.admin-context :is(
+  .admin-portal,.admin-sidebar,.admin-workspace,.ac-toolbar,.ac-card,.ac-kpi,.ac-dialog,
+  .admin-panel,.admin-record,.admin-table-wrap,.admin-setting-card,.admin-kpi,.admin-sandbox-banner,
+  .ac-operation-counts>div,.admin-context-page,.page,.panel,.form-card,.table-wrap,
+  .sv-workspace,.sv-panel,.sv-detail,.sv-header,.sv-stats>article,
+  .ops-ticket-row,.ops-readiness-card,.trade-case-link,
+  .topup-admin-page,.topup-admin-stats article,.topup-admin-status-banner,
+  .topup-admin-supplier-card,.topup-admin-package,.topup-admin-orders,
+  .topup-admin-game,.topup-admin-product,.topup-admin-empty,.topup-admin-no-results,
+  .topup-admin-footnote,.topup-admin-create,.topup-admin-settings
+ ) {
+  background:#000000!important; background-image:none!important;
+ }
+ body #app.admin-context :is(.ac-table th,.ac-total td,.admin-table th) {
+  background:#000000!important; background-image:none!important;
+ }
+}
