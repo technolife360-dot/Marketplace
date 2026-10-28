@@ -19,7 +19,7 @@ The server enforces admin authorization and its existing production MFA requirem
 
 The migration is `supabase/migrations/20261028000000_admin_finance.sql`. It adds a private expense journal and reporting indexes; it does not modify orders, payments, ledger values or provider configuration. It enables RLS and revokes direct browser-role privileges on the new journal.
 
-**Status: prepared, not applied.** Automatic approval review rejected applying the migration to the connected real project because explicit authorization for that database change was missing. Do not merge/deploy the branch until the owner authorizes and applies this migration. The production startup guard verifies that the journal exists and remains private.
+**Status: applied after explicit owner approval on 2026-10-29 (Asia/Kuala_Lumpur).** Supabase confirmed the migration succeeded. A metadata-only check verified the new journal exists, RLS is enabled, anon/authenticated have no direct table privileges, and both reporting indexes exist. The production startup guard verifies that the journal remains private.
 
 For SQLite development, normal `app.migrate()` creates the journal. Do not run a local seed against production. The QA preview uses only `/tmp/sentryloot-admin-qa.sqlite3` and clearly labeled synthetic sandbox records.
 
@@ -31,4 +31,4 @@ For SQLite development, normal `app.migrate()` creates the journal. Do not run a
 - Browser checks: expense save/void/recalculation, CSV download, audit search, seller verification, orders, site-management navigation, mobile drawer, Escape, desktop and 390px mobile layouts.
 - Focused fields use one visible border and no secondary focus halo; compound search/configuration controls keep the boundary on the outer control. Native values and select-menu.js remain intact.
 - No browser console errors were observed during the final checks.
-- Live PostgreSQL financial data and real payment information were not inspected. Production execution remains unverified pending the migration approval.
+- Live PostgreSQL financial data and real payment information were not inspected. The schema prerequisite is verified; financial values were tested only against isolated local QA records.

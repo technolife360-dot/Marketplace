@@ -34,7 +34,7 @@ The owner explicitly requested a pure black background to match the storefront. 
 
 Expense creation and voiding persist in the local QA database and update profit. CSV downloads successfully. Audit search finds both expense events. Seller verification and orders still load. One bordered field, no outer focus halo and keyboard navigation were inspected. Console errors: none during final checks.
 
-This is a visual/local functional pass, not production financial verification. The real database migration awaits owner approval; no deployment has been performed. Full test results and accounting definitions are in `docs/admin-console.md`.
+This is a visual/local functional pass, not production financial verification. The owner subsequently approved the database migration; it was applied and its RLS, role grants and indexes were verified through metadata only. Release occurs through the main-branch Git deployment. Full test results and accounting definitions are in `docs/admin-console.md`.
 
 ## Follow-up polish
 
