@@ -32,3 +32,17 @@ For SQLite development, normal `app.migrate()` creates the journal. Do not run a
 - Focused fields use one visible border and no secondary focus halo; compound search/configuration controls keep the boundary on the outer control. Native values and select-menu.js remain intact.
 - No browser console errors were observed during the final checks.
 - Live PostgreSQL financial data and real payment information were not inspected. The schema prerequisite is verified; financial values were tested only against isolated local QA records.
+
+## PostgreSQL alias regression
+
+The first production finance request exposed a PostgreSQL-only syntax error: `day` requires an explicit `AS` when used as a column alias. Both income and expense date queries now use `AS day`, matching the existing overview query convention. SQLite had accepted the previous syntax.
+
+Two opt-in PostgreSQL integration tests now execute the real report function against empty and populated connection-local temporary fixtures, including numeric aggregate serialization and game allocation totals. They reproduced the original SyntaxError before the fix and passed afterwards. All report dependencies are shadowed in `pg_temp`, verified before execution, and removed with ROLLBACK. No existing financial rows are read or changed.
+
+Run with a configured database connection:
+
+```sh
+SENTRYLOOT_TEST_POSTGRES_TEMP=1 python3 -m unittest tests.test_admin_console_postgres -v
+```
+
+Without the opt-in variable, these database integration checks are explicitly skipped by the normal test suite. After the fix, the full suite passed: 110 frontend tests; 314 Python tests ran, 311 passed and three opt-in checks skipped. Both new PostgreSQL TEMP-fixture tests also passed in a separate opt-in run.

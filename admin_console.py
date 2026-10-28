@@ -73,9 +73,9 @@ def report(db, qs, core):
     args = (revenue_kind, currency, lo, hi)
     # SUM includes negative reversal entries of the same recognized commission type.
     day_sql = "to_char(le.created_at::timestamptz AT TIME ZONE 'UTC','YYYY-MM-DD')" if core.get('DATABASE_URL') else 'date(le.created_at)'
-    income = {r['day']: int(r['amount']) for r in db.execute(f'''SELECT {day_sql} day,SUM(le.amount_minor) amount
+    income = {r['day']: int(r['amount']) for r in db.execute(f'''SELECT {day_sql} AS day,SUM(le.amount_minor) amount
         FROM ledger_entries le JOIN orders o ON o.id=le.order_id WHERE {revenue_where} GROUP BY 1''', args)}
-    costs = {r['day']: int(r['amount']) for r in db.execute('''SELECT incurred_on day,SUM(amount_minor) amount FROM admin_expenses
+    costs = {r['day']: int(r['amount']) for r in db.execute('''SELECT incurred_on AS day,SUM(amount_minor) amount FROM admin_expenses
         WHERE book=? AND currency=? AND incurred_on>=? AND incurred_on<? AND voided_at IS NULL GROUP BY incurred_on''', (book, currency, lo, hi))}
     daily = []
     cursor = start
