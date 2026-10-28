@@ -1,0 +1,28 @@
+/* One visible field boundary. Native values, validation and select-menu.js stay intact. */
+@layer sentryloot-controls, admin-premium, sentryloot-premium, sentryloot-icons, sentryloot-theme;
+@layer sentryloot-controls {
+ body :is(#app,#profile-menu-root) :is(.field-control,.auth-password-control,.site-select) {
+  border:0!important; outline:0!important; box-shadow:none!important;
+ }
+ body :is(#app,#profile-menu-root) :is(.field-control,.auth-password-control,.site-select)::before,
+ body :is(#app,#profile-menu-root) :is(.field-control,.auth-password-control,.site-select)::after {
+  box-shadow:none!important;
+ }
+ /* Compound fields own the border; their nested input must not add another. */
+ body #app :is(.admin-search-box,.admin-config-input,.topup-admin-search,.topup-admin-filter) {
+  border:1px solid #353535!important; border-radius:8px!important; box-shadow:none!important; outline:0!important;
+ }
+ body #app :is(.admin-search-box,.admin-config-input,.topup-admin-search,.topup-admin-filter) :is(input,select,.site-select-trigger) {
+  border:0!important; outline:0!important; box-shadow:none!important;
+ }
+ /* Focus changes the existing boundary instead of drawing a second outer ring. */
+ body :is(#app,#profile-menu-root) :where(input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),textarea,.site-select-trigger):focus,
+ body :is(#app,#profile-menu-root) .site-select-trigger[aria-expanded=true] {
+  border-color:#ff9b42!important; outline:0!important; box-shadow:none!important;
+ }
+ body #app :is(.admin-search-box,.admin-config-input,.topup-admin-search,.topup-admin-filter):focus-within {
+  border-color:#ff9b42!important; outline:0!important; box-shadow:none!important;
+ }
+ /* Select popups and their search fields are separate surfaces, not nested field borders. */
+ body :is(#app,#profile-menu-root) .site-select-native { border:0!important; box-shadow:none!important; outline:0!important; }
+}

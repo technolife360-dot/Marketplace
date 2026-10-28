@@ -409,7 +409,7 @@ test('admin loads only the requested section and deduplicates pending requests',
  const context={Promise,Map,adminPage:{root,data:{},loaded:new Set(),pending:new Map(),resources:new Map()},
   api:path=>{requests.push(path);return new Promise((resolve,reject)=>pending.push({resolve,reject}))},
   adminLoadingMarkup:()=>'<p>Loading</p>',adminViewMarkup:name=>'<p>'+name+'</p>',
-  bindAdminForms(){},localizeDOM(){},window:{},esc:String,adminText:(uz,ru,en)=>en};
+  bindAdminForms(){},localizeDOM(){},window:{AdminConsole:{async mountFinance(panel){panel.innerHTML='<p>Finance</p>';}}},esc:String,adminText:(uz,ru,en)=>en};
  vm.createContext(context);vm.runInContext(source.slice(start,end),context);
  const first=context.loadAdminView('overview'),second=context.loadAdminView('overview');
  assert.strictEqual(first,second);
