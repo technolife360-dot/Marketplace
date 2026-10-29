@@ -16,6 +16,14 @@ test('checkout summary displays the actual server fee and total',()=>{
  const html=flow().totals({subtotal_minor:12990,commission_minor:649,total_minor:13639,currency:'MYR'});
  assert.match(html,/MYR 129.9/);assert.match(html,/MYR 6.49/);assert.match(html,/MYR 136.39/);
 });
+test('buyer totals explain estimated display currencies without adding a second source amount',()=>{
+ const f=flow({fmt:()=> '≈ €72.58'});
+ const order={subtotal_minor:30000,commission_minor:3000,total_minor:33000,currency:'MYR'};
+ const html=f.totals(order);
+ assert.match(html,/Converted prices are estimates\. Orders are paid in their original currency\./);
+ assert.doesNotMatch(html,/MYR|33000/);
+ assert.doesNotMatch(f.totals({...order,funds:{seller_fee_minor:3000}},false),/Converted prices are estimates/);
+});
 test('unpaid orders cannot expose delivery or completion controls',()=>{
  const html=flow().stageMarkup({status:'pending_payment',payment:{provider:'stripe_test'},total_minor:12990,currency:'MYR'}, {is_paused:false},true);
  assert.match(html,/data-of-pay/);assert.doesNotMatch(html,/data-of-complete|data-of-seller-delivery/);

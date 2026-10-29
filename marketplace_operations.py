@@ -353,7 +353,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
     if path=='/api/catalog/readiness' and method=='GET':
         core['require_admin'](ctx)
         rows=db.execute("SELECT l.*,g.name game_name FROM listings l JOIN games g ON g.id=l.game_id WHERE l.status IN ('draft','pending_review','published','approved_private') ORDER BY l.updated_at DESC LIMIT 200").fetchall()
-        return {'items':[{'id':r['id'],'title':r['title'],'game_name':r['game_name'],'status':r['status'],'issues':quality(r)} for r in rows],'games':[dict(r) for r in db.execute("SELECT g.name,g.slug,COUNT(l.id) listings FROM games g LEFT JOIN listings l ON l.game_id=g.id AND l.status='published' GROUP BY g.id,g.name,g.slug ORDER BY COUNT(l.id),g.name")]}
+        return {'launch':core['launch_readiness'].launch_summary(db,core),'items':[{'id':r['id'],'title':r['title'],'game_name':r['game_name'],'status':r['status'],'issues':quality(r)} for r in rows],'games':[dict(r) for r in db.execute("SELECT g.name,g.slug,COUNT(l.id) listings FROM games g LEFT JOIN listings l ON l.game_id=g.id AND l.status='published' GROUP BY g.id,g.name,g.slug ORDER BY COUNT(l.id),g.name")]}
     if path=='/api/support/tickets' and method in ('GET','POST'):
         require(ctx);admin=core['is_admin'](db,uid) or core['launch_readiness'].staff_allowed(db,uid,'support')
         if method=='GET':

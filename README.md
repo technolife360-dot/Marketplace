@@ -95,7 +95,7 @@ Implemented locally: registration/login, Google and Apple ID OAuth sign-in bound
 
 Not launch-complete: production OAuth client/service IDs and HTTPS callback registration, verified SMTP sender configuration, Didit production credentials/workflow/webhook registration, private evidence uploads with malware scanning, a real payment/refund/payout adapter, backup/restore and monitoring/alerts, complete reviewed RU/EN translations, and jurisdiction-specific legal/tax/publisher-rule review. The repository now includes deterministic, moderator-only fraud review flags, game-specific account fields for the five seeded games, platform/rank search filters, a three-listing comparison view, and a non-secret health readiness report. These do not replace human review or external provider configuration. Listing photos are public product media after upload; they must not contain secrets, account credentials, or personal documents. Read [the six launch-readiness areas](docs/SIX_READINESS_WORK.md) before changing production gates. Do not open public sales until the required provider and operational items are completed.
 
-The configured Asia market list supplies account country defaults and display-currency choices only. It does not mean buyers or sellers in every listed market can transact, pass provider onboarding, or receive a payout. Real checkout remains unavailable until a provider confirms coverage and is integrated.
+The configured global country/region list supplies account country defaults and display-currency choices only. It does not mean buyers or sellers in every listed market can transact, pass provider onboarding, or receive a payout. Real checkout remains unavailable until a provider confirms coverage and is integrated.
 
 Top Up catalog and admin inventory management are implemented, but live Top Up checkout is intentionally closed until the payment method is selected and integrated. Supplier fallback is also not active until a specific supplier API and credentials are supplied; the admin page labels this state instead of claiming that automatic fulfillment is available.
 
@@ -121,3 +121,9 @@ admin uploads use `admin-images/`. Existing root-key listing URLs remain valid.
 Private evidence always uses the separate private evidence bucket and signed links.
 When changing artwork, upload and verify the new R2 object before updating its URL
 and manifest. Do not remove an old object while retained deployments still use it.
+
+### October 29 marketplace preparation update
+
+Core shopping translations now cover 14 interface languages with English fallback for untranslated text. Display-currency estimates do not change the stored order or settlement currency. Listing creation supports whole-unit UZS and minor-unit MYR; the Stripe test boundary converts whole UZS to Stripe minor units consistently for checkout, payment verification, refunds and seller settlement. Signed sandbox payment flows are implemented and regression-tested; this is not a live payment adapter or an external end-to-end success claim.
+
+The admin catalogue-readiness page now combines existing catalogue checks with business/support, payment configuration and Top Up prerequisites. Configuration presence is explicitly separate from operational verification. See [owner preparation steps](docs/MARKETPLACE_LAUNCH_OWNER_STEPS.md) for authentic catalogue inputs, sandbox configuration, supplier onboarding and remaining launch checks.

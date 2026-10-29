@@ -16,6 +16,21 @@ UNHANDLED = object()
 PREFIX = 'stripe_test:'
 
 
+def stripe_amount(amount, currency):
+    """Convert the app's money convention to Stripe integer minor units.
+
+    Existing UZS database amounts are whole som; MYR amounts already are sen.
+    Reject other conventions rather than guessing their scale.
+    """
+    if type(amount) is not int or amount <= 0 or currency not in ('UZS', 'MYR'):
+        raise RuntimeError('Invalid checkout amount or unsupported internal currency.')
+    return amount*100 if currency == 'UZS' else amount
+
+
+def matches_amount(amount, internal, currency):
+    return type(amount) is int and amount == stripe_amount(internal, currency)
+
+
 def read(db, key, default=None):
     row = db.execute('SELECT value FROM platform_config WHERE key=?', (PREFIX+key,)).fetchone()
     return json.loads(row['value']) if row else default
@@ -56,20 +71,20 @@ class StripeTestProvider:
 
     def create_intent(self, order_id, amount_minor, currency, idempotency_key):
         # Deliberately no network inside the stock-reservation transaction.
-        if type(amount_minor) is not int or amount_minor <= 0 or not re.fullmatch('[A-Z]{3}', currency):
-            raise RuntimeError('Invalid checkout amount or currency.')
+        stripe_amount(amount_minor, currency)
         return PaymentIntent(self.name, amount_minor, currency, idempotency_key)
 
     def session(self, oid, amount, currency, idem, kind='marketplace', expires_at=None):
+        external_amount = stripe_amount(amount, currency)
         self.assert_account()
         result = self.client.v1.checkout.sessions.create({
-            'mode': 'payment', 'payment_method_types': ['card'],
+            'mode': 'payment',
             'client_reference_id': oid,
             'metadata': {'sentryloot_order': oid, 'sentryloot_mode': self.name, 'sentryloot_kind': kind},
             'payment_intent_data': {'transfer_group': 'sentryloot_test_'+oid,
                                     'metadata': {'sentryloot_order': oid, 'sentryloot_mode': self.name}},
             'line_items': [{'quantity': 1, 'price_data': {'currency': currency.lower(),
-                'unit_amount': amount, 'product_data': {'name': 'SentryLoot TEST order'}}}],
+                'unit_amount': external_amount, 'product_data': {'name': 'SentryLoot TEST order'}}}],
             # Callers pin this value before the network request so retries with
             # the same idempotency key send byte-for-byte equivalent parameters.
             'expires_at': expires_at if expires_at is not None else int(time.time())+1800,
@@ -111,14 +126,17 @@ class StripeTestProvider:
         return session
 
     def transfer(self, oid, seller, destination, charge, amount, currency):
+        external_amount = stripe_amount(amount, currency)
         self.assert_account()
         source = self.test_object(self.client.v1.charges.retrieve(charge, {'expand': ['balance_transaction']}))
         balance = source.get('balance_transaction')
-        if not isinstance(balance, dict) or type(balance.get('amount')) is not int or balance['amount'] <= 0 or source.get('currency', '').upper() != currency:
+        if (not isinstance(balance, dict) or type(balance.get('amount')) is not int or balance['amount'] <= 0
+                or type(source.get('amount')) is not int or source['amount'] <= 0 or external_amount > source['amount']
+                or source.get('currency', '').upper() != currency):
             raise RuntimeError('Stripe settlement balance is not available yet.')
         # Presentment (e.g. UZS) may settle into the platform's MYR balance.
         # Use Stripe's actual settlement amounts, never an invented FX rate.
-        settled_amount = amount*balance['amount']//source['amount']
+        settled_amount = external_amount*balance['amount']//source['amount']
         settled_currency = balance['currency']
         if settled_amount <= 0:
             raise RuntimeError('Seller transfer is below the settlement currency minimum.')
@@ -144,13 +162,18 @@ class StripeTestProvider:
 
     def refund(self, provider_reference, amount_minor, idempotency_key):
         self.assert_account()
+        intent = self.test_object(self.client.v1.payment_intents.retrieve(provider_reference))
+        external_amount = stripe_amount(amount_minor, intent.get('currency', '').upper())
+        if (intent.get('id') != provider_reference or type(intent.get('amount_received')) is not int
+                or intent['amount_received'] != external_amount):
+            raise RuntimeError('Stripe test refund amount requires reconciliation.')
         refunds = self.client.v1.refunds.list({'payment_intent': provider_reference, 'limit': 100})
         existing = [r for r in refunds['data'] if r.get('status') == 'succeeded']
-        if sum(r['amount'] for r in existing) == amount_minor:
+        if existing and not refunds.get('has_more') and sum(r['amount'] for r in existing) == external_amount:
             return {'id': existing[0]['id'], 'status': 'succeeded'}
         if existing or refunds.get('has_more'):
             raise RuntimeError('Partial refund needs reconciliation before continuing.')
-        result = self.client.v1.refunds.create({'payment_intent': provider_reference, 'amount': amount_minor},
+        result = self.client.v1.refunds.create({'payment_intent': provider_reference, 'amount': external_amount},
                                              options={'idempotency_key': idempotency_key})
         return dict(result)
 
@@ -396,8 +419,8 @@ def receive_event(db, provider, event, core):
         if paid:
             intent = session['payment_intent']
             if (session.get('client_reference_id') != oid or session.get('metadata', {}).get('sentryloot_order') != oid
-                    or session.get('amount_total') != payment['amount_minor'] or session.get('currency', '').upper() != payment['currency']
-                    or intent.get('amount_received') != payment['amount_minor'] or intent.get('currency', '').upper() != payment['currency']):
+                    or not matches_amount(session.get('amount_total'), payment['amount_minor'], payment['currency']) or session.get('currency', '').upper() != payment['currency']
+                    or not matches_amount(intent.get('amount_received'), payment['amount_minor'], payment['currency']) or intent.get('currency', '').upper() != payment['currency']):
                 raise core['HttpError'](409, 'Stripe test amount, currency or order mismatch.')
             if payment['status'] == 'pending' and order['status'] == 'pending_payment':
                 db.execute("UPDATE payments SET status='succeeded',provider_reference=?,updated_at=CURRENT_TIMESTAMP WHERE order_id=?", (intent['id'], oid))
@@ -473,14 +496,14 @@ def charge_event(db, provider, event, core):
         # retries this response; it must not be permanently acknowledged first.
         raise core['HttpError'](409, 'Checkout payment event must be reconciled first.')
     oid = payment['order_id']
-    if charge.get('currency', '').upper() != payment['currency'] or charge.get('amount') != payment['amount_minor']:
+    if charge.get('currency', '').upper() != payment['currency'] or not matches_amount(charge.get('amount'), payment['amount_minor'], payment['currency']):
         raise core['HttpError'](409, 'Stripe charge amount mismatch.')
     db.execute('BEGIN IMMEDIATE')
     try:
         core['trade_workflows'].lock_order(db, oid)
         payment = db.execute('SELECT * FROM payments WHERE order_id=?', (oid,)).fetchone()
         if payment['status'] != 'refunded':
-            if event['type'] == 'charge.refunded' and charge.get('amount_refunded') == payment['amount_minor']:
+            if event['type'] == 'charge.refunded' and matches_amount(charge.get('amount_refunded'), payment['amount_minor'], payment['currency']):
                 queue_refund(db, oid, core)
                 # A dashboard/API refund is already complete at Stripe. Reconcile
                 # locally without submitting a second refund request.

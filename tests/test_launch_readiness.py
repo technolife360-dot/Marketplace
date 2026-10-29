@@ -14,6 +14,33 @@ class LaunchFlows(unittest.TestCase):
     def profile(self):
         return {'business_name':'Example operator','public_email':'support@example.invalid','public_address':'Public business address','support_owner':'Support manager','support_hours':'Mon–Fri 09:00–18:00','timezone':'Asia/Tashkent','response_target':'Within one business day','protection_scope':'Products not delivered or not as described','protection_exclusions':'Problems outside the agreed coverage','published':True}
 
+    def test_catalogue_readiness_explains_launch_dependencies_without_claiming_live_sales(self):
+        with patch.dict(app.os.environ, {'SEAGM_UID':'private-fixture-uid','SEAGM_SECRET_KEY':'private-fixture-secret'}):
+            result=self.route(self.admin,'GET','/api/catalog/readiness')
+        readiness=result['launch']
+        self.assertFalse(readiness['live_sales'])
+        self.assertEqual(readiness['payments']['verification'],'not_checked')
+        self.assertEqual(readiness['payments']['state'],'local_sandbox')
+        self.assertEqual(readiness['business']['state'],'needs_details')
+        self.assertIn('support_hours',readiness['business']['missing'])
+        self.assertEqual(readiness['topup']['state'],'needs_supplier')
+        self.assertTrue(readiness['topup']['credentials_present'])
+        self.assertFalse(readiness['topup']['delivery_verified'])
+        self.assertGreater(readiness['topup']['unpriced'],0)
+        self.assertNotIn('private-fixture',json.dumps(result))
+        for uid in (self.buyer,self.seller,None):
+            with self.assertRaises(app.HttpError):self.route(uid,'GET','/api/catalog/readiness')
+
+    def test_published_business_profile_does_not_open_sales_or_verify_a_supplier(self):
+        self.route(self.admin,'POST','/api/admin/launch/profile',self.profile())
+        self.db.execute("UPDATE topup_packages SET price_minor=10000,supplier_type_id='123',supplier_enabled=1")
+        result=self.route(self.admin,'GET','/api/catalog/readiness')['launch']
+        self.assertEqual(result['business']['state'],'published')
+        self.assertFalse(result['live_sales'])
+        self.assertEqual(result['topup']['unpriced'],0)
+        self.assertEqual(result['topup']['state'],'needs_supplier')
+        self.assertFalse(result['topup']['delivery_verified'])
+
     def test_business_drafts_are_private_and_publish_requires_real_fields(self):
         self.route(self.admin,'POST','/api/admin/launch/profile',{'business_name':'Draft','published':False})
         self.assertEqual(self.route(self.buyer,'GET','/api/launch/profile'),{'published':False})

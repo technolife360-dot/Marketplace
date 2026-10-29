@@ -4,6 +4,7 @@ No provider is enabled here and no credentials or private delivery payloads are
 included in public configuration or personal exports.
 """
 import json
+import os
 import re
 import account_contacts
 from datetime import datetime, timezone
@@ -56,6 +57,29 @@ def validate_profile(data,core):
     result['published']=data.get('published') is True
     if result['published'] and any(not result[k] for k in fields):raise core['HttpError'](400,'Complete and confirm the real business and support details before publishing.')
     return result
+
+def launch_summary(db,core):
+    """Admin-only preparation facts. Presence of keys is never an API verification."""
+    profile=config(db,CONFIG_KEY,{})
+    required=('business_name','public_email','public_address','support_owner','support_hours',
+              'timezone','response_target','protection_scope','protection_exclusions')
+    missing=[key for key in required if not str(profile.get(key,'')).strip()]
+    provider=os.environ.get('PAYMENT_PROVIDER','disabled').strip().lower()
+    test_keys=all(os.environ.get(key,'').strip() for key in
+                  ('STRIPE_TEST_SECRET_KEY','STRIPE_TEST_ACCOUNT_ID','STRIPE_TEST_WEBHOOK_SECRET','PUBLIC_BASE_URL'))
+    payment_state=('test_configuration_present' if test_keys else 'needs_test_configuration') if provider=='stripe_test' else (
+        'local_sandbox' if core['MODE']=='development' and provider in ('disabled','sandbox') else 'closed')
+    topup=db.execute("SELECT COUNT(*) total,COALESCE(SUM(CASE WHEN price_minor<=0 THEN 1 ELSE 0 END),0) unpriced,COALESCE(SUM(CASE WHEN supplier_enabled=0 OR supplier_type_id='' THEN 1 ELSE 0 END),0) unmapped FROM topup_packages WHERE enabled=1").fetchone()
+    return {
+        # No live payment/fulfillment adapter exists in this release.
+        'live_sales':False,
+        'payments':{'state':payment_state,'verification':'not_checked','test_only':True},
+        'business':{'state':'published' if profile.get('published') and not missing else 'needs_details',
+                    'missing':missing,'published':bool(profile.get('published') and not missing)},
+        'topup':{'state':'needs_supplier','total':topup['total'],'unpriced':topup['unpriced'],
+                 'unmapped':topup['unmapped'],'credentials_present':bool(os.environ.get('SEAGM_UID','').strip() and os.environ.get('SEAGM_SECRET_KEY','').strip()),
+                 'delivery_verified':False},
+    }
 
 def package_metadata(row,db=None):
     slug=row['url_slug']

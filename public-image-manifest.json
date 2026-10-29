@@ -309,6 +309,11 @@
     "size": 16949,
     "sha256": "90ccd19dd449417e914b28432a6dd06be37d55b51b0ddee695546ed9910a5897"
   },
+  "/static/assets/pubg-uid-guide.png": {
+    "url": "https://images.gamestorehub.com/site-assets/audit-e3a484dd847a412d/pubg-uid-guide.png",
+    "size": 989586,
+    "sha256": "e3a484dd847a412d7811ca1585ffaaec3a724a5c74ab72784d950c3cd45c882d"
+  },
   "/static/assets/sentryloot-app-icon.png": {
     "url": "https://images.gamestorehub.com/site-assets/sentryloot-app-icon.png",
     "size": 53158,

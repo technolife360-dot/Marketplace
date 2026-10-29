@@ -44,6 +44,8 @@ class StripeTestFlows(unittest.TestCase):
         self.db.execute('INSERT INTO carts(user_id,listing_id,quantity) VALUES(?,?,1)', (self.buyer, self.listing))
         result = app.checkout(self.db, self.buyer, True, True)
         self.oid = result['id']; self.amount = result['total_minor']
+        currency = result['currency'].lower()
+        external_amount = self.amount*100 if currency == 'uzs' else self.amount
         item = self.db.execute('SELECT id,snapshot_json FROM order_items WHERE order_id=?', (self.oid,)).fetchone()
         snapshot = json.loads(item['snapshot_json'])
         fields = {field['key']: 'Test fixture' for field in snapshot.get('buyer_fields', [])}
@@ -54,14 +56,15 @@ class StripeTestFlows(unittest.TestCase):
             'expires_at': int(time.time())+1800}
         payments.start_checkout(self.db, self.oid, self.buyer, vars(app))
         intent = {'id': 'pi_fixture', 'status': 'succeeded', 'livemode': False,
-            'amount_received': self.amount, 'currency': 'uzs',
+            'amount_received': external_amount, 'currency': currency,
             'latest_charge': {'id': 'ch_fixture', 'livemode': False, 'refunded': False, 'disputed': False, 'amount_refunded': 0}}
         self.session = {'id': 'cs_test_fixture', 'livemode': False, 'client_reference_id': self.oid,
             'metadata': {'sentryloot_mode': 'stripe_test', 'sentryloot_order': self.oid},
-            'payment_status': 'paid', 'amount_total': self.amount, 'currency': 'uzs', 'payment_intent': intent}
+            'payment_status': 'paid', 'amount_total': external_amount, 'currency': currency, 'payment_intent': intent}
         self.provider.client.v1.checkout.sessions.retrieve.return_value = self.session
+        self.provider.client.v1.payment_intents.retrieve.return_value = intent
         self.provider.client.v1.charges.retrieve.return_value = {'id': 'ch_fixture', 'livemode': False,
-            'amount': self.amount, 'currency': 'uzs', 'balance_transaction': {'amount': self.amount, 'currency': 'uzs'}}
+            'amount': external_amount, 'currency': currency, 'balance_transaction': {'amount': external_amount, 'currency': currency}}
         return result
 
     def signed(self, event_id='evt_fixture', kind='checkout.session.completed', session=None):
@@ -85,6 +88,97 @@ class StripeTestFlows(unittest.TestCase):
         with patch.object(app, 'MODE', 'production'), patch.dict(os.environ, {'MARKETPLACE_SALES_ENABLED': 'true', 'MARKETPLACE_INTERNAL_TESTING_ENABLED': 'true'}):
             self.assertFalse(app.production_marketplace_sales_enabled())
             self.assertTrue(app.internal_testing_enabled())
+
+    def test_checkout_converts_whole_som_but_preserves_ringgit_cents(self):
+        provider = self.configure()
+        provider.client.v1.checkout.sessions.create.return_value = {
+            'id': 'cs_test_units', 'livemode': False, 'url': 'https://checkout.stripe.com/c/pay/cs_test_units'}
+        for currency, internal, stripe_amount in [('UZS', 96000, 9600000), ('MYR', 30000, 30000)]:
+            with self.subTest(currency=currency):
+                provider.session('order', internal, currency, 'units_'+currency)
+                price = provider.client.v1.checkout.sessions.create.call_args.args[0]['line_items'][0]['price_data']
+                self.assertEqual(price['unit_amount'], stripe_amount)
+                self.assertEqual(price['currency'], currency.lower())
+
+    def test_invalid_or_unknown_internal_currency_amounts_fail_before_checkout(self):
+        provider = self.configure()
+        for amount, currency in [(True, 'UZS'), (False, 'MYR'), (0, 'UZS'), (-1, 'UZS'),
+                                 (1.5, 'UZS'), ('96000', 'UZS'), (96000, 'JPY'),
+                                 (96000, 'uzs'), (96000, None)]:
+            with self.subTest(amount=amount, currency=currency):
+                with self.assertRaises(RuntimeError):
+                    provider.session('order', amount, currency, 'invalid')
+                with self.assertRaises(RuntimeError):
+                    provider.create_intent('order', amount, currency, 'invalid')
+        provider.client.v1.checkout.sessions.create.assert_not_called()
+
+    def test_old_undercharged_checkout_is_rejected_without_creating_another_charge(self):
+        provider = self.configure(); self.order()
+        self.session['amount_total'] = self.amount
+        self.session['payment_intent']['amount_received'] = self.amount
+        provider.client.v1.checkout.sessions.create.reset_mock()
+        with self.assertRaises(app.HttpError) as error:
+            payments.reconcile_checkout(self.db, self.oid, self.buyer, vars(app))
+        self.assertEqual(error.exception.status, 409)
+        provider.client.v1.checkout.sessions.create.assert_not_called()
+        self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?', (self.oid,)).fetchone()['status'], 'pending_payment')
+        self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM ledger_entries').fetchone()['n'], 0)
+
+    def test_refund_converts_using_verified_intent_currency(self):
+        provider = self.configure()
+        for currency, internal, external in [('uzs', 96000, 9600000), ('myr', 30000, 30000)]:
+            with self.subTest(currency=currency):
+                provider.client.v1.payment_intents.retrieve.return_value = {
+                    'id': 'pi_units', 'livemode': False, 'currency': currency, 'amount_received': external}
+                provider.refund('pi_units', internal, 'refund_units_'+currency)
+                self.assertEqual(provider.client.v1.refunds.create.call_args.args[0]['amount'], external)
+                provider.client.v1.refunds.list.return_value = {
+                    'data': [{'id': 're_units', 'status': 'succeeded', 'amount': external}], 'has_more': False}
+                provider.client.v1.refunds.create.reset_mock()
+                self.assertEqual(provider.refund('pi_units', internal, 'refund_units_'+currency)['id'], 're_units')
+                provider.client.v1.refunds.create.assert_not_called()
+                provider.client.v1.refunds.list.return_value = {'data': [], 'has_more': False}
+
+    def test_refund_rejects_legacy_undercharge_unknown_currency_and_live_intent(self):
+        provider = self.configure()
+        for overrides in [{'amount_received': 96000}, {'currency': 'jpy'}, {'livemode': True}, {'id': 'pi_wrong'}]:
+            provider.client.v1.payment_intents.retrieve.return_value = {
+                'id': 'pi_units', 'livemode': False, 'currency': 'uzs', 'amount_received': 9600000, **overrides}
+            with self.subTest(overrides=overrides), self.assertRaises(RuntimeError):
+                provider.refund('pi_units', 96000, 'refund_units')
+        provider.client.v1.refunds.create.assert_not_called()
+
+    def test_uzs_seller_transfer_uses_actual_myr_settlement_ratio(self):
+        provider = self.configure()
+        provider.client.v1.charges.retrieve.return_value = {
+            'id': 'ch_units', 'livemode': False, 'currency': 'uzs', 'amount': 9600000,
+            'balance_transaction': {'amount': 3200, 'currency': 'myr'}}
+        provider.transfer('order', self.seller, 'acct_seller', 'ch_units', 72000, 'UZS')
+        params = provider.client.v1.transfers.create.call_args.args[0]
+        self.assertEqual(params['amount'], 2400)
+        self.assertEqual(params['currency'], 'myr')
+
+    def test_myr_checkout_webhook_and_refund_keep_the_same_cent_amount(self):
+        provider = self.configure()
+        self.db.execute("UPDATE listings SET price_minor=30000,currency='MYR' WHERE id=?", (self.listing,))
+        self.order()
+        self.assertEqual(self.amount, 33000)
+        price = provider.client.v1.checkout.sessions.create.call_args.args[0]['line_items'][0]['price_data']
+        self.assertEqual(price['unit_amount'], 33000)
+        self.pay()
+        self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?', (self.oid,)).fetchone()['status'], 'paid')
+        payments.queue_refund(self.db, self.oid, vars(app))
+        self.assertEqual(payments.process(self.db, vars(app))['jobs'][0]['status'], 'succeeded')
+        self.assertEqual(provider.client.v1.refunds.create.call_args.args[0]['amount'], 33000)
+
+    def test_payout_amount_is_already_stripe_minor_units_even_for_uzs(self):
+        provider = self.configure()
+        payments.write(self.db, 'seller:'+self.seller, {'id': 'acct_seller'})
+        provider.client.v1.payouts.create.return_value = {
+            'id': 'po_units', 'livemode': False, 'status': 'pending', 'amount': 96000, 'currency': 'uzs'}
+        self.route(self.seller, 'POST', '/api/seller/stripe-test/payout', {
+            'amount_minor': 96000, 'currency': 'UZS', 'request_key': 'payout_units_fixture_0001', 'test_only': True})
+        self.assertEqual(provider.client.v1.payouts.create.call_args.args[0]['amount'], 96000)
 
     def test_checkout_network_is_outside_stock_transaction_and_retry_reuses_order(self):
         provider = self.configure()
@@ -197,7 +291,7 @@ class StripeTestFlows(unittest.TestCase):
         self.configure(); self.order()
         raw, headers = self.signed()
         with self.assertRaises(app.HttpError): payments.webhook(self.db, headers, raw+b' ', vars(app))
-        for field, value in (('amount_total', self.amount+1), ('currency', 'usd')):
+        for field, value in (('amount_total', self.amount+1), ('amount_total', float(self.amount*100)), ('amount_total', True), ('currency', 'usd')):
             old = self.session[field]; self.session[field] = value
             raw, headers = self.signed()
             with self.assertRaises(app.HttpError): payments.webhook(self.db, headers, raw, vars(app))
@@ -214,7 +308,7 @@ class StripeTestFlows(unittest.TestCase):
         self.route(self.admin, 'POST', '/api/admin/payments/stripe-test/sellers/'+self.seller, {'account_id': 'acct_seller'})
         self.assertEqual(payments.process(self.db, vars(app))['jobs'][0]['status'], 'succeeded')
         params = provider.client.v1.transfers.create.call_args.args[0]
-        self.assertEqual(params['amount'], 45000)
+        self.assertEqual(params['amount'], 4500000)
         self.assertEqual(params['source_transaction'], 'ch_fixture')
         self.assertEqual(params['destination'], 'acct_seller')
         payments.process(self.db, vars(app))
@@ -244,7 +338,7 @@ class StripeTestFlows(unittest.TestCase):
         provider.client.v1.transfers.retrieve.return_value = {'id': 'tr_refunded_order', 'livemode': False,
             'reversed': False, 'amount_reversed': 0}
         charge = {'id': 'ch_fixture', 'livemode': False, 'payment_intent': 'pi_fixture',
-            'amount': self.amount, 'amount_refunded': self.amount, 'currency': 'uzs'}
+            'amount': self.amount*100, 'amount_refunded': self.amount*100, 'currency': 'uzs'}
         body, headers = self.signed('evt_dashboard_refund', 'charge.refunded', charge)
         self.assertTrue(payments.webhook(self.db, headers, body, vars(app))['ok'])
         self.assertEqual(payments.process(self.db, vars(app))['jobs'][0]['status'], 'succeeded')
@@ -266,7 +360,7 @@ class StripeTestFlows(unittest.TestCase):
         provider.client.v1.transfers.retrieve.return_value = {'id': 'tr_disputed', 'livemode': False,
             'reversed': False, 'amount_reversed': 0}
         provider.client.v1.charges.retrieve.return_value = {'id': 'ch_fixture', 'livemode': False,
-            'payment_intent': 'pi_fixture', 'amount': payment['amount_minor'], 'currency': 'uzs'}
+            'payment_intent': 'pi_fixture', 'amount': payment['amount_minor']*100, 'currency': 'uzs'}
         body, headers = self.signed('evt_charge_dispute', 'charge.dispute.created', {'charge': 'ch_fixture', 'livemode': False})
         payments.webhook(self.db, headers, body, vars(app))
         result = payments.process(self.db, vars(app))
@@ -322,16 +416,19 @@ class StripeTestFlows(unittest.TestCase):
         self.provider.client.v1.checkout.sessions.create.return_value = {
             'id': 'cs_test_topup', 'livemode': False, 'url': 'https://checkout.stripe.com/c/pay/cs_test_topup', 'expires_at': int(time.time())+1800}
         self.route(self.buyer, 'POST', '/api/top-up/test-orders/'+self.oid+'/checkout')
-        intent = {'id': 'pi_topup', 'livemode': False, 'amount_received': 20000, 'currency': 'uzs', 'status': 'succeeded',
+        intent = {'id': 'pi_topup', 'livemode': False, 'amount_received': 2000000, 'currency': 'uzs', 'status': 'succeeded',
                   'latest_charge': {'id': 'ch_topup', 'livemode': False, 'refunded': False, 'disputed': False}}
-        self.session = {'id': 'cs_test_topup', 'livemode': False, 'client_reference_id': self.oid, 'amount_total': 20000,
+        self.session = {'id': 'cs_test_topup', 'livemode': False, 'client_reference_id': self.oid, 'amount_total': 2000000,
             'currency': 'uzs', 'payment_status': 'paid', 'payment_intent': intent,
             'metadata': {'sentryloot_mode': 'stripe_test', 'sentryloot_kind': 'topup', 'sentryloot_order': self.oid}}
         self.provider.client.v1.checkout.sessions.retrieve.return_value = self.session
+        self.provider.client.v1.payment_intents.retrieve.return_value = intent
         return data
 
     def test_topup_purchase_delivery_confirmation_and_refund_are_test_only(self):
         self.topup_order()
+        price = self.provider.client.v1.checkout.sessions.create.call_args.args[0]['line_items'][0]['price_data']
+        self.assertEqual(price['unit_amount'], 2000000)
         package = self.db.execute('SELECT stock_on_hand,stock_reserved FROM topup_packages WHERE id=(SELECT package_id FROM topup_orders WHERE id=?)', (self.oid,)).fetchone()
         self.pay()
         order = self.route(self.buyer, 'GET', '/api/top-up/test-orders/'+self.oid)
@@ -347,9 +444,20 @@ class StripeTestFlows(unittest.TestCase):
         self.assertEqual(real, 0)
         self.route(self.buyer, 'POST', '/api/top-up/test-orders/'+self.oid+'/cancel')
         self.assertEqual(payments.process(self.db, vars(app))['jobs'][0]['status'], 'succeeded')
+        self.assertEqual(self.provider.client.v1.refunds.create.call_args.args[0]['amount'], 2000000)
         self.assertEqual(self.db.execute('SELECT status FROM topup_orders WHERE id=?', (self.oid,)).fetchone()['status'], 'refunded')
         current = self.db.execute('SELECT stock_on_hand,stock_reserved FROM topup_packages WHERE id=(SELECT package_id FROM topup_orders WHERE id=?)', (self.oid,)).fetchone()
         self.assertEqual(tuple(current), tuple(package))
+
+    def test_topup_undercharged_session_does_not_deliver_or_refund_automatically(self):
+        self.topup_order()
+        self.session['amount_total'] = 20000
+        self.session['payment_intent']['amount_received'] = 20000
+        with self.assertRaises(app.HttpError) as error:
+            self.pay()
+        self.assertEqual(error.exception.status, 409)
+        self.assertEqual(self.db.execute('SELECT status FROM topup_orders WHERE id=?', (self.oid,)).fetchone()['status'], 'awaiting_payment')
+        self.provider.client.v1.refunds.create.assert_not_called()
 
     def test_topup_retries_are_idempotent_and_late_payment_auto_refunds(self):
         data = self.topup_order()

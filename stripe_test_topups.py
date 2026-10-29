@@ -108,7 +108,7 @@ def receive(db, provider, event, core):
             db.execute('COMMIT'); return {'ok': True, 'duplicate': True}
         if paid:
             amount = order['unit_price_minor']*order['quantity']; intent = session['payment_intent']
-            if (session.get('client_reference_id') != oid or session.get('amount_total') != amount or intent.get('amount_received') != amount
+            if (session.get('client_reference_id') != oid or not pay.matches_amount(session.get('amount_total'), amount, order['currency']) or not pay.matches_amount(intent.get('amount_received'), amount, order['currency'])
                     or session.get('currency', '').upper() != order['currency'] or intent.get('currency', '').upper() != order['currency']
                     or session.get('metadata', {}).get('sentryloot_order') != oid):
                 raise core['HttpError'](409, 'Stripe test top-up amount, currency or order mismatch.')

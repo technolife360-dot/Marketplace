@@ -23,6 +23,19 @@
 .launch-checklist-listings h3 { margin: 0 0 8px; font-size: 14px; }
 .market-sold-out { position: absolute; inset-inline-start: 10px; bottom: 10px; padding: 6px 10px; border-radius: 8px; background: #20182e; color: #f0e5ff; font-size: 11px; font-weight: 650; }
 .tu-launch-alert { width: 100%; margin-block: 12px; }
+.ops-readiness-page { max-width: 1180px; margin-inline: auto; }
+.ops-readiness-page>.panel { padding: 24px; margin-block: 18px; }
+.ops-launch-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 24px; margin-top: 24px; }
+.ops-launch-card { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.ops-launch-card h3 { margin: 0; font-size: 14px; color: var(--muted); }
+.ops-launch-card strong { font-size: 16px; overflow-wrap: anywhere; }
+.ops-launch-card p { flex: 1; margin: 0; line-height: 1.65; }
+.ops-launch-card a { min-height: 44px; display: inline-flex; align-items: center; }
+.ops-catalogue-guide summary { cursor: pointer; font-weight: 650; min-height: 44px; align-content: center; }
+.ops-catalogue-guide summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+.ops-catalogue-guide p,.ops-catalogue-guide li { line-height: 1.7; }
+.ops-catalogue-guide li { margin-block: 10px; }
+@media(max-width:600px){.ops-launch-grid { grid-template-columns: minmax(0,1fr); }.ops-readiness-page>.panel { padding: 16px; }}
 @media(max-width:600px){.launch-grid { grid-template-columns: minmax(0,1fr); }.launch-page .panel { padding: 16px; }.launch-actions>* { width:100%; }}
 
 video.ops-evidence { display:block; width:100%; max-width:640px; max-height:400px; margin-block:12px; background:var(--paper); border-radius:10px; }

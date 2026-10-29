@@ -2,7 +2,7 @@
 // payment, business-registration and publisher approvals are separate launch gates.
 (function () {
   const T = (uz, ru, en) => ({ uz, ru, en });
-  const pick = (value, lang) => value[lang] || value.en;
+  const pick = (value, lang) => value[lang] || window.RegionPreferences?.translate?.(value.en, lang) || value.en;
   const EMAIL = 'sentryloot@gamestorehub.com';
   const mail = `<a href="mailto:${EMAIL}">${EMAIL}</a>`;
   const link = (href, label) => `<a href="${href}">${label}</a>`;
@@ -162,7 +162,7 @@
   ];
 
   function render(route, language) {
-    const lang = language === 'uz' || language === 'ru' ? language : 'en';
+    const lang = language || 'en';
     const page = P[route];
     if (!page) return null;
     const status = pick(T('Hozir haqiqiy to‘lov va savdo yoqilmagan. Bu sahifalar joriy xizmat va rejalashtirilgan tartibni tushuntiradi; kompaniya rekvizitlari va yakuniy savdo shartlari ishga tushirishdan oldin e’lon qilinadi.', 'Реальные платежи и продажи пока отключены. Эти страницы объясняют текущий сервис и планируемый порядок; реквизиты компании и окончательные условия будут опубликованы до запуска.', 'Live payments and sales are disabled. These pages explain the current service and planned process; registered business details and final sales terms will be published before launch.'), lang);
