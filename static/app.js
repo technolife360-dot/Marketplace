@@ -566,7 +566,7 @@ async function renderComparison(){return ExperienceUX.comparison()}
 async function renderListing(id){const it=await api('/listings/'+encodeURIComponent(id));updateRouteMetadata('listing/'+encodeURIComponent(id));const title=`${it.title} | ${it.game_name} | SentryLoot`;const description=String(it.description||`${it.game_name} ${it.product_type}`).replace(/\s+/g,' ').slice(0,260);document.title=title;const desc=$('meta[name="description"]');if(desc)desc.content=description;for(const [selector,value] of [['meta[property="og:title"]',title],['meta[property="og:description"]',description],['meta[property="og:url"]',location.href],['meta[property="og:image"]',it.image_url||'https://gamestorehub.comhttps://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/sentryloot-mark.png']]){const el=$(selector);if(el)el.content=value}
  app.innerHTML=ListingDetail.markup(it);
  setupListingDetailGallery(app,it);setupListingDescription(app);ListingDetail.setup(app);
- MarketUX.listing(it);TradeUX.listing(it);await ExperienceUX.listing(it);
+ MarketUX.listing(it);TradeUX.listing(it);await ExperienceUX.listing(it);await window.RegionPreferences?.loadRates();window.RegionPreferences?.refreshPrices();
 }
 
 function setupAuthCountryPicker(){const select=$('#auth-country');if(select)window.SelectMenus.enhance(select)}

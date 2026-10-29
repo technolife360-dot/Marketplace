@@ -1,7 +1,7 @@
 /* Global browsing preferences. Settlement always uses the original listing currency. */
 (function (root) {
  'use strict';
- const KEY='sentryloot-region-v1', FXKEY='sentryloot-fx-v1';
+ const KEY='sentryloot-region-v1', FXKEY='sentryloot-fx-v2';
  const moneyTokens=new Map();
  let state={country:'US',currency:'USD',language:'en',source:'default'},markets=[],options={},fx=null,flight=null,bound=false;
  const read=(store,key)=>{try{return JSON.parse(store.getItem(key)||'null')}catch{return null}};
@@ -45,6 +45,7 @@
  }
  function refreshPrices(){
   refreshMoney();
+  root.document?.querySelectorAll('[data-region-money]').forEach(node=>{const converted=estimate(node.dataset.regionAmount,node.dataset.regionCurrency);if(converted||node.dataset.regionOriginal)node.textContent=converted||node.dataset.regionOriginal});
   root.document?.querySelectorAll('[data-region-source]').forEach(node=>{node.hidden=!estimate(node.dataset.regionAmount,node.dataset.regionCurrency)});
   root.document?.querySelectorAll('[data-region-price]').forEach(node=>{
    const text=estimate(node.dataset.regionAmount,node.dataset.regionCurrency);
@@ -55,9 +56,9 @@
  async function loadRates(){
   if(flight)return flight;
   const cached=read(root.sessionStorage,FXKEY);
-  if(cached?.expires_at*1000>Date.now()&&cached.rates){fx=cached;refreshPrices();return fx}
+  if(cached?.expires_at*1000>Date.now()&&Number.isFinite(cached.updated_at)&&cached.rates?.USD===1&&cached.rates?.MYR>0&&cached.rates?.UZS>0){fx=cached;refreshPrices();return fx}
   flight=(async()=>{try{
-   const response=await fetch('/api/exchange-rates',{credentials:'omit',signal:AbortSignal.timeout(5000)});
+   const response=await fetch('/api/exchange-rates',{credentials:'same-origin',signal:AbortSignal.timeout(5000)});
    if(!response.ok)return null;
    const data=await response.json();
    if(data?.rates&&Object.keys(data.rates).length){fx=data;if(!data.stale)write(root.sessionStorage,FXKEY,data);refreshPrices()}

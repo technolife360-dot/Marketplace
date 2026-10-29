@@ -70,7 +70,7 @@ window.ListingDetail = (() => {
           <p class="listing-item-meta">${esc(item.game_name)} · ${esc(productLabel)}</p>
           <h1 data-user-content>${esc(item.title)}</h1>
           <span class="listing-stock ${available ? '' : 'is-sold-out'}"><i></i>${esc(stockText)}</span>
-          <div class="price" data-listing-price>${fmt(item.price_minor,item.currency)}</div>
+          <div class="price" data-listing-price data-region-money data-region-amount="${esc(item.price_minor)}" data-region-currency="${esc(item.currency)}" data-region-original="${esc(fmt(item.price_minor,item.currency,true))}">${fmt(item.price_minor,item.currency)}</div>
           <button type="button" class="button-primary listing-buy-button" data-action="buy-now" data-id="${id}" ${available ? '' : 'disabled'}>${t('Xarid qilish','Купить','Buy now')}<span aria-hidden="true">→</span></button>
           <div class="listing-secondary-actions">${item.is_owner ? `<button type="button" class="button-secondary" disabled title="${t('Bu sizning e’loningiz','Это ваше объявление','This is your own listing')}">${icon('message')}${t('Sotuvchiga yozish','Написать продавцу','Message seller')}</button>` : `<button type="button" class="button-secondary" data-action="contact-seller" data-id="${id}" ${item.status !== 'published' ? 'disabled' : ''}>${icon('message')}${t('Sotuvchiga yozish','Написать продавцу','Message seller')}</button>`}</div>
           <p class="listing-delivery-summary">${icon('clock')}<span>${esc(item.delivery_eta || t('Yetkazishni sotuvchidan aniqlang','Уточните доставку у продавца','Confirm delivery time with seller'))}</span></p>

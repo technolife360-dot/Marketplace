@@ -22,3 +22,13 @@ test('late FX response updates displayed amounts without changing forms or origi
  api.init({markets,translate:(_uz,_ru,en)=>en});api.apply({country:'GB',currency:'GBP',language:'en'});api.money(12000,'UZS','12,000 UZS');await api.loadRates();
  assert.equal(nodes[0].data,'Total: ≈ £0.75');assert.equal(nodes[1].data,'112,000 UZS');assert.equal(nodes[2].data,'12,000 UZS');api.apply({country:'MY',currency:'MYR',language:'en'});assert.equal(nodes[0].data,'Total: ≈ RM 4.00');
 });
+test('MYR listing binds main and mobile totals to UZS and GBP, including quantity totals',async()=>{
+ const {api,root}=fixture();const nodes=[{dataset:{regionAmount:'30000',regionCurrency:'MYR'},textContent:'RM 300.00'},{dataset:{regionAmount:'60000',regionCurrency:'MYR'},textContent:'RM 600.00'}];
+ root.document.querySelectorAll=selector=>selector==='[data-region-money]'?nodes:[];
+ api.init({markets:[...markets,{country:'UZ',currency:'UZS'}],translate:(_uz,_ru,en)=>en});api.apply({country:'UZ',currency:'UZS',language:'en'});await api.loadRates();
+ assert.match(nodes[0].textContent,/900,000/);assert.match(nodes[0].textContent,/UZS/);assert.match(nodes[1].textContent,/1,800,000/);
+ api.apply({country:'GB',currency:'GBP',language:'en'});assert.equal(nodes[0].textContent,'≈ £56.25');assert.equal(nodes[1].textContent,'≈ £112.50');
+});
+test('incomplete cached FX snapshots are refreshed instead of pinning listing prices to MYR',async()=>{
+ const {api,stored}=fixture();stored.set('sentryloot-fx-v2',JSON.stringify({rates:{USD:1},updated_at:Date.now()/1000,expires_at:Date.now()/1000+3600}));api.init({markets,translate:(_uz,_ru,en)=>en});api.apply({country:'GB',currency:'GBP',language:'en'});await api.loadRates();assert.equal(api.estimate(30000,'MYR'),'≈ £56.25');
+});
