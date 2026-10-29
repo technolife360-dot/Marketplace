@@ -471,3 +471,9 @@ test('desktop order labels keep financial exceptions active',()=>{
  assert.equal(context.desktopOrderGroup({...item,status:'completed'}),'completed');
  for(const status of ['cancelled','refunded'])assert.equal(context.desktopOrderGroup({...item,status}),'closed');
 });
+test('saved regional language survives navigation even when session lookup fails',async()=>{
+ const start=source.indexOf('let bootstrapSessionReady='),part=source.slice(start),stop=part.indexOf('\n}',part.indexOf('async function bootstrap'))+2;
+ const supported=new Set(['en']);
+ const context={me:null,csrf:'',adminText:(_uz,_ru,en)=>en,window:{RegionPreferences:{init(){},apply:()=>({language:'de'}),refreshPrices(){}}},localStorage:{getItem:()=> 'de'},localeKey:'language',supportedLocales:supported,location:{pathname:'/',hash:'',search:''},loadAsiaMarkets:async()=>{supported.add('de')},asiaMarkets:[],api:async()=>{throw Error('temporary session outage')},navigate:async()=>{},ExperienceUX:{sync:async()=>{}},document:{documentElement:{}},URLSearchParams,syncProfileTrigger(){},syncLanguageMenu(){},syncSellItemButton(){},syncAdminLink(){},renderSupportWidget(){},localizeDOM(){},refreshCart(){},refreshNotifications(){}};
+ vm.createContext(context);vm.runInContext(part.slice(0,stop),context);await context.bootstrap();assert.equal(context.document.documentElement.lang,'de');
+});

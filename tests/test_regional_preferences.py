@@ -21,8 +21,8 @@ class RegionDetection(unittest.TestCase):
             self.assertEqual(region.resolve({'Accept-Language':'de'})['source'],'default')
     def test_quality_fallback_unknown_and_language_safety(self):
         self.assertEqual(region.browser_preferences('ru-RU;q=0.2,en-GB;q=0.9'),('en','GB'))
-        self.assertEqual(region.browser_preferences('de-DE,de;q=0.9,en;q=0.5'),('en','DE'))
-        self.assertEqual(region.browser_preferences('ar-SA'),('en','SA'))
+        self.assertEqual(region.browser_preferences('de-DE,de;q=0.9,en;q=0.5'),('de','DE'))
+        self.assertEqual(region.browser_preferences('ar-SA'),('ar','SA'))
         self.assertEqual(region.browser_preferences('ru;q=0,*;q=0.8,en-GB;q=bad'),('en',''))
         with patch.dict('os.environ',{'VERCEL':'1'}):
             self.assertEqual(region.resolve({'X-Vercel-IP-Country':'XX'})['country'],'US')
@@ -68,3 +68,14 @@ class RegionFlows(unittest.TestCase):
         before=self.ctx(self.buyer)['user']
         with self.assertRaises(app.HttpError):self.route(self.buyer,'POST','/api/profile',{'country':'GB','currency':'XXX'})
         self.assertEqual(self.ctx(self.buyer)['user']['country'],before['country'])
+
+class ExpandedLanguages(RegionFlows):
+    def test_all_languages_save_through_profile_and_resolve_after_login(self):
+        self.assertEqual(len(region.SUPPORTED_LANGUAGES),14)
+        for language in region.SUPPORTED_LANGUAGES:
+            result=self.route(self.buyer,'POST','/api/profile',{'country':'DE','currency':'EUR','language':language})
+            self.assertEqual(result['user']['language'],language)
+            self.assertEqual(self.route(self.buyer,'GET','/api/me')['region']['language'],language)
+    def test_european_defaults_share_country_dataset(self):
+        for country,expected in {'DE':('EUR','de'),'FR':('EUR','fr'),'IT':('EUR','it'),'ES':('EUR','es'),'NL':('EUR','nl'),'PL':('PLN','pl'),'PT':('EUR','pt'),'GB':('GBP','en'),'CH':('CHF','en')}.items():
+            self.assertEqual((region.COUNTRY_CURRENCIES[country],region.COUNTRY_LANGUAGES[country]),expected)

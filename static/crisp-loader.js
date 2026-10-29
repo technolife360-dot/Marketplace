@@ -12,7 +12,8 @@
   window.CRISP_WEBSITE_ID = '23d64f2d-3d3a-4e73-bca1-4e24795ba125';
   var locale = 'en';
   try { locale = localStorage.getItem('bozor-language') || 'en'; } catch (_) {}
-  if (!['en', 'uz', 'ru'].includes(locale)) locale = 'en';
+  if (!['en','uz','ru','de','fr','es','it','pt','nl','pl','tr','ar','ms','zh'].includes(locale)) locale = 'en';
+  window.__sentryLootCrispLocale = locale;
   window.CRISP_RUNTIME_CONFIG = Object.assign({}, window.CRISP_RUNTIME_CONFIG, { locale: locale });
 
   // Keep the entry point small and predictable; Crisp still handles the conversation.

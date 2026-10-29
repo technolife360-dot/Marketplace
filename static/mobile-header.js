@@ -47,10 +47,6 @@ window.MobileHeader = (() => {
       content.innerHTML = `${me ? `<a class="mobile-menu-profile" href="/#account">${marketAvatarMarkup(me.display_name || me.email, me.avatar_url, 'account-avatar', me.id)}<span><b>${esc(me.display_name)}</b><small>${t('Hisob sozlamalari', 'Настройки аккаунта', 'Account settings')}</small></span>${icon('arrow-up-right')}</a>` : ''}` + marketSidebarMarkup(filters, {mobile: true}) + `
         <footer class="mobile-menu-footer">
           <a class="mobile-menu-sell" href="/#seller">${icon('plus')}<span>${t('E’lon joylash', 'Продать товар', 'Sell item')}</span>${icon('arrow-up-right')}</a>
-          <div class="mobile-menu-language" role="group" aria-label="${t('Til', 'Язык', 'Language')}">
-            <span>${icon('globe')}<span>${t('Til', 'Язык', 'Language')}</span></span>
-            <div>${[['en', 'EN', 'English'], ['uz', 'UZ', 'O‘zbekcha'], ['ru', 'RU', 'Русский']].map(([value, label, name]) => `<button type="button" data-mobile-language="${value}" aria-label="${name}" aria-pressed="${locale === value}">${label}</button>`).join('')}</div>
-          </div>
           <button type="button" class="mobile-menu-account-action" data-mobile-region>${icon('globe')}<span>${t('Region va valyuta', 'Регион и валюта', 'Region & currency')}</span></button>
           ${me?.is_admin ? `<a class="mobile-menu-admin" href="/#admin">${icon('shield')}<span>${t('Admin paneli', 'Панель администратора', 'Admin panel')}</span>${icon('arrow-up-right')}</a>` : ''}
           ${me?.email_verified ? `<button type="button" class="mobile-menu-account-action" data-mobile-action data-action="link-facebook"><span class="market-nav-icon" aria-hidden="true"><span class="facebook-mark">f</span></span><span>${t('Facebook’ni ulash', 'Подключить Facebook', 'Link Facebook')}</span></button>` : ''}

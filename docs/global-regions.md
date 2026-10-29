@@ -21,11 +21,14 @@ Source: https://github.com/unicode-org/cldr-json/blob/main/cldr-json/cldr-core/s
   Changing country defaults currency unless an explicit currency is also supplied.
 - Registration accepts global countries. OAuth state signs the selected language
   as well as country; pre-existing signed state remains compatible.
-- Language selection remains English, Uzbek and Russian. Unsupported browser
-  languages fall back to English; e.g. Germany uses en-DE and EUR, Saudi Arabia
-  uses en-SA and SAR. German/Arabic interface translations are not claimed.
+- Language selection includes English, Uzbek, Russian, German, French, Spanish,
+  Italian, Portuguese, Dutch, Polish, Turkish, Arabic, Malay and Simplified Chinese.
+  Core navigation, region settings and common purchase/Top Up labels are translated.
+  Untranslated long-form, legal and admin content falls back to English. Country
+  changes suggest a supported local language and currency; either can be overridden.
+  Arabic uses RTL. Versioned country-data requests avoid stale Asia-only caches.
 
-Users can change preferences from the globe menu on desktop, or **Region &
+Users open the region dialog directly from the globe button on desktop, or **Region &
 currency** in mobile navigation. Guests save locally; signed-in users save through
 `POST /api/profile` with the existing session, validation and CSRF protection.
 
@@ -41,10 +44,12 @@ browser also caches the snapshot in session storage until expiration.
 
 A failed refresh may return the last good snapshot for up to 48 hours, marked
 `stale`; stale or unavailable snapshots are not publicly cached. Missing rates
-show original prices. Catalogue card estimates and seller wallet conversions
+show original prices. Catalogue, detail, cart, order, Top Up and seller wallet conversions
 share this API; there are no direct browser-to-FX-provider requests.
 
-All original prices remain visible. Conversions use the existing ledger units:
+The customer UI displays the selected currency, without extra original-currency
+rows. Top Up preserves quantity and Player ID when preferences change. Accounting
+reports retain their explicit book currency. Conversions use the existing ledger units:
 MYR is cents; UZS is whole som. Orders, commission, accounting, refunds, filters
 and Stripe test payment amounts are not converted or reinterpreted. Checkout
 still charges the order's original currency. No live Stripe settings are changed.

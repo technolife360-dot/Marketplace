@@ -11,7 +11,12 @@ import threading
 import time
 from urllib.request import Request, urlopen
 
-from asia_markets import COUNTRIES, COUNTRY_CURRENCIES, CURRENCIES
+from pathlib import Path
+from asia_markets import COUNTRIES, COUNTRY_CURRENCIES, CURRENCIES, ASIA_MARKETS
+
+LANGUAGE_DATA = json.loads((Path(__file__).resolve().parent / "static/regional-languages.json").read_text(encoding="utf-8"))
+SUPPORTED_LANGUAGES = frozenset(item["code"] for item in LANGUAGE_DATA["languages"])
+COUNTRY_LANGUAGES = {row["country"]: row.get("language", "en") for row in ASIA_MARKETS}
 
 _lock = threading.Lock()
 _rates = {}
@@ -41,7 +46,7 @@ def browser_preferences(header):
     language = 'en'
     if choices:
         primary = choices[0][2].split('-')[0].lower()
-        language = primary if primary in ('en', 'uz', 'ru') else 'en'
+        language = primary if primary in SUPPORTED_LANGUAGES else 'en'
     country = ''
     for _, _, tag in choices:
         for part in tag.split('-')[1:]:
@@ -64,10 +69,10 @@ def resolve(headers, user=None):
         country, source = user['country'], 'profile'
     currency = COUNTRY_CURRENCIES[country]
     if user:
-        language = user.get('language') if user.get('language') in ('en', 'uz', 'ru') else language
+        language = user.get('language') if user.get('language') in SUPPORTED_LANGUAGES else language
         currency = user.get('currency') if user.get('currency') in CURRENCIES else currency
     return {'country': country, 'currency': currency, 'language': language, 'source': source,
-            'supported_languages': ['en', 'uz', 'ru']}
+            'supported_languages': sorted(SUPPORTED_LANGUAGES)}
 
 
 def exchange_rates():

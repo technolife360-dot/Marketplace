@@ -14,3 +14,10 @@
 .regional-price-estimate{display:block;font-size:12px;color:#a8a8b3;line-height:1.6;font-weight:400;margin-top:2px}
 .regional-price-estimate[hidden]{display:none}
 @media(max-width:480px){.region-preferences-dialog{padding:22px}.region-preferences-heading h2{font-size:20px}}
+@layer sentryloot-controls {
+ body .region-preferences-heading [data-region-close]{display:grid!important;place-items:center!important;flex:0 0 40px!important;width:40px!important;min-width:40px!important;height:40px!important;min-height:40px!important;padding:0!important;line-height:1!important;box-sizing:border-box!important}
+ body .region-preferences-heading [data-region-close] svg{display:block!important;width:18px!important;height:18px!important;margin:0!important;position:static!important;transform:none!important}
+}
+.region-preferences-dialog{text-align:start}
+.market-card-bottom .price{white-space:normal;overflow-wrap:anywhere}
+html[dir=rtl] .game-carousel-stage,html[dir=rtl] .game-carousel-track{direction:ltr}

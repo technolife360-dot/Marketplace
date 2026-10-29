@@ -1,7 +1,7 @@
 /* One compact, searchable dropdown for native selects. Native values remain the form source. */
 window.SelectMenus=(()=>{
  const states=new WeakMap();let sequence=0,active=null,queued=false;
- const text=(uz,ru,en)=>document.documentElement.lang==='uz'?uz:document.documentElement.lang==='ru'?ru:en;
+ const text=(uz,ru,en)=>document.documentElement.lang==='uz'?uz:document.documentElement.lang==='ru'?ru:(window.RegionPreferences?.translate(en,document.documentElement.lang)||en);
  const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  function enhance(select){
   if(states.has(select)){states.get(select).sync();return}
