@@ -13,11 +13,10 @@
 
 @layer sentryloot-premium {
   body #cookie-notice {
-    position:fixed;inset:auto 0 0;z-index:1000002;
-    display:flex;align-items:center;justify-content:space-between;gap:24px;
-    box-sizing:border-box;width:100%;padding:18px max(24px,calc((100vw - 1200px)/2));
-    padding-bottom:calc(18px + env(safe-area-inset-bottom,0px));
-    border:0!important;border-top:1px solid #353535!important;border-radius:0;
+    position:fixed;inset:auto 16px calc(12px + env(safe-area-inset-bottom,0px));z-index:1000002;
+    display:flex;align-items:center;justify-content:space-between;gap:20px;
+    box-sizing:border-box;width:calc(100% - 32px);padding:12px 18px;
+    border:1px solid #353535!important;border-radius:12px;
     background:#111!important;color:#f1f1f1!important;
     box-shadow:0 -8px 32px #0004!important;font:13px/1.6 Roboto,Arial,sans-serif;
     max-height:50dvh;overflow:auto;
@@ -30,7 +29,7 @@
   body #cookie-notice button { min-height:44px;padding:10px 24px;border:0!important;border-radius:8px;background:#f3ba69!important;color:#111!important;font:600 13px/1.4 Roboto,Arial,sans-serif;cursor:pointer;white-space:nowrap; }
   body #cookie-notice :is(a,button):focus-visible { outline:2px solid #f3ba69!important;outline-offset:3px; }
   @media(max-width:700px) {
-    body #cookie-notice { flex-wrap:wrap;gap:12px;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px)); }
+    body #cookie-notice { left:10px;right:10px;width:calc(100% - 20px);flex-wrap:wrap;gap:10px;padding:12px 14px; }
     body #cookie-notice .cookie-notice-copy,body #cookie-notice .cookie-notice-actions { width:100%; }
     body #cookie-notice .cookie-notice-actions { justify-content:space-between; }
   }
