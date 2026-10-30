@@ -2273,6 +2273,8 @@ class Handler(BaseHTTPRequestHandler):
                 account=seagm_supplier.account_status()
             except seagm_supplier.SupplierError as error:
                 raise HttpError(502,str(error))
+            if not account.get('connected'):
+                raise HttpError(503,'SEAGM sandbox UID va API kaliti serverda sozlanmagan. API aloqasi tasdiqlanmadi.')
             return {'ok':True,'account':account,'orders_enabled':False,
                     'message':'SEAGM API aloqasi tekshirildi. Xaridlar to‘lov provayderi va paket mosliklari sozlanmaguncha o‘chiq qoladi.'}
         if path=='/api/admin/top-up/supplier/catalog' and method=='GET':

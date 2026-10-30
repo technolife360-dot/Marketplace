@@ -28,7 +28,7 @@ Architecture: new `rewards_engine.py` stores private transactional records in ex
 - [x] Engine, authorization, ledger, quotes, claims/campaigns, settings and regression tests.
 - [x] Marketplace and Top Up checkout/payment/refund/settlement hooks and focused tests.
 - [x] Customer/admin UI, bonus checkout controls, exact quote binding and responsive styling.
-- [ ] Isolated full tests/build, Chrome synthetic flows, review, authorized push and deployment checks.
+- [x] Isolated full tests/build, Chrome synthetic flows, review, authorized push and deployment checks. Implementation pushed as `4a5df97`; Vercel READY; wallet and campaign pages verified on the production domain without creating production campaigns or credits.
 
 Verification: Python full suite ran 366 tests (3 skipped); final focused backend suite passed 28 tests. Final browser/translation/frontend suite passed 142 tests and build completed. Chrome verified actual local API campaign creation/toggling, voucher claim, wallet, account credit/coupon quotes and Top Up credit quotes. Mobile viewport 390×844 had no horizontal overflow; no browser console errors. Final review found no remaining P1/P2 issues. Synthetic QA uses a disposable SQLite database, not production records. Stripe SDK calls are mocked in integration tests with signed webhook fixtures; no live payment or supplier delivery has been exercised.
 

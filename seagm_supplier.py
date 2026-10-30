@@ -86,7 +86,7 @@ def request(path: str, parameters: dict[str, object] | None = None, *, method="G
         raise SupplierError("SEAGM API JSON formatida javob bermadi.") from None
     if not isinstance(result, dict):
         raise SupplierError("SEAGM API javobining formati noto‘g‘ri.")
-    if result.get("code") not in (None, 200, 2000, 2010):
+    if result.get("code") not in (200, 201, 202, 204):
         code = str(result.get("code", ""))[:20]
         error_info = result.get("error_info") if isinstance(result.get("error_info"), dict) else {}
         message = str(error_info.get("info_message") or result.get("msg") or result.get("message") or "")[:180]
@@ -100,6 +100,8 @@ def account_status():
         return {"configured": False, "environment": config["environment"], "connected": False}
     result = request("/v1/me")
     account = result.get("data") if isinstance(result.get("data"), dict) else {}
+    if not account.get("id") or str(account["id"]) != config["uid"]:
+        raise SupplierError("SEAGM API javobida sozlangan akkaunt tasdiqlanmadi.")
     balance = account.get("balance")
     credits = account.get("credits")
     return {
