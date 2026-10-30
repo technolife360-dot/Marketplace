@@ -1,0 +1,119 @@
+[
+  {
+    "game": "dota-2",
+    "status": 200,
+    "bytes": 1435098,
+    "original_match": true,
+    "width": 1000,
+    "height": 1333
+  },
+  {
+    "game": "ea-sports-fc",
+    "status": 200,
+    "bytes": 441147,
+    "original_match": true,
+    "width": 512,
+    "height": 512
+  },
+  {
+    "game": "fortnite",
+    "status": 200,
+    "bytes": 1570344,
+    "original_match": true,
+    "width": 960,
+    "height": 1440
+  },
+  {
+    "game": "free-fire",
+    "status": 200,
+    "bytes": 1695103,
+    "original_match": true,
+    "width": 1000,
+    "height": 1406
+  },
+  {
+    "game": "genshin-impact",
+    "status": 200,
+    "bytes": 1110174,
+    "original_match": true,
+    "width": 843,
+    "height": 1000
+  },
+  {
+    "game": "gta-5",
+    "status": 200,
+    "bytes": 399045,
+    "original_match": true,
+    "width": 387,
+    "height": 516
+  },
+  {
+    "game": "honor-of-kings",
+    "status": 200,
+    "bytes": 3548827,
+    "original_match": true,
+    "width": 1200,
+    "height": 1600
+  },
+  {
+    "game": "league-of-legends",
+    "status": 200,
+    "bytes": 881367,
+    "original_match": true,
+    "width": 600,
+    "height": 840
+  },
+  {
+    "game": "minecraft",
+    "status": 200,
+    "bytes": 955072,
+    "original_match": true,
+    "width": 720,
+    "height": 1080
+  },
+  {
+    "game": "mobile-legends",
+    "status": 200,
+    "bytes": 2302637,
+    "original_match": true,
+    "width": 1200,
+    "height": 1800
+  },
+  {
+    "game": "pubg-mobile",
+    "status": 200,
+    "bytes": 3402710,
+    "original_match": true,
+    "width": 1365,
+    "height": 2048
+  },
+  {
+    "game": "roblox",
+    "status": 200,
+    "bytes": 3011332,
+    "original_match": true,
+    "width": 1440,
+    "height": 2160
+  },
+  {
+    "game": "valorant",
+    "status": 200,
+    "bytes": 2376408,
+    "original_match": true,
+    "width": 1200,
+    "height": 1600
+  },
+  {
+    "game": "cs2",
+    "status": 200,
+    "bytes": 146763,
+    "original_match": true,
+    "width": 289,
+    "height": 346
+  },
+  {
+    "game": "call-of-duty-mobile",
+    "status": 200,
+    "original_match": true
+  }
+]

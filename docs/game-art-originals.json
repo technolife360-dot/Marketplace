@@ -1,0 +1,128 @@
+[
+  {
+    "game": "dota-2",
+    "key": "site-assets/storefront-7c336bd6c7318e89/game-art/dota-2.png",
+    "format": "PNG",
+    "width": 1000,
+    "height": 1333,
+    "bytes": 1435098,
+    "sha256": "59dcac8849d5ed734624b8fd58e4743dbf169eeb32c4b904973dfbbe5ae68e0a"
+  },
+  {
+    "game": "ea-sports-fc",
+    "key": "site-assets/storefront-7c336bd6c7318e89/game-art/ea-sports-fc.png",
+    "format": "PNG",
+    "width": 512,
+    "height": 512,
+    "bytes": 441147,
+    "sha256": "04616b67cf70d5806d70c89c9efd6f61003e8e429803b46097c626c749148263"
+  },
+  {
+    "game": "fortnite",
+    "key": "site-assets/storefront-7c336bd6c7318e89/game-art/fortnite.png",
+    "format": "PNG",
+    "width": 960,
+    "height": 1440,
+    "bytes": 1570344,
+    "sha256": "e0dd04f6899645022d01ac46c66d55e0e4c49ea3f7807b1d440e925def642323"
+  },
+  {
+    "game": "free-fire",
+    "key": "site-assets/storefront-7c336bd6c7318e89/game-art/free-fire.png",
+    "format": "PNG",
+    "width": 512,
+    "height": 512,
+    "bytes": 596121,
+    "sha256": "cfc5df9ee064cffca856eef87b26ba1cddb4364f09d5f8c4e33530cada956127"
+  },
+  {
+    "game": "genshin-impact",
+    "key": "site-assets/storefront-7c336bd6c7318e89/game-art/genshin-impact.png",
+    "format": "PNG",
+    "width": 843,
+    "height": 1000,
+    "bytes": 1110174,
+    "sha256": "a9554a32212dc90a2efb052adae9c025f177cb1b93c1b6b4e9e702ca9e5a5e2e"
+  },
+  {
+    "game": "gta-5",
+    "key": "site-assets/storefront-7c336bd6c7318e89/game-art/gta-6.png",
+    "format": "PNG",
+    "width": 387,
+    "height": 516,
+    "bytes": 399045,
+    "sha256": "f0239ec3f09abd65583651c193ee5c5c6b3263990fc9658aa111781e47aa78f1"
+  },
+  {
+    "game": "honor-of-kings",
+    "key": "site-assets/storefront-7c336bd6c7318e89/game-art/honor-of-kings.png",
+    "format": "PNG",
+    "width": 1200,
+    "height": 1600,
+    "bytes": 3548827,
+    "sha256": "1d9d227cee928bdad75b38f7e84f29ab1f7be8c22ebdf1da6de7551c2d5c0b9d"
+  },
+  {
+    "game": "league-of-legends",
+    "key": "site-assets/storefront-7c336bd6c7318e89/game-art/league-of-legends.png",
+    "format": "PNG",
+    "width": 600,
+    "height": 840,
+    "bytes": 881367,
+    "sha256": "b80d61d336f432432b4892088cb808bc34fe474f1d09e7ff01d4caa23a256727"
+  },
+  {
+    "game": "minecraft",
+    "key": "site-assets/storefront-7c336bd6c7318e89/game-art/minecraft.png",
+    "format": "PNG",
+    "width": 720,
+    "height": 1080,
+    "bytes": 955072,
+    "sha256": "9ca86104b507a7ce1d18a541b069d177898f8b9dff05755a89d7d083bc2b19ab"
+  },
+  {
+    "game": "mobile-legends",
+    "key": "site-assets/storefront-7c336bd6c7318e89/game-art/mobile-legends.png",
+    "format": "PNG",
+    "width": 1200,
+    "height": 1800,
+    "bytes": 2302637,
+    "sha256": "e78696ae6c8b25d5418075b22046a5cec025b34543c521859db4597fb400f52c"
+  },
+  {
+    "game": "pubg-mobile",
+    "key": "site-assets/storefront-7c336bd6c7318e89/game-art/pubg-mobile.png",
+    "format": "PNG",
+    "width": 1365,
+    "height": 2048,
+    "bytes": 3402710,
+    "sha256": "84e5511bca75383a56c4dabb382238461e1d9be79daf8af83587561a7496fb24"
+  },
+  {
+    "game": "roblox",
+    "key": "site-assets/storefront-7c336bd6c7318e89/game-art/roblox.png",
+    "format": "PNG",
+    "width": 1440,
+    "height": 2160,
+    "bytes": 3011332,
+    "sha256": "ce681ce90da7b2727b3de11fae55eb56d86d063aa8004f3caa1e4f632cc0e13c"
+  },
+  {
+    "game": "valorant",
+    "key": "site-assets/storefront-7c336bd6c7318e89/game-art/valorant.png",
+    "format": "PNG",
+    "width": 1200,
+    "height": 1600,
+    "bytes": 2376408,
+    "sha256": "8f510eea8ce9f31a47ccd57c95fafc432a1468ab0225de38a1b05eb3afde3f0b"
+  },
+  {
+    "game": "cs2",
+    "key": "site-assets/storefront-7c336bd6c7318e89/game-art/cs2.png",
+    "format": "PNG",
+    "width": 289,
+    "height": 346,
+    "bytes": 146763,
+    "sha256": "ab53c05882d7851956e62c71d880a8417c1387f64f675fa32dcf5f0a725d8580"
+  }
+]

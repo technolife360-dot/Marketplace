@@ -36,6 +36,7 @@ import seller_verification
 import account_contacts
 import oauth_service
 import seagm_supplier
+import vipayment_supplier
 import storage_r2
 import public_assets
 import seller_catalog
@@ -2269,6 +2270,17 @@ class Handler(BaseHTTPRequestHandler):
                                 'environment':supplier_config['environment'],
                                 'message':'SEAGM API kalitlari sozlangan.' if supplier_config['configured'] else 'SEAGM API kalitlari serverda kiritilmagan.'},
                     'payments':{'configured':payment_provider not in ('disabled','unconfigured'),'provider':payment_provider}}
+        if path in ('/api/admin/top-up/supplier/vipayment/check','/api/admin/top-up/supplier/vipayment/catalog') and method=='POST':
+            require_admin(ctx)
+            check_rate(db,'admin_vipayment_check',uid,6)
+            if not vipayment_supplier.configuration()['configured']:
+                raise HttpError(503,'VIPayment API ID va API kaliti serverda sozlanmagan.')
+            try:
+                if path.endswith('/check'):
+                    return {'ok':True,'account':vipayment_supplier.account_status(),'orders_enabled':False}
+                return {'provider':'VIPayment','access':'read_only','orders_enabled':False,'products':vipayment_supplier.catalog_services()}
+            except vipayment_supplier.SupplierError as error:
+                raise HttpError(502,str(error))
         if path=='/api/admin/top-up/supplier/check' and method=='POST':
             require_admin(ctx)
             check_rate(db,'admin_seagm_check',uid,6)

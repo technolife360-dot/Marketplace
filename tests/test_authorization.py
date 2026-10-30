@@ -73,6 +73,7 @@ class AuthorizationBoundaries(unittest.TestCase):
         paths=('/api/admin','/api/admin/overview','/api/admin/listings','/api/admin/listings/unknown',
                '/api/admin/top-up','/api/admin/top-up/packages','/api/admin/top-up/packages/unknown',
                '/api/admin/top-up/presentation/unknown','/api/admin/top-up/supplier/check',
+               '/api/admin/top-up/supplier/vipayment/check','/api/admin/top-up/supplier/vipayment/catalog',
                '/api/admin/users','/api/admin/users/unknown','/api/admin/sellers','/api/admin/sellers/unknown',
                '/api/admin/orders','/api/admin/disputes','/api/admin/disputes/unknown',
                '/api/admin/account-reviews','/api/admin/account-reviews/unknown','/api/admin/payouts',

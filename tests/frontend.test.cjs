@@ -484,3 +484,15 @@ test('saved regional language survives navigation even when session lookup fails
  const context={me:null,csrf:'',adminText:(_uz,_ru,en)=>en,window:{RegionPreferences:{init(){},apply:()=>({language:'de'}),refreshPrices(){}}},localStorage:{getItem:()=> 'de'},localeKey:'language',supportedLocales:supported,location:{pathname:'/',hash:'',search:''},loadAsiaMarkets:async()=>{supported.add('de')},asiaMarkets:[],api:async()=>{throw Error('temporary session outage')},navigate:async()=>{},ExperienceUX:{sync:async()=>{}},document:{documentElement:{}},URLSearchParams,syncProfileTrigger(){},syncLanguageMenu(){},syncSellItemButton(){},syncAdminLink(){},renderSupportWidget(){},localizeDOM(){},refreshCart(){},refreshNotifications(){}};
  vm.createContext(context);vm.runInContext(part.slice(0,stop),context);await context.bootstrap();assert.equal(context.document.documentElement.lang,'de');
 });
+
+test('carousel uses uploaded original PNGs without downscaled responsive substitutes',()=>{
+ const context={adminText:(_uz,_ru,en)=>en,esc:String,encodeURIComponent};vm.createContext(context);
+ const start=source.indexOf('const marketGameLinks='),end=source.indexOf('function marketSellerIdentity(',start);
+ vm.runInContext(source.slice(start,end)+'\nvar html=homeGameCarouselMarkup();',context);
+ const images=[...context.html.matchAll(/<img[^>]+>/g)].map(m=>m[0]);
+ assert.equal(images.length,15);
+ assert.equal(images.filter(s=>/src="[^"]+\.png(?:\?[^"]*)?"/.test(s)).length,14);
+ assert.ok(images.some(s=>s.includes('/gta-6.png')));
+ assert.ok(images.some(s=>s.includes('/call-of-duty-mobile-1280.webp')));
+ for(const img of images)assert.doesNotMatch(img,/\bsrcset=/);
+});
