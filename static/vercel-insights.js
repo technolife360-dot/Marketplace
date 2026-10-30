@@ -1,3 +1,9 @@
+/* Load analytics only after an explicit, server-recorded opt-in. */
+(() => {
+ let loaded=false;
+ function sync(){
+  if(loaded||!window.CookieConsent?.allows('analytics'))return;
+  loaded=true;
 window.va = window.va || function (...args) {
   (window.vaq = window.vaq || []).push(args);
 };
@@ -19,3 +25,8 @@ speedInsightsScript.src = "/_vercel/speed-insights/script.js";
 speedInsightsScript.dataset.sdkn = "@vercel/speed-insights";
 speedInsightsScript.dataset.sdkv = "2.0.0";
 document.head.append(speedInsightsScript);
+
+ }
+ window.addEventListener('sentryloot:consent',sync);
+ sync();
+})();

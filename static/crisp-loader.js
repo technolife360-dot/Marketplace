@@ -43,6 +43,7 @@
   }
   function dismissHint() { clearTimeout(hintTimer); hint.hidden = true; }
   function openChat() {
+    if (!window.CookieConsent?.allows('support')) { window.CookieConsent?.open(); return; }
     dismissHint(); unread = 0; badge.hidden = true;
     if (window.__sentryLootCrispLoadFailed) {
       window.open('https://go.crisp.chat/chat/embed/?website_id=' + window.CRISP_WEBSITE_ID, '_blank', 'noopener,noreferrer');
@@ -83,6 +84,10 @@
   try { seen = sessionStorage.getItem('sentryloot-support-hint') === '1'; sessionStorage.setItem('sentryloot-support-hint', '1'); } catch (_) {}
   if (!seen) { hint.hidden = false; hintTimer = setTimeout(dismissHint, 5000); }
 
+  var sdkLoaded = false;
+  function loadSupport() {
+    if (sdkLoaded || !window.CookieConsent?.allows('support')) return;
+    sdkLoaded = true;
   var script = document.createElement('script');
   script.src = 'https://client.crisp.chat/l.js';
   script.async = true;
@@ -92,4 +97,7 @@
     dock.hidden = false;
   };
   document.head.appendChild(script);
+  }
+  window.addEventListener('sentryloot:consent', loadSupport);
+  loadSupport();
 })();
