@@ -155,14 +155,14 @@ window.ExperienceUX=(()=>{
 
 /* Informational notice; dismissal does not grant optional tracking consent. */
 (() => {
-  const key = 'sentryloot-cookie-notice-v1';
+  const key = 'sentryloot-cookie-notice-v2';
   try { if (localStorage.getItem(key) === 'dismissed') return; } catch (_) {}
   if (document.getElementById('cookie-notice')) return;
   const notice = document.createElement('section');
   notice.id = 'cookie-notice';
   notice.setAttribute('role', 'region');
   notice.setAttribute('aria-labelledby', 'cookie-notice-title');
-  notice.innerHTML = `<h2 id="cookie-notice-title">Cookies</h2><p>We use cookies to enhance your experience. By continuing to visit this site you agree to our use of cookies.</p><div><a href="/privacy-policy">Privacy Policy</a><button type="button">Got it</button></div>`;
+  notice.innerHTML = `<div class="cookie-notice-copy"><h2 id="cookie-notice-title">Cookies</h2><p>We use cookies to enhance your experience. By continuing to visit this site you agree to our use of cookies.</p></div><div class="cookie-notice-actions"><a href="/privacy-policy">Privacy Policy</a><button type="button">Accept all</button></div>`;
   notice.querySelector('button').addEventListener('click', () => {
     try { localStorage.setItem(key, 'dismissed'); } catch (_) {}
     notice.remove();
