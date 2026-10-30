@@ -2094,7 +2094,7 @@ class Handler(BaseHTTPRequestHandler):
             if user_presence_available(db):
                 presence=db.execute('SELECT last_seen_at FROM users WHERE id=?',(seller_id,)).fetchone()
                 online=bool(presence and presence['last_seen_at'] and presence['last_seen_at']>=(datetime.now(timezone.utc)-timedelta(minutes=3)).isoformat(timespec='seconds'))
-            positive=db.execute('SELECT COUNT(*) n FROM visible_reviews WHERE seller_id=? AND rating>=4',(seller_id,)).fetchone()['n']
+            positive=db.execute(f'''SELECT COUNT(*) n FROM visible_reviews r JOIN order_items i ON i.id=r.order_item_id JOIN orders o ON o.id=i.order_id WHERE i.seller_id=? AND r.rating>=4 AND {purchase_reviews.MARKET_REAL}''',(seller_id,)).fetchone()['n']
             reply_samples=[]
             reply_rows=db.execute("""SELECT first_message.sent_at first_buyer,MIN(reply.created_at) first_reply
                 FROM (SELECT c.id,MIN(m.created_at) sent_at FROM conversations c
@@ -2117,11 +2117,11 @@ class Handler(BaseHTTPRequestHandler):
                 'member_since':profile['created_at'] if profile else None,
                 'online':online,
                 'positive_percent':round(100*positive/item['review_count']) if item['review_count'] else None,
-                'total_sales':db.execute("SELECT COALESCE(SUM(oi.quantity),0) n FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE oi.seller_id=? AND o.status='completed'",(seller_id,)).fetchone()['n'],
+                'total_sales':db.execute(f"SELECT COALESCE(SUM(oi.quantity),0) n FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE oi.seller_id=? AND {purchase_reviews.MARKET_REAL}",(seller_id,)).fetchone()['n'],
                 'active_listings':db.execute("SELECT COUNT(*) n FROM listings WHERE seller_id=? AND status='published' AND stock>reserved",(seller_id,)).fetchone()['n'],
             }
             item['seller']['total_sales']=int(item['seller']['total_sales'])
-            item['reviews']=[dict(row) for row in db.execute('SELECT r.rating,r.body,r.created_at,u.display_name reviewer_name FROM visible_reviews r JOIN users u ON u.id=r.reviewer_id WHERE r.seller_id=? ORDER BY r.created_at DESC,r.id DESC LIMIT 20',(seller_id,))]
+            item['reviews']=[dict(row) for row in db.execute(f'SELECT r.rating,r.body,r.created_at,u.display_name reviewer_name FROM visible_reviews r JOIN users u ON u.id=r.reviewer_id JOIN order_items i ON i.id=r.order_item_id JOIN orders o ON o.id=i.order_id WHERE i.seller_id=? AND {purchase_reviews.MARKET_REAL} ORDER BY r.created_at DESC,r.id DESC LIMIT 20',(seller_id,))]
             related_public=launch_readiness.TEST_SQL if MODE=='production' and not (uid and is_admin(db,uid)) else '1=1'
             item['related']=[dict(x) for x in db.execute(f"""SELECT l.id,l.seller_id,l.title,l.price_minor,l.currency,l.product_type,l.platform,l.region,l.delivery_eta,l.image_url,l.attributes_json,l.stock,l.reserved,(l.stock-l.reserved) available,
                 g.name game_name,c.name category_name,s.shop_name seller_name,u.display_name seller_display_name,COALESCE(av.value,'') seller_avatar_url,s.verification_status,

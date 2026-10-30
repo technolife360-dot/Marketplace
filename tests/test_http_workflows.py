@@ -317,7 +317,7 @@ class HTTPWorkflows(unittest.TestCase):
         status, _, _ = buyer.request('POST', '/api/reviews', {'item_id': item, 'rating': 5, 'body': 'Delivery verified in a local test.'})
         self.assertEqual(status, 201)
         status, listing, _ = self.guest.request('GET', '/api/listings/' + lid)
-        self.assertEqual((status, listing['review_count'], listing['seller']['total_sales']), (200, 1, 1))
+        self.assertEqual((status, listing['review_count'], listing['seller']['total_sales']), (200, 0, 0))
         self.assertNotIn('Private local test delivery code', json.dumps(listing))
         status, _, _ = self.guest.request('GET', '/api/orders/' + oid)
         self.assertEqual(status, 401)

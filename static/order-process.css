@@ -1,7 +1,7 @@
 /* Scoped so order controls never alter home search, profile or listing icons. */
 @layer sentryloot-theme {
   body:has(.order-process) #route-back{display:none!important}
-  body .order-process{max-width:1240px!important;margin:0 auto!important;padding:28px 24px 48px!important;color:#f1f1f1!important;background:#000!important;font-family:Roboto,Arial,sans-serif!important}
+  body .order-process{max-width:1240px!important;margin:0 auto!important;padding:28px 24px 48px!important;color:#f1f1f1!important;background:transparent!important;font-family:Roboto,Arial,sans-serif!important}
   body .order-process *,body .order-process *:before,body .order-process *:after{box-sizing:border-box!important}
   body .order-process [hidden][hidden]{display:none!important}
   body .order-process h1{font-size:28px!important;line-height:1.25!important;letter-spacing:-.6px!important;margin:8px 0!important}
@@ -157,4 +157,9 @@
  body .order-process .of-cart-quantity>div{display:flex;align-items:center;gap:12px}
  body .order-process .of-cart-quantity button{width:36px;min-width:36px;height:36px!important;min-height:36px!important;padding:0!important;font-size:22px!important;line-height:1!important;display:grid!important;place-items:center;text-decoration:none!important}
  body .order-process .of-cart-quantity output{min-width:24px;text-align:center;font-size:15px;font-variant-numeric:tabular-nums}
+}
+
+@layer sentryloot-theme {
+ body :is(.order-process,.mobile-cart-preview) .of-payment-amount { display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-block:12px;border-block:1px solid #353535;font-size:14px; }
+ body .order-process .of-empty .of-primary { display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 18px;background:#f3ba69;color:#111;border-radius:8px;text-decoration:none; }
 }

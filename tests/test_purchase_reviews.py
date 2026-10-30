@@ -127,6 +127,27 @@ class PurchaseReviewFlows(unittest.TestCase):
         self.assertEqual((related['seller_card_rating'],related['seller_sales_count']),(4.0,5))
         catalogue=self.route(None,'GET','/api/listings')['items']
         self.assertEqual(next(item for item in catalogue if item['id']==self.listing)['seller_sales_count'],5)
+    def test_store_and_listing_reputation_exclude_test_refunded_and_hidden_feedback(self):
+        _,real=self.market_order()
+        self.db.execute('UPDATE order_items SET quantity=2 WHERE id=?',(real,))
+        self.route(self.buyer,'POST','/api/reviews',{'item_id':real,'rating':4,'body':'A genuine completed purchase.'})
+        for mode in ('sandbox','disabled','stripe_test'):
+            _,test_item=self.market_order(mode=mode)
+            self.db.execute('UPDATE order_items SET quantity=50 WHERE id=?',(test_item,))
+            self.db.execute('INSERT INTO reviews(id,order_item_id,reviewer_id,seller_id,rating,body) VALUES(?,?,?,?,5,?)',(app.ident(),test_item,self.buyer,self.seller,'Legacy test feedback.'))
+        oid,refunded=self.market_order()
+        self.route(self.buyer,'POST','/api/reviews',{'item_id':refunded,'rating':1,'body':'This order was later refunded.'})
+        self.db.execute("UPDATE orders SET status='refunded' WHERE id=?",(oid,))
+        store=self.route(None,'GET','/api/stores/'+self.seller)
+        listing=self.route(None,'GET','/api/listings/'+self.listing)
+        feedback=self.route(None,'GET','/api/stores/'+self.seller+'/reviews')
+        self.assertEqual((store['completed_sales'],store['review_count'],store['rating'],store['positive_percent']),(2,1,4.0,100))
+        self.assertEqual(sum(x['quantity'] for x in store['sales_history']),2)
+        self.assertEqual((listing['seller']['total_sales'],listing['review_count'],listing['seller_rating']),(2,1,4.0))
+        self.assertEqual((feedback['total_count'],len(feedback['items'])),(1,1))
+        self.assertEqual(feedback['items'][0]['body'],'A genuine completed purchase.')
+        self.assertEqual(feedback['types'][0]['count'],1)
+
     def test_reports_seller_reply_and_moderation_preserve_one_review_per_purchase(self):
         _,iid=self.market_order();r=self.route(self.buyer,'POST','/api/reviews',{'item_id':iid,'rating':3,'body':'The buyer describes the delivery.'})
         with self.assertRaises(app.HttpError):self.route(self.other,'POST','/api/reviews/'+r['id']+'/reply',{'body':'Not the seller.'})

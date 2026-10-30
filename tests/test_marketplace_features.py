@@ -74,7 +74,7 @@ class MarketplaceUsability(unittest.TestCase):
         self.assertEqual(self.route(self.seller,'POST','/api/seller/listings/bulk-pause',{'ids':[lid,self.listing]})['updated'],2)
     def order(self):
         oid=app.ident();iid=app.ident()
-        self.db.execute("INSERT INTO orders(id,reference,buyer_id,status,subtotal_minor,commission_minor,total_minor,currency,payment_mode) VALUES(?,?,?,'completed',50000,0,50000,'UZS','sandbox')",(oid,'TEST-'+oid,self.buyer))
+        self.db.execute("INSERT INTO orders(id,reference,buyer_id,status,subtotal_minor,commission_minor,total_minor,currency,payment_mode) VALUES(?,?,?,'completed',50000,0,50000,'UZS','stripe')",(oid,'TEST-'+oid,self.buyer))
         self.db.execute("INSERT INTO order_items(id,order_id,listing_id,seller_id,title,quantity,unit_price_minor,commission_minor,delivery_method) VALUES(?,?,?,?,?,1,50000,0,'manual')",(iid,oid,self.listing,self.seller,'Test purchase'))
         return oid,iid
     def test_review_filters_pagination_and_authenticated_seller_replies(self):

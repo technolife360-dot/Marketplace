@@ -87,6 +87,8 @@ def add_seller_card_stats(db, items):
         score=ratings.get(item.get('seller_id'))
         item['seller_card_review_count']=int(score['n']) if score else 0
         item['seller_card_rating']=float(score['rating']) if score else None
+        item['review_count']=item['seller_card_review_count']
+        item['seller_rating']=item['seller_card_rating']
         item['seller_sales_count']=sales.get((item.get('seller_id'),item.get('product_type')),0)
 
 

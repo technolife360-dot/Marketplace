@@ -73,3 +73,16 @@ test('listing overview keeps Original email immediately below Platform',()=>{
   const rows=detail().facts({...item,product_type:'item',attributes:{}});
   assert.equal(rows[2][0],'Original email');assert.equal(rows[2][1],'Not specified');
 });
+
+test('seasonal rank is omitted when empty but declared ranks remain visible',()=>{
+  for(const attributes of [{},{rank:''},{current_rank:'   '}]){
+    assert.equal(detail().facts({...item,attributes}).some(([key])=>key==='Rank'),false);
+  }
+  assert.ok(detail().facts({...item,attributes:{current_rank:'Ace'}}).some(([key,value])=>key==='Rank'&&value==='Ace'));
+});
+
+test('protection reflects the server policy without inventing a financial guarantee',()=>{
+  const html=detail().markup({...item,after_sale_policy:{days:14,appeal_days:7,financial_guarantee:false}});
+  assert.match(html,/14/);assert.match(html,/after.*completion/i);assert.match(html,/24\/7/);
+  assert.doesNotMatch(html,/money.back guarantee/i);
+});
