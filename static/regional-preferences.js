@@ -41,7 +41,7 @@
   // Existing marketplace ledger: MYR cents, UZS whole som. Never reinterpret it.
   const major=Number(amount)/(currency==='MYR'?100:1);
   if(!Number.isFinite(major))return null;
-  try{return '≈ '+new Intl.NumberFormat(numberLocale(),{style:'currency',currency:state.currency}).format(major/from*to)}catch{return null}
+  try{return new Intl.NumberFormat(numberLocale(),{style:'currency',currency:state.currency}).format(major/from*to)}catch{return null}
  }
  function refreshPrices(){
   refreshMoney();
