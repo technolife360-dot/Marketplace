@@ -271,7 +271,7 @@ function setupMarketSidebarToggle(){
   if(!drag)return;const current=drag;drag=null;
   document.documentElement.classList.remove('market-sidebar-dragging');document.documentElement.style.removeProperty('--market-sidebar-drag-x');
   try{current.handle.releasePointerCapture(current.pointerId)}catch{}
-  if(commit&&current.delta<=-Math.min(56,current.width*.25)){setCollapsed(true);button.focus({preventScroll:true})}
+  if(commit&&current.delta<=-Math.min(56,current.width*.25))setCollapsed(true);
  }
  button.addEventListener('click',event=>{if(!collapsed)return;setCollapsed(false);if(event.detail===0)requestAnimationFrame(()=>$('#market-sidebar a')?.focus({preventScroll:true}))});
  app.addEventListener('pointerdown',event=>{
