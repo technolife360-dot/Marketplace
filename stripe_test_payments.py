@@ -8,6 +8,8 @@ import json
 import os
 import re
 import time
+
+import rewards_engine
 from urllib.parse import urlsplit
 
 from payment_providers import PaymentIntent
@@ -39,6 +41,15 @@ def read(db, key, default=None):
 def write(db, key, value):
     db.execute('INSERT INTO platform_config(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP',
                (PREFIX+key, json.dumps(value, separators=(',', ':'))))
+
+
+def promotion_view(record):
+    """Public order totals; ledger allocations and FX context stay private."""
+    if not record:
+        return None
+    fields = ('quote_id', 'currency', 'subtotal_minor', 'fee_minor', 'gross_total_minor',
+              'discount_minor', 'bonus_minor', 'total_minor', 'earn_micro', 'mode', 'test_only', 'state')
+    return {key: record[key] for key in fields if key in record}
 
 
 class StripeTestProvider:
@@ -125,19 +136,23 @@ class StripeTestProvider:
             raise ValueError('Payment has already been refunded or disputed.')
         return session
 
-    def transfer(self, oid, seller, destination, charge, amount, currency):
+    def transfer(self, oid, seller, destination, charge, amount, currency, platform_funded=False):
         external_amount = stripe_amount(amount, currency)
         self.assert_account()
         source = self.test_object(self.client.v1.charges.retrieve(charge, {'expand': ['balance_transaction']}))
         balance = source.get('balance_transaction')
         if (not isinstance(balance, dict) or type(balance.get('amount')) is not int or balance['amount'] <= 0
-                or type(source.get('amount')) is not int or source['amount'] <= 0 or external_amount > source['amount']
+                or type(source.get('amount')) is not int or source['amount'] <= 0
                 or source.get('currency', '').upper() != currency):
             raise RuntimeError('Stripe settlement balance is not available yet.')
         # Presentment (e.g. UZS) may settle into the platform's MYR balance.
         # Use Stripe's actual settlement amounts, never an invented FX rate.
         settled_amount = external_amount*balance['amount']//source['amount']
         settled_currency = balance['currency']
+        # Promotional benefits are paid by the platform. A seller's gross
+        # entitlement can exceed the reduced charge; Stripe then requires
+        # platform balance funding instead of a capped source transaction.
+        source_transaction = None if platform_funded or external_amount > source['amount'] else charge
         if settled_amount <= 0:
             raise RuntimeError('Seller transfer is below the settlement currency minimum.')
         previous = self.client.v1.transfers.list({'transfer_group': 'sentryloot_test_'+oid, 'limit': 100})
@@ -145,7 +160,7 @@ class StripeTestProvider:
             raise RuntimeError('Transfer history needs reconciliation.')
         matches = [t for t in previous['data'] if t.get('metadata', {}).get('sentryloot_seller') == seller]
         if matches:
-            if len(matches) != 1 or matches[0]['amount'] != settled_amount or matches[0]['destination'] != destination or matches[0].get('source_transaction') != charge or matches[0]['currency'] != settled_currency:
+            if len(matches) != 1 or matches[0]['amount'] != settled_amount or matches[0]['destination'] != destination or matches[0].get('source_transaction') != source_transaction or matches[0]['currency'] != settled_currency:
                 raise RuntimeError('Unexpected existing Stripe test transfer.')
             return self.test_object(matches[0])
         account = self.client.v1.accounts.retrieve(destination)
@@ -153,10 +168,12 @@ class StripeTestProvider:
         # controlled by this test platform with active transfer capability.
         if destination == self.account or account.get('capabilities', {}).get('transfers') != 'active':
             raise RuntimeError('Seller test Connect account cannot receive transfers.')
-        result = self.client.v1.transfers.create({'amount': settled_amount, 'currency': settled_currency,
-            'destination': destination, 'source_transaction': charge,
-            'transfer_group': 'sentryloot_test_'+oid,
-            'metadata': {'sentryloot_order': oid, 'sentryloot_seller': seller, 'sentryloot_mode': self.name}},
+        params = {'amount': settled_amount, 'currency': settled_currency,
+            'destination': destination, 'transfer_group': 'sentryloot_test_'+oid,
+            'metadata': {'sentryloot_order': oid, 'sentryloot_seller': seller, 'sentryloot_mode': self.name}}
+        if source_transaction:
+            params['source_transaction'] = source_transaction
+        result = self.client.v1.transfers.create(params,
             options={'idempotency_key': 'sentryloot:test:transfer:'+oid+':'+seller})
         return self.test_object(result)
 
@@ -213,6 +230,7 @@ def start_checkout(db, oid, uid, core):
             try:
                 core['trade_workflows'].lock_order(db, oid)
                 restore_expired_cart(db, oid, uid)
+                rewards_engine.sync_order(db, oid, core)
                 db.execute('COMMIT')
             except Exception:
                 db.execute('ROLLBACK')
@@ -343,6 +361,7 @@ def queue_refund(db, oid, core):
     enqueue(db, oid, 'refund')
     db.execute("UPDATE payments SET status='refund_pending',updated_at=CURRENT_TIMESTAMP WHERE order_id=?", (oid,))
     db.execute("UPDATE orders SET status='refund_pending',updated_at=CURRENT_TIMESTAMP WHERE id=?", (oid,))
+    rewards_engine.sync_order(db, oid, core)
 
 
 def ledger(db, oid, user, kind, amount, currency, core):
@@ -450,6 +469,7 @@ def receive_event(db, provider, event, core):
             db.execute("UPDATE payments SET status='expired' WHERE order_id=?", (oid,))
             db.execute("UPDATE orders SET status='cancelled' WHERE id=?", (oid,))
             restore_expired_cart(db, oid, order['buyer_id'])
+        rewards_engine.sync_order(db, oid, core)
         write(db, 'event:'+event['id'], {'processed': True})
         db.execute('COMMIT')
         return {'ok': True}
@@ -492,6 +512,10 @@ def charge_event(db, provider, event, core):
         return {'ok': True, 'ignored': True}
     payment = db.execute("SELECT * FROM payments WHERE provider='stripe_test' AND provider_reference=?", (intent,)).fetchone()
     if not payment:
+        import stripe_test_topups
+        result = stripe_test_topups.charge_event(db, charge, event, core)
+        if result is not UNHANDLED:
+            return result
         # A charge event can arrive before checkout.session.completed. Stripe
         # retries this response; it must not be permanently acknowledged first.
         raise core['HttpError'](409, 'Checkout payment event must be reconciled first.')
@@ -519,6 +543,7 @@ def charge_event(db, provider, event, core):
                 if not db.execute("SELECT 1 FROM reports WHERE order_id=? AND reason='order_dispute' AND status IN ('open','reviewing')", (oid,)).fetchone():
                     buyer = db.execute('SELECT buyer_id FROM orders WHERE id=?', (oid,)).fetchone()['buyer_id']
                     db.execute("INSERT INTO reports(id,reporter_id,order_id,reason,details) VALUES(?,?,?,'order_dispute',?)", (core['ident'](), buyer, oid, 'Stripe TEST charge dispute or partial refund requires reconciliation.'))
+        rewards_engine.sync_order(db, oid, core)
         write(db, 'event:'+event['id'], {'processed': True})
         db.execute('COMMIT'); return {'ok': True}
     except Exception:
@@ -591,14 +616,16 @@ def process(db, core, limit=5):
                 # A dispute or refund request freezes release.
                 job['status'] = 'cancelled' if payment['status'] in ('refunded', 'refund_pending') else 'blocked'
             else:
-                for seller in db.execute('SELECT seller_id,SUM(unit_price_minor*quantity-commission_minor) amount FROM order_items WHERE order_id=? GROUP BY seller_id', (oid,)).fetchall():
+                sellers = db.execute('SELECT seller_id,SUM(unit_price_minor*quantity-commission_minor) amount FROM order_items WHERE order_id=? GROUP BY seller_id', (oid,)).fetchall()
+                platform_funded = sum(seller['amount'] for seller in sellers) > payment['amount_minor']
+                for seller in sellers:
                     transfer_key = 'transfer:'+oid+':'+seller['seller_id']
                     if read(db, transfer_key) or seller['amount'] <= 0:
                         continue
                     account = read(db, 'seller:'+seller['seller_id'])
                     if not account:
                         raise RuntimeError('Seller test Connect account has not been linked.')
-                    result = provider.transfer(oid, seller['seller_id'], account['id'], paid['charge'], seller['amount'], order['currency'])
+                    result = provider.transfer(oid, seller['seller_id'], account['id'], paid['charge'], seller['amount'], order['currency'], **({'platform_funded': True} if platform_funded else {}))
                     write(db, transfer_key, {'id': result['id'], 'amount': seller['amount'],
                         'settled_amount': result.get('amount'), 'settled_currency': result.get('currency')})
                 release_test_ledger(db, oid, core)

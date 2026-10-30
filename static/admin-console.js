@@ -33,7 +33,7 @@ window.AdminConsole = (() => {
       make('overview','gamepad',tr('Umumiy ko‘rinish','Обзор','Overview')) + make('listings') + make('orders') +
       link('top-up-admin','wallet','Top Up') + make('sellers') + make('users') +
       group(tr('MOLIYA','ФИНАНСЫ','FINANCE')) + make('finance','wallet',tr('Daromad va xarajatlar','Доходы и расходы','Revenue & expenses')) +
-      make('payouts') + group(tr('ISHONCH','ДОВЕРИЕ','TRUST')) + make('disputes') + make('account-reviews') + make('reports') +
+      make('payouts') + link('admin-rewards','ticket',tr('Bonus va aksiyalar','Бонусы и акции','Rewards & campaigns')) + group(tr('ISHONCH','ДОВЕРИЕ','TRUST')) + make('disputes') + make('account-reviews') + make('reports') +
       link('admin-support','message',tr('Support','Поддержка','Support')) + link('review-moderation','star',tr('Sharhlar','Отзывы','Reviews')) +
       group(tr('KONTENT VA TIZIM','КОНТЕНТ И СИСТЕМА','CONTENT & SYSTEM')) +
       link('catalog-readiness','gamepad',tr('O‘yinlar va katalog','Игры и каталог','Games & catalogue')) +

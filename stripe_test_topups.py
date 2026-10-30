@@ -3,6 +3,7 @@ import re
 import time
 
 import stripe_test_payments as pay
+import rewards_engine
 
 
 def enabled(core):
@@ -19,7 +20,8 @@ def view(db, oid, uid, core):
     if not row or not pay.read(db, 'topup:'+oid):
         raise core['HttpError'](404, 'Test top-up order not found.')
     order = core['topup_admin_row'](row)
-    order.update(mode='stripe_test', total_minor=order['unit_price_minor']*order['quantity'], real_delivery=False)
+    promotion = rewards_engine.purchase(db, 'topup', oid)
+    order.update(mode='stripe_test', total_minor=promotion['total_minor'] if promotion else order['unit_price_minor']*order['quantity'], real_delivery=False, promotions=pay.promotion_view(promotion))
     return order
 
 
@@ -42,6 +44,9 @@ def checkout(db, uid, data, core):
         raise core['HttpError'](409, 'This package has no configured test price.')
     if package['game_slug'] in ('mobile-legends',) and not server:
         raise core['HttpError'](400, 'Enter the server ID for this game.')
+    quote_id = data.get('rewards_quote_id')
+    if quote_id is not None and (not isinstance(quote_id, str) or not quote_id or len(quote_id)>200):
+        raise core['HttpError'](400, 'Invalid promotion quote.')
     request_record = 'topup_request:'+uid+':'+request_key
     db.execute('BEGIN IMMEDIATE')
     try:
@@ -51,14 +56,20 @@ def checkout(db, uid, data, core):
         if prior:
             oid = prior['id']
             old = db.execute('SELECT * FROM topup_orders WHERE id=?', (oid,)).fetchone()
-            if (old['package_id'], old['quantity'], old['player_id'], old['server_id']) != (package_id, quantity, player, server):
+            if (old['package_id'], old['quantity'], old['player_id'], old['server_id'], prior.get('rewards_quote_id')) != (package_id, quantity, player, server, quote_id):
                 raise core['HttpError'](409, 'This request key belongs to different top-up details.')
         else:
+            package = db.execute('SELECT * FROM topup_packages WHERE id=? AND enabled=1', (package_id,)).fetchone()
+            if not package or package['price_minor'] <= 0:
+                raise core['HttpError'](409, 'This package has no configured test price.')
             oid = core['ident']()
+            if quote_id:
+                rewards_engine.reserve(db, uid, quote_id, 'topup', oid, [{'package_id': package_id, 'quantity': quantity, 'price_minor': package['price_minor']}], 'UZS', package['price_minor']*quantity, 0, core)
             db.execute('INSERT INTO topup_orders(id,reference,buyer_id,package_id,player_id,server_id,quantity,unit_price_minor,currency,fulfillment_note) VALUES(?,?,?,?,?,?,?,?,?,?)',
                 (oid, 'TEST-TU-'+core['secrets'].token_hex(4).upper(), uid, package_id, player, server, quantity, package['price_minor'], 'UZS', 'Stripe TEST only. No UC or supplier delivery.'))
-            pay.write(db, request_record, {'id': oid})
+            pay.write(db, request_record, {'id': oid, 'rewards_quote_id': quote_id})
             pay.write(db, 'topup:'+oid, {'idempotency_key': core['create_token']()})
+            rewards_engine.sync_topup(db, oid, core)
         db.execute('COMMIT')
     except Exception:
         db.execute('ROLLBACK'); raise
@@ -72,6 +83,13 @@ def start(db, oid, uid, core):
     saved = pay.read(db, 'checkout:'+oid)
     if saved:
         if saved['expires_at'] <= time.time():
+            db.execute('BEGIN IMMEDIATE')
+            try:
+                db.execute("UPDATE topup_orders SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='awaiting_payment'", (oid,))
+                rewards_engine.sync_topup(db, oid, core)
+                db.execute('COMMIT')
+            except Exception:
+                db.execute('ROLLBACK'); raise
             raise core['HttpError'](409, 'Test checkout expired. Create a new top-up order.')
         return {'checkout_url': saved['url'], 'mode': 'stripe_test'}
     provider = core['configured_payment_provider']()
@@ -107,12 +125,15 @@ def receive(db, provider, event, core):
         if order['payment_reference']:
             db.execute('COMMIT'); return {'ok': True, 'duplicate': True}
         if paid:
-            amount = order['unit_price_minor']*order['quantity']; intent = session['payment_intent']
+            promotion = rewards_engine.purchase(db, 'topup', oid)
+            amount = promotion['total_minor'] if promotion else order['unit_price_minor']*order['quantity']; intent = session['payment_intent']
             if (session.get('client_reference_id') != oid or not pay.matches_amount(session.get('amount_total'), amount, order['currency']) or not pay.matches_amount(intent.get('amount_received'), amount, order['currency'])
                     or session.get('currency', '').upper() != order['currency'] or intent.get('currency', '').upper() != order['currency']
-                    or session.get('metadata', {}).get('sentryloot_order') != oid):
+                    or session.get('metadata', {}).get('sentryloot_order') != oid
+                    or session.get('metadata', {}).get('sentryloot_mode') != 'stripe_test'
+                    or session.get('metadata', {}).get('sentryloot_kind') != 'topup'):
                 raise core['HttpError'](409, 'Stripe test top-up amount, currency or order mismatch.')
-            pay.write(db, 'paid:'+oid, {'intent': intent['id'], 'charge': intent['latest_charge']['id']})
+            pay.write(db, 'paid:'+oid, {'intent': intent['id'], 'charge': intent['latest_charge']['id'], 'amount_minor': amount, 'currency': order['currency']})
             status = 'paid_test' if order['status'] == 'awaiting_payment' else 'refund_pending'
             db.execute('UPDATE topup_orders SET status=?,payment_reference=?,updated_at=CURRENT_TIMESTAMP WHERE id=?', (status, 'stripe_test_'+intent['id'], oid))
             if status == 'refund_pending':
@@ -120,6 +141,41 @@ def receive(db, provider, event, core):
             core['notify'](db, order['buyer_id'], 'order', 'Test top-up payment received', 'No UC has been delivered. This is a Stripe test order.', '/topup-order/'+oid)
         else:
             db.execute("UPDATE topup_orders SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='awaiting_payment'", (oid,))
+        rewards_engine.sync_topup(db, oid, core)
+        pay.write(db, 'event:'+event['id'], {'processed': True})
+        db.execute('COMMIT'); return {'ok': True}
+    except Exception:
+        db.execute('ROLLBACK'); raise
+
+
+def charge_event(db, charge, event, core):
+    """Reconcile confirmed test refunds/disputes for top-ups without payments rows."""
+    order = db.execute('SELECT * FROM topup_orders WHERE payment_reference=?', ('stripe_test_'+charge['payment_intent'],)).fetchone()
+    if not order or not pay.read(db, 'topup:'+order['id']):
+        return pay.UNHANDLED
+    oid = order['id']
+    paid = pay.read(db, 'paid:'+oid)
+    promotion = rewards_engine.purchase(db, 'topup', oid)
+    amount = paid.get('amount_minor', promotion['total_minor'] if promotion else order['unit_price_minor']*order['quantity']) if paid else None
+    if (not paid or paid['charge'] != charge['id'] or charge.get('currency', '').upper() != order['currency']
+            or not pay.matches_amount(charge.get('amount'), amount, order['currency'])):
+        raise core['HttpError'](409, 'Stripe test top-up charge amount mismatch.')
+    db.execute('BEGIN IMMEDIATE')
+    try:
+        db.execute('UPDATE topup_orders SET updated_at=updated_at WHERE id=?', (oid,))
+        order = db.execute('SELECT * FROM topup_orders WHERE id=?', (oid,)).fetchone()
+        if pay.read(db, 'event:'+event['id']):
+            db.execute('COMMIT'); return {'ok': True, 'duplicate': True}
+        if order['status'] != 'refunded':
+            if event['type'] == 'charge.refunded' and pay.matches_amount(charge.get('amount_refunded'), amount, order['currency']):
+                db.execute("UPDATE topup_orders SET status='refund_pending',updated_at=CURRENT_TIMESTAMP WHERE id=?", (oid,))
+                pay.enqueue(db, oid, 'topup_refund')
+                job = pay.read(db, 'job:'+oid+':topup_refund')
+                job.update(external_refund=True, external_refund_id=charge['id'])
+                pay.write(db, 'job:'+oid+':topup_refund', job)
+            else:
+                db.execute("UPDATE topup_orders SET status='disputed',updated_at=CURRENT_TIMESTAMP WHERE id=?", (oid,))
+            rewards_engine.sync_topup(db, oid, core)
         pay.write(db, 'event:'+event['id'], {'processed': True})
         db.execute('COMMIT'); return {'ok': True}
     except Exception:
@@ -135,10 +191,17 @@ def process_refund(db, provider, key, core):
         if job['status'] == 'succeeded':
             db.execute('COMMIT'); return job
         order = db.execute('SELECT * FROM topup_orders WHERE id=?', (oid,)).fetchone()
-        result = provider.refund(pay.read(db, 'paid:'+oid)['intent'], order['unit_price_minor']*order['quantity'], 'sentryloot:test:refund:'+oid)
+        paid = pay.read(db, 'paid:'+oid)
+        promotion = rewards_engine.purchase(db, 'topup', oid)
+        amount = paid.get('amount_minor', promotion['total_minor'] if promotion else order['unit_price_minor']*order['quantity'])
+        if job.get('external_refund'):
+            result = {'id': job['external_refund_id'], 'status': 'succeeded'}
+        else:
+            result = provider.refund(paid['intent'], amount, 'sentryloot:test:refund:'+oid)
         if result.get('status') != 'succeeded':
             raise RuntimeError('Test refund is pending.')
         db.execute("UPDATE topup_orders SET status='refunded',updated_at=CURRENT_TIMESTAMP WHERE id=?", (oid,))
+        rewards_engine.sync_topup(db, oid, core)
         job.update(status='succeeded', reference=result['id'])
         pay.write(db, key, job); db.execute('COMMIT')
     except Exception:
@@ -188,6 +251,7 @@ def route(db, ctx, method, path, data, core):
         else:
             raise core['HttpError'](409, 'This action is unavailable for the current test order state.')
         db.execute('UPDATE topup_orders SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?', (status, oid))
+        rewards_engine.sync_topup(db, oid, core)
         core['audit'](db, uid, 'stripe_test_topup_'+action, 'topup_order', oid)
         db.execute('COMMIT'); return {'status': status, 'real_delivery': False}
     except Exception:

@@ -59,9 +59,12 @@ function renderTopUpDetail(game, initialPackage) {
   const root=app.querySelector('.topup-product-page'), q=selector=>root.querySelector(selector), all=selector=>Array.from(root.querySelectorAll(selector));
   root.dataset.gameCurrency=game.currency||'';
   root.addEventListener('error',event=>{const image=event.target;if(image.dataset?.tuFallback&&image.getAttribute('src')!==image.dataset.tuFallback)image.src=image.dataset.tuFallback;},true);
-  const quantity=q('#tu-quantity');
+  const quantity=q('#tu-quantity');let testRequestKey=crypto.randomUUID();
+  q('#topup-checkout-form').insertAdjacentHTML('beforebegin','<div data-tu-rewards></div>');
+  const rewards=me&&window.RewardsUI?window.RewardsUI.mountQuote(q('[data-tu-rewards]'),{auto:true,context:()=>{const count=topupQuantity(quantity.value);return count===null?null:{kind:'topup',package_id:selected.id,quantity:count}},onChange:quote=>{q('[data-tu-total]').textContent=quote?fmt(quote.total_minor,quote.currency):(topupQuantity(quantity.value)===null?'—':topupDetailPrice(selected,topupQuantity(quantity.value)))}}):null;
+  if(!me)q('[data-tu-rewards]').innerHTML='<a class="rw-entry" href="/#login">'+t('Bonus va platforma kuponi uchun kiring','Войдите для бонусов и купонов платформы','Sign in to use rewards and platform coupons')+'</a>';
   function invalidatePreview(){q('#topup-details-preview').hidden=true;}
-  function updateTotal(){const value=topupQuantity(quantity.value);q('#tu-quantity-error').hidden=value!==null;q('#tu-quantity-error').textContent=t('1 dan 99 gacha butun son kiriting.','Введите целое число от 1 до 99.','Enter a whole number from 1 to 99.');quantity.setAttribute('aria-invalid',String(value===null));q('[data-tu-total]').textContent=value===null?'—':topupDetailPrice(selected,value);all('[data-tu-quantity]').forEach(button=>button.disabled=value===null||(Number(button.dataset.tuQuantity)<0?value<=1:value>=99));invalidatePreview();}
+  function updateTotal(){rewards?.invalidate();testRequestKey=crypto.randomUUID();const value=topupQuantity(quantity.value);q('#tu-quantity-error').hidden=value!==null;q('#tu-quantity-error').textContent=t('1 dan 99 gacha butun son kiriting.','Введите целое число от 1 до 99.','Enter a whole number from 1 to 99.');quantity.setAttribute('aria-invalid',String(value===null));q('[data-tu-total]').textContent=value===null?'—':topupDetailPrice(selected,value);all('[data-tu-quantity]').forEach(button=>button.disabled=value===null||(Number(button.dataset.tuQuantity)<0?value<=1:value>=99));invalidatePreview();}
   function showGallery(){q('#tu-gallery-content').innerHTML=`<img src="${esc(art)}" data-tu-fallback="${esc(fallback)}" alt="${esc(game.name)} ${esc(game.currency)} Top Up" fetchpriority="high">`;}
   function choosePackage(pack,updateUrl=true){selected=pack;updateLaunchAlert();all('[data-tu-package]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.tuPackage===pack.url_slug)));q('[data-tu-price]').textContent=topupDetailPrice(pack);q('[data-tu-price-caption]').textContent=t('Paket: ','Пакет: ','For ')+packLabel(pack);updateTotal();if(updateUrl){const path='/top-up/'+encodeURIComponent(game.slug)+'/'+encodeURIComponent(pack.url_slug);if(location.pathname!==path)history.pushState(history.state,'',path);document.title=packLabel(pack)+' '+game.name+' Top Up | SentryLoot';const canonical=document.querySelector('link[rel="canonical"]');if(canonical)canonical.href=location.origin+path;const desc=document.querySelector('meta[name="description"]');if(desc)desc.content=game.name+' '+packLabel(pack)+' top-up package. '+noCheckout;}}
   function openTab(id,focus=false){const panel=q('#tu-panel-'+id);if(!panel)return;all('.tu-tab-panel').forEach(item=>item.hidden=item.id!=='tu-panel-description'&&item!==panel);if(focus)panel.focus();}
@@ -78,7 +81,6 @@ function renderTopUpDetail(game, initialPackage) {
   const testTerms=document.createElement('label');testTerms.className='field';testTerms.hidden=true;
   testTerms.innerHTML='<span><input type="checkbox" data-tu-test-consent> '+t('Bu faqat xaridi. Haqiqiy UC yetkazilmaydi. Savdo shartlarini qabul qilaman.','Это покупка без доставки UC. Я принимаю условия покупки.','I have checked the Player ID and accept the checkout terms.')+'</span>';
   q('.tu-purchase-actions').before(testTerms);
-  let testRequestKey=crypto.randomUUID();
   function updateTestCheckout(){
     const ready=selected.payment_ready&&selected.payment_mode==='stripe_test';
     root.dataset.checkoutReady=String(Boolean(ready));
@@ -92,7 +94,8 @@ function renderTopUpDetail(game, initialPackage) {
     if(!q('[data-tu-test-consent]').checked){toast(t('xaridi shartlarini tasdiqlang.','Подтвердите условия покупки.','Confirm the checkout terms.'),'error');return;}
     testBuy.disabled=true;
     try{
-      const order=await api('/top-up/test-checkout',{method:'POST',body:JSON.stringify({package_id:selected.id,quantity:topupQuantity(quantity.value),player_id:form.elements.namedItem('player_id').value,server_id:form.elements.namedItem('server_id')?.value||'',request_key:testRequestKey,accept_terms:true})});
+      const promotion=rewards?.checkout();
+      const order=await api('/top-up/test-checkout',{method:'POST',body:JSON.stringify({package_id:selected.id,quantity:topupQuantity(quantity.value),player_id:form.elements.namedItem('player_id').value,server_id:form.elements.namedItem('server_id')?.value||'',request_key:testRequestKey,accept_terms:true,...(promotion?{rewards_quote_id:promotion.id,expected_total_minor:promotion.total_minor}:{})})});
       location.hash='topup-order/'+encodeURIComponent(order.id);
       const payment=await api('/top-up/test-orders/'+encodeURIComponent(order.id)+'/checkout',{method:'POST',body:'{}'});
       location.assign(payment.checkout_url);
