@@ -40,6 +40,10 @@ test('header and profile menu render the uploaded photo with the shared avatar r
  vm.runInContext(source.slice(source.indexOf('function syncProfileTrigger('),source.indexOf('async function refreshProfileBonusBalance(')),context);
  context.syncProfileTrigger();assert.match(button.innerHTML,/src="https:\/\/images.example.com\/current.webp"/);
  assert.match(context.profileMenuMarkup(),/class="profile-avatar user-avatar"[^>]*>[\s\S]*?src="https:\/\/images.example.com\/current.webp"/);
+ for(const seller of [null,{id:'seller'}]){
+  context.me.seller=seller;const html=context.profileMenuMarkup();
+  for(const route of ['wallet','payout-options'])assert.equal((html.match(new RegExp('href="/#'+route+'"','g'))||[]).length,seller?1:0);
+ }
  context.me.avatar_url='';context.syncProfileTrigger();assert.doesNotMatch(button.innerHTML,/<img/);assert.match(button.innerHTML,/>TB<\/span>/);
 });
 
@@ -222,10 +226,9 @@ test('buyer sidebar exposes conversations and purchases using the primary naviga
   assert.doesNotMatch(html, /href="\/#(?:seller|wallet|payout-options|admin)"/);
 });
 
-test('seller wallet links remain role-specific without seller dashboard or admin sidebar links', () => {
+test('seller financial links live in the profile instead of the sidebar', () => {
   const seller = sidebarMarkup({seller: {id: 'seller'}, is_admin: false});
-  assert.match(seller, /href="\/#wallet"/);
-  assert.match(seller, /href="\/#payout-options"/);
+  assert.doesNotMatch(seller, /href="\/#(?:wallet|payout-options)"/);
   assert.doesNotMatch(seller, /href="\/#(?:seller|admin)"/);
   assert.doesNotMatch(sidebarMarkup({seller: null, is_admin: true}), /href="\/#(?:seller|admin)"/);
 });
@@ -236,10 +239,14 @@ test('mobile menu reuses seller routes without duplicate desktop IDs or a drag d
   assert.match(mobile, /id="mobile-market-sidebar"/);
   assert.doesNotMatch(mobile, /id="market-sidebar(?:-handle)?"/);
   assert.match(desktop, /id="market-sidebar-handle"/);
-  for (const route of ['messages', 'orders', 'favorites', 'my-reviews', 'requests', 'wallet', 'payout-options']) {
+  for (const route of ['messages', 'orders', 'favorites', 'my-reviews', 'requests']) {
     assert.ok(mobile.includes(`href="/#${route}"`));
   }
-  assert.doesNotMatch(mobile, /href="\/#(?:seller|admin)"/);
+  assert.doesNotMatch(mobile, /href="\/#(?:seller|admin|wallet|payout-options)"/);
+  for(const html of [desktop,mobile]){
+    const hrefs=[...html.matchAll(/href="([^"]+)"/g)].map(m=>m[1]);
+    assert.equal(new Set(hrefs).size,hrefs.length);
+  }
 });
 
 test('home cards show verified seller reputation and sales without inventing ratings', () => {

@@ -11,7 +11,7 @@
 
 - Home search must preserve the current production/Vercel appearance. Its category menu must always open directly BELOW `#home-category`, anchored to that field, never above it or elsewhere. Keep a compact scrollable list. If a native menu cannot guarantee this position, use an anchored popup while preserving the exact field appearance and layout. Do not redesign the search when adjusting its icon.
 
-- The sidebar's game tiles were intentionally replaced by account navigation below the divider. Messages, purchases, saved listings, reviews and requests belong there; seller wallet/payout links are role-specific. Keep profile dropdown focused on account status/settings, support and sign-out.
+- The sidebar's game tiles were intentionally replaced by account navigation below the divider. Messages, purchases, saved listings, reviews and requests belong there once each. Seller wallet/payout links belong only inside `.profile-content` and remain role-specific. Keep profile dropdown focused on account status/settings, seller finances, support and sign-out.
 - Personal sidebar links must reuse `.market-sidebar-main` geometry: 40px rows, 14px/500 text, 10px gap, 32×32 icon frames and 24×24 SVGs. Do not introduce separate competing size rules for the two groups.
 
 - The entire desktop `.market-sidebar` must scroll as one region. Keep its row heights fixed; do not create a nested scroll area for `.market-sidebar-account`.

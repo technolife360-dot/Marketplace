@@ -298,11 +298,7 @@ function marketSidebarMarkup(filters={}, {mobile=false}={}){
   ['/#orders','cart',t('Xaridlarim','Мои покупки','My purchases')],
   ['/#favorites','heart',t('Saqlanganlar','Избранное','Favourites')],
   ['/#my-reviews','star',t('Sharhlarim','Мои отзывы','My reviews')],
-  ['/#requests','search',t('Mahsulot so‘rovlari','Запросы товаров','Product requests')],
-  ...(me.seller?[
-   ['/#wallet','wallet',t('Hamyon','Кошелёк','Wallet')],
-   ['/#payout-options','arrow-up-right',t('Pul yechish','Вывод средств','Payout options')]
-  ]:[])
+  ['/#requests','search',t('Mahsulot so‘rovlari','Запросы товаров','Product requests')]
  ]:[['/#login','user',t('Hisobga kirish','Войти в аккаунт','Sign in')]];
  return `<aside id="${mobile?'mobile-market-sidebar':'market-sidebar'}" class="market-sidebar" aria-label="${t('Bozor navigatsiyasi','Навигация маркета','Marketplace navigation')}"><nav class="market-sidebar-main" aria-label="${t('Bozor bo‘limlari','Разделы маркета','Marketplace sections')}">${entries.map(row).join('')}</nav><section class="market-sidebar-account"><h2>${me?t('Mening bo‘limlarim','Мои разделы','Your space'):t('Sizning hisobingiz','Ваш аккаунт','Your account')}</h2><nav class="market-sidebar-main market-sidebar-personal" aria-label="${t('Shaxsiy bo‘limlar','Личные разделы','Your account sections')}">${personal.map(row).join('')}${row(['/blog','file-text',t('Blog va qo‘llanmalar','Блог и руководства','Blog & guides')])}</nav></section></aside>${mobile?'':`<div id="market-sidebar-handle" class="market-sidebar-drag-handle" role="separator" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="1" aria-valuenow="1" tabindex="0" aria-label="${t('Menyuni yopish uchun chapga torting','Потяните влево, чтобы закрыть меню','Drag left to close sidebar')}" title="${t('Yopish uchun chapga torting','Потяните влево, чтобы закрыть','Drag left to close')}"></div>`}`;
 }
@@ -653,6 +649,7 @@ function profileMenuMarkup(){
    <nav class="profile-menu" aria-label="${t('Hisob sozlamalari','Настройки аккаунта','Account settings')}">
     ${menuRow('/#account','settings',t('Hisob sozlamalari','Настройки аккаунта','Account settings'),t('Profil, xavfsizlik va sozlamalar','Профиль, безопасность и настройки','Profile, security and preferences'))}
     ${menuRow('/#rewards','ticket',t('Bonus va vaucherlar','Бонусы и ваучеры','Rewards & vouchers'),t('Xarid uchun bonus krediti','Бонусы на покупки','Your promotional purchase credit'))}
+    ${me.seller?menuRow('/#wallet','wallet',t('Hamyon','Кошелёк','Wallet'),t('Sotuvchi mablag‘lari','Средства продавца','Seller funds'))+menuRow('/#payout-options','arrow-up-right',t('Pul yechish','Вывод средств','Payout options'),t('Mablag‘ yechish sozlamalari','Настройки вывода средств','Payout settings')):''}
     ${me.email_verified?`<button class="profile-menu-row profile-menu-button" type="button" data-action="link-facebook"><span class="profile-menu-icon" aria-hidden="true"><span class="facebook-mark">f</span></span><span class="profile-menu-copy"><b>${t('Facebook’ni ulash','Подключить Facebook','Link Facebook')}</b><small>${t('Hisobingizga xavfsiz ulash','Безопасное подключение аккаунта','Securely connect your account')}</small></span></button>`:''}
    </nav>
    <nav class="profile-menu profile-account-actions" aria-label="${t('Yordam va hisob','Помощь и аккаунт','Help and account')}">
