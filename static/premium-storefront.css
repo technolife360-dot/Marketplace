@@ -22,6 +22,10 @@
   body .site-header { border-bottom:1px solid var(--line) !important; }
   body .header-search { border-radius:12px !important; background-color:#11151a !important; }
   body .header-search:focus-within { border-color:#ffb36b !important; }
+  /* The form's focus border is the search input's visible focus indicator. */
+  body #search-form.header-search input:focus-visible {
+    outline:none !important; box-shadow:none !important; border:0 !important;
+  }
   body .brand { letter-spacing:.015em !important; }
   body :is(.sell-item-button,.login-button) { border-radius:10px !important; }
   body .market-sidebar { border-right:1px solid var(--line) !important; }
