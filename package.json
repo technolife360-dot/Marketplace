@@ -12,7 +12,7 @@
     "backup": "python3 scripts/backup_sqlite.py"
   },
   "engines": {
-    "node": ">=18",
+    "node": "24.x",
     "python": ">=3.11"
   },
   "dependencies": {
