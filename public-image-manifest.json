@@ -315,44 +315,44 @@
     "sha256": "e3a484dd847a412d7811ca1585ffaaec3a724a5c74ab72784d950c3cd45c882d"
   },
   "/static/assets/sentryloot-app-icon.png": {
-    "url": "https://images.gamestorehub.com/site-assets/sentryloot-app-icon.png",
-    "size": 53158,
-    "sha256": "b7da7bb6f941cfc1dbd8373bc159e92fa00c677caf73cf55a863ba4b95f14c8b"
+    "url": "https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-app-icon.png",
+    "size": 80020,
+    "sha256": "bc416f48bf62bdc67654db3997620368c1e831d7fd966cc829b5f992958464da"
   },
   "/static/assets/sentryloot-favicon.png": {
-    "url": "https://images.gamestorehub.com/site-assets/sentryloot-favicon.png",
-    "size": 231319,
-    "sha256": "23a1d2b5801293000d7942cedb4eac4adcf42fe9697d69d656b4c2301238ade8"
+    "url": "https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-favicon.png",
+    "size": 4327,
+    "sha256": "e0564ef5fb02a43e5650611db22a62663d685aa921a071e5a4896070ecd957bc"
   },
   "/static/assets/sentryloot-logo-crest.jpg": {
-    "url": "https://images.gamestorehub.com/site-assets/sentryloot-logo-crest.jpg",
-    "size": 44471,
-    "sha256": "a3d4c7a16cd0bfc3f859a5776c5ef3d31d94a571cf106fd2d15996ef848f2f6f"
+    "url": "https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-logo-crest.jpg",
+    "size": 13422,
+    "sha256": "2435f4eb65afd17613cb105b5550f0ca8916f8673b13049e5ae91a6b1857d779"
   },
   "/static/assets/sentryloot-logo-full.jpg": {
-    "url": "https://images.gamestorehub.com/site-assets/sentryloot-logo-full.jpg",
-    "size": 69894,
-    "sha256": "7fc63e99b9fa3a01b003c3e142d705e4290732f93641ec01163d8e142cb51ab7"
+    "url": "https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-logo-full.jpg",
+    "size": 13422,
+    "sha256": "2435f4eb65afd17613cb105b5550f0ca8916f8673b13049e5ae91a6b1857d779"
   },
   "/static/assets/sentryloot-mark-128.png": {
-    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/sentryloot-mark-128.png",
-    "size": 16428,
-    "sha256": "98b65ee39c01cfb3ddea6ee8ef4451c0a700638117d023f7b444b06cc8ed6305"
+    "url": "https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-128.png",
+    "size": 4327,
+    "sha256": "e0564ef5fb02a43e5650611db22a62663d685aa921a071e5a4896070ecd957bc"
   },
   "/static/assets/sentryloot-mark-256.webp": {
-    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/sentryloot-mark-256.webp",
-    "size": 16330,
-    "sha256": "2b2f06f358f72cde360e6cb757f2259580409d866a4a046ba8d952182ce760f6"
+    "url": "https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-256.webp",
+    "size": 2438,
+    "sha256": "f75b256ec7b195202d2d2c857bab66101a42c8b87f0c889b0bfe219b055d6769"
   },
   "/static/assets/sentryloot-mark-512.png": {
-    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/sentryloot-mark-512.png",
-    "size": 149535,
-    "sha256": "4220b34bdccd9d15a8a391fc96d9ed4ba518d5d0accd20f1f6b9122e1962689a"
+    "url": "https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-512.png",
+    "size": 80020,
+    "sha256": "bc416f48bf62bdc67654db3997620368c1e831d7fd966cc829b5f992958464da"
   },
   "/static/assets/sentryloot-mark.png": {
-    "url": "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/sentryloot-mark.png",
-    "size": 794557,
-    "sha256": "c510e0ae39a66258579d0e3dc4b28450c000658d0697453b073e4a818b39bd72"
+    "url": "https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark.png",
+    "size": 80020,
+    "sha256": "bc416f48bf62bdc67654db3997620368c1e831d7fd966cc829b5f992958464da"
   },
   "/static/assets/topup-elite-pass.png": {
     "url": "https://images.gamestorehub.com/site-assets/topup-elite-pass.png",
@@ -455,8 +455,8 @@
     "sha256": "b63f6cd5ed6ba8fe494b7317b780446b03f610c6b34025e101d83580812b3c96"
   },
   "/static/favicon.svg": {
-    "url": "https://images.gamestorehub.com/site-assets/favicon.svg",
-    "size": 486,
-    "sha256": "c640c597f7397dbaa877452a736ebb3baf93240c150f423612e2d28bd0579a4b"
+    "url": "https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/favicon.svg",
+    "size": 5904,
+    "sha256": "a1278c8d62b61b5021e8d0f2e9e8cd847cc767e82f4ad736d99f8983bf8af10b"
   }
 }

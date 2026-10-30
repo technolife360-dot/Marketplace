@@ -1072,8 +1072,16 @@ body .topup-hero-brand .brand-dot,
 body .auth-showcase-brand > span:last-child span,
 body .auth-mobile-brand > span:last-child,
 body .admin-brand b > span {
-  color:#FF9B42 !important;
+  color:#f3ba69 !important;
 }
+}
+
+/* Approved SL identity: black export blends into every dark surface. */
+@layer sentryloot-theme {
+body :is(.brand-mark,.admin-brand-mark) { background:transparent !important;border:0 !important;box-shadow:none !important; }
+body :is(.brand-mark,.admin-brand-mark) img { width:140%;height:140%;max-width:none;max-height:none;object-fit:contain;mix-blend-mode:screen;border-radius:0;filter:none !important; }
+body .auth-art-core { background:transparent !important;border:0 !important;box-shadow:none !important;transform:none !important; }
+body .auth-art-core img,body #support-dock .support-launcher-logo,body .profile-menu-avatar img { mix-blend-mode:screen; }
 }
 
 /* One compact support entry point; vendor UI appears only for a conversation. */
