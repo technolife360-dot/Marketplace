@@ -37,6 +37,7 @@ import account_contacts
 import oauth_service
 import seagm_supplier
 import vipayment_supplier
+import melostore_catalog
 import storage_r2
 import public_assets
 import seller_catalog
@@ -284,6 +285,8 @@ def public_sitemap_xml():
                 urls.append(base+'/top-up/'+urlquote(str(product['game_slug']),safe='')+'/'+urlquote(str(product['url_slug']),safe=''))
     finally:
         db.close()
+    urls.extend(base+'/top-up/'+urlquote(row['slug'],safe='') for row in melostore_catalog.snapshot()['items'])
+    urls=list(dict.fromkeys(urls))
     entries=''.join(f'<url><loc>{html.escape(url)}</loc></url>' for url in urls)
     return ('<?xml version="1.0" encoding="UTF-8"?>'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+entries+'</urlset>').encode('utf-8')
@@ -1276,8 +1279,11 @@ def seo_page_html(path, slug=None):
             seed_topup_catalog(db)
             if len(parts)==1:
                 game=db.execute('SELECT game_name FROM topup_packages WHERE game_slug=? AND enabled=1 LIMIT 1',(parts[0],)).fetchone()
-                if not game: return None
-                title=str(game['game_name'])+' Top Up | SentryLoot'; description='Browse '+str(game['game_name'])+' game currency packages.'; canonical=base+'/top-up/'+urlquote(parts[0],safe='')
+                if not game:
+                    supplier_brand=melostore_catalog.brand_detail(parts[0])
+                    if not supplier_brand: return None
+                    game={'game_name':supplier_brand['name']}
+                title=str(game['game_name'])+' Top Up | SentryLoot'; description='Browse '+str(game['game_name'])+' top-up packages and digital products.'; canonical=base+'/top-up/'+urlquote(parts[0],safe='')
             elif len(parts)==2:
                 package=db.execute('SELECT game_slug,url_slug,game_name,amount,currency FROM topup_packages WHERE game_slug=? AND url_slug=? AND enabled=1',(parts[0],parts[1])).fetchone()
                 if not package: return None
@@ -2038,7 +2044,13 @@ class Handler(BaseHTTPRequestHandler):
                 by_slug[row['game_slug']]['packages'].append(item)
             scores=purchase_reviews.topup_scores(db)
             for game in games:game['review_summary']=scores.get(game['slug'],{'count':0,'rating':None})
-            return games
+            return melostore_catalog.public_catalog(games)
+        supplier_catalog_match=re.fullmatch(r'/api/top-up/catalog/([a-z0-9-]+)',path)
+        if supplier_catalog_match and method=='GET':
+            brand=melostore_catalog.brand_detail(supplier_catalog_match.group(1))
+            if not brand: raise HttpError(404,'Top Up mahsuloti topilmadi.')
+            brand['payment_mode']='stripe_test' if stripe_test_topups.enabled(globals()) else 'disabled'
+            return brand
         topup_match=re.fullmatch(r'/api/top-up/packages/([a-z0-9-]+)/([a-z0-9-]+)',path)
         if topup_match and method=='GET':
             seed_topup_catalog(db)

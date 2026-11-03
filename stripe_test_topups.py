@@ -4,6 +4,7 @@ import time
 
 import stripe_test_payments as pay
 import rewards_engine
+import melostore_catalog
 
 
 def enabled(core):
@@ -21,7 +22,7 @@ def view(db, oid, uid, core):
         raise core['HttpError'](404, 'Test top-up order not found.')
     order = core['topup_admin_row'](row)
     promotion = rewards_engine.purchase(db, 'topup', oid)
-    order.update(mode='stripe_test', total_minor=promotion['total_minor'] if promotion else order['unit_price_minor']*order['quantity'], real_delivery=False, promotions=pay.promotion_view(promotion))
+    order.update(supplier_sku=pay.read(db, 'topup:'+oid).get('supplier_sku'), mode='stripe_test', total_minor=promotion['total_minor'] if promotion else order['unit_price_minor']*order['quantity'], real_delivery=False, promotions=pay.promotion_view(promotion))
     return order
 
 
@@ -39,7 +40,19 @@ def checkout(db, uid, data, core):
         raise core['HttpError'](400, 'Enter a numeric player ID and a quantity from 1 to 99.')
     if not isinstance(server, str) or not re.fullmatch(r'[0-9]{0,10}', server) or not isinstance(request_key, str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,100}', request_key):
         raise core['HttpError'](400, 'Invalid server ID or checkout request key.')
-    package = db.execute('SELECT * FROM topup_packages WHERE id=? AND enabled=1', (package_id,)).fetchone()
+    supplier = None
+    if 'sku' in data:
+        supplier = melostore_catalog.test_checkout_offer(data['sku'])
+        if not supplier or quantity != 1 or server or data.get('rewards_quote_id'):
+            raise core['HttpError'](409, 'This supplier test package is unavailable or has invalid checkout details.')
+        package_id = supplier['id']
+        # These references are intentionally unpriced and disabled in the legacy
+        # checkout. Supplier test orders use the server-approved USD price below.
+        db.execute('INSERT INTO topup_packages(id,game_slug,game_name,url_slug,currency,amount,price_minor,enabled,manual_enabled,supplier_enabled) VALUES(?,?,?,?,?,?,0,0,0,0) ON CONFLICT(id) DO NOTHING',
+            (package_id, supplier['game_slug'], supplier['game_name'], supplier['sku'], 'UC', supplier['amount']))
+    elif isinstance(package_id, str) and package_id.startswith('h2h-test-'):
+        raise core['HttpError'](409, 'Choose a supplier SKU for this package.')
+    package = supplier or db.execute('SELECT * FROM topup_packages WHERE id=? AND enabled=1', (package_id,)).fetchone()
     if not package or package['price_minor'] <= 0:
         raise core['HttpError'](409, 'This package has no configured test price.')
     if package['game_slug'] in ('mobile-legends',) and not server:
@@ -59,16 +72,16 @@ def checkout(db, uid, data, core):
             if (old['package_id'], old['quantity'], old['player_id'], old['server_id'], prior.get('rewards_quote_id')) != (package_id, quantity, player, server, quote_id):
                 raise core['HttpError'](409, 'This request key belongs to different top-up details.')
         else:
-            package = db.execute('SELECT * FROM topup_packages WHERE id=? AND enabled=1', (package_id,)).fetchone()
+            package = melostore_catalog.test_checkout_offer(supplier['sku']) if supplier else db.execute('SELECT * FROM topup_packages WHERE id=? AND enabled=1', (package_id,)).fetchone()
             if not package or package['price_minor'] <= 0:
                 raise core['HttpError'](409, 'This package has no configured test price.')
             oid = core['ident']()
             if quote_id:
                 rewards_engine.reserve(db, uid, quote_id, 'topup', oid, [{'package_id': package_id, 'quantity': quantity, 'price_minor': package['price_minor']}], 'UZS', package['price_minor']*quantity, 0, core)
             db.execute('INSERT INTO topup_orders(id,reference,buyer_id,package_id,player_id,server_id,quantity,unit_price_minor,currency,fulfillment_note) VALUES(?,?,?,?,?,?,?,?,?,?)',
-                (oid, 'TEST-TU-'+core['secrets'].token_hex(4).upper(), uid, package_id, player, server, quantity, package['price_minor'], 'UZS', 'Stripe TEST only. No UC or supplier delivery.'))
+                (oid, 'TEST-TU-'+core['secrets'].token_hex(4).upper(), uid, package_id, player, server, quantity, package['price_minor'], 'USD' if supplier else 'UZS', 'Stripe TEST only. No UC or supplier delivery.'))
             pay.write(db, request_record, {'id': oid, 'rewards_quote_id': quote_id})
-            pay.write(db, 'topup:'+oid, {'idempotency_key': core['create_token']()})
+            pay.write(db, 'topup:'+oid, {'idempotency_key': core['create_token'](), 'supplier_sku':supplier['sku'] if supplier else None})
             rewards_engine.sync_topup(db, oid, core)
         db.execute('COMMIT')
     except Exception:
@@ -96,7 +109,11 @@ def start(db, oid, uid, core):
     if provider.name != 'stripe_test':
         raise core['HttpError'](503, 'Stripe test is disabled.')
     try:
-        result = provider.session(oid, order['total_minor'], order['currency'], pay.read(db, 'topup:'+oid)['idempotency_key'], kind='topup')
+        record = pay.read(db, 'topup:'+oid)
+        if not record.get('expires_at'):
+            record['expires_at'] = int(time.time())+1800
+            pay.write(db, 'topup:'+oid, record)
+        result = provider.session(oid, order['total_minor'], order['currency'], record['idempotency_key'], kind='topup', expires_at=record['expires_at'], cancel_path='/top-up/pubg-mobile' if record.get('supplier_sku') else None, success_path='/top-up/pubg-mobile?topup_return='+oid if record.get('supplier_sku') else None)
     except Exception as exc:
         raise core['HttpError'](503, 'Stripe test checkout is unavailable. Retry from this order.') from exc
     pay.write(db, 'checkout:'+oid, {'id': result['id'], 'url': result['url'], 'expires_at': result['expires_at']})
@@ -215,7 +232,7 @@ def route(db, ctx, method, path, data, core):
     if path == '/api/top-up/test-checkout' and method == 'POST':
         uid = core['require_verified'](ctx)
         return checkout(db, uid, data, core)
-    match = re.fullmatch(r'/api/top-up/test-orders/([A-Za-z0-9_-]+)(?:/(checkout|cancel|confirm))?', path)
+    match = re.fullmatch(r'/api/top-up/test-orders/([A-Za-z0-9_-]+)(?:/(checkout|cancel|confirm|refresh))?', path)
     admin = re.fullmatch(r'/api/admin/payments/stripe-test/topups/([A-Za-z0-9_-]+)/(deliver|refund)', path)
     if not match and not admin:
         return pay.UNHANDLED
@@ -235,6 +252,19 @@ def route(db, ctx, method, path, data, core):
         raise core['HttpError'](405, 'Method not allowed.')
     if action == 'checkout':
         return start(db, oid, uid, core)
+    if action == 'refresh':
+        # Local testing also supports an explicit server-to-Stripe verification.
+        # Never trust a success URL or a client-supplied payment status.
+        saved = pay.read(db, 'checkout:'+oid)
+        if order['status'] == 'awaiting_payment' and saved and enabled(core):
+            provider = core['configured_payment_provider']()
+            try:
+                session = provider.paid_session(saved['id'])
+            except ValueError:
+                return order
+            receive(db, provider, {'id':'reconcile:'+saved['id'], 'type':'checkout.session.completed',
+                    'data':{'object':session}}, core)
+        return view(db, oid, uid, core)
     db.execute('BEGIN IMMEDIATE')
     try:
         db.execute('UPDATE topup_orders SET updated_at=updated_at WHERE id=?', (oid,))

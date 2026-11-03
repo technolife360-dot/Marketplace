@@ -127,3 +127,14 @@ and manifest. Do not remove an old object while retained deployments still use i
 Core shopping translations now cover 14 interface languages with English fallback for untranslated text. Display-currency estimates do not change the stored order or settlement currency. Listing creation supports whole-unit UZS and minor-unit MYR; the Stripe test boundary converts whole UZS to Stripe minor units consistently for checkout, payment verification, refunds and seller settlement. Signed sandbox payment flows are implemented and regression-tested; this is not a live payment adapter or an external end-to-end success claim.
 
 The admin catalogue-readiness page now combines existing catalogue checks with business/support, payment configuration and Top Up prerequisites. Configuration presence is explicitly separate from operational verification. See [owner preparation steps](docs/MARKETPLACE_LAUNCH_OWNER_STEPS.md) for authentic catalogue inputs, sandbox configuration, supplier onboarding and remaining launch checks.
+
+
+### H2H PUBG Stripe test checkout
+
+The supplier page collects a numeric Player ID and explicit test-payment consent in the selection panel. Buy creates an order in the background and redirects directly to Stripe-hosted Checkout. It never adds UC to the cart.
+
+The approved SKU/price allowlist in `melostore_catalog.PUBG_TEST_OFFERS` is authoritative on the server. USD prices are integer cents; client prices and FX estimates are not accepted as payment amounts. Localized display prices remain estimates, and Checkout charges the original USD test amount. Orders retain the chosen supplier SKU and Player ID. No funded supplier request or real UC delivery is made.
+
+Use the existing `STRIPE_TEST_SECRET_KEY`, `STRIPE_TEST_ACCOUNT_ID`, `STRIPE_TEST_WEBHOOK_SECRET`, `PAYMENT_PROVIDER=stripe_test`, and `PUBLIC_BASE_URL` settings. Only test keys and test Stripe objects are accepted. The local ignored `.env.stripe-test.local` stores credentials with mode 0600; start with `SENTRYLOOT_ENV_FILE=.env.stripe-test.local`. Set `PYTHONPATH` if the Stripe SDK is installed outside the project environment.
+
+The signed webhook endpoint is `/api/webhooks/stripe-test`; its configured destination must point at the environment that holds the order database. Handle completed, async succeeded/failed, expired, refund, and dispute events. Successful supplier test payments return to `/top-up/pubg-mobile`, where the server verifies the saved Stripe session and displays the result on the product page. Cancel also returns to that product page. No separate order screen is opened. Visiting a return URL alone cannot mark an order paid.

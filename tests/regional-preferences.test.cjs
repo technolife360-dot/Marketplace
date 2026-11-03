@@ -32,3 +32,31 @@ test('MYR listing binds main and mobile totals to UZS and GBP, including quantit
 test('incomplete cached FX snapshots are refreshed instead of pinning listing prices to MYR',async()=>{
  const {api,stored}=fixture();stored.set('sentryloot-fx-v2',JSON.stringify({rates:{USD:1},updated_at:Date.now()/1000,expires_at:Date.now()/1000+3600}));api.init({markets,translate:(_uz,_ru,en)=>en});api.apply({country:'GB',currency:'GBP',language:'en'});await api.loadRates();assert.equal(api.estimate(30000,'MYR'),'£56.25');
 });
+
+test('supplier USD cents convert once for region currency and refresh after rates load',async()=>{
+ const {api,root}=fixture();
+ const source=fs.readFileSync('static/topup.js','utf8');
+ const context={RegionPreferences:api,esc:String};vm.createContext(context);
+ vm.runInContext(source.slice(source.indexOf('function topupSupplierBasePrice('),source.indexOf('async function renderTopUpSupplierBrand(')),context);
+ const pack={selling_price_cents:499,selling_currency:'USD'};
+ const nodes=[{dataset:{regionAmount:'4.99',regionCurrency:'USD',regionOriginal:'$4.99'},textContent:'$4.99'}];
+ root.document.querySelectorAll=selector=>selector==='[data-region-money]'?nodes:[];
+ api.init({markets:[...markets,{country:'UZ',currency:'UZS'}],translate:(_uz,_ru,en)=>en});api.apply({country:'MY',currency:'MYR',language:'en'});
+ assert.equal(context.topupSupplierPrice(pack),'$4.99');
+ assert.match(context.topupSupplierPriceAttributes(pack),/data-region-amount="4.99"/);
+ await api.loadRates();
+ assert.equal(context.topupSupplierPrice(pack),'RM 19.96');
+ assert.equal(nodes[0].textContent,'RM 19.96');
+ api.apply({country:'GB',currency:'GBP',language:'en'});
+ assert.equal(nodes[0].textContent,'£3.74');
+ api.apply({country:'UZ',currency:'UZS',language:'en'});
+ assert.match(nodes[0].textContent,/59,880/);
+ api.apply({country:'DE',currency:'EUR',language:'en'});
+ assert.equal(context.topupSupplierPrice(pack),'$4.99');
+ assert.equal(nodes[0].textContent,'$4.99');
+ api.apply({country:'US',currency:'USD',language:'en'});
+ assert.equal(context.topupSupplierPrice(pack),'$4.99');
+ assert.equal(nodes[0].textContent,'$4.99');
+ assert.equal(pack.selling_price_cents,499);
+ assert.equal(context.topupSupplierPrice({}),'');
+});

@@ -93,7 +93,7 @@ class StripeTestFlows(unittest.TestCase):
         provider = self.configure()
         provider.client.v1.checkout.sessions.create.return_value = {
             'id': 'cs_test_units', 'livemode': False, 'url': 'https://checkout.stripe.com/c/pay/cs_test_units'}
-        for currency, internal, stripe_amount in [('UZS', 96000, 9600000), ('MYR', 30000, 30000)]:
+        for currency, internal, stripe_amount in [('UZS', 96000, 9600000), ('MYR', 30000, 30000), ('USD', 99, 99)]:
             with self.subTest(currency=currency):
                 provider.session('order', internal, currency, 'units_'+currency)
                 price = provider.client.v1.checkout.sessions.create.call_args.args[0]['line_items'][0]['price_data']
@@ -405,6 +405,72 @@ class StripeTestFlows(unittest.TestCase):
         payments.process(self.db, vars(app))
         provider.client.v1.transfers.reversals.create.assert_called_once()
         self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?', (self.oid,)).fetchone()['status'], 'refunded')
+
+    def test_supplier_test_checkout_uses_server_usd_price_and_pins_sku(self):
+        self.configure()
+        data = {'sku':'pubgmgl325u-s7', 'player_id':'12345678', 'quantity':1,
+                'request_key':'supplier_checkout_fixture_0001', 'accept_terms':True,
+                'selling_price_cents':1, 'currency':'MYR'}
+        result = self.route(self.buyer, 'POST', '/api/top-up/test-checkout', data)
+        order = self.route(self.buyer, 'GET', '/api/top-up/test-orders/'+result['id'])
+        self.assertEqual((order['total_minor'],order['currency'],order['supplier_sku']), (499,'USD','pubgmgl325u-s7'))
+        self.assertEqual(order['player_id'],'12345678')
+        again = self.route(self.buyer, 'POST', '/api/top-up/test-checkout', data)
+        self.assertEqual(result['id'],again['id'])
+        self.provider.client.v1.checkout.sessions.create.return_value = {'id':'cs_test_supplier', 'livemode':False,
+            'url':'https://checkout.stripe.com/c/pay/cs_test_supplier', 'expires_at':int(time.time())+1800}
+        self.route(self.buyer,'POST','/api/top-up/test-orders/'+result['id']+'/checkout')
+        price = self.provider.client.v1.checkout.sessions.create.call_args.args[0]['line_items'][0]['price_data']
+        self.assertEqual((price['unit_amount'],price['currency']),(499,'usd'))
+        self.assertEqual(self.provider.client.v1.checkout.sessions.create.call_args.args[0]['cancel_url'],'https://test.example.invalid/top-up/pubg-mobile')
+        self.assertEqual(self.provider.client.v1.checkout.sessions.create.call_args.args[0]['success_url'],'https://test.example.invalid/top-up/pubg-mobile?topup_return='+result['id'])
+        with self.assertRaises(app.HttpError):
+            self.route(self.buyer,'POST','/api/top-up/test-checkout',{**data,'sku':'pubgmgl660u-s7'})
+        with self.assertRaises(app.HttpError):
+            self.route(self.buyer,'POST','/api/top-up/test-checkout',{**data,'sku':None,'package_id':order['package_id']})
+
+    def test_supplier_storefront_only_advertises_test_checkout_when_configured(self):
+        with patch.object(app,'configured_payment_provider',side_effect=RuntimeError('Not configured')):
+            self.assertEqual(self.route(self.buyer,'GET','/api/top-up/catalog/pubg-mobile')['payment_mode'],'disabled')
+        self.configure()
+        self.assertEqual(self.route(self.buyer,'GET','/api/top-up/catalog/pubg-mobile')['payment_mode'],'stripe_test')
+
+    def test_supplier_checkout_rejects_invalid_id_unapproved_sku_and_unavailable_packages(self):
+        self.configure()
+        data = {'sku':'pubgmgl60eu-s2','player_id':'12345678','quantity':1,
+                'request_key':'supplier_rejected_fixture_0001','accept_terms':True}
+        for overrides in ({'player_id':'abc'}, {'player_id':''}, {'quantity':2},
+                          {'sku':'pubgmgl325eu-s2'}, {'accept_terms':False}, {'server_id':'7'}):
+            with self.subTest(overrides=overrides), self.assertRaises(app.HttpError):
+                self.route(self.buyer,'POST','/api/top-up/test-checkout',{**data,**overrides})
+        with patch.object(app.melostore_catalog,'test_checkout_offer',return_value=None):
+            with self.assertRaises(app.HttpError):
+                self.route(self.buyer,'POST','/api/top-up/test-checkout',data)
+        self.provider.client.v1.checkout.sessions.create.assert_not_called()
+
+    def test_supplier_usd_signed_webhook_records_test_payment_without_delivery(self):
+        self.configure()
+        result = self.route(self.buyer,'POST','/api/top-up/test-checkout',{'sku':'pubgmgl60eu-s2',
+            'player_id':'12345678','quantity':1,'request_key':'supplier_paid_fixture_0001','accept_terms':True})
+        self.oid = result['id']
+        self.provider.client.v1.checkout.sessions.create.return_value = {'id':'cs_test_supplier_paid','livemode':False,
+            'url':'https://checkout.stripe.com/c/pay/cs_test_supplier_paid','expires_at':int(time.time())+1800}
+        self.route(self.buyer,'POST','/api/top-up/test-orders/'+self.oid+'/checkout')
+        self.session = {'id':'cs_test_supplier_paid','livemode':False,'client_reference_id':self.oid,
+            'payment_status':'paid','amount_total':99,'currency':'usd',
+            'metadata':{'sentryloot_mode':'stripe_test','sentryloot_kind':'topup','sentryloot_order':self.oid},
+            'payment_intent':{'id':'pi_supplier','livemode':False,'status':'succeeded','amount_received':99,'currency':'usd',
+                'latest_charge':{'id':'ch_supplier','livemode':False,'refunded':False,'amount_refunded':0,'disputed':False}}}
+        self.provider.client.v1.checkout.sessions.retrieve.return_value=self.session
+        order=self.route(self.buyer,'POST','/api/top-up/test-orders/'+self.oid+'/refresh')
+        self.assertEqual(order['status'],'paid_test')
+        self.pay(); self.pay()
+        order=self.route(self.buyer,'GET','/api/top-up/test-orders/'+self.oid)
+        self.assertEqual(order['status'],'paid_test')
+        self.assertFalse(order['real_delivery'])
+        self.assertEqual(order['supplier_reference'],'')
+        self.assertEqual(order['supplier_quantity'],0)
+        self.assertEqual(self.db.execute('SELECT COUNT(*) n FROM ledger_entries').fetchone()['n'],0)
 
     def topup_order(self):
         self.configure()

@@ -3090,3 +3090,342 @@ body:not(.home-page) .listing-detail-page .listing-buy-button:hover { background
  body .user-avatar>span{grid-area:1/1;line-height:1!important}
  body .user-avatar>img{position:absolute!important;inset:0!important;z-index:1!important;display:block!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;border:0!important;border-radius:inherit!important;object-fit:cover!important;object-position:center!important;opacity:1!important;visibility:visible!important}
 }
+
+/* Desktop Top Up catalog categories. */
+.topup-categories { display:flex; align-items:center; justify-content:flex-start; flex-wrap:nowrap; gap:24px; width:100%; margin:24px 0 28px; padding:0; overflow-x:auto; scrollbar-width:thin; border:0; }
+.topup-page .topup-category { position:relative; flex:0 0 auto; white-space:nowrap; min-height:44px; padding:10px 4px; border:0!important; border-radius:0; background:none!important; box-shadow:none!important; color:#99999f!important; font:inherit; font-size:14px; font-weight:500; line-height:1.4; cursor:pointer; transition:color .18s ease; }
+.topup-page .topup-category:hover { color:#f3f3f5!important; }
+.topup-page .topup-category[aria-pressed="true"] { color:#ff9b42!important; font-weight:600; }
+.topup-category:focus-visible { outline:2px solid #ff9b42; outline-offset:3px; }
+.topup-category-empty { padding:42px 20px; border:1px dashed #333338; border-radius:14px; text-align:center; color:#aaa; }
+.topup-page [data-topup-category-card][hidden], .topup-page [data-topup-category-empty][hidden] { display:none!important; }
+@media(max-width:840px) { .topup-categories { display:none; } }
+
+@layer sentryloot-premium {
+ body #app .topup-page .topup-category { border:0!important; background:transparent!important; box-shadow:none!important; color:#99999f!important; }
+ body #app .topup-page .topup-category:hover { background:transparent!important; color:#f3f3f5!important; }
+ body #app .topup-page .topup-category[aria-pressed="true"] { background:transparent!important; color:#ff9b42!important; }
+}
+
+.topup-page .topup-category::after { content:""; position:absolute; left:4px; right:4px; bottom:3px; height:2px; border-radius:2px; background:currentColor; transform:scaleX(0); transform-origin:center; transition:transform .18s ease; }
+.topup-page .topup-category:hover::after, .topup-page .topup-category:focus-visible::after { transform:scaleX(1); }
+@media(prefers-reduced-motion:reduce) { .topup-page .topup-category::after { transition:none; } }
+
+/* Dense desktop catalog: six compact cards across the full content width. */
+@media(min-width:841px) {
+ .topup-page .topup-games-grid { grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; }
+ .topup-page .topup-game-card { border-radius:12px; box-shadow:none; }
+ .topup-page .topup-game-card:hover { transform:translateY(-2px); box-shadow:none; }
+ .topup-page .topup-game-cover { height:auto; aspect-ratio:16/10; }
+ .topup-page .topup-game-cover picture { display:block; width:100%; height:100%; }
+ .topup-page .topup-game-cover-shade { background:linear-gradient(180deg,transparent 60%,rgba(0,0,0,.18)); }
+ .topup-page .topup-game-card-body { min-height:0; padding:10px 12px 12px; gap:8px; }
+ .topup-page .topup-game-card-body .topup-currency-row { display:none; }
+ .topup-page .topup-game-card-body h2 { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; min-height:34px; margin:0; font-size:13px; font-weight:600; line-height:17px; letter-spacing:0; }
+ .topup-page .topup-game-card-body .topup-game-cta { min-height:30px; margin:0; padding:5px 10px; border-radius:7px; font-size:11px; line-height:18px; }
+ .topup-page .topup-game-card-body .pr-card-rating { margin:0; font-size:11px; }
+}
+
+/* Desktop image-led portrait cards. */
+@media(min-width:841px) {
+ .topup-page .topup-game-card { aspect-ratio:3/4; isolation:isolate; background:#191919; }
+ .topup-page .topup-game-cover { position:absolute; inset:0; height:100%; aspect-ratio:auto; border:0; }
+ .topup-page .topup-game-cover picture, .topup-page .topup-game-cover img { width:100%; height:100%; }
+ .topup-page .topup-game-cover-shade { background:linear-gradient(180deg,transparent 35%,rgba(8,8,10,.08) 50%,rgba(8,8,10,.75) 100%); }
+ .topup-page .topup-game-card-body { position:absolute; inset:auto 0 0; z-index:1; padding:24px 12px 12px; gap:10px; background:transparent; }
+ .topup-page .topup-game-card-body::before { content:""; position:absolute; inset:-20px 0 0; z-index:-1; background:linear-gradient(180deg,transparent,rgba(12,12,14,.24)); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); mask-image:linear-gradient(180deg,transparent,#000 45%); pointer-events:none; }
+ .topup-page .topup-game-card-body h2 { width:100%; color:#fff; text-shadow:0 1px 8px rgba(0,0,0,.6); }
+ .topup-page .topup-game-card-body .topup-game-cta { min-height:32px; font-size:12px; font-weight:600; }
+}
+@layer sentryloot-premium {
+ @media(min-width:841px) {
+  body #app .topup-page .topup-game-card .topup-game-card-body { background:transparent!important; background-image:none!important; }
+  body #app .topup-page .topup-game-card-body .topup-game-cta { background:#f3ba69!important; border:0!important; color:#21170b!important; box-shadow:none!important; }
+  body #app .topup-page .topup-game-card-body .topup-game-cta:hover { background:#ffd08d!important; color:#21170b!important; }
+ }
+}
+
+/* Large H2H catalogue: lightweight search, incremental results and brand packages. */
+.topup-cover-placeholder { position:absolute; inset:0; display:grid; place-items:center; background:radial-gradient(ellipse at top,#393342,#121216); color:#a59a86; }
+.topup-cover-placeholder .icon { width:56px; height:56px; }
+.topup-game-cover picture { position:relative; }
+.topup-catalog-tools { display:flex; align-items:center; justify-content:space-between; gap:20px; margin:0 0 20px; }
+.topup-catalog-tools>p { margin:0; color:#a1a1aa; font-size:13px; }
+.topup-catalog-search { display:block; width:320px; max-width:100%; }
+.topup-catalog-search input { width:100%; height:44px; min-height:44px; padding:0 14px; border:1px solid #303036; border-radius:10px; background:#111114; color:#f1f1f1; font:inherit; font-size:13px; }
+.topup-catalog-more { display:flex; justify-content:center; margin:24px 0; }
+.topup-catalog-more>button { min-width:180px; min-height:44px; }
+.topup-supplier-back { display:inline-block; margin-bottom:24px; color:#bbb; font-size:13px; }
+.topup-supplier-heading { display:flex; align-items:center; gap:24px; margin:0 0 32px; }
+.topup-supplier-heading>img { width:112px; height:112px; border-radius:16px; object-fit:cover; }
+.topup-supplier-heading span { color:#f3ba69; font-size:12px; }
+.topup-supplier-heading h1 { margin:8px 0; font-size:28px; }
+.topup-supplier-heading p { margin:0; color:#a1a1aa; font-size:14px; }
+.topup-supplier-notice { margin:0 0 20px; color:#a1a1aa; font-size:13px; }
+.topup-supplier-packages { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
+.topup-supplier-package { padding:18px; border:1px solid #29292e; border-radius:12px; background:#111114; }
+.topup-supplier-package h2 { margin:12px 0 8px; font-size:14px; line-height:1.45; }
+.topup-supplier-package p { margin:0; color:#a1a1aa; font-size:12px; }
+.topup-supplier-stock { color:#999; font-size:11px; }
+.topup-supplier-stock.is-available { color:#8dc7a0; }
+.topup-page [data-package-search][hidden], .topup-page [data-topup-package-empty][hidden], .topup-page [data-topup-load-more][hidden] { display:none!important; }
+@media(max-width:840px) { .topup-page:not(.topup-supplier-page)>.topup-catalog-tools { display:none; } }
+
+/* Keep supplier artwork readable without cropping square logos into portrait cards. */
+@media(min-width:841px) {
+ .topup-page .topup-game-cover .topup-card-backdrop { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:blur(18px) brightness(.65); transform:scale(1.15); }
+ .topup-page .topup-game-cover picture img { position:absolute; top:10px; left:10px; width:calc(100% - 20px); height:calc(100% - 86px); object-fit:contain; object-position:center top; border-radius:8px; transform:none; }
+ .topup-page .topup-game-card:hover .topup-game-cover picture img { transform:none; }
+}
+
+@layer sentryloot-premium { body #app .topup-page button[data-topup-load-more][hidden] { display:none!important; } }
+
+/* Midasbuy-inspired desktop product shop, using SentryLoot's gold palette. */
+@media(min-width:841px) {
+ .topup-supplier-page { padding-top:24px; }
+ .tus-breadcrumb { display:flex; align-items:center; gap:10px; margin-bottom:20px; color:#8c8e98; font-size:12px; }
+ .tus-breadcrumb a { color:#ddd; text-decoration:none; }
+ .tus-hero { position:relative; display:flex; align-items:center; justify-content:space-between; gap:24px; min-height:180px; padding:32px; overflow:hidden; isolation:isolate; border:1px solid #303036; border-radius:18px; background:#15151c; }
+ .tus-hero-bg { position:absolute; inset:0 0 0 auto; width:55%; height:100%; object-fit:cover; opacity:.22; filter:blur(1px); z-index:-2; }
+ .tus-hero::after { content:""; position:absolute; inset:0; z-index:-1; background:linear-gradient(90deg,#15151c 25%,rgba(21,21,28,.7) 65%,rgba(21,21,28,.15)); }
+ .tus-hero-main { display:flex; align-items:center; gap:22px; min-width:0; }
+ .tus-brand-art { display:grid; place-items:center; width:88px; height:88px; flex:0 0 88px; overflow:hidden; border:1px solid #ffffff25; border-radius:17px; background:#23232a; box-shadow:0 8px 24px #0004; }
+ .tus-brand-art img { width:100%; height:100%; object-fit:cover; }
+ .tus-brand-art .icon { width:40px; height:40px; }
+ .tus-eyebrow { color:#f3ba69; font-size:11px; font-weight:600; letter-spacing:1.2px; text-transform:uppercase; }
+ .tus-hero h1 { margin:8px 0; font-size:28px; font-weight:650; line-height:1.2; letter-spacing:-.6px; }
+ .tus-hero p { margin:0; color:#a8a8b3; font-size:13px; }
+ .tus-hero-meta { display:flex; align-items:center; gap:7px; flex:0 0 auto; align-self:flex-end; padding-bottom:4px; color:#a4a4af; font-size:12px; }
+ .tus-hero-meta b { color:#f2f2f5; font-size:14px; font-weight:600; }
+ .tus-hero-meta i { width:3px; height:3px; margin:0 7px; border-radius:50%; background:#666; }
+ .tus-types { display:flex; align-items:stretch; gap:26px; margin:22px 0 30px; overflow-x:auto; scrollbar-width:thin; border-bottom:1px solid #29292f; }
+ .tus-types button { position:relative; display:flex; align-items:center; gap:9px; flex:0 0 auto; min-height:54px; padding:12px 2px 17px; font-size:13px; font-weight:500; white-space:nowrap; cursor:pointer; }
+ .tus-types button span { display:grid; place-items:center; min-width:24px; height:20px; padding:0 6px; border-radius:5px; background:#ffffff09; color:#898993; font-size:10px; }
+ .tus-types button::after { content:""; position:absolute; bottom:0; left:0; right:0; height:3px; border-radius:3px 3px 0 0; background:#f3ba69; transform:scaleX(0); transition:transform .18s ease; }
+ .tus-types button[aria-pressed="true"]::after,.tus-types button:hover::after { transform:scaleX(1); }
+ .tus-layout { display:grid; grid-template-columns:minmax(0,1fr) 292px; align-items:start; gap:28px; }
+ .tus-main { min-width:0; }
+ .tus-section-heading { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:12px; }
+ .tus-section-heading>div { display:flex; align-items:center; gap:12px; }
+ .tus-step { display:grid; place-items:center; width:32px; height:32px; flex:0 0 32px; border:1px solid #f3ba6930; border-radius:9px; background:#f3ba690b; color:#f3ba69; font-size:11px; font-weight:650; }
+ .tus-section-heading p { margin:0 0 5px; color:#777983; font-size:9px; font-weight:600; letter-spacing:1.6px; }
+ .tus-section-heading h2 { margin:0; font-size:20px; font-weight:600; letter-spacing:-.4px; }
+ .tus-search { display:block; width:240px; flex:0 0 240px; margin:0; }
+ .tus-search input { width:100%; height:44px; min-height:44px; padding:0 14px; border:1px solid #303036; border-radius:9px; background:#121217; color:#ddd; font:inherit; font-size:12px; }
+ .tus-result-count { margin:0 0 20px; padding-left:44px; color:#7f818c; font-size:11px; }
+ .tus-package-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+ .tus-pack { position:relative; display:flex; flex-direction:column; align-items:center; min-width:0; min-height:198px; padding:13px 14px 16px; text-align:center; cursor:pointer; transition:transform .18s ease,border-color .18s ease; }
+ .tus-pack-top { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; min-height:19px; }
+ .tus-stock { display:inline-flex; align-items:center; gap:5px; color:#83858e; font-size:9px; }
+ .tus-stock.is-available::before { content:""; width:4px; height:4px; border-radius:50%; background:#9ab99d; }
+ .tus-pack-check { display:grid; place-items:center; width:19px; height:19px; border:1px solid #42434c; border-radius:50%; color:transparent; font-size:11px; }
+ .tus-pack[aria-pressed="true"] .tus-pack-check { background:#f3ba69; border-color:#f3ba69; color:#20190f; }
+ .tus-pack-art { display:grid; place-items:center; height:68px; margin:8px 0 12px; }
+ .tus-pack-art img { display:block; width:68px; height:60px; object-fit:contain; }
+ .tus-pack-art .icon { width:42px; height:42px; color:#cbb58c; stroke-width:1; }
+ .tus-pack strong { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; width:100%; font-size:14px; font-weight:600; line-height:1.4; }
+ .tus-pack>small { margin:6px 0 16px; color:#747783; font-size:10px; }
+ .tus-pack-price { width:100%; margin-top:auto; padding-top:11px; border-top:1px solid #ffffff09; color:#a6a3a0; font-size:11px; }
+ .tus-pack:disabled { cursor:default; }
+ .tus-pack:disabled .tus-pack-art { opacity:.35; }
+ .tus-empty { padding:44px 20px; text-align:center; color:#8a8c98; border:1px dashed #32323c; border-radius:12px; }
+ .tus-more { display:flex; justify-content:center; margin:24px 0; }
+ .tus-more button { min-height:44px; padding:10px 24px; border-radius:9px; font-size:12px; cursor:pointer; }
+ .tus-summary { position:sticky; top:104px; padding:22px; border:1px solid #303039; border-radius:15px; background:#131319; }
+ .tus-summary-title { display:flex; align-items:center; gap:11px; margin-bottom:20px; }
+ .tus-summary-title h2 { margin:0; font-size:15px; font-weight:600; }
+ .tus-summary-brand { display:flex; align-items:center; gap:10px; padding:0 0 20px; border-bottom:1px solid #ffffff0c; font-size:12px; line-height:1.5; }
+ .tus-summary-brand img { width:34px; height:34px; border-radius:8px; object-fit:cover; }
+ .tus-summary-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:185px; text-align:center; }
+ .tus-summary-empty>.icon { width:34px; height:34px; margin-bottom:16px; color:#686875; stroke-width:1; }
+ .tus-summary-empty b { color:#babac4; font-size:13px; font-weight:500; }
+ .tus-summary-empty p { max-width:190px; margin:8px 0 0; color:#72747e; font-size:11px; line-height:1.65; }
+ .tus-summary-product-art { display:grid; place-items:center; height:80px; margin-top:20px; }
+ .tus-summary-product-art img { width:60px; height:60px; object-fit:contain; }
+ .tus-summary-product-art .icon { width:40px; height:40px; color:#cbb58c; }
+ .tus-summary-selected h3 { margin:8px 0 20px; font-size:15px; text-align:center; }
+ .tus-summary-selected dl { margin:0 0 22px; }
+ .tus-summary-selected dl>div { display:flex; justify-content:space-between; gap:12px; margin-top:12px; font-size:11px; line-height:1.5; }
+ .tus-summary-selected dt { color:#81838d; }
+ .tus-summary-selected dd { max-width:58%; margin:0; text-align:right; color:#d9d9df; overflow-wrap:anywhere; }
+ .tus-summary-total { display:flex; align-items:center; justify-content:space-between; padding:18px 0; border-top:1px solid #ffffff0c; font-size:12px; color:#9495a0; }
+ .tus-summary-total b { color:#f3ba69; font-size:24px; }
+ .tus-buy { width:100%; min-height:44px; padding:10px; font-size:13px; font-weight:600; border-radius:9px; }
+ .tus-checkout-note { display:flex; align-items:flex-start; gap:8px; margin:14px 0 0; color:#777a85; font-size:10px; line-height:1.6; }
+ .tus-checkout-note .icon { width:14px; height:14px; flex:0 0 14px; margin-top:1px; }
+}
+@layer sentryloot-premium {
+ @media(min-width:841px) {
+  body #app .topup-supplier-page .tus-types button { border:0!important; border-radius:0!important; background:transparent!important; color:#92949f!important; box-shadow:none!important; }
+  body #app .topup-supplier-page .tus-types button[aria-pressed="true"],body #app .topup-supplier-page .tus-types button:hover { color:#f3ba69!important; background:transparent!important; }
+  body #app .topup-supplier-page .tus-pack { border:1px solid #2d2e38!important; border-radius:13px!important; background:linear-gradient(155deg,#1c1c26,#14141c)!important; color:#eeeef2!important; box-shadow:none!important; }
+  body #app .topup-supplier-page .tus-pack:not(:disabled):hover { border-color:#8b7554!important; background:linear-gradient(155deg,#24222a,#19181f)!important; transform:translateY(-2px); }
+  body #app .topup-supplier-page .tus-pack[aria-pressed="true"] { border-color:#f3ba69!important; background:linear-gradient(155deg,#30291f,#1d1b1c)!important; box-shadow:0 0 0 1px #f3ba6930!important; }
+  body #app .topup-supplier-page .tus-pack:disabled { opacity:1!important; background:#121219!important; border-color:#25252f!important; color:#7c7f89!important; }
+  body #app .topup-supplier-page .tus-buy:disabled { background:#f3ba69!important; color:#352718!important; opacity:.45!important; border:0!important; box-shadow:none!important; cursor:not-allowed!important; }
+  body #app .topup-supplier-page :is(.tus-type-section,.tus-pack,.tus-empty,[data-supplier-summary-empty],[data-supplier-summary-selected],[data-supplier-more])[hidden] { display:none!important; }
+ }
+}
+
+@layer sentryloot-premium {
+ @media(min-width:841px) {
+  body #app .topup-supplier-page .tus-hero::after { background:linear-gradient(90deg,#15151c 25%,rgba(21,21,28,.7) 65%,rgba(21,21,28,.15))!important; }
+  body #app .topup-supplier-page .tus-types button::after { background:#f3ba69!important; }
+  body #app .topup-supplier-page .tus-pack-check { color:transparent!important; }
+  body #app .topup-supplier-page .tus-pack[aria-pressed="true"] .tus-pack-check { color:#20190f!important; background:#f3ba69!important; border-color:#f3ba69!important; }
+  body #app .topup-supplier-page :is(.tus-eyebrow,.tus-step) { color:#f3ba69!important; }
+ }
+}
+
+/* Compact game masthead, with artwork blending into the page like Midasbuy. */
+@media(min-width:841px) {
+ .topup-supplier-page .tus-breadcrumb { position:relative; z-index:2; margin-bottom:0; font-size:11px; }
+ .topup-supplier-page .tus-hero { min-height:168px; padding:32px 0 36px; border:0; border-radius:0; background:transparent; overflow:visible; }
+ .topup-supplier-page .tus-hero-bg { top:-40px; bottom:auto; left:50%; right:auto; width:100vw; max-width:none; height:calc(100% + 40px); transform:translateX(-50%); object-fit:cover; object-position:center 38%; opacity:.32; filter:none; }
+ .topup-supplier-page .tus-hero::after { top:-40px; bottom:0; left:50%; right:auto; width:100vw; transform:translateX(-50%); }
+ .topup-supplier-page .tus-hero-main { gap:18px; }
+ .topup-supplier-page .tus-brand-art { width:74px; height:74px; flex-basis:74px; border:0; border-radius:14px; box-shadow:0 4px 20px #0003; }
+ .topup-supplier-page .tus-hero h1 { margin:6px 0 10px; font-size:25px; line-height:1.25; letter-spacing:.25px; text-transform:uppercase; }
+ .topup-supplier-page .tus-hero p { color:#afb1bc; font-size:12px; }
+ .topup-supplier-page .tus-types { position:relative; margin-top:0; }
+}
+@layer sentryloot-premium {
+ @media(min-width:841px) {
+  body #app .topup-supplier-page .tus-hero { border:0!important; background:transparent!important; box-shadow:none!important; }
+  body #app .topup-supplier-page .tus-hero::after { background:linear-gradient(0deg,#0a0b0f,rgba(10,11,15,.2) 65%),linear-gradient(90deg,rgba(10,11,15,.9),rgba(10,11,15,.5) 40%,rgba(10,11,15,.2) 70%,rgba(10,11,15,.7))!important; }
+ }
+}
+
+/* Supplied PUBG banner: 1500 × 500 layout, preserving the original artwork. */
+@media(min-width:841px) {
+ .topup-supplier-page .tus-hero-pubg { height:calc(33.333333vw - 40px); min-height:240px; max-height:460px; }
+ .topup-supplier-page .tus-hero-pubg .tus-hero-bg { object-position:center 42%; opacity:.9; }
+}
+@layer sentryloot-premium {
+ @media(min-width:841px) {
+  body #app .topup-supplier-page .tus-hero-pubg::after { background:linear-gradient(0deg,#0a0b0f,transparent 55%),linear-gradient(90deg,rgba(10,11,15,.8),rgba(10,11,15,.15) 55%,rgba(10,11,15,.1))!important; }
+ }
+}
+
+/* Compact PUBG masthead; render the original R2 asset without blur or opacity loss. */
+@media(min-width:841px) {
+ .topup-supplier-page .tus-hero-pubg { height:200px; min-height:200px; max-height:200px; padding:24px 0; }
+ .topup-supplier-page .tus-hero-pubg .tus-hero-bg { opacity:1; filter:none; object-position:center 24%; }
+ .topup-supplier-page .tus-hero-pubg .tus-brand-art { width:64px; height:64px; flex-basis:64px; border-radius:12px; }
+ .topup-supplier-page .tus-hero-pubg h1 { font-size:24px; }
+}
+@layer sentryloot-premium {
+ @media(min-width:841px) {
+  body #app .topup-supplier-page .tus-hero-pubg::after { background:linear-gradient(0deg,#0a0b0f,transparent 48%),linear-gradient(90deg,rgba(10,11,15,.78),rgba(10,11,15,.12) 55%,transparent)!important; }
+ }
+}
+
+/* Show the complete HD composition on the right; no zoom, blur or cut-off figures. */
+@media(min-width:841px) {
+ .topup-supplier-page .tus-hero-pubg .tus-hero-bg { top:-40px; left:auto; right:calc((100% - 100vw) / 2); width:auto; max-width:none; height:calc(100% + 40px); transform:none; object-fit:contain; object-position:right center; opacity:1; filter:none; }
+}
+@layer sentryloot-premium {
+ @media(min-width:841px) {
+  body #app .topup-supplier-page .tus-hero-pubg::after { background:linear-gradient(90deg,#0a0b0f 0%,#0a0b0f 40%,rgba(10,11,15,.2) 54%,transparent 65%),linear-gradient(0deg,#0a0b0f,transparent 12%)!important; }
+ }
+}
+
+@media(min-width:841px) { .topup-supplier-page .tus-hero-pubg .tus-hero-bg { mask-image:linear-gradient(90deg,transparent,#000 18%); -webkit-mask-image:linear-gradient(90deg,transparent,#000 18%); } }
+
+/* Full-width HD artwork, with only a light contrast layer behind the title. */
+@media(min-width:841px) {
+ .topup-supplier-page .tus-hero-pubg .tus-hero-bg { left:50%; right:auto; width:100vw; height:calc(100% + 40px); transform:translateX(-50%); object-fit:cover; object-position:center 52%; mask-image:none; -webkit-mask-image:none; opacity:1; filter:none; }
+ .topup-supplier-page .tus-hero-pubg .tus-hero-main { text-shadow:0 2px 12px #000b; }
+}
+@layer sentryloot-premium {
+ @media(min-width:841px) {
+  body #app .topup-supplier-page .tus-hero-pubg::after { background:linear-gradient(0deg,#0a0b0f,transparent 15%),linear-gradient(90deg,rgba(10,11,15,.52),rgba(10,11,15,.12) 42%,transparent 70%)!important; }
+ }
+}
+
+/* A little more height keeps the characters' legs in view. */
+@media(min-width:841px) {
+ .topup-supplier-page .tus-hero-pubg { height:300px; min-height:300px; max-height:300px; }
+ .topup-supplier-page .tus-hero-pubg .tus-hero-bg { object-position:center bottom; }
+}
+
+/* Product type navigation scrolls without a visible scrollbar. */
+.tus-types { scrollbar-width:none; -ms-overflow-style:none; }
+.tus-types::-webkit-scrollbar { display:none; width:0; height:0; }
+
+@media(min-width:841px) { .topup-supplier-page .tus-pack strong { margin-bottom:16px; } }
+
+@media(min-width:841px) { .topup-supplier-page .tus-hero-pubg { height:280px; min-height:280px; max-height:280px; } }
+
+/* UC bonuses keep their own accent and a compact offer tag. */
+.topup-supplier-page .tus-pack-label { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:5px; }
+.topup-supplier-page .tus-pack-bonus { display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
+.topup-supplier-page .tus-bonus-icon { width:15px; height:15px; flex:none; }
+.topup-supplier-page .tus-pack-unit { font-size:12px; font-weight:500; }
+@layer sentryloot-premium {
+ body #app .topup-supplier-page .tus-pack-bonus,
+ body #app .topup-supplier-page .tus-pack-bonus svg { color:#f3ba69!important; }
+ body #app .topup-supplier-page .tus-bonus-icon { width:15px!important; height:15px!important; }
+}
+
+/* Currency label sits beneath the package quantity. */
+.topup-supplier-page .tus-pack-label .tus-pack-unit { flex-basis:100%; margin-top:3px; font-size:15px; font-weight:600; line-height:1.3; text-align:center; }
+
+/* Compact desktop package selection and order panel. */
+@media(min-width:841px) {
+ .topup-supplier-page .tus-layout { grid-template-columns:minmax(0,1fr) 280px; gap:20px; }
+ .topup-supplier-page .tus-package-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+ .topup-supplier-page .tus-pack { min-height:156px; padding:16px 10px 12px; gap:0; }
+ .topup-supplier-page .tus-pack-top { position:absolute; top:10px; right:10px; width:auto; min-height:0; }
+ .topup-supplier-page .tus-pack-check { width:16px; height:16px; font-size:10px; }
+ .topup-supplier-page .tus-pack-art { height:42px; margin:0 0 9px; }
+ .topup-supplier-page .tus-pack-art img { width:48px; height:42px; }
+ .topup-supplier-page .tus-pack-art .icon { width:32px; height:32px; }
+ .topup-supplier-page .tus-pack strong { margin:0 0 10px; font-size:16px; line-height:1.3; min-height:44px; align-content:center; gap:3px; }
+ .topup-supplier-page .tus-pack-label .tus-pack-unit { margin-top:0; font-size:14px; line-height:1.3; }
+ .topup-supplier-page .tus-pack-price { padding-top:8px; font-size:10px; }
+ .topup-supplier-page .tus-summary { padding:18px; border-radius:12px; }
+ .topup-supplier-page .tus-summary-title { margin-bottom:14px; }
+ .topup-supplier-page .tus-summary-title h2 { font-size:14px; }
+ .topup-supplier-page .tus-summary-brand { padding-bottom:14px; gap:8px; font-size:11px; color:#94969e; }
+ .topup-supplier-page .tus-summary-brand img { width:26px; height:26px; border-radius:6px; }
+ .topup-supplier-page .tus-summary-product { display:flex; align-items:center; gap:12px; padding:16px 0; }
+ .topup-supplier-page .tus-summary-product-art { height:52px; width:58px; margin:0; flex:none; border-radius:10px; background:#ffffff04; }
+ .topup-supplier-page .tus-summary-product-art img { width:44px; height:40px; }
+ .topup-supplier-page .tus-summary-selected h3 { justify-content:flex-start; margin:0; font-size:17px; text-align:left; gap:4px; }
+ .topup-supplier-page .tus-summary-selected .tus-pack-unit { text-align:left; font-size:13px; color:#a6a8b0; }
+ .topup-supplier-page .tus-summary-selected dl { margin:0 0 14px; }
+ .topup-supplier-page .tus-summary-selected dl>div { margin-top:6px; }
+ .topup-supplier-page .tus-summary-total { padding:14px 0; }
+ .topup-supplier-page .tus-summary-total b { font-size:20px; }
+ .topup-supplier-page .tus-checkout-note { margin-top:10px; line-height:1.5; }
+ .topup-supplier-page .tus-summary-empty { min-height:100px; }
+}
+@layer sentryloot-premium {
+ @media(min-width:841px) {
+  body #app .topup-supplier-page .tus-pack { border:1px solid #ffffff0c!important; border-radius:11px!important; background:#14151b!important; }
+  body #app .topup-supplier-page .tus-pack:not(:disabled):hover { border-color:#f3ba6970!important; background:#1b1b20!important; transform:translateY(-1px); }
+  body #app .topup-supplier-page .tus-pack[aria-pressed="true"] { border-color:#f3ba69!important; background:linear-gradient(145deg,#29241c,#1b1918)!important; box-shadow:none!important; }
+  body #app .topup-supplier-page .tus-pack:focus-visible { outline:2px solid #f3ba69!important; outline-offset:3px; }
+  body #app .topup-supplier-page .tus-summary { background:#111217!important; border:1px solid #ffffff10!important; box-shadow:none!important; }
+ }
+}
+
+@media(min-width:841px) {
+ .topup-supplier-page .tus-pack-price.has-price { font-size:15px; font-weight:600; line-height:1.3; font-variant-numeric:tabular-nums; }
+}
+@layer sentryloot-premium {
+ body #app .topup-supplier-page .tus-pack-price.has-price { color:#f3ba69!important; }
+}
+
+.tus-checkout-form { margin:0 0 16px; }
+.tus-checkout-form .field { display:flex; flex-direction:column; gap:8px; margin:0; font-size:12px; }
+.tus-checkout-form input[name="player_id"] { width:100%; height:44px; padding:0 12px; border:1px solid #ffffff20; border-radius:8px; background:#0c0d12; color:#f1f1f3; font-size:14px; }
+.tus-checkout-form>small { display:block; margin-top:7px; color:#90939f; font-size:10px; line-height:1.5; }
+.tus-test-consent { display:flex; align-items:flex-start; gap:9px; margin-top:16px; font-size:10px; line-height:1.6; color:#a4a7b1; cursor:pointer; }
+.tus-test-consent input { flex:0 0 16px; width:16px; height:16px; margin:2px 0 0; accent-color:#f3ba69; }
+.tus-checkout-error { color:#f38b8b; font-size:11px; line-height:1.5; }
+@layer sentryloot-premium {
+ body #app .topup-supplier-page .tus-buy:not(:disabled) { background:#f3ba69!important; color:#241b10!important; border:0!important; }
+ body #app .topup-supplier-page .tus-checkout-form input[name="player_id"]:focus { outline:2px solid #f3ba69!important; outline-offset:2px; }
+}

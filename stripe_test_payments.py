@@ -24,7 +24,7 @@ def stripe_amount(amount, currency):
     Existing UZS database amounts are whole som; MYR amounts already are sen.
     Reject other conventions rather than guessing their scale.
     """
-    if type(amount) is not int or amount <= 0 or currency not in ('UZS', 'MYR'):
+    if type(amount) is not int or amount <= 0 or currency not in ('UZS', 'MYR', 'USD'):
         raise RuntimeError('Invalid checkout amount or unsupported internal currency.')
     return amount*100 if currency == 'UZS' else amount
 
@@ -85,8 +85,12 @@ class StripeTestProvider:
         stripe_amount(amount_minor, currency)
         return PaymentIntent(self.name, amount_minor, currency, idempotency_key)
 
-    def session(self, oid, amount, currency, idem, kind='marketplace', expires_at=None):
+    def session(self, oid, amount, currency, idem, kind='marketplace', expires_at=None, cancel_path=None, success_path=None):
         external_amount = stripe_amount(amount, currency)
+        if cancel_path is not None and not re.fullmatch(r'/top-up/[a-z0-9-]+', cancel_path):
+            raise RuntimeError('Invalid checkout return path.')
+        if success_path is not None and not re.fullmatch(r'/top-up/[a-z0-9-]+\?topup_return=[A-Za-z0-9_-]+', success_path):
+            raise RuntimeError('Invalid checkout success path.')
         self.assert_account()
         result = self.client.v1.checkout.sessions.create({
             'mode': 'payment',
@@ -99,8 +103,8 @@ class StripeTestProvider:
             # Callers pin this value before the network request so retries with
             # the same idempotency key send byte-for-byte equivalent parameters.
             'expires_at': expires_at if expires_at is not None else int(time.time())+1800,
-            'success_url': self.base+('/#topup-order/' if kind=='topup' else '/#order/')+oid,
-            'cancel_url': self.base+('/#topup-order/' if kind=='topup' else '/#order/')+oid,
+            'success_url': self.base+success_path if success_path else self.base+('/#topup-order/' if kind=='topup' else '/#order/')+oid,
+            'cancel_url': self.base+cancel_path if cancel_path else self.base+('/#topup-order/' if kind=='topup' else '/#order/')+oid,
         }, options={'idempotency_key': 'checkout:'+idem})
         self.test_object(result)
         if not result['id'].startswith('cs_test_') or urlsplit(result.get('url') or '').hostname != 'checkout.stripe.com':

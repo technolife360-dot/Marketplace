@@ -1,3 +1,271 @@
+const TOPUP_CATALOG_IMAGE_FALLBACKS = {
+  "h2h-5307-free-fire-max-global-13": "https://play-lh.googleusercontent.com/M_l-dWl4q9FLX3IgYu8lrSPAs6WrMiL2gPxzYwehWAsfFpOVOSG-APyLkUkJn8Og_uHXw_qv5K351Dyy4pmqoQ=s512-rw",
+  "h2h-5388-solo-leveling-arise-drop-link-13": "https://cdn.melostore.id/uploads/catalog/thumbnails/solo-leveling-arise-auto-via-login-20261027.webp",
+  "h2h-5348-solo-leveling-arise-10-2": "https://cdn.melostore.id/uploads/catalog/thumbnails/solo-leveling-arise-auto-via-login-20261027.webp",
+  "h2h-5539-umamusume-pretty-derby-drop-link-13": "https://cdn.melostore.id/uploads/catalog/thumbnails/umamusume-pretty-derby-20261027.webp",
+  "h2h-5573-whiteout-survival-6": "https://cdn.melostore.id/uploads/catalog/thumbnails/whiteout-survival-manual-20261028.webp",
+  "h2h-5428-tarisland-14-2": "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/3126180/header.jpg",
+  "h2h-5479-the-seven-deadly-sins-drop-link-13-2": "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/6c/fd/65/6cfd6551-746a-7914-24cd-05c61b5eaff8/Placeholder.mill/1200x630wa.jpg",
+  "h2h-5541-x-clash-13": "https://play-lh.googleusercontent.com/ENd_7tg4X0CHk76h_QJs6sHPTTQf9Y40Xwc7eRqUigGdpLAXYtvNi13DTGcpAd4ft9WHC8pdjgCA-6TIcT2H=s0-br30",
+  "h2h-2520-tungkal-fight-night-ticket-12": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22512%22%20height%3D%22512%22%20viewBox%3D%220%200%20512%20512%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20stop-color%3D%22%23592620%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%2316161e%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Cpath%20fill%3D%22url%28%23g%29%22%20d%3D%22M0%200h512v512H0z%22%2F%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23f3ba69%22%20stroke-width%3D%225%22%3E%3Cpath%20d%3D%22M100%20130h312v60a32%2032%200%20000%2064v60H100v-60a32%2032%200%20000-64z%22%2F%3E%3Cpath%20d%3D%22M325%20143v158%22%20stroke-dasharray%3D%228%2010%22%2F%3E%3Cpath%20d%3D%22m155%20200%2036-28%2036%2028-12%2042h-48z%22%2F%3E%3Cpath%20d%3D%22M191%20172v-20m-25%2091-13%2030m62-30%2013%2030%22%2F%3E%3C%2Fg%3E%3Cg%20fill%3D%22%23f3ba69%22%20font-family%3D%22Arial%2Csans-serif%22%20text-anchor%3D%22middle%22%20font-weight%3D%22700%22%3E%3Ctext%20x%3D%22256%22%20y%3D%22370%22%20font-size%3D%2237%22%3ETUNGKAL%3C%2Ftext%3E%3Ctext%20x%3D%22256%22%20y%3D%22410%22%20font-size%3D%2227%22%20letter-spacing%3D%224%22%3EFIGHT%20NIGHT%3C%2Ftext%3E%3Ctext%20x%3D%22256%22%20y%3D%22449%22%20font-size%3D%2216%22%20letter-spacing%3D%225%22%3ETICKET%3C%2Ftext%3E%3C%2Fg%3E%3C%2Fsvg%3E"
+};
+
+const TOPUP_CATEGORIES = [
+  ['all', 'All'],
+  ['game', 'Game'], ['gift-card', 'Gift card'], ['social', 'Social'],
+  ['ewallet', 'Ewallet'], ['airtime-data', 'Airtime & Data (Pulsa & Data)'],
+  ['pln', 'PLN'], ['apps-subscriptions', 'Aplikasi & Langganan']
+];
+
+function topupCategory(item) {
+  const value = String(item.category_slug || item.category || 'game').trim().toLowerCase().replace(/[ _]+/g, '-');
+  const aliases = {'games':'game', 'gift-cards':'gift-card', 'e-wallet':'ewallet', 'pulsa':'airtime-data', 'data':'airtime-data', 'pulsa-&-data':'airtime-data', 'airtime-&-data':'airtime-data', 'aplikasi-&-langganan':'apps-subscriptions'};
+  return aliases[value] || value;
+}
+
+function topupApplyFilters(page) {
+  const category = page.dataset.activeTopupCategory || 'all';
+  const query = (page.dataset.topupQuery || '').trim().toLocaleLowerCase();
+  const limit = Number(page.dataset.topupLimit) || 48;
+  const cards = [...page.querySelectorAll('[data-topup-category-card]')];
+  let matched = 0;
+  cards.forEach(card => {
+    const matches = (category === 'all' || card.dataset.topupCategoryCard === category) && card.querySelector('h2').textContent.toLocaleLowerCase().includes(query);
+    card.hidden = !matches || matched >= limit;
+    if (matches) matched++;
+  });
+  const empty = page.querySelector('[data-topup-category-empty]');
+  if (empty) {
+    empty.hidden = matched > 0;
+    empty.textContent = query
+      ? adminText('Mos mahsulot topilmadi.', 'Подходящих товаров не найдено.', 'No matching products found.')
+      : adminText('Bu kategoriyada hozircha mahsulotlar yo‘q.', 'В этой категории пока нет товаров.', 'No products in this category yet.');
+  }
+  const count = page.querySelector('[data-topup-result-count]');
+  if (count) count.textContent = adminText(matched + ' ta mahsulot', matched + ' товаров', matched + ' products');
+  const more = page.querySelector('[data-topup-load-more]');
+  if (more) more.hidden = matched <= limit;
+}
+
+function topupCatalogCard(item, index) {
+  const source = item.image_url || TOPUP_CATALOG_IMAGE_FALLBACKS[item.slug] || TOPUP_OFFICIAL_GAME_ART[item.slug];
+  const mobileArt = TOPUP_MOBILE_GAME_ART[item.slug];
+  const fallback = TOPUP_OFFICIAL_GAME_ART[item.slug] ? 'https://images.gamestorehub.com/site-assets/topup-' + item.slug + '.svg' : '';
+  const backdrop = source ? '<img class="topup-card-backdrop" src="' + esc(source) + '" alt="" aria-hidden="true" loading="lazy" decoding="async">' : '';
+  const picture = source ? '<picture>' + (mobileArt ? '<source media="(max-width:840px)" srcset="/static/assets/' + mobileArt + '">' : '') + '<img ' + (fallback ? 'data-topup-fallback="' + fallback + '" ' : 'data-topup-hide-error ') + 'src="' + esc(source) + '" alt="' + esc(item.name) + '" loading="' + (index < 2 ? 'eager' : 'lazy') + '" decoding="async"></picture>' : '';
+  return '<article data-topup-category-card="' + esc(topupCategory(item)) + '" class="topup-game-card topup-game-' + esc(item.slug) + '"><a class="topup-game-cover" href="/top-up/' + encodeURIComponent(item.slug) + '" aria-label="' + esc(item.name) + '"><span class="topup-cover-placeholder" aria-hidden="true">' + topupGameIcon(item.slug) + '</span>' + backdrop + picture + '<span class="topup-game-cover-shade"></span></a><div class="topup-game-card-body"><h2 title="' + esc(item.name) + '">' + esc(item.name) + '</h2>' + (item.review_summary?.count ? '<span class="pr-card-rating">★ ' + Number(item.review_summary.rating).toFixed(1) + ' <small>(' + Number(item.review_summary.count) + ')</small></span>' : '') + '<a class="topup-game-cta" href="/top-up/' + encodeURIComponent(item.slug) + '">Top Up</a></div></article>';
+}
+
+function topupSupplierGroups(packages) {
+  const collator = new Intl.Collator('en', {numeric:true, sensitivity:'base'});
+  const amount = label => {
+    const expression = String(label || '').match(/\d[\d.,]*(?:\s*\+\s*\d[\d.,]*)*/);
+    if (!expression) return Infinity;
+    return expression[0].split('+').reduce((total, value) => {
+      const normalized = value.trim().replace(/[.,](?=\d{3}(?:[.,]|$))/g, '').replace(',', '.');
+      return total + Number(normalized);
+    }, 0);
+  };
+  const groups = new Map(), seen = new Set();
+  packages.forEach((pack, index) => {
+    if (pack.status !== 'active') return;
+    const name = String(pack.type_name || '').trim() || 'Other';
+    const identity = JSON.stringify([name, String(pack.name || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase()]);
+    if (seen.has(identity)) return;
+    seen.add(identity);
+    if (!groups.has(name)) groups.set(name, {name, items: []});
+    groups.get(name).items.push({pack, index});
+  });
+  for (const group of groups.values()) {
+    group.items.sort((a, b) => amount(a.pack.name) - amount(b.pack.name) || collator.compare(a.pack.name, b.pack.name));
+  }
+  return [...groups.values()];
+}
+
+function topupSupplierPresentationPackages(slug, packages) {
+  const normalized = packages.map(pack => ({...pack,
+    name: String(pack.name || '').replace(/\bunknown\s+cash\b/gi, 'UC'),
+    type_name: String(pack.type_name || '').replace(/\bunknown\s+cash\b/gi, 'UC')
+  }));
+  if (slug !== 'pubg-mobile') return normalized;
+  const ucLabels = new Map([
+    [60, '60 UC'], [120, '120 UC'], [325, '300 + 25 UC'],
+    [660, '600 + 60 UC'], [1800, '1500 + 300 UC'], [3850, '3000 + 850 UC'],
+    [8100, '6000 + 2100 UC'], [16200, '12000 + 4200 UC'],
+    [24300, '18000 + 6300 UC'], [32400, '24000 + 8400 UC'],
+    [40500, '30000 + 10500 UC']
+  ]);
+  const preferredSkus = new Map([[60, 'pubgmgl60eu-s2'], [325, 'pubgmgl325u-s7'], [660, 'pubgmgl660u-s7'], [1800, 'pubgmgl1800u-s7'], [3850, 'pubgmgl3850u-s7'], [8100, 'pubgmgl8100uco-s11'], [16200, 'pubgmgl16200uco-s11'], [24300, 'pubgmgl24300uco-s11'], [32400, 'pubgmgl32400uco-s11'], [40500, 'pubgmgl40500uco-s11']]);
+  const usdPrices = new Map([
+    [60, 99], [120, 198], [325, 499], [660, 899], [1800, 2499],
+    [3850, 4999], [8100, 9999], [16200, 18999], [24300, 28999],
+    [32400, 37999], [40500, 46999]
+  ]);
+  const result = normalized.flatMap(pack => {
+    if (pack.type_name !== 'UC') return [pack];
+    const total = Number(pack.name.replace(/UC/gi, '').replace(/[\s.,]/g, ''));
+    if (preferredSkus.has(total) && pack.sku !== preferredSkus.get(total)) return [];
+    return ucLabels.has(total) ? [{...pack, name:ucLabels.get(total), selling_price_cents:usdPrices.get(total), selling_currency:'USD'}] : [];
+  });
+  return result;
+}
+
+function topupSupplierBasePrice(pack) {
+  return pack.selling_currency === 'USD' && Number.isSafeInteger(pack.selling_price_cents) && pack.selling_price_cents > 0
+    ? '$' + (pack.selling_price_cents / 100).toFixed(2) : '';
+}
+
+function topupSupplierPrice(pack) {
+  const original = topupSupplierBasePrice(pack);
+  return original ? globalThis.RegionPreferences?.estimate(pack.selling_price_cents / 100, 'USD') || original : '';
+}
+
+function topupSupplierPriceAttributes(pack) {
+  const original = topupSupplierBasePrice(pack);
+  return original ? `data-region-money data-region-amount="${pack.selling_price_cents / 100}" data-region-currency="USD" data-region-original="${esc(original)}"` : '';
+}
+
+function topupSupplierPackageLabel(pack) {
+  const parts = String(pack.name || '').match(/^(\d+)\s*\+\s*(\d+)\s+UC$/i);
+  if (!parts) {
+    const plain = String(pack.name || '').match(/^(\d+)\s+UC$/i);
+    return plain ? `${esc(plain[1])}<span class="tus-pack-unit">UC</span>` : esc(pack.name);
+  }
+  const tag = '<svg class="tus-bonus-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 4h8l10 10-7 7L3 10V4Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="7.5" cy="8" r="1.2" fill="currentColor"/><path d="m11 11 5 5m0-5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+  return `${esc(parts[1])}<span class="tus-pack-bonus">+${esc(parts[2])}${tag}</span><span class="tus-pack-unit">UC</span>`;
+}
+
+async function renderTopUpSupplierBrand(game) {
+  const brand = await api('/top-up/catalog/' + encodeURIComponent(game.slug));
+  const returnOrder = new URLSearchParams(location.search).get('topup_return');
+  brand.image_url = brand.image_url || TOPUP_CATALOG_IMAGE_FALLBACKS[game.slug] || '';
+  brand.packages = topupSupplierPresentationPackages(game.slug, brand.packages);
+  const t = adminText, groups = topupSupplierGroups(brand.packages);
+  const category = TOPUP_CATEGORIES.find(([slug]) => slug === brand.category)?.[1] || '';
+  const heroArt = game.slug === 'pubg-mobile' ? 'https://images.gamestorehub.com/site-assets/topup/pubg-mobile/hero-f39ccb5ddd387864bb28.png' : TOPUP_OFFICIAL_GAME_ART[game.slug] || brand.image_url;
+  const packageArt = pack => {
+    const kind = String(pack.type_name || '').toLowerCase();
+    let art = /^(uc|diamonds|tokens)$/.test(kind) ? TOPUP_CURRENCY_ART[game.slug] : '';
+    if (game.slug === 'pubg-mobile' && kind === 'battle pass') art = 'https://images.gamestorehub.com/site-assets/topup-elite-pass.png';
+    if (game.slug === 'pubg-mobile' && kind === 'weekly deal pack') art = 'https://images.gamestorehub.com/site-assets/topup-weekly-deal-' + (/pack 2/i.test(pack.name) ? '2' : '1') + '.png';
+    return art ? '<img src="' + esc(art) + '" alt="" loading="lazy" decoding="async">' : icon('box');
+  };
+  const typeName = group => group.name === 'Other' ? t('Boshqa paketlar','Другие пакеты','Other packages') : group.name;
+  const packageCard = ({pack, index}) => `<button type="button" class="tus-pack" data-supplier-package="${index}" data-package-search="${esc(pack.name.toLocaleLowerCase())}" aria-pressed="false" ${pack.status !== 'active' ? 'disabled' : ''}><span class="tus-pack-top"><span class="tus-pack-check" aria-hidden="true">✓</span></span><span class="tus-pack-art">${packageArt(pack)}</span><strong class="tus-pack-label">${topupSupplierPackageLabel(pack)}</strong><span class="tus-pack-price${topupSupplierPrice(pack) ? ' has-price' : ''}" ${topupSupplierPriceAttributes(pack)}>${topupSupplierPrice(pack) || t('Narx tayyorlanmoqda','Цена готовится','Price coming soon')}</span></button>`;
+  app.innerHTML = `<section class="page topup-page topup-supplier-page">
+    <nav class="tus-breadcrumb" aria-label="Breadcrumb"><a href="/top-up">Top Up</a><span>/</span><span>${esc(brand.name)}</span></nav>
+    <header class="tus-hero${game.slug === 'pubg-mobile' ? ' tus-hero-pubg' : ''}">${heroArt ? `<img class="tus-hero-bg" src="${esc(heroArt)}" alt="" aria-hidden="true">` : ''}<div class="tus-hero-main"><div class="tus-brand-art">${brand.image_url ? `<img src="${esc(brand.image_url)}" alt="" decoding="async">` : topupGameIcon(game.slug)}</div><div><span class="tus-eyebrow">${esc(category)}</span><h1>${esc(brand.name)}</h1><p>${t('O‘zingizga mos paketni tanlang','Выберите подходящий пакет','Find the right package for you')}</p></div></div></header>
+    <nav class="tus-types" aria-label="${t('Mahsulot turi','Тип товара','Product type')}">${groups.map((group,index)=>`<button type="button" data-supplier-type="${index}" aria-pressed="${index===0}" aria-controls="tus-type-${index}">${esc(typeName(group))}<span>${group.items.length}</span></button>`).join('')}</nav>
+    <div class="tus-layout"><div class="tus-main">
+    ${groups.map((group,index)=>`<section class="tus-type-section" id="tus-type-${index}" data-supplier-section="${index}" aria-label="${esc(typeName(group))}" ${index?'hidden':''}><div class="tus-package-grid">${group.items.map(packageCard).join('')}</div></section>`).join('')}
+    <p class="tus-empty" data-topup-package-empty hidden>${t('Mos paket topilmadi.','Подходящих пакетов не найдено.','No matching packages found.')}</p><div class="tus-more"><button type="button" data-supplier-more>${t('Ko‘proq ko‘rsatish','Показать ещё','Show more')}</button></div></div>
+    <aside class="tus-summary"><div class="tus-summary-title"><h2>${t('Tanlangan paket','Выбранный пакет','Your selection')}</h2></div><div class="tus-summary-brand">${brand.image_url?`<img src="${esc(brand.image_url)}" alt="">`:''}<span>${esc(brand.name)}</span></div><div class="tus-summary-empty" data-supplier-summary-empty>${icon('box')}<b>${t('Paketni tanlang','Выберите пакет','Select a package')}</b><p>${t('Paket tafsilotlari shu yerda ko‘rinadi.','Здесь появятся детали пакета.','Your package details will appear here.')}</p></div><div class="tus-summary-selected" data-supplier-summary-selected aria-live="polite" hidden></div>${game.slug === 'pubg-mobile' ? `<form id="tus-checkout-form" class="tus-checkout-form"><label class="field"><span>Player ID</span><input name="player_id" inputmode="numeric" autocomplete="off" pattern="[0-9]{3,40}" minlength="3" maxlength="40" placeholder="${t('Player ID kiriting','Введите Player ID','Enter Player ID')}" required aria-describedby="tus-player-help"></label><small id="tus-player-help">${t('PUBG Mobile profilidagi ID raqamingiz.','ID из вашего профиля PUBG Mobile.','Your numeric ID from your PUBG Mobile profile.')}</small><label class="tus-test-consent"><input type="checkbox" name="accept_terms" required><span>${t('Player ID ni tekshirdim. Stripe test to‘loviga roziman; haqiqiy UC yetkazilmaydi.','Я проверил Player ID и согласен на тестовую оплату Stripe. Реальные UC не доставляются.','I checked my Player ID and agree to a Stripe test payment. No real UC will be delivered.')}</span></label><p class="tus-checkout-error" role="alert" hidden></p></form>` : ''}<div class="tus-summary-total"><span>${t('Jami','Итого','Total')}</span><b>—</b></div><button type="submit" form="tus-checkout-form" class="tus-buy" disabled>${t('Xarid qilish','Купить сейчас','Buy now')}</button><p class="tus-checkout-note">${icon('shield')}<span>${t('Sotuv narxlari va xarid qilish imkoniyati tayyorlanmoqda.','Цены продажи и возможность покупки готовятся.','Selling prices and checkout are being prepared.')}</span></p></aside></div></section>`;
+  const page = app.querySelector('.topup-supplier-page');
+  const typeButtons = [...page.querySelectorAll('[data-supplier-type]')];
+  const sections = [...page.querySelectorAll('[data-supplier-section]')];
+  const cards = [...page.querySelectorAll('[data-supplier-package]')];
+  const cardsByIndex = new Map(cards.map(card => [Number(card.dataset.supplierPackage), card]));
+  let activeType = 0, limit = 48, selectedPackage = null, requestKey = crypto.randomUUID();
+  const checkoutForm = page.querySelector('#tus-checkout-form');
+  function selectPackage(index) {
+    const pack = brand.packages[index];
+    if (!pack || pack.status !== 'active') return;
+    cards.forEach(card => card.setAttribute('aria-pressed', String(Number(card.dataset.supplierPackage) === index)));
+    selectedPackage = pack;
+    requestKey = crypto.randomUUID();
+    const price = topupSupplierPrice(pack);
+    const total = page.querySelector('.tus-summary-total b');
+    total.textContent = price || '—';
+    if (topupSupplierBasePrice(pack)) {
+      total.dataset.regionMoney = '';
+      total.dataset.regionAmount = String(pack.selling_price_cents / 100);
+      total.dataset.regionCurrency = 'USD';
+      total.dataset.regionOriginal = topupSupplierBasePrice(pack);
+    } else {
+      ['regionMoney','regionAmount','regionCurrency','regionOriginal'].forEach(key => delete total.dataset[key]);
+    }
+    const ready = Boolean(price && brand.payment_mode === 'stripe_test' && checkoutForm);
+    const buy = page.querySelector('.tus-buy');
+    buy.disabled = !ready;
+    buy.textContent = ready ? t('Stripe test to‘lovi','Тестовая оплата Stripe','Stripe test checkout') : t('Xarid qilish','Купить сейчас','Buy now');
+    page.querySelector('.tus-checkout-note span').textContent = ready
+      ? t(`Stripe test. To‘lov: ${topupSupplierBasePrice(pack)} USD. Haqiqiy UC yetkazilmaydi.`,`Stripe test. Оплата: ${topupSupplierBasePrice(pack)} USD. Реальные UC не доставляются.`,`Stripe test. Payment: ${topupSupplierBasePrice(pack)} USD. No real UC delivery.`)
+      : price ? t('Stripe test sozlamalari kutilmoqda.','Ожидается настройка Stripe test.','Stripe test configuration is required.')
+      : t('Sotuv narxlari va xarid qilish imkoniyati tayyorlanmoqda.','Цены продажи и возможность покупки готовятся.','Selling prices and checkout are being prepared.');
+    page.querySelector('[data-supplier-summary-empty]').hidden = true;
+    const details = page.querySelector('[data-supplier-summary-selected]');
+    details.hidden = false;
+    details.innerHTML = `<div class="tus-summary-product"><div class="tus-summary-product-art">${packageArt(pack)}</div><h3 class="tus-pack-label">${topupSupplierPackageLabel(pack)}</h3></div><dl><div><dt>${t('Mahsulot turi','Тип товара','Product type')}</dt><dd>${esc(pack.type_name || t('Boshqa paketlar','Другие пакеты','Other packages'))}</dd></div><div><dt>${t('Miqdor','Количество','Quantity')}</dt><dd>1</dd></div></dl>`;
+  }
+  function filterPackages() {
+    const query = '';
+    sections.forEach((section,index)=>{section.hidden=index!==activeType;});
+    const group = groups[activeType];
+
+    let matched = 0;
+    if (group) group.items.forEach(({index})=>{
+      const card = cardsByIndex.get(index), matches = card.dataset.packageSearch.includes(query);
+      card.hidden = !matches || matched >= limit;
+      if(matches) matched++;
+    });
+
+    page.querySelector('[data-topup-package-empty]').hidden = matched > 0;
+    page.querySelector('[data-supplier-more]').hidden = matched <= limit;
+  }
+  typeButtons.forEach((button,index)=>button.addEventListener('click',()=>{
+    activeType=index;limit=48;
+    typeButtons.forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
+    filterPackages();
+    if (groups[activeType]?.items.length) selectPackage(groups[activeType].items[0].index);
+  }));
+  cards.forEach(card=>card.addEventListener('click',()=>selectPackage(Number(card.dataset.supplierPackage))));
+  page.querySelector('[data-supplier-more]').addEventListener('click',()=>{limit+=48;filterPackages();});
+  if (checkoutForm) {
+    checkoutForm.addEventListener('input', () => {requestKey = crypto.randomUUID();});
+    checkoutForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!checkoutForm.reportValidity() || !selectedPackage || brand.payment_mode !== 'stripe_test') return;
+      if (!me) {location.hash = 'login'; return;}
+      const button = page.querySelector('.tus-buy'), error = checkoutForm.querySelector('.tus-checkout-error');
+      button.disabled = true; error.hidden = true;
+      try {
+        const order = await api('/top-up/test-checkout', {method:'POST', body:JSON.stringify({sku:selectedPackage.sku, player_id:checkoutForm.elements.player_id.value.trim(), quantity:1, server_id:'', request_key:requestKey, accept_terms:checkoutForm.elements.accept_terms.checked})});
+        const session = await api('/top-up/test-orders/' + encodeURIComponent(order.id) + '/checkout', {method:'POST', body:'{}'});
+        try {sessionStorage.setItem('sentryloot-supplier-checkout', JSON.stringify({slug:game.slug,sku:selectedPackage.sku,player_id:checkoutForm.elements.player_id.value.trim()}));} catch {}
+        location.assign(session.checkout_url);
+      } catch (failure) {
+        error.textContent = failure.message; error.hidden = false;
+        toast(failure.message, 'error');
+      } finally {button.disabled = false;}
+    });
+  }
+  filterPackages();
+  if (groups[0]?.items.length) selectPackage(groups[0].items[0].index);
+  if (checkoutForm && !returnOrder) {
+    try {
+      const draft = JSON.parse(sessionStorage.getItem('sentryloot-supplier-checkout') || 'null');
+      if (draft?.slug === game.slug) {
+        const index = brand.packages.findIndex(pack => pack.sku === draft.sku);
+        if (cardsByIndex.has(index)) selectPackage(index);
+        if (/^[0-9]{3,40}$/.test(draft.player_id || '')) checkoutForm.elements.player_id.value = draft.player_id;
+        sessionStorage.removeItem('sentryloot-supplier-checkout');
+      }
+    } catch {}
+  }
+  if (returnOrder && /^[A-Za-z0-9_-]+$/.test(returnOrder)) {
+    history.replaceState(history.state, '', location.pathname + location.hash);
+    try {sessionStorage.removeItem('sentryloot-supplier-checkout');} catch {}
+    try {
+      const order = await api('/top-up/test-orders/' + encodeURIComponent(returnOrder) + '/refresh', {method:'POST',body:'{}'});
+      if (['paid_test','delivered_test','completed'].includes(order.status)) {
+        toast(t('Stripe test to‘lovi muvaffaqiyatli. Test rejimida haqiqiy UC yuborilmaydi.','Тестовая оплата Stripe успешна. Реальные UC в тестовом режиме не отправляются.','Stripe test payment successful. No real UC is delivered in test mode.'),'success');
+      } else {
+        toast(t('To‘lov hali tasdiqlanmagan.','Оплата ещё не подтверждена.','Payment has not been confirmed yet.'),'info');
+      }
+    } catch (error) {toast(error.message,'error');}
+  }
+}
+
 const TOPUP_MOBILE_GAME_ART = {'pubg-mobile':'mobile-topup-pubg.webp','mobile-legends':'market-game-mobile-legends.png','free-fire':'market-game-free-fire.png','honor-of-kings':'market-game-honor-of-kings.png'};
 const TOPUP_GAME_ORDER = ['pubg-mobile', 'mobile-legends', 'free-fire', 'honor-of-kings'];
 function topupGameCount(count) {
@@ -55,11 +323,11 @@ async function renderTopUpCatalog(selectedGame, selectedProduct) {
     return;
   }
   const words = {
-    catalog: adminText('O‘yin valutasini Top Up qilish','Пополнение игровых валют','Game top ups'),
-    intro: adminText('Sevimli o‘yiningizni tanlang — kerakli valyuta paketini topib, alohida sahifasini oching.','Выберите игру, найдите нужный пакет валюты и откройте его отдельную страницу.','Pick your game, find the right currency pack, and open its own product page.'),
+    catalog: 'Top Up',
+    intro: adminText('Kategoriya va mahsulotni tanlang — o‘yinlar, sovg‘a kartalari va raqamli xizmatlar.','Выберите категорию и товар: игры, подарочные карты и цифровые услуги.','Choose a category and product — games, gift cards, and digital services.'),
     games: adminText('O‘yinlar','Игры','Games'), packs: adminText('Paketlar','Пакеты','Packs'),
     select: adminText('O‘yinni tanlang','Выберите игру','Choose your game'),
-    feature: adminText('O‘yin valutasini oson to‘ldiring','Пополняйте игровой баланс легко','Power up your game')
+    feature: adminText('Top Up va raqamli xizmatlar','Пополнения и цифровые услуги','Top ups & digital services')
   };
   const heading = game ? game.name : words.catalog;
   const currentPackage = game && selectedProduct ? game.packages.find(item => item.url_slug === selectedProduct) : null;
@@ -71,16 +339,31 @@ async function renderTopUpCatalog(selectedGame, selectedProduct) {
 
   let body = '';
   if (game) {
+    if (game.source === 'melostore' && !selectedProduct) { await renderTopUpSupplierBrand(game); return; }
     renderTopUpDetail(game, currentPackage);
     return;
   } else {
-    body = '<div class="topup-games-grid">' + rows.map(function(item, index) {
-      const currencyIcon = topupCurrencyImage(item, 'catalog');
-      return '<article class="topup-game-card topup-game-' + esc(item.slug) + '"><a class="topup-game-cover" href="/top-up/' + encodeURIComponent(item.slug) + '" aria-label="' + esc(item.name) + '"><picture><source media="(max-width:840px)" srcset="/static/assets/' + TOPUP_MOBILE_GAME_ART[item.slug] + '"><img data-topup-fallback="https://images.gamestorehub.com/site-assets/topup-' + esc(item.slug) + '.svg" src="' + TOPUP_OFFICIAL_GAME_ART[item.slug] + '" alt="' + esc(item.name) + '" loading="' + (index < 2 ? 'eager' : 'lazy') + '"' + (index < 2 ? ' fetchpriority="high"' : '') + '></picture><span class="topup-game-cover-shade"></span></a><div class="topup-game-card-body"><div class="topup-currency-row"><span class="topup-currency-icon">' + currencyIcon + '</span><span>' + esc(item.currency) + '</span></div><h2>' + esc(item.name) + '</h2>' + (item.review_summary?.count ? '<span class="pr-card-rating">★ ' + Number(item.review_summary.rating).toFixed(1) + ' <small>(' + Number(item.review_summary.count) + ')</small></span>' : '') + '<a class="topup-game-cta" href="/top-up/' + encodeURIComponent(item.slug) + '">Top Up</a></div></article>';
-    }).join('') + '</div>';
+    body = '<div class="topup-catalog-tools"><p data-topup-result-count role="status"></p><label class="topup-catalog-search"><span class="sr-only">' + adminText('Mahsulotlarni qidirish','Поиск товаров','Search products') + '</span><input type="search" data-topup-search placeholder="' + adminText('Mahsulotlarni qidirish…','Поиск товаров…','Search products…') + '" autocomplete="off"></label></div><div id="topup-catalog-products"><p class="topup-category-empty" data-topup-category-empty role="status" hidden></p><div class="topup-games-grid">' + rows.map(topupCatalogCard).join('') + '</div></div><div class="topup-catalog-more"><button type="button" class="button-secondary" data-topup-load-more>' + adminText('Ko‘proq ko‘rsatish','Показать ещё','Show more') + '</button></div>';
   }
-  const catalogContent = '<div class="topup-hero topup-hero-image"><nav class="topup-breadcrumb topup-hero-back" aria-label="Breadcrumb"></nav><img class="topup-hero-background" src="https://images.gamestorehub.com/site-assets/topup-hero.jpg" alt="" fetchpriority="high"><div class="topup-hero-overlay"></div><div class="topup-hero-content"><div class="topup-hero-brand"><b>Sentry<span class="brand-dot">Loot</span></b></div><h1>' + esc(words.feature) + '</h1><p>' + words.intro + '</p></div></div>' + body + '<aside class="topup-safe-note">' + icon('shield') + '<p><b>' + adminText('Xaridlar va to‘lovlar','Покупки и оплата','Payments are being prepared') + '</b><br>' + adminText('To‘lov tizimi ulangach paketlarni xarid qilish mumkin bo‘ladi.','Пакеты можно будет купить после подключения платёжной системы.','Packages will be available to buy once a payment provider is connected.') + '</p></aside>';
+  const categoryNavigation = '<nav class="topup-categories" aria-label="' + adminText('Top Up kategoriyalari','Категории Top Up','Top Up categories') + '">' + TOPUP_CATEGORIES.map(([id, label]) => '<button type="button" class="topup-category" data-topup-category="' + id + '" aria-pressed="' + (id === 'all') + '" aria-controls="topup-catalog-products">' + esc(label) + '</button>').join('') + '</nav>';
+  const catalogContent = '<div class="topup-hero topup-hero-image"><nav class="topup-breadcrumb topup-hero-back" aria-label="Breadcrumb"></nav><img class="topup-hero-background" src="https://images.gamestorehub.com/site-assets/topup-hero.jpg" alt="" fetchpriority="high"><div class="topup-hero-overlay"></div><div class="topup-hero-content"><div class="topup-hero-brand"><b>Sentry<span class="brand-dot">Loot</span></b></div><h1>' + esc(words.feature) + '</h1><p>' + words.intro + '</p></div></div>' + categoryNavigation + body + '<aside class="topup-safe-note">' + icon('shield') + '<p><b>' + adminText('Xaridlar va to‘lovlar','Покупки и оплата','Payments are being prepared') + '</b><br>' + adminText('To‘lov tizimi ulangach paketlarni xarid qilish mumkin bo‘ladi.','Пакеты можно будет купить после подключения платёжной системы.','Packages will be available to buy once a payment provider is connected.') + '</p></aside>';
   app.innerHTML = '<section class="page topup-page">' + (game ? body : catalogContent) + '</section>';
+  const page = app.querySelector('.topup-page');
+  page.dataset.activeTopupCategory = 'all';
+  page.querySelectorAll('[data-topup-category]').forEach(button => button.addEventListener('click', () => {
+    page.dataset.activeTopupCategory = button.dataset.topupCategory;
+    page.dataset.topupLimit = '48';
+    page.querySelectorAll('[data-topup-category]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+    topupApplyFilters(page);
+  }));
+  page.querySelector('[data-topup-search]').addEventListener('input', event => {
+    page.dataset.topupQuery = event.target.value; page.dataset.topupLimit = '48'; topupApplyFilters(page);
+  });
+  page.querySelector('[data-topup-load-more]').addEventListener('click', () => {
+    page.dataset.topupLimit = String((Number(page.dataset.topupLimit) || 48) + 48); topupApplyFilters(page);
+  });
+  page.querySelectorAll('[data-topup-hide-error]').forEach(image => image.addEventListener('error', () => { image.hidden = true; }, { once:true }));
+  topupApplyFilters(page);
   $$('[data-topup-fallback]', app).forEach(image => image.addEventListener('error', () => { if (image.src !== new URL(image.dataset.topupFallback, location.origin).href) image.src = image.dataset.topupFallback; }, { once: true }));
 
 }
