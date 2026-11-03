@@ -113,7 +113,11 @@ def start(db, oid, uid, core):
         if not record.get('expires_at'):
             record['expires_at'] = int(time.time())+1800
             pay.write(db, 'topup:'+oid, record)
-        result = provider.session(oid, order['total_minor'], order['currency'], record['idempotency_key'], kind='topup', expires_at=record['expires_at'], cancel_path='/top-up/pubg-mobile' if record.get('supplier_sku') else None, success_path='/top-up/pubg-mobile?topup_return='+oid if record.get('supplier_sku') else None)
+        sku = record.get('supplier_sku') or ''
+        membership = sku.startswith('pubgmmuc') or sku in ('pubgmucwmevp-s101','pubgm1ucwdp-s101','pubgm2ucwdp-s101')
+        cancel_path = '/top-up/pubg-mobile' + ('?package='+sku if membership else '') if sku else None
+        success_path = '/top-up/pubg-mobile?topup_return='+oid + ('&package='+sku if membership else '') if sku else None
+        result = provider.session(oid, order['total_minor'], order['currency'], record['idempotency_key'], kind='topup', expires_at=record['expires_at'], cancel_path=cancel_path, success_path=success_path)
     except Exception as exc:
         raise core['HttpError'](503, 'Stripe test checkout is unavailable. Retry from this order.') from exc
     pay.write(db, 'checkout:'+oid, {'id': result['id'], 'url': result['url'], 'expires_at': result['expires_at']})

@@ -435,6 +435,68 @@ class StripeTestFlows(unittest.TestCase):
         self.configure()
         self.assertEqual(self.route(self.buyer,'GET','/api/top-up/catalog/pubg-mobile')['payment_mode'],'stripe_test')
 
+    def test_elite_pass_checkout_uses_approved_sku_and_server_prices(self):
+        self.configure()
+        for sku, cents in [('pubgmel5ucbp-s101',549),('pubgmel1ucbp-s101',1079),('pubgmepl1ucbp-s10',2699)]:
+            with self.subTest(sku=sku):
+                result=self.route(self.buyer,'POST','/api/top-up/test-checkout',{'sku':sku,'player_id':'12345678',
+                    'quantity':1,'request_key':'elite_pass_fixture_'+sku,'accept_terms':True,'selling_price_cents':1})
+                order=self.route(self.buyer,'GET','/api/top-up/test-orders/'+result['id'])
+                self.assertEqual((order['supplier_sku'],order['total_minor'],order['currency']),(sku,cents,'USD'))
+
+    def test_coins_checkout_uses_approved_prices_and_skus(self):
+        self.configure()
+        for sku, cents in [('pubgm60wc-s101',99),('pubgm325wc-s101',499),('pubgm660wc-s101',999),
+                           ('pubgm1800wc-s101',2499),('pubgm3850wc-s101',4999),('pubgm8100wc-s101',9999)]:
+            with self.subTest(sku=sku):
+                result=self.route(self.buyer,'POST','/api/top-up/test-checkout',{'sku':sku,'player_id':'12345678',
+                    'quantity':1,'request_key':'coins_fixture_'+sku,'accept_terms':True,'selling_price_cents':1})
+                order=self.route(self.buyer,'GET','/api/top-up/test-orders/'+result['id'])
+                self.assertEqual((order['supplier_sku'],order['total_minor'],order['currency']),(sku,cents,'USD'))
+
+    def test_first_purchase_pack_allows_only_one_per_checkout(self):
+        self.configure()
+        for quantity in (1,):
+            result=self.route(self.buyer,'POST','/api/top-up/test-checkout',{'sku':'pubgmucfpp-s101',
+                'player_id':'12345678','quantity':quantity,'request_key':'first_purchase_fixture_'+str(quantity),
+                'accept_terms':True,'selling_price_cents':1})
+            order=self.route(self.buyer,'GET','/api/top-up/test-orders/'+result['id'])
+            self.assertEqual((order['quantity'],order['total_minor'],order['currency']),(quantity,89*quantity,'USD'))
+            self.assertEqual(order['supplier_sku'],'pubgmucfpp-s101')
+        for quantity in (0,2,3,99,100,1.5):
+            with self.assertRaises(app.HttpError):
+                self.route(self.buyer,'POST','/api/top-up/test-checkout',{'sku':'pubgmucfpp-s101',
+                    'player_id':'12345678','quantity':quantity,'request_key':'first_purchase_invalid_fixture',
+                    'accept_terms':True})
+
+    def test_mythic_emblem_uses_approved_price_and_single_quantity(self):
+        self.configure()
+        data={'sku':'pubgmucmep-s101','player_id':'12345678','quantity':1,
+              'request_key':'mythic_emblem_fixture_0001','accept_terms':True,'selling_price_cents':1}
+        result=self.route(self.buyer,'POST','/api/top-up/test-checkout',data)
+        order=self.route(self.buyer,'GET','/api/top-up/test-orders/'+result['id'])
+        self.assertEqual((order['supplier_sku'],order['total_minor'],order['currency']),('pubgmucmep-s101',445,'USD'))
+        with self.assertRaises(app.HttpError):
+            self.route(self.buyer,'POST','/api/top-up/test-checkout',{**data,'quantity':2,'request_key':'mythic_invalid_fixture_0001'})
+
+    def test_prime_memberships_use_approved_prices_and_return_to_their_own_detail(self):
+        self.configure()
+        rows=[('pubgmmucp-s101',89),('pubgmmucpb-s101',269),('pubgmmucpc-s101',539),('pubgmmucpa-s101',1079),
+              ('pubgmmucpp-s101',899),('pubgmmucppb-s101',2699),('pubgmmucppc-s101',5399),('pubgmmucppa-s101',10799)]
+        for sku,cents in rows:
+            with self.subTest(sku=sku):
+                result=self.route(self.buyer,'POST','/api/top-up/test-checkout',{'sku':sku,'player_id':'12345678',
+                    'quantity':1,'request_key':'membership_fixture_'+sku,'accept_terms':True,'selling_price_cents':1})
+                order=self.route(self.buyer,'GET','/api/top-up/test-orders/'+result['id'])
+                self.assertEqual((order['supplier_sku'],order['total_minor'],order['currency']),(sku,cents,'USD'))
+        self.provider.client.v1.checkout.sessions.create.return_value={'id':'cs_test_membership','livemode':False,
+            'url':'https://checkout.stripe.com/c/pay/cs_test_membership','expires_at':int(time.time())+1800}
+        self.route(self.buyer,'POST','/api/top-up/test-orders/'+result['id']+'/checkout')
+        params=self.provider.client.v1.checkout.sessions.create.call_args.args[0]
+        self.assertEqual(params['line_items'][0]['price_data']['unit_amount'],10799)
+        self.assertEqual(params['cancel_url'],'https://test.example.invalid/top-up/pubg-mobile?package='+sku)
+        self.assertEqual(params['success_url'],'https://test.example.invalid/top-up/pubg-mobile?topup_return='+result['id']+'&package='+sku)
+
     def test_supplier_checkout_rejects_invalid_id_unapproved_sku_and_unavailable_packages(self):
         self.configure()
         data = {'sku':'pubgmgl60eu-s2','player_id':'12345678','quantity':1,

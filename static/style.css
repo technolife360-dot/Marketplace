@@ -3287,7 +3287,7 @@ body:not(.home-page) .listing-detail-page .listing-buy-button:hover { background
  .topup-supplier-page .tus-brand-art { width:74px; height:74px; flex-basis:74px; border:0; border-radius:14px; box-shadow:0 4px 20px #0003; }
  .topup-supplier-page .tus-hero h1 { margin:6px 0 10px; font-size:25px; line-height:1.25; letter-spacing:.25px; text-transform:uppercase; }
  .topup-supplier-page .tus-hero p { color:#afb1bc; font-size:12px; }
- .topup-supplier-page .tus-types { position:relative; margin-top:0; }
+ .topup-supplier-page .tus-types { position:relative; margin-top:0; gap:40px; }
 }
 @layer sentryloot-premium {
  @media(min-width:841px) {
@@ -3298,55 +3298,55 @@ body:not(.home-page) .listing-detail-page .listing-buy-button:hover { background
 
 /* Supplied PUBG banner: 1500 × 500 layout, preserving the original artwork. */
 @media(min-width:841px) {
- .topup-supplier-page .tus-hero-pubg { height:calc(33.333333vw - 40px); min-height:240px; max-height:460px; }
- .topup-supplier-page .tus-hero-pubg .tus-hero-bg { object-position:center 42%; opacity:.9; }
+ .topup-supplier-page .tus-hero-game { height:calc(33.333333vw - 40px); min-height:240px; max-height:460px; }
+ .topup-supplier-page .tus-hero-game .tus-hero-bg { object-position:center 42%; opacity:.9; }
 }
 @layer sentryloot-premium {
  @media(min-width:841px) {
-  body #app .topup-supplier-page .tus-hero-pubg::after { background:linear-gradient(0deg,#0a0b0f,transparent 55%),linear-gradient(90deg,rgba(10,11,15,.8),rgba(10,11,15,.15) 55%,rgba(10,11,15,.1))!important; }
+  body #app .topup-supplier-page .tus-hero-game::after { background:linear-gradient(0deg,#0a0b0f,transparent 55%),linear-gradient(90deg,rgba(10,11,15,.8),rgba(10,11,15,.15) 55%,rgba(10,11,15,.1))!important; }
  }
 }
 
 /* Compact PUBG masthead; render the original R2 asset without blur or opacity loss. */
 @media(min-width:841px) {
- .topup-supplier-page .tus-hero-pubg { height:200px; min-height:200px; max-height:200px; padding:24px 0; }
- .topup-supplier-page .tus-hero-pubg .tus-hero-bg { opacity:1; filter:none; object-position:center 24%; }
- .topup-supplier-page .tus-hero-pubg .tus-brand-art { width:64px; height:64px; flex-basis:64px; border-radius:12px; }
- .topup-supplier-page .tus-hero-pubg h1 { font-size:24px; }
+ .topup-supplier-page .tus-hero-game { height:200px; min-height:200px; max-height:200px; padding:24px 0; }
+ .topup-supplier-page .tus-hero-game .tus-hero-bg { opacity:1; filter:none; object-position:center 24%; }
+ .topup-supplier-page .tus-hero-game .tus-brand-art { width:64px; height:64px; flex-basis:64px; border-radius:12px; }
+ .topup-supplier-page .tus-hero-game h1 { font-size:24px; }
 }
 @layer sentryloot-premium {
  @media(min-width:841px) {
-  body #app .topup-supplier-page .tus-hero-pubg::after { background:linear-gradient(0deg,#0a0b0f,transparent 48%),linear-gradient(90deg,rgba(10,11,15,.78),rgba(10,11,15,.12) 55%,transparent)!important; }
+  body #app .topup-supplier-page .tus-hero-game::after { background:linear-gradient(0deg,#0a0b0f,transparent 48%),linear-gradient(90deg,rgba(10,11,15,.78),rgba(10,11,15,.12) 55%,transparent)!important; }
  }
 }
 
 /* Show the complete HD composition on the right; no zoom, blur or cut-off figures. */
 @media(min-width:841px) {
- .topup-supplier-page .tus-hero-pubg .tus-hero-bg { top:-40px; left:auto; right:calc((100% - 100vw) / 2); width:auto; max-width:none; height:calc(100% + 40px); transform:none; object-fit:contain; object-position:right center; opacity:1; filter:none; }
+ .topup-supplier-page .tus-hero-game .tus-hero-bg { top:-40px; left:auto; right:calc((100% - 100vw) / 2); width:auto; max-width:none; height:calc(100% + 40px); transform:none; object-fit:contain; object-position:right center; opacity:1; filter:none; }
 }
 @layer sentryloot-premium {
  @media(min-width:841px) {
-  body #app .topup-supplier-page .tus-hero-pubg::after { background:linear-gradient(90deg,#0a0b0f 0%,#0a0b0f 40%,rgba(10,11,15,.2) 54%,transparent 65%),linear-gradient(0deg,#0a0b0f,transparent 12%)!important; }
+  body #app .topup-supplier-page .tus-hero-game::after { background:linear-gradient(90deg,#0a0b0f 0%,#0a0b0f 40%,rgba(10,11,15,.2) 54%,transparent 65%),linear-gradient(0deg,#0a0b0f,transparent 12%)!important; }
  }
 }
 
-@media(min-width:841px) { .topup-supplier-page .tus-hero-pubg .tus-hero-bg { mask-image:linear-gradient(90deg,transparent,#000 18%); -webkit-mask-image:linear-gradient(90deg,transparent,#000 18%); } }
+@media(min-width:841px) { .topup-supplier-page .tus-hero-game .tus-hero-bg { mask-image:linear-gradient(90deg,transparent,#000 18%); -webkit-mask-image:linear-gradient(90deg,transparent,#000 18%); } }
 
 /* Full-width HD artwork, with only a light contrast layer behind the title. */
 @media(min-width:841px) {
- .topup-supplier-page .tus-hero-pubg .tus-hero-bg { left:50%; right:auto; width:100vw; height:calc(100% + 40px); transform:translateX(-50%); object-fit:cover; object-position:center 52%; mask-image:none; -webkit-mask-image:none; opacity:1; filter:none; }
- .topup-supplier-page .tus-hero-pubg .tus-hero-main { text-shadow:0 2px 12px #000b; }
+ .topup-supplier-page .tus-hero-game .tus-hero-bg { left:50%; right:auto; width:100vw; height:calc(100% + 40px); transform:translateX(-50%); object-fit:cover; object-position:center 52%; mask-image:none; -webkit-mask-image:none; opacity:1; filter:none; }
+ .topup-supplier-page .tus-hero-game .tus-hero-main { text-shadow:0 2px 12px #000b; }
 }
 @layer sentryloot-premium {
  @media(min-width:841px) {
-  body #app .topup-supplier-page .tus-hero-pubg::after { background:linear-gradient(0deg,#0a0b0f,transparent 15%),linear-gradient(90deg,rgba(10,11,15,.52),rgba(10,11,15,.12) 42%,transparent 70%)!important; }
+  body #app .topup-supplier-page .tus-hero-game::after { background:linear-gradient(0deg,#0a0b0f,transparent 15%),linear-gradient(90deg,rgba(10,11,15,.52),rgba(10,11,15,.12) 42%,transparent 70%)!important; }
  }
 }
 
 /* A little more height keeps the characters' legs in view. */
 @media(min-width:841px) {
- .topup-supplier-page .tus-hero-pubg { height:300px; min-height:300px; max-height:300px; }
- .topup-supplier-page .tus-hero-pubg .tus-hero-bg { object-position:center bottom; }
+ .topup-supplier-page .tus-hero-game { height:300px; min-height:300px; max-height:300px; }
+ .topup-supplier-page .tus-hero-game .tus-hero-bg { object-position:center bottom; }
 }
 
 /* Product type navigation scrolls without a visible scrollbar. */
@@ -3355,7 +3355,7 @@ body:not(.home-page) .listing-detail-page .listing-buy-button:hover { background
 
 @media(min-width:841px) { .topup-supplier-page .tus-pack strong { margin-bottom:16px; } }
 
-@media(min-width:841px) { .topup-supplier-page .tus-hero-pubg { height:280px; min-height:280px; max-height:280px; } }
+@media(min-width:841px) { .topup-supplier-page .tus-hero-game { height:280px; min-height:280px; max-height:280px; } }
 
 /* UC bonuses keep their own accent and a compact offer tag. */
 .topup-supplier-page .tus-pack-label { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:5px; }
@@ -3428,4 +3428,184 @@ body:not(.home-page) .listing-detail-page .listing-buy-button:hover { background
 @layer sentryloot-premium {
  body #app .topup-supplier-page .tus-buy:not(:disabled) { background:#f3ba69!important; color:#241b10!important; border:0!important; }
  body #app .topup-supplier-page .tus-checkout-form input[name="player_id"]:focus { outline:2px solid #f3ba69!important; outline-offset:2px; }
+}
+
+@media(min-width:841px) {
+ .topup-supplier-page .tus-pack-art .tus-coin-image { width:72px; height:72px; max-width:none; }
+ .topup-supplier-page .tus-summary-product-art .tus-coin-image { width:64px; height:64px; max-width:none; }
+}
+
+@media(min-width:841px) {
+ .topup-supplier-page .tus-pack-art:has(.tus-coin-image) { height:64px; margin-bottom:10px; }
+}
+
+@media(min-width:841px) {
+ .tus-product-info { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:22px; align-items:start; margin-top:22px; padding:18px; border:1px solid #ffffff0c; border-radius:12px; background:#111217; }
+ .tus-product-info-banner { display:block; width:100%; height:auto; border-radius:8px; }
+ .tus-product-info-copy h2 { margin:0 0 12px; font-size:14px; }
+ .tus-product-info-copy h3 { margin:18px 0 8px; font-size:13px; }
+ .tus-product-info-copy p { margin:0; color:#a1a4af; font-size:12px; line-height:1.75; }
+ .tus-included-items { display:flex; gap:12px; }
+ .tus-included-items>div { display:flex; align-items:center; gap:8px; padding:8px 12px; border-radius:8px; background:#ffffff05; }
+ .tus-included-items img { width:40px; height:40px; object-fit:contain; }
+ .tus-included-items strong { color:#f3ba69; font-size:13px; white-space:nowrap; }
+}
+
+.tus-checkout-form .tus-quantity-field { margin-top:16px; }
+.tus-checkout-form .tus-quantity-field[hidden] { display:none; }
+.tus-checkout-form input[name="quantity"] { width:100%; height:44px; padding:0 12px; border:1px solid #ffffff20; border-radius:8px; background:#0c0d12; color:#f1f1f3; font-size:14px; }
+@layer sentryloot-premium {
+ body #app .topup-supplier-page .tus-quantity-field[hidden] { display:none!important; }
+}
+
+/* First Purchase Pack follows the product-focused reference layout. */
+@media(min-width:841px) {
+ .topup-supplier-page.is-first-purchase .tus-layout { grid-template-columns:minmax(0,1.5fr) minmax(340px,1fr); gap:32px; }
+ .is-first-purchase .tus-product-info { display:block; margin:0; padding:0; border:0; background:transparent; }
+ .is-first-purchase .tus-product-info-banner { width:100%; border-radius:12px; }
+ .is-first-purchase .tus-product-info-copy { padding-top:32px; }
+ .is-first-purchase .tus-product-info-copy h2 { margin:0 0 18px; font-size:17px; font-weight:600; text-transform:uppercase; letter-spacing:.8px; }
+ .is-first-purchase .tus-included-items { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); padding:20px; gap:24px; border-radius:12px; background:#191e30; }
+ .is-first-purchase .tus-included-items>div { padding:0; gap:18px; background:transparent; }
+ .is-first-purchase .tus-included-items strong { color:#eeeef5; font-size:17px; font-weight:500; }
+ .is-first-purchase .tus-included-icon { position:relative; display:grid; place-items:center; width:90px; height:100px; border:1px solid #ffffff14; background:#111526; border-radius:8px; }
+ .is-first-purchase .tus-included-icon img { width:78px; height:78px; }
+ .is-first-purchase .tus-included-icon b { position:absolute; bottom:5px; right:7px; font-size:13px; font-weight:500; color:#fff; }
+ .is-first-purchase .tus-product-info-copy h3 { margin:34px 0 12px; font-size:17px; letter-spacing:.5px; }
+ .is-first-purchase .tus-product-info-copy p { font-size:14px; line-height:1.8; }
+ .topup-supplier-page.is-first-purchase .tus-summary { padding:30px; border-radius:12px; top:104px; }
+ .tus-first-purchase-heading h2 { margin:0 0 12px; font-size:17px; font-weight:500; color:#b8bdca; }
+ .tus-first-purchase-heading>strong { display:block; font-size:32px; font-weight:650; line-height:1.3; margin-bottom:26px; color:#fff; }
+ .is-first-purchase .tus-checkout-form { display:flex; flex-direction:column; margin:0 0 20px; }
+ .is-first-purchase .tus-checkout-form .tus-quantity-field { order:-1; display:flex; flex-direction:row; align-items:center; justify-content:space-between; padding:12px 14px; gap:12px; background:#20263a; border-radius:9px; margin:0 0 22px; }
+ .tus-quantity-stepper { display:flex; align-items:center; }
+ .tus-quantity-stepper input[name="quantity"] { width:44px; padding:0; border:0; text-align:center; background:transparent; appearance:textfield; -moz-appearance:textfield; }
+ .tus-quantity-stepper input::-webkit-inner-spin-button,.tus-quantity-stepper input::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+ .tus-quantity-stepper button { width:36px; min-width:36px; height:44px; padding:0; font-size:22px; }
+ .is-first-purchase .tus-buy { min-height:46px; font-size:16px; }
+}
+@layer sentryloot-premium {
+ @media(min-width:841px) {
+  body #app .topup-supplier-page.is-first-purchase .tus-summary { background:#191e30!important; border:0!important; }
+  body #app .topup-supplier-page.is-first-purchase :is(.tus-package-grid,.tus-summary-title,.tus-summary-brand,.tus-summary-total) { display:none!important; }
+  body #app .topup-supplier-page.is-first-purchase .tus-buy:not(:disabled) { background:linear-gradient(110deg,#03c0d8,#1957ff)!important; color:#fff!important; }
+  body #app .topup-supplier-page .tus-quantity-stepper button { background:transparent!important; border:0!important; box-shadow:none!important; color:#b5bdcf!important; }
+  body #app .topup-supplier-page .tus-quantity-stepper button:disabled { color:#586077!important; opacity:.6!important; }
+ }
+}
+@layer sentryloot-premium {
+ @media(min-width:841px) {
+  body #app .topup-supplier-page.is-first-purchase .tus-checkout-form .tus-quantity-field:not([hidden]) { display:flex!important; flex-direction:row!important; align-items:center!important; justify-content:space-between!important; background:#20263a!important; border:0!important; padding:12px 14px!important; }
+  body #app .topup-supplier-page.is-first-purchase .tus-quantity-field>span { text-align:left!important; }
+  body #app .topup-supplier-page .tus-quantity-stepper input[name="quantity"] { width:44px!important; min-width:44px!important; height:44px!important; padding:0!important; border:0!important; background:transparent!important; text-align:center!important; box-shadow:none!important; }
+ }
+}
+@layer sentryloot-premium {
+ body #app .topup-supplier-page .tus-summary,
+ body #app .topup-supplier-page.is-first-purchase .tus-summary { background:#090b0e!important; }
+}
+@layer sentryloot-premium {
+ body #app .topup-supplier-page .tus-summary,
+ body #app .topup-supplier-page.is-first-purchase .tus-summary { background:#3a3a3a!important; }
+ body #app .topup-supplier-page .tus-buy,
+ body #app .topup-supplier-page.is-first-purchase .tus-buy:not(:disabled),
+ body #app .topup-supplier-page .tus-quantity-stepper button { background:#f3ba69!important; color:#241b10!important; border:0!important; }
+}
+/* Glass surface for the package checkout panel. */
+@layer sentryloot-premium {
+ body #app .topup-supplier-page .tus-summary,
+ body #app .topup-supplier-page.is-first-purchase .tus-summary {
+  background:linear-gradient(135deg,rgba(255,255,255,.085),rgba(255,255,255,.025))!important;
+  border:1px solid rgba(255,255,255,.13)!important;
+  -webkit-backdrop-filter:blur(20px) saturate(120%);
+  backdrop-filter:blur(20px) saturate(120%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 12px 32px rgba(0,0,0,.16)!important;
+ }
+}
+/* Apple-inspired glass: a soft tint, clear edge and restrained reflection. */
+@layer sentryloot-premium {
+ body #app .topup-supplier-page .tus-summary,
+ body #app .topup-supplier-page.is-first-purchase .tus-summary {
+  background:linear-gradient(145deg,rgba(255,255,255,.16) 0%,rgba(235,240,250,.065) 42%,rgba(200,210,225,.035) 100%)!important;
+  border:1px solid rgba(255,255,255,.22)!important;
+  -webkit-backdrop-filter:blur(32px) saturate(160%);
+  backdrop-filter:blur(32px) saturate(160%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.24),inset 1px 0 0 rgba(255,255,255,.08),inset 0 -1px 0 rgba(255,255,255,.04),0 16px 40px rgba(0,0,0,.18)!important;
+ }
+ body #app .topup-supplier-page.is-first-purchase .tus-checkout-form .tus-quantity-field:not([hidden]) {
+  background:rgba(255,255,255,.055)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+ }
+}
+/* Keep currency units beside the amount in package cards and selection. */
+.topup-supplier-page .tus-pack-label { flex-wrap:nowrap; }
+.topup-supplier-page .tus-pack-label .tus-pack-unit,
+.topup-supplier-page .tus-summary-selected .tus-pack-unit {
+ flex:0 0 auto; margin-top:0; white-space:nowrap;
+}
+@layer sentryloot-premium {
+ body #app .topup-supplier-page .tus-package-grid .tus-pack-unit[data-currency-unit="UC"] { display:none!important; }
+}
+/* Prime subscriptions: image cards open their own product detail. */
+@media(min-width:841px) {
+ .topup-supplier-page.is-membership-list .tus-layout { grid-template-columns:minmax(0,1fr); }
+ .is-membership-list .tus-package-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:20px; }
+ .tus-membership-cover { display:block; width:100%; height:250px; object-fit:cover; object-position:center; border-radius:14px 14px 0 0; }
+ .tus-membership-card-body { display:flex; flex-direction:column; width:100%; flex:1; min-height:160px; padding:20px; text-align:left; }
+ .tus-membership-card-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:auto; padding-top:24px; }
+ .tus-membership-price { font-size:20px; line-height:1.4; font-weight:650; font-variant-numeric:tabular-nums; }
+ .tus-membership-bag { display:grid; place-items:center; width:42px; height:38px; flex:none; border-radius:20px; background:#f3ba69; color:#241b10; }
+ .tus-membership-bag svg { width:21px; height:21px; }
+ .tus-membership-back { display:inline-flex; align-items:center; margin:0 0 16px; color:#f3ba69; font-size:13px; text-decoration:none; }
+ .tus-reward-symbol { display:grid; place-items:center; width:64px; height:64px; border:2px solid #b99d58; border-radius:50%; color:#e0c077; font-size:24px; font-weight:700; }
+}
+@layer sentryloot-premium {
+ @media(min-width:841px) {
+  body #app .topup-supplier-page.is-membership-list .tus-summary { display:none!important; }
+  body #app .topup-supplier-page .tus-membership-card,
+  body #app .topup-supplier-page .tus-membership-card[aria-pressed="true"] { padding:0!important; overflow:hidden; align-items:stretch; text-align:left; border:1px solid #ffffff0b!important; border-radius:14px!important; background:#1c2234!important; box-shadow:none!important; }
+  body #app .topup-supplier-page .tus-membership-card:hover { border-color:#f3ba6970!important; background:#20273b!important; }
+  body #app .topup-supplier-page .tus-membership-card .tus-membership-title { display:block; width:100%; min-height:54px; margin:0; overflow:visible; font-size:18px; line-height:1.5; font-weight:500; color:#f5f5f8!important; }
+  body #app .topup-supplier-page .tus-membership-price { color:#f5f5f8!important; }
+ }
+}
+@layer sentryloot-premium {
+ body #app .topup-supplier-page .tus-membership-card,
+ body #app .topup-supplier-page .tus-membership-card[aria-pressed="true"] { background:#14151b!important; border-color:rgba(255,255,255,.09)!important; }
+ body #app .topup-supplier-page .tus-membership-card:hover { background:#1a1c22!important; border-color:rgba(243,186,105,.45)!important; }
+}
+
+@media(min-width:841px) {
+ .tus-weekly-pack .tus-pack-art { height:84px; }
+ .tus-weekly-pack .tus-pack-art img { width:84px; height:84px; border-radius:7px; }
+}
+
+@media(min-width:841px) {
+ .topup-supplier-page.is-first-purchase .tus-product-info-banner { display:block; width:100%; height:300px; max-height:300px; object-fit:contain; margin:0 auto; }
+}
+
+/* Supplier tabs and checkout controls share the surrounding text alignment. */
+body #app .topup-supplier-page .tus-types .tus-type-icon { width:10px; height:10px; flex:0 0 10px; color:inherit; }
+@layer sentryloot-premium {
+body #app .topup-supplier-page .tus-quantity-stepper button,
+body #app .topup-supplier-page .tus-quantity-stepper button:hover,
+body #app .topup-supplier-page .tus-quantity-stepper button:active { background:transparent!important; border:0!important; box-shadow:none!important; color:inherit!important; }
+}
+body #app .topup-supplier-page .tus-checkout-note { display:grid; grid-template-columns:16px minmax(0,1fr); align-items:start; gap:8px; text-align:left; }
+body #app .topup-supplier-page .tus-checkout-note > .icon { width:16px; height:16px; margin:0; align-self:start; }
+body #app .topup-supplier-page .tus-checkout-note > span { display:block; min-width:0; line-height:16px; }
+body #app .topup-supplier-page .tus-types .tus-type-icon[class*="i-midas:"] { fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+
+.topup-supplier-page .tus-customer-fields { display:grid; gap:18px; margin-top:18px; }
+.topup-supplier-page .tus-customer-fields .field { display:grid; gap:8px; }
+.topup-supplier-page .tus-customer-fields input { width:100%; height:44px; padding:0 12px; background:#0c0d12; color:#f1f1f3; border:1px solid #ffffff20; border-radius:8px; }
+.topup-supplier-page .tus-customer-fields input:focus { outline:2px solid #f3ba69; outline-offset:2px; }
+
+@media(min-width:841px) {
+ .topup-supplier-page .tus-hero-game .tus-hero-bg { object-position:center 42%; }
+ .topup-supplier-page[data-supplier-game="pubg-mobile"] .tus-hero-bg { object-position:center bottom; }
+ .topup-supplier-page[data-supplier-game="mobile-legends"] .tus-hero-bg { object-position:center 36%; }
+}
+@layer sentryloot-premium {
+ body #app .topup-supplier-page .tus-types .tus-type-icon { width:10px!important; height:10px!important; flex:0 0 10px!important; }
 }

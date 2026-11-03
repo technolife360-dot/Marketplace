@@ -5,6 +5,7 @@ Run from the project root: python3 scripts/sync_melostore_catalog.py
 The current snapshot retains dashboard-only entries and image fallbacks.
 """
 import json
+import csv
 import os
 import sys
 from datetime import datetime, timezone
@@ -51,6 +52,25 @@ def main():
                  for row in catalog.snapshot()['items']]
     result = catalog.build_snapshot(brands['data'], prices, dashboard,
                                     datetime.now(timezone.utc).isoformat())
+    # Retain the owner's explicitly pinned PUBG offer catalogue.
+    previous_pubg = next((row for row in catalog.snapshot()['items'] if row['slug'] == 'pubg-mobile'), None)
+    if previous_pubg:
+        for item in result['items']:
+            if item['slug'] == 'pubg-mobile':
+                item['packages'] = previous_pubg['packages']
+        result['product_count'] = sum(len(item['packages']) for item in result['items'])
+    review_dir = catalog.SNAPSHOT.parent.parent / 'secrets'
+    review_dir.mkdir(mode=0o700, exist_ok=True)
+    review = review_dir / 'topup-price-review.csv'
+    by_sku = {row['sku_code']: row for row in prices['data']}
+    with review.open('w', newline='') as stream:
+        writer = csv.writer(stream)
+        writer.writerow(['game','type','package','sku','supplier_cost_idr','selling_price_usd'])
+        for item in result['items']:
+            for sku in result['selected_skus'].get(item['slug'], []):
+                row = by_sku[sku]
+                writer.writerow([item['name'], row.get('type_name',''), row['name'], sku, row['price'], ''])
+    review.chmod(0o600)
     temporary = catalog.SNAPSHOT.with_suffix('.json.tmp')
     temporary.write_text(json.dumps(result, ensure_ascii=False, separators=(',', ':')) + '\n')
     temporary.replace(catalog.SNAPSHOT)

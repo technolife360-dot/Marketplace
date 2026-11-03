@@ -56,7 +56,20 @@ function topupCatalogCard(item, index) {
   return '<article data-topup-category-card="' + esc(topupCategory(item)) + '" class="topup-game-card topup-game-' + esc(item.slug) + '"><a class="topup-game-cover" href="/top-up/' + encodeURIComponent(item.slug) + '" aria-label="' + esc(item.name) + '"><span class="topup-cover-placeholder" aria-hidden="true">' + topupGameIcon(item.slug) + '</span>' + backdrop + picture + '<span class="topup-game-cover-shade"></span></a><div class="topup-game-card-body"><h2 title="' + esc(item.name) + '">' + esc(item.name) + '</h2>' + (item.review_summary?.count ? '<span class="pr-card-rating">★ ' + Number(item.review_summary.rating).toFixed(1) + ' <small>(' + Number(item.review_summary.count) + ')</small></span>' : '') + '<a class="topup-game-cta" href="/top-up/' + encodeURIComponent(item.slug) + '">Top Up</a></div></article>';
 }
 
-function topupSupplierGroups(packages) {
+function topupSupplierTypeIcon(name) {
+  const kinds = {UC:'liked', Coins:'buy', Diamonds:'diamond', Tokens:'diamond', Gems:'diamond', Shop:'transaction', 'Battle Pass':'battle-pass'};
+  const paths = {
+    diamond:'<path d="m3 8 4-5h10l4 5-9 13L3 8Zm0 0h18M7 3l5 18 5-18"/>',
+    liked:'<path d="M7 10v11H3V10h4Zm0 0 5-8a3 3 0 0 1 2 4l-1 4h6a2 2 0 0 1 2 2l-2 7a2 2 0 0 1-2 2H7"/>',
+    buy:'<path d="M4 7h16l1 14H3L4 7Z"/><path d="M8 8V6a4 4 0 0 1 8 0v2"/>',
+    transaction:'<path d="M2 3h3l3 13h11l3-10H6"/><circle cx="9" cy="21" r="1"/><circle cx="19" cy="21" r="1"/>',
+    'battle-pass':'<path d="M3 5h18v4a3 3 0 0 0 0 6v4H3v-4a3 3 0 0 0 0-6V5Z"/><path d="m12 8 1.2 2.5 2.8.4-2 2 .5 2.8-2.5-1.3-2.5 1.3.5-2.8-2-2 2.8-.4L12 8Z"/>'
+  };
+  const kind = kinds[name];
+  return kind ? `<svg class="icon tus-type-icon i-midas:${kind}" style="width:10px!important;height:10px!important;flex:0 0 10px!important" viewBox="0 0 24 24" aria-hidden="true">${paths[kind]}</svg>` : '';
+}
+
+function topupSupplierGroups(packages, slug = '') {
   const collator = new Intl.Collator('en', {numeric:true, sensitivity:'base'});
   const amount = label => {
     const expression = String(label || '').match(/\d[\d.,]*(?:\s*\+\s*\d[\d.,]*)*/);
@@ -69,17 +82,19 @@ function topupSupplierGroups(packages) {
   const groups = new Map(), seen = new Set();
   packages.forEach((pack, index) => {
     if (pack.status !== 'active') return;
-    const name = String(pack.type_name || '').trim() || 'Other';
-    const identity = JSON.stringify([name, String(pack.name || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase()]);
+    const originalType = String(pack.type_name || '').trim() || 'Other';
+    const name = slug === 'pubg-mobile' && ['Prime','Prime Plus','Weekly Deal Pack','Mythic Emblem Pack','Weekly Mythic Emblem Value Pack','Upgradable Firearm Materials Pack','First Purchase Pack'].includes(originalType) ? 'Shop' : originalType;
+    const identity = JSON.stringify([originalType, String(pack.name || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase()]);
     if (seen.has(identity)) return;
     seen.add(identity);
     if (!groups.has(name)) groups.set(name, {name, items: []});
     groups.get(name).items.push({pack, index});
   });
   for (const group of groups.values()) {
-    group.items.sort((a, b) => amount(a.pack.name) - amount(b.pack.name) || collator.compare(a.pack.name, b.pack.name));
+    group.items.sort((a, b) => (group.name === 'Shop' ? (['Prime','Prime Plus','Weekly Deal Pack','Mythic Emblem Pack','Weekly Mythic Emblem Value Pack','Upgradable Firearm Materials Pack','First Purchase Pack'].indexOf(a.pack.type_name) - ['Prime','Prime Plus','Weekly Deal Pack','Mythic Emblem Pack','Weekly Mythic Emblem Value Pack','Upgradable Firearm Materials Pack','First Purchase Pack'].indexOf(b.pack.type_name)) : 0) || amount(a.pack.name) - amount(b.pack.name) || collator.compare(a.pack.name, b.pack.name));
   }
-  return [...groups.values()];
+  const result = [...groups.values()];
+  return slug === 'pubg-mobile' ? result : result.sort((a,b)=>Number(a.name==='Shop')-Number(b.name==='Shop'));
 }
 
 function topupSupplierPresentationPackages(slug, packages) {
@@ -87,7 +102,11 @@ function topupSupplierPresentationPackages(slug, packages) {
     name: String(pack.name || '').replace(/\bunknown\s+cash\b/gi, 'UC'),
     type_name: String(pack.type_name || '').replace(/\bunknown\s+cash\b/gi, 'UC')
   }));
-  if (slug !== 'pubg-mobile') return normalized;
+  if (slug !== 'pubg-mobile') return normalized.map(pack => {
+    const bonus = /first[ -]*top[ -]*up bonus/i.test(pack.name + ' ' + pack.type_name);
+    const shop = /pass|membership|subscription|bundle|pack/i.test(pack.type_name + ' ' + pack.name);
+    return {...pack, type_name:bonus ? 'First Top-Up Bonus' : shop ? 'Shop' : pack.type_name};
+  });
   const ucLabels = new Map([
     [60, '60 UC'], [120, '120 UC'], [325, '300 + 25 UC'],
     [660, '600 + 60 UC'], [1800, '1500 + 300 UC'], [3850, '3000 + 850 UC'],
@@ -101,7 +120,337 @@ function topupSupplierPresentationPackages(slug, packages) {
     [3850, 4999], [8100, 9999], [16200, 18999], [24300, 28999],
     [32400, 37999], [40500, 46999]
   ]);
+  const passPrices = new Map([
+    ['pubgmel5ucbp-s101', 549], ['pubgmel1ucbp-s101', 1079], ['pubgmepl1ucbp-s10', 2699]
+  ]);
+  const coinOffers = new Map([
+  [
+    "pubgm60wc-s101",
+    {
+      "name": "60 Coins",
+      "selling_price_cents": 99,
+      "selling_currency": "USD",
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/coins-60-5231f32f578dd31be5e9.png"
+    }
+  ],
+  [
+    "pubgm325wc-s101",
+    {
+      "name": "300 + 25 Coins",
+      "selling_price_cents": 499,
+      "selling_currency": "USD",
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/coins-325-916657fcdb871e747524.png"
+    }
+  ],
+  [
+    "pubgm660wc-s101",
+    {
+      "name": "600 + 60 Coins",
+      "selling_price_cents": 999,
+      "selling_currency": "USD",
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/coins-660-f068e3cb6acf706322bd.png"
+    }
+  ],
+  [
+    "pubgm1800wc-s101",
+    {
+      "name": "1500 + 300 Coins",
+      "selling_price_cents": 2499,
+      "selling_currency": "USD",
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/coins-1800-bebb53489b8dd64f309e.png"
+    }
+  ],
+  [
+    "pubgm3850wc-s101",
+    {
+      "name": "3000 + 850 Coins",
+      "selling_price_cents": 4999,
+      "selling_currency": "USD",
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/coins-3850-b19a39c804ac5fe51bf3.png"
+    }
+  ],
+  [
+    "pubgm8100wc-s101",
+    {
+      "name": "6000 + 2100 Coins",
+      "selling_price_cents": 9999,
+      "selling_currency": "USD",
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/coins-8100-7dc96560e8d1673eaef1.png"
+    }
+  ]
+]);
+  const firstPurchase = {"membership":true,
+  "display_name": "First Purchase Pack",
+  "max_quantity": 1,
+  "selling_price_cents": 89,
+  "selling_currency": "USD",
+  "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/first-purchase-uc-f27f18c82b7625431641.png",
+  "detail_banner": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/first-purchase-banner-25b1d7baf26e989de845.png",
+  "included_items": [
+    {
+      "name": "100 AG",
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/first-purchase-ag-6ead67d5a5c1a99a842e.png"
+    },
+    {
+      "name": "90 UC",
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/first-purchase-uc-f27f18c82b7625431641.png"
+    }
+  ]
+};
+  const mythicEmblem = {
+  "open_detail": true,
+  "membership": true,
+  "display_name": "Mythic Emblem Pack",
+  "selling_price_cents": 445,
+  "selling_currency": "USD",
+  "max_quantity": 1,
+  "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/mythic-emblem-fragment-8a815edf1aeff4101f97.png",
+  "detail_banner": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/mythic-emblem-banner-d5ae588db8e3818af980.png",
+  "included_items": [
+    {
+      "name": "15 Mythic Emblem Fragment",
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/mythic-emblem-fragment-8a815edf1aeff4101f97.png"
+    },
+    {
+      "name": "300 UC",
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/mythic-emblem-uc-f27f18c82b7625431641.png"
+    }
+  ],
+  "description": {
+    "en": "Mythic Emblem Pack, limited to one purchase per UID. Get 300 UC and 15 Mythic Emblem Fragments immediately upon purchase. Other rewards can be claimed daily in the game's Special Offers tab - Growth Pack.",
+    "uz": "Mythic Emblem Pack har bir UID uchun bir marta olinadi. Xariddan so‘ng darhol 300 UC va 15 Mythic Emblem Fragment beriladi. Qolgan mukofotlarni o‘yindagi Special Offers → Growth Pack bo‘limidan har kuni olish mumkin.",
+    "ru": "Mythic Emblem Pack доступен один раз для каждого UID. После покупки сразу начисляются 300 UC и 15 Mythic Emblem Fragments. Остальные награды можно получать ежедневно в разделе Special Offers → Growth Pack в игре."
+  }
+};
+  const memberships = new Map([
+  [
+    "pubgmmucp-s101",
+    {
+      "membership": true,
+      "display_name": "Prime (1 Month)",
+      "name": "Prime (1 Month)",
+      "selling_price_cents": 89,
+      "selling_currency": "USD",
+      "max_quantity": 1,
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/membership-prime-1-34d12468569003f0f658.png",
+      "detail_banner": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/membership-prime-1-34d12468569003f0f658.png",
+      "included_items": [
+        {
+          "name": "60 UC",
+          "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/first-purchase-uc-f27f18c82b7625431641.png"
+        }
+      ],
+      "description": {
+        "en": "Prime (1 Month): get 60 UC immediately. Claim 3 UC and 5 RP daily during the subscription. See the banner for subscription perks.",
+        "uz": "Prime (1 Month): get 60 UC immediately. Claim 3 UC and 5 RP daily during the subscription. See the banner for subscription perks.",
+        "ru": "Prime (1 Month): get 60 UC immediately. Claim 3 UC and 5 RP daily during the subscription. See the banner for subscription perks."
+      }
+    }
+  ],
+  [
+    "pubgmmucpb-s101",
+    {
+      "membership": true,
+      "display_name": "Prime (3 Months)",
+      "name": "Prime (3 Months)",
+      "selling_price_cents": 269,
+      "selling_currency": "USD",
+      "max_quantity": 1,
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/membership-prime-3-f165feecab750e7bd24c.png",
+      "detail_banner": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/membership-prime-3-f165feecab750e7bd24c.png",
+      "included_items": [
+        {
+          "name": "180 UC",
+          "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/first-purchase-uc-f27f18c82b7625431641.png"
+        }
+      ],
+      "description": {
+        "en": "Prime (3 Months): get 180 UC immediately. Claim 3 UC and 5 RP daily during the subscription. See the banner for subscription perks.",
+        "uz": "Prime (3 Months): get 180 UC immediately. Claim 3 UC and 5 RP daily during the subscription. See the banner for subscription perks.",
+        "ru": "Prime (3 Months): get 180 UC immediately. Claim 3 UC and 5 RP daily during the subscription. See the banner for subscription perks."
+      }
+    }
+  ],
+  [
+    "pubgmmucpc-s101",
+    {
+      "membership": true,
+      "display_name": "Prime (6 Months)",
+      "name": "Prime (6 Months)",
+      "selling_price_cents": 539,
+      "selling_currency": "USD",
+      "max_quantity": 1,
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/membership-prime-6-6b4cbbaae7ba38202fff.png",
+      "detail_banner": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/membership-prime-6-6b4cbbaae7ba38202fff.png",
+      "included_items": [
+        {
+          "name": "360 UC",
+          "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/first-purchase-uc-f27f18c82b7625431641.png"
+        }
+      ],
+      "description": {
+        "en": "Prime (6 Months): get 360 UC immediately. Claim 3 UC and 5 RP daily during the subscription. See the banner for subscription perks.",
+        "uz": "Prime (6 Months): get 360 UC immediately. Claim 3 UC and 5 RP daily during the subscription. See the banner for subscription perks.",
+        "ru": "Prime (6 Months): get 360 UC immediately. Claim 3 UC and 5 RP daily during the subscription. See the banner for subscription perks."
+      }
+    }
+  ],
+  [
+    "pubgmmucpa-s101",
+    {
+      "membership": true,
+      "display_name": "Prime (12 Months)",
+      "name": "Prime (12 Months)",
+      "selling_price_cents": 1079,
+      "selling_currency": "USD",
+      "max_quantity": 1,
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/membership-prime-12-43481d7fc3f6bb30fba2.png",
+      "detail_banner": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/membership-prime-12-43481d7fc3f6bb30fba2.png",
+      "included_items": [
+        {
+          "name": "720 UC",
+          "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/first-purchase-uc-f27f18c82b7625431641.png"
+        }
+      ],
+      "description": {
+        "en": "Prime (12 Months): get 720 UC immediately. Claim 3 UC and 5 RP daily during the subscription. See the banner for subscription perks.",
+        "uz": "Prime (12 Months): get 720 UC immediately. Claim 3 UC and 5 RP daily during the subscription. See the banner for subscription perks.",
+        "ru": "Prime (12 Months): get 720 UC immediately. Claim 3 UC and 5 RP daily during the subscription. See the banner for subscription perks."
+      }
+    }
+  ],
+  [
+    "pubgmmucpp-s101",
+    {
+      "membership": true,
+      "display_name": "Prime Plus (1 Month)",
+      "name": "Prime Plus (1 Month)",
+      "selling_price_cents": 899,
+      "selling_currency": "USD",
+      "max_quantity": 1,
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/membership-prime-plus-1-0cfeb3cc329cd12739c0.png",
+      "detail_banner": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/membership-prime-plus-1-0cfeb3cc329cd12739c0.png",
+      "included_items": [
+        {
+          "name": "660 UC",
+          "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/first-purchase-uc-f27f18c82b7625431641.png"
+        },
+        {
+          "name": "300 RP",
+          "symbol": "RP"
+        }
+      ],
+      "description": {
+        "en": "Prime Plus (1 Month): get 660 UC and 300 RP immediately. Claim 8 UC, 10 RP and 50 AG daily during the subscription. See the banner for subscription perks.",
+        "uz": "Prime Plus (1 Month): get 660 UC and 300 RP immediately. Claim 8 UC, 10 RP and 50 AG daily during the subscription. See the banner for subscription perks.",
+        "ru": "Prime Plus (1 Month): get 660 UC and 300 RP immediately. Claim 8 UC, 10 RP and 50 AG daily during the subscription. See the banner for subscription perks."
+      }
+    }
+  ],
+  [
+    "pubgmmucppb-s101",
+    {
+      "membership": true,
+      "display_name": "Prime Plus (3 Months)",
+      "name": "Prime Plus (3 Months)",
+      "selling_price_cents": 2699,
+      "selling_currency": "USD",
+      "max_quantity": 1,
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/membership-prime-plus-3-355292a57613d4e40850.png",
+      "detail_banner": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/membership-prime-plus-3-355292a57613d4e40850.png",
+      "included_items": [
+        {
+          "name": "1980 UC",
+          "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/first-purchase-uc-f27f18c82b7625431641.png"
+        },
+        {
+          "name": "900 RP",
+          "symbol": "RP"
+        }
+      ],
+      "description": {
+        "en": "Prime Plus (3 Months): get 1980 UC and 900 RP immediately. Claim 8 UC, 10 RP and 50 AG daily during the subscription. See the banner for subscription perks.",
+        "uz": "Prime Plus (3 Months): get 1980 UC and 900 RP immediately. Claim 8 UC, 10 RP and 50 AG daily during the subscription. See the banner for subscription perks.",
+        "ru": "Prime Plus (3 Months): get 1980 UC and 900 RP immediately. Claim 8 UC, 10 RP and 50 AG daily during the subscription. See the banner for subscription perks."
+      }
+    }
+  ],
+  [
+    "pubgmmucppc-s101",
+    {
+      "membership": true,
+      "display_name": "Prime Plus (6 Months)",
+      "name": "Prime Plus (6 Months)",
+      "selling_price_cents": 5399,
+      "selling_currency": "USD",
+      "max_quantity": 1,
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/membership-prime-plus-6-f0810a36c9c072a6011b.png",
+      "detail_banner": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/membership-prime-plus-6-f0810a36c9c072a6011b.png",
+      "included_items": [
+        {
+          "name": "3960 UC",
+          "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/first-purchase-uc-f27f18c82b7625431641.png"
+        },
+        {
+          "name": "1800 RP",
+          "symbol": "RP"
+        }
+      ],
+      "description": {
+        "en": "Prime Plus (6 Months): get 3960 UC and 1800 RP immediately. Claim 8 UC, 10 RP and 50 AG daily during the subscription. See the banner for subscription perks.",
+        "uz": "Prime Plus (6 Months): get 3960 UC and 1800 RP immediately. Claim 8 UC, 10 RP and 50 AG daily during the subscription. See the banner for subscription perks.",
+        "ru": "Prime Plus (6 Months): get 3960 UC and 1800 RP immediately. Claim 8 UC, 10 RP and 50 AG daily during the subscription. See the banner for subscription perks."
+      }
+    }
+  ],
+  [
+    "pubgmmucppa-s101",
+    {
+      "membership": true,
+      "display_name": "Prime Plus (12 Months)",
+      "name": "Prime Plus (12 Months)",
+      "selling_price_cents": 10799,
+      "selling_currency": "USD",
+      "max_quantity": 1,
+      "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/membership-prime-plus-12-fe0a0c7c55aed4f293f3.png",
+      "detail_banner": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/membership-prime-plus-12-fe0a0c7c55aed4f293f3.png",
+      "included_items": [
+        {
+          "name": "7920 UC",
+          "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/first-purchase-uc-f27f18c82b7625431641.png"
+        },
+        {
+          "name": "3600 RP",
+          "symbol": "RP"
+        }
+      ],
+      "description": {
+        "en": "Prime Plus (12 Months): get 7920 UC and 3600 RP immediately. Claim 8 UC, 10 RP and 50 AG daily during the subscription. See the banner for subscription perks.",
+        "uz": "Prime Plus (12 Months): get 7920 UC and 3600 RP immediately. Claim 8 UC, 10 RP and 50 AG daily during the subscription. See the banner for subscription perks.",
+        "ru": "Prime Plus (12 Months): get 7920 UC and 3600 RP immediately. Claim 8 UC, 10 RP and 50 AG daily during the subscription. See the banner for subscription perks."
+      }
+    }
+  ]
+]);
+  const firearmMaterials = {"membership":true,"selling_price_cents":269,"selling_currency":"USD","display_name": "Upgradable Firearm Materials Pack", "max_quantity": 1, "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/firearm-materials-material-c272ba6c040945c5f323.png", "detail_banner": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/firearm-materials-banner-4b759c34102a30282f79.png", "included_items": [{"name": "100 UC", "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/firearm-materials-uc-f27f18c82b7625431641.png"}, {"name": "1 Modification Material Piece", "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/firearm-materials-material-c272ba6c040945c5f323.png"}], "description": {"en": "Upgradable Firearm Materials Pack, limited to one purchase per UID. Get 100UC and Modification Material Piece ×1 immediately upon purchase. Other rewards can be claimed daily in the game's Special Offers tab - Growth Pack.", "uz": "Upgradable Firearm Materials Pack, limited to one purchase per UID. Get 100UC and Modification Material Piece ×1 immediately upon purchase. Other rewards can be claimed daily in the game's Special Offers tab - Growth Pack.", "ru": "Upgradable Firearm Materials Pack, limited to one purchase per UID. Get 100UC and Modification Material Piece ×1 immediately upon purchase. Other rewards can be claimed daily in the game's Special Offers tab - Growth Pack."}};
+  const weeklyMythic = {"open_detail": true, "membership": true, "name": "Weekly Mythic Emblem Value Pack", "display_name": "Weekly Mythic Emblem Value Pack", "selling_price_cents": 269, "selling_currency": "USD", "max_quantity": 1, "image_url": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/weekly-mythic-pack-416254d25e35f8df0ed5.png", "detail_banner": "https://images.gamestorehub.com/site-assets/topup/pubg-mobile/weekly-mythic-pack-416254d25e35f8df0ed5.png", "banner_width": 820, "banner_height": 820, "included_items": [{"name": "1 Mythic Emblem", "symbol": "✦"}], "description": {"uz": "Haftalik Mythic Emblem Value Pack. Tarkibida 1 ta Mythic Emblem bor. Haftada bir marta olinadi.", "ru": "Еженедельный Mythic Emblem Value Pack. Содержит 1 Mythic Emblem. Доступен один раз в неделю.", "en": "Weekly Mythic Emblem Value Pack. Includes 1 Mythic Emblem. Available once a week."}};
   const result = normalized.flatMap(pack => {
+    if (pack.type_name === 'Weekly Deal Pack') {
+      const prices = {'pubgm1ucwdp-s101':89, 'pubgm2ucwdp-s101':269};
+      if (!(pack.sku in prices)) return [];
+      const art = 'https://images.gamestorehub.com/site-assets/topup-weekly-deal-' + (/pack 2/i.test(pack.name) ? '2' : '1') + '.png';
+      const name = pack.name.replace(/\s+UC$/i, '');
+      return [{...pack, name, display_name:name, membership:true, max_quantity:1, image_url:art, detail_banner:art, selling_price_cents:prices[pack.sku], selling_currency:'USD'}];
+    }
+    if (pack.type_name === 'Weekly Mythic Emblem Value Pack') return pack.sku === 'pubgmucwmevp-s101' ? [{...pack, ...weeklyMythic}] : [];
+    if (pack.type_name === 'Upgradable Firearm Materials Pack') return pack.sku === 'pubgmucufmp-s101' ? [{...pack, ...firearmMaterials}] : [];
+    if (['Prime','Prime Plus'].includes(pack.type_name)) return memberships.has(pack.sku) ? [{...pack, ...memberships.get(pack.sku)}] : [];
+    if (pack.type_name === 'Mythic Emblem Pack') return pack.sku === 'pubgmucmep-s101' ? [{...pack, ...mythicEmblem}] : [];
+    if (pack.type_name === 'First Purchase Pack') return pack.sku === 'pubgmucfpp-s101' ? [{...pack, ...firstPurchase}] : [];
+    if (pack.type_name === 'Coins') return coinOffers.has(pack.sku) ? [{...pack, ...coinOffers.get(pack.sku)}] : [];
+    if (pack.type_name === 'Battle Pass') {
+      return passPrices.has(pack.sku) ? [{...pack, selling_price_cents:passPrices.get(pack.sku), selling_currency:'USD'}] : [];
+    }
     if (pack.type_name !== 'UC') return [pack];
     const total = Number(pack.name.replace(/UC/gi, '').replace(/[\s.,]/g, ''));
     if (preferredSkus.has(total) && pack.sku !== preferredSkus.get(total)) return [];
@@ -126,40 +475,46 @@ function topupSupplierPriceAttributes(pack) {
 }
 
 function topupSupplierPackageLabel(pack) {
-  const parts = String(pack.name || '').match(/^(\d+)\s*\+\s*(\d+)\s+UC$/i);
+  const parts = String(pack.name || '').match(/^(\d+)\s*\+\s*(\d+)\s+(UC|Coins|Diamonds|Tokens|Gems|Crystals|Vouchers|Points|Credits|Gold)$/i);
   if (!parts) {
-    const plain = String(pack.name || '').match(/^(\d+)\s+UC$/i);
-    return plain ? `${esc(plain[1])}<span class="tus-pack-unit">UC</span>` : esc(pack.name);
+    const plain = String(pack.name || '').match(/^(\d+)\s+(UC|Coins|Diamonds|Tokens|Gems|Crystals|Vouchers|Points|Credits|Gold)$/i);
+    return plain ? `${esc(plain[1])}<span class="tus-pack-unit" data-currency-unit="${esc(plain[2].toUpperCase())}">${esc(plain[2])}</span>` : esc(pack.name);
   }
   const tag = '<svg class="tus-bonus-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 4h8l10 10-7 7L3 10V4Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="7.5" cy="8" r="1.2" fill="currentColor"/><path d="m11 11 5 5m0-5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
-  return `${esc(parts[1])}<span class="tus-pack-bonus">+${esc(parts[2])}${tag}</span><span class="tus-pack-unit">UC</span>`;
+  return `${esc(parts[1])}<span class="tus-pack-bonus">+${esc(parts[2])}${tag}</span><span class="tus-pack-unit" data-currency-unit="${esc(parts[3].toUpperCase())}">${esc(parts[3])}</span>`;
 }
 
 async function renderTopUpSupplierBrand(game) {
   const brand = await api('/top-up/catalog/' + encodeURIComponent(game.slug));
   const returnOrder = new URLSearchParams(location.search).get('topup_return');
+  const requestedSku = new URLSearchParams(location.search).get('package');
   brand.image_url = brand.image_url || TOPUP_CATALOG_IMAGE_FALLBACKS[game.slug] || '';
   brand.packages = topupSupplierPresentationPackages(game.slug, brand.packages);
-  const t = adminText, groups = topupSupplierGroups(brand.packages);
+  const t = adminText, groups = topupSupplierGroups(brand.packages, game.slug);
   const category = TOPUP_CATEGORIES.find(([slug]) => slug === brand.category)?.[1] || '';
-  const heroArt = game.slug === 'pubg-mobile' ? 'https://images.gamestorehub.com/site-assets/topup/pubg-mobile/hero-f39ccb5ddd387864bb28.png' : TOPUP_OFFICIAL_GAME_ART[game.slug] || brand.image_url;
+  const heroArt = brand.banner_url || TOPUP_OFFICIAL_GAME_ART[game.slug] || brand.image_url;
   const packageArt = pack => {
     const kind = String(pack.type_name || '').toLowerCase();
-    let art = /^(uc|diamonds|tokens)$/.test(kind) ? TOPUP_CURRENCY_ART[game.slug] : '';
+    let art = pack.image_url || (/^(uc|diamonds|tokens)$/.test(kind) ? TOPUP_CURRENCY_ART[game.slug] : '');
     if (game.slug === 'pubg-mobile' && kind === 'battle pass') art = 'https://images.gamestorehub.com/site-assets/topup-elite-pass.png';
     if (game.slug === 'pubg-mobile' && kind === 'weekly deal pack') art = 'https://images.gamestorehub.com/site-assets/topup-weekly-deal-' + (/pack 2/i.test(pack.name) ? '2' : '1') + '.png';
-    return art ? '<img src="' + esc(art) + '" alt="" loading="lazy" decoding="async">' : icon('box');
+    return art ? '<img' + (kind === 'coins' ? ' class="tus-coin-image"' : '') + ' src="' + esc(art) + '" alt="" loading="lazy" decoding="async">' : brand.image_url ? '<img src="' + esc(brand.image_url) + '" alt="" loading="lazy" decoding="async">' : icon('box');
+  };
+  const productInfo = group => {
+    const pack = group.items.find(item=>item.pack.sku===requestedSku)?.pack || group.items[0]?.pack;
+    if (!pack?.detail_banner || ((pack.membership || pack.open_detail) && pack.sku !== requestedSku)) return '';
+    return `<article class="tus-product-info"><img class="tus-product-info-banner" width="${pack.banner_width || 1520}" height="${pack.banner_height || 770}" src="${esc(pack.detail_banner)}" alt="${esc(pack.display_name || pack.name)} overall rewards" loading="lazy"></article>`;
   };
   const typeName = group => group.name === 'Other' ? t('Boshqa paketlar','Другие пакеты','Other packages') : group.name;
-  const packageCard = ({pack, index}) => `<button type="button" class="tus-pack" data-supplier-package="${index}" data-package-search="${esc(pack.name.toLocaleLowerCase())}" aria-pressed="false" ${pack.status !== 'active' ? 'disabled' : ''}><span class="tus-pack-top"><span class="tus-pack-check" aria-hidden="true">✓</span></span><span class="tus-pack-art">${packageArt(pack)}</span><strong class="tus-pack-label">${topupSupplierPackageLabel(pack)}</strong><span class="tus-pack-price${topupSupplierPrice(pack) ? ' has-price' : ''}" ${topupSupplierPriceAttributes(pack)}>${topupSupplierPrice(pack) || t('Narx tayyorlanmoqda','Цена готовится','Price coming soon')}</span></button>`;
-  app.innerHTML = `<section class="page topup-page topup-supplier-page">
+  const packageCard = ({pack, index}) => pack.membership ? `<button type="button" class="tus-pack tus-membership-card" data-supplier-package="${index}" data-package-search="${esc(pack.name.toLocaleLowerCase())}" aria-label="${esc(pack.display_name)}"><img class="tus-membership-cover" src="${esc(pack.detail_banner)}" alt="" loading="lazy" width="1520" height="770"><span class="tus-membership-card-body"><strong class="tus-membership-title">${esc(pack.display_name)}</strong><span class="tus-membership-card-footer"><span class="tus-membership-price" ${topupSupplierPriceAttributes(pack)}>${topupSupplierPrice(pack) || t('Narx tayyorlanmoqda','Цена готовится','Price coming soon')}</span><span class="tus-membership-bag" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 8h14l1 13H4L5 8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 9V6a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span></span></span></button>` : `<button type="button" class="tus-pack${pack.open_detail ? ' tus-weekly-pack' : ''}" data-supplier-package="${index}" data-package-search="${esc(pack.name.toLocaleLowerCase())}" ${pack.open_detail ? '' : 'aria-pressed="false"'} ${pack.status !== 'active' ? 'disabled' : ''}>${pack.open_detail ? '' : '<span class="tus-pack-top"><span class="tus-pack-check" aria-hidden="true">✓</span></span>'}<span class="tus-pack-art">${packageArt(pack)}</span><strong class="tus-pack-label">${topupSupplierPackageLabel(pack)}</strong><span class="tus-pack-price${topupSupplierPrice(pack) ? ' has-price' : ''}" ${topupSupplierPriceAttributes(pack)}>${topupSupplierPrice(pack) || t('Narx tayyorlanmoqda','Цена готовится','Price coming soon')}</span></button>`;
+  app.innerHTML = `<section class="page topup-page topup-supplier-page" data-supplier-game="${esc(game.slug)}">
     <nav class="tus-breadcrumb" aria-label="Breadcrumb"><a href="/top-up">Top Up</a><span>/</span><span>${esc(brand.name)}</span></nav>
-    <header class="tus-hero${game.slug === 'pubg-mobile' ? ' tus-hero-pubg' : ''}">${heroArt ? `<img class="tus-hero-bg" src="${esc(heroArt)}" alt="" aria-hidden="true">` : ''}<div class="tus-hero-main"><div class="tus-brand-art">${brand.image_url ? `<img src="${esc(brand.image_url)}" alt="" decoding="async">` : topupGameIcon(game.slug)}</div><div><span class="tus-eyebrow">${esc(category)}</span><h1>${esc(brand.name)}</h1><p>${t('O‘zingizga mos paketni tanlang','Выберите подходящий пакет','Find the right package for you')}</p></div></div></header>
-    <nav class="tus-types" aria-label="${t('Mahsulot turi','Тип товара','Product type')}">${groups.map((group,index)=>`<button type="button" data-supplier-type="${index}" aria-pressed="${index===0}" aria-controls="tus-type-${index}">${esc(typeName(group))}<span>${group.items.length}</span></button>`).join('')}</nav>
+    <header class="tus-hero${brand.category === 'game' ? ' tus-hero-game' : ''}">${heroArt ? `<img class="tus-hero-bg" src="${esc(heroArt)}" alt="" aria-hidden="true">` : ''}<div class="tus-hero-main"><div class="tus-brand-art">${brand.image_url ? `<img src="${esc(brand.image_url)}" alt="" decoding="async">` : topupGameIcon(game.slug)}</div><div><span class="tus-eyebrow">${esc(category)}</span><h1>${esc(brand.name)}</h1><p>${t('O‘zingizga mos paketni tanlang','Выберите подходящий пакет','Find the right package for you')}</p></div></div></header>
+    <nav class="tus-types" aria-label="${t('Mahsulot turi','Тип товара','Product type')}">${groups.map((group,index)=>`<button type="button" data-supplier-type="${index}" aria-pressed="${index===0}" aria-controls="tus-type-${index}">${topupSupplierTypeIcon(group.name)}${esc(typeName(group))}</button>`).join('')}</nav>
     <div class="tus-layout"><div class="tus-main">
-    ${groups.map((group,index)=>`<section class="tus-type-section" id="tus-type-${index}" data-supplier-section="${index}" aria-label="${esc(typeName(group))}" ${index?'hidden':''}><div class="tus-package-grid">${group.items.map(packageCard).join('')}</div></section>`).join('')}
+    ${groups.map((group,index)=>`<section class="tus-type-section" id="tus-type-${index}" data-supplier-section="${index}" aria-label="${esc(typeName(group))}" ${index?'hidden':''}><div class="tus-package-grid">${group.items.map(packageCard).join('')}</div>${productInfo(group)}</section>`).join('')}
     <p class="tus-empty" data-topup-package-empty hidden>${t('Mos paket topilmadi.','Подходящих пакетов не найдено.','No matching packages found.')}</p><div class="tus-more"><button type="button" data-supplier-more>${t('Ko‘proq ko‘rsatish','Показать ещё','Show more')}</button></div></div>
-    <aside class="tus-summary"><div class="tus-summary-title"><h2>${t('Tanlangan paket','Выбранный пакет','Your selection')}</h2></div><div class="tus-summary-brand">${brand.image_url?`<img src="${esc(brand.image_url)}" alt="">`:''}<span>${esc(brand.name)}</span></div><div class="tus-summary-empty" data-supplier-summary-empty>${icon('box')}<b>${t('Paketni tanlang','Выберите пакет','Select a package')}</b><p>${t('Paket tafsilotlari shu yerda ko‘rinadi.','Здесь появятся детали пакета.','Your package details will appear here.')}</p></div><div class="tus-summary-selected" data-supplier-summary-selected aria-live="polite" hidden></div>${game.slug === 'pubg-mobile' ? `<form id="tus-checkout-form" class="tus-checkout-form"><label class="field"><span>Player ID</span><input name="player_id" inputmode="numeric" autocomplete="off" pattern="[0-9]{3,40}" minlength="3" maxlength="40" placeholder="${t('Player ID kiriting','Введите Player ID','Enter Player ID')}" required aria-describedby="tus-player-help"></label><small id="tus-player-help">${t('PUBG Mobile profilidagi ID raqamingiz.','ID из вашего профиля PUBG Mobile.','Your numeric ID from your PUBG Mobile profile.')}</small><label class="tus-test-consent"><input type="checkbox" name="accept_terms" required><span>${t('Player ID ni tekshirdim. Stripe test to‘loviga roziman; haqiqiy UC yetkazilmaydi.','Я проверил Player ID и согласен на тестовую оплату Stripe. Реальные UC не доставляются.','I checked my Player ID and agree to a Stripe test payment. No real UC will be delivered.')}</span></label><p class="tus-checkout-error" role="alert" hidden></p></form>` : ''}<div class="tus-summary-total"><span>${t('Jami','Итого','Total')}</span><b>—</b></div><button type="submit" form="tus-checkout-form" class="tus-buy" disabled>${t('Xarid qilish','Купить сейчас','Buy now')}</button><p class="tus-checkout-note">${icon('shield')}<span>${t('Sotuv narxlari va xarid qilish imkoniyati tayyorlanmoqda.','Цены продажи и возможность покупки готовятся.','Selling prices and checkout are being prepared.')}</span></p></aside></div></section>`;
+    <aside class="tus-summary"><div class="tus-summary-title"><h2>${t('Tanlangan paket','Выбранный пакет','Your selection')}</h2></div><div class="tus-summary-brand">${brand.image_url?`<img src="${esc(brand.image_url)}" alt="">`:''}<span>${esc(brand.name)}</span></div><div class="tus-summary-empty" data-supplier-summary-empty>${icon('box')}<b>${t('Paketni tanlang','Выберите пакет','Select a package')}</b><p>${t('Paket tafsilotlari shu yerda ko‘rinadi.','Здесь появятся детали пакета.','Your package details will appear here.')}</p></div><div class="tus-summary-selected" data-supplier-summary-selected aria-live="polite" hidden></div>${game.slug !== 'pubg-mobile' && brand.category === 'game' ? '<div class="tus-customer-fields" data-supplier-customer-fields></div>' : ''}${game.slug === 'pubg-mobile' ? `<form id="tus-checkout-form" class="tus-checkout-form"><label class="field"><span>Player ID</span><input name="player_id" inputmode="numeric" autocomplete="off" pattern="[0-9]{3,40}" minlength="3" maxlength="40" placeholder="${t('Player ID kiriting','Введите Player ID','Enter Player ID')}" required aria-describedby="tus-player-help"></label><small id="tus-player-help">${t('PUBG Mobile profilidagi ID raqamingiz.','ID из вашего профиля PUBG Mobile.','Your numeric ID from your PUBG Mobile profile.')}</small><label class="field tus-quantity-field" data-supplier-quantity-field hidden><span>${t('Miqdor','Количество','Quantity')}</span><div class="tus-quantity-stepper"><button type="button" data-supplier-quantity-step="-1" aria-label="${t('Kamaytirish','Уменьшить','Decrease quantity')}">−</button><input type="number" name="quantity" inputmode="numeric" min="1" max="99" step="1" value="1" required disabled><button type="button" data-supplier-quantity-step="1" aria-label="${t('Ko‘paytirish','Увеличить','Increase quantity')}">+</button></div></label><label class="tus-test-consent"><input type="checkbox" name="accept_terms" required><span>${t('Player ID ni tekshirdim. Stripe test to‘loviga roziman; haqiqiy UC yetkazilmaydi.','Я проверил Player ID и согласен на тестовую оплату Stripe. Реальные UC не доставляются.','I checked my Player ID and agree to a Stripe test payment. No real UC will be delivered.')}</span></label><p class="tus-checkout-error" role="alert" hidden></p></form>` : ''}<div class="tus-summary-total"><span>${t('Jami','Итого','Total')}</span><b>—</b></div><button type="submit" form="tus-checkout-form" class="tus-buy" disabled>${t('Xarid qilish','Купить сейчас','Buy now')}</button><p class="tus-checkout-note">${icon('shield')}<span>${t('Sotuv narxlari va xarid qilish imkoniyati tayyorlanmoqda.','Цены продажи и возможность покупки готовятся.','Selling prices and checkout are being prepared.')}</span></p></aside></div></section>`;
   const page = app.querySelector('.topup-supplier-page');
   const typeButtons = [...page.querySelectorAll('[data-supplier-type]')];
   const sections = [...page.querySelectorAll('[data-supplier-section]')];
@@ -167,11 +522,71 @@ async function renderTopUpSupplierBrand(game) {
   const cardsByIndex = new Map(cards.map(card => [Number(card.dataset.supplierPackage), card]));
   let activeType = 0, limit = 48, selectedPackage = null, requestKey = crypto.randomUUID();
   const checkoutForm = page.querySelector('#tus-checkout-form');
+  function refreshQuantity() {
+    if (!selectedPackage) return;
+    const quantity = selectedPackage.detail_banner ? Number(checkoutForm.elements.quantity.value) : 1;
+    const valid = Number.isInteger(quantity) && quantity >= 1 && quantity <= (selectedPackage.max_quantity || 1);
+    const priced = {...selectedPackage, selling_price_cents:selectedPackage.selling_price_cents * quantity};
+    const total = page.querySelector('.tus-summary-total b');
+    total.textContent = valid ? topupSupplierPrice(priced) || '—' : '—';
+    if (valid && topupSupplierBasePrice(priced)) {
+      total.dataset.regionMoney = '';
+      total.dataset.regionAmount = String(priced.selling_price_cents / 100);
+      total.dataset.regionCurrency = 'USD';
+      total.dataset.regionOriginal = topupSupplierBasePrice(priced);
+    } else {
+      ['regionMoney','regionAmount','regionCurrency','regionOriginal'].forEach(key=>delete total.dataset[key]);
+    }
+    const featuredPrice = page.querySelector('[data-fpp-total]');
+    if (featuredPrice) {
+      featuredPrice.textContent = total.textContent;
+      ['regionMoney','regionAmount','regionCurrency','regionOriginal'].forEach(key => {
+        if (key in total.dataset) featuredPrice.dataset[key] = total.dataset[key];
+        else delete featuredPrice.dataset[key];
+      });
+      page.querySelector('.tus-buy').textContent = valid ? topupSupplierPrice(priced) || '—' : '—';
+      const buy = page.querySelector('.tus-buy');
+      ['regionMoney','regionAmount','regionCurrency','regionOriginal'].forEach(key => {
+        if (key in total.dataset) buy.dataset[key] = total.dataset[key];
+        else delete buy.dataset[key];
+      });
+    }
+    checkoutForm?.querySelectorAll('[data-supplier-quantity-step]').forEach(button => {
+      button.disabled = !valid || (Number(button.dataset.supplierQuantityStep) < 0 ? quantity <= 1 : quantity >= (selectedPackage.max_quantity || 1));
+    });
+    const summaryQuantity = page.querySelector('[data-supplier-quantity-summary]');
+    if (summaryQuantity) summaryQuantity.textContent = valid ? String(quantity) : '—';
+    page.querySelector('.tus-buy').disabled = !valid || !topupSupplierBasePrice(selectedPackage) || brand.payment_mode !== 'stripe_test';
+    if (valid && topupSupplierBasePrice(priced) && brand.payment_mode === 'stripe_test') {
+      page.querySelector('.tus-checkout-note span').textContent = t(`Stripe test. To‘lov: ${topupSupplierBasePrice(priced)} USD. Haqiqiy UC yetkazilmaydi.`,`Stripe test. Оплата: ${topupSupplierBasePrice(priced)} USD. Реальные UC не доставляются.`,`Stripe test. Payment: ${topupSupplierBasePrice(priced)} USD. No real UC delivery.`);
+    }
+  }
   function selectPackage(index) {
     const pack = brand.packages[index];
     if (!pack || pack.status !== 'active') return;
-    cards.forEach(card => card.setAttribute('aria-pressed', String(Number(card.dataset.supplierPackage) === index)));
+    cards.forEach(card => {
+      const cardIndex = Number(card.dataset.supplierPackage), item = brand.packages[cardIndex];
+      if (item.open_detail || item.membership) card.removeAttribute('aria-pressed');
+      else card.setAttribute('aria-pressed', String(cardIndex === index));
+    });
     selectedPackage = pack;
+    const customerFields = page.querySelector('[data-supplier-customer-fields]');
+    if (customerFields) {
+      const previous = new Map([...customerFields.querySelectorAll('input')].map(input=>[input.name,input.value]));
+      customerFields.innerHTML = (pack.inquiry_fields || []).filter(field=>['text','number','email'].includes(field.type)).map((field,index)=>`<label class="field"><span>${esc(field.name || (index===0 ? 'Player ID' : 'Zone ID'))}</span><input type="${field.type==='email'?'email':'text'}" name="${esc(field.key)}" autocomplete="off" ${field.type==='number'?'inputmode="numeric"':''} ${field.required===false?'':'required'}></label>`).join('');
+      customerFields.querySelectorAll('input').forEach(input=>{input.value=previous.get(input.name)||'';});
+    }
+    const listing = Boolean((pack.membership || pack.open_detail) && pack.sku !== requestedSku);
+    page.classList.toggle('is-membership-list', listing);
+    page.classList.toggle('is-first-purchase', Boolean(pack.detail_banner) && !listing);
+    if (checkoutForm) {
+      const multiple = Boolean(pack.detail_banner);
+      checkoutForm.querySelector('[data-supplier-quantity-field]').hidden = !multiple;
+      checkoutForm.elements.quantity.disabled = !multiple;
+      checkoutForm.elements.quantity.value = '1';
+      checkoutForm.elements.quantity.max = String(pack.max_quantity || 1);
+      checkoutForm.elements.quantity.readOnly = (pack.max_quantity || 1) === 1;
+    }
     requestKey = crypto.randomUUID();
     const price = topupSupplierPrice(pack);
     const total = page.querySelector('.tus-summary-total b');
@@ -186,6 +601,7 @@ async function renderTopUpSupplierBrand(game) {
     }
     const ready = Boolean(price && brand.payment_mode === 'stripe_test' && checkoutForm);
     const buy = page.querySelector('.tus-buy');
+    ['regionMoney','regionAmount','regionCurrency','regionOriginal'].forEach(key=>delete buy.dataset[key]);
     buy.disabled = !ready;
     buy.textContent = ready ? t('Stripe test to‘lovi','Тестовая оплата Stripe','Stripe test checkout') : t('Xarid qilish','Купить сейчас','Buy now');
     page.querySelector('.tus-checkout-note span').textContent = ready
@@ -195,7 +611,11 @@ async function renderTopUpSupplierBrand(game) {
     page.querySelector('[data-supplier-summary-empty]').hidden = true;
     const details = page.querySelector('[data-supplier-summary-selected]');
     details.hidden = false;
-    details.innerHTML = `<div class="tus-summary-product"><div class="tus-summary-product-art">${packageArt(pack)}</div><h3 class="tus-pack-label">${topupSupplierPackageLabel(pack)}</h3></div><dl><div><dt>${t('Mahsulot turi','Тип товара','Product type')}</dt><dd>${esc(pack.type_name || t('Boshqa paketlar','Другие пакеты','Other packages'))}</dd></div><div><dt>${t('Miqdor','Количество','Quantity')}</dt><dd>1</dd></div></dl>`;
+    details.innerHTML = `<div class="tus-summary-product"><div class="tus-summary-product-art">${packageArt(pack)}</div><h3 class="tus-pack-label">${topupSupplierPackageLabel(pack)}</h3></div><dl><div><dt>${t('Mahsulot turi','Тип товара','Product type')}</dt><dd>${esc(pack.type_name || t('Boshqa paketlar','Другие пакеты','Other packages'))}</dd></div><div><dt>${t('Miqdor','Количество','Quantity')}</dt><dd data-supplier-quantity-summary>1</dd></div></dl>`;
+    if (pack.detail_banner) {
+      details.innerHTML = `<div class="tus-first-purchase-heading"><h2>${esc(pack.display_name || pack.name)}</h2><strong data-fpp-total ${topupSupplierPriceAttributes(pack)}>${topupSupplierPrice(pack)}</strong></div>`;
+    }
+    refreshQuantity();
   }
   function filterPackages() {
     const query = '';
@@ -213,15 +633,29 @@ async function renderTopUpSupplierBrand(game) {
     page.querySelector('[data-supplier-more]').hidden = matched <= limit;
   }
   typeButtons.forEach((button,index)=>button.addEventListener('click',()=>{
+    if (requestedSku && groups[index]?.name === 'Shop') {
+      location.assign('/top-up/' + encodeURIComponent(game.slug) + '?type=shop'); return;
+    }
+    const query = groups[index]?.name === 'Shop' ? '?type=shop' : '';
+    history.replaceState(history.state, '', location.pathname + query);
     activeType=index;limit=48;
     typeButtons.forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
     filterPackages();
     if (groups[activeType]?.items.length) selectPackage(groups[activeType].items[0].index);
   }));
-  cards.forEach(card=>card.addEventListener('click',()=>selectPackage(Number(card.dataset.supplierPackage))));
+  cards.forEach(card=>card.addEventListener('click',()=>{
+    const index=Number(card.dataset.supplierPackage), pack=brand.packages[index];
+    if (pack.membership || pack.open_detail) {location.assign('/top-up/' + encodeURIComponent(game.slug) + '?package=' + encodeURIComponent(pack.sku));return;}
+    selectPackage(index);
+  }));
   page.querySelector('[data-supplier-more]').addEventListener('click',()=>{limit+=48;filterPackages();});
   if (checkoutForm) {
-    checkoutForm.addEventListener('input', () => {requestKey = crypto.randomUUID();});
+    checkoutForm.querySelectorAll('[data-supplier-quantity-step]').forEach(button => button.addEventListener('click', () => {
+      const input = checkoutForm.elements.quantity;
+      input.value = String(Math.min(Number(input.max) || 1, Math.max(1, (Number(input.value) || 1) + Number(button.dataset.supplierQuantityStep))));
+      input.dispatchEvent(new Event('input', {bubbles:true}));
+    }));
+    checkoutForm.addEventListener('input', () => {requestKey = crypto.randomUUID(); refreshQuantity();});
     checkoutForm.addEventListener('submit', async event => {
       event.preventDefault();
       if (!checkoutForm.reportValidity() || !selectedPackage || brand.payment_mode !== 'stripe_test') return;
@@ -229,7 +663,7 @@ async function renderTopUpSupplierBrand(game) {
       const button = page.querySelector('.tus-buy'), error = checkoutForm.querySelector('.tus-checkout-error');
       button.disabled = true; error.hidden = true;
       try {
-        const order = await api('/top-up/test-checkout', {method:'POST', body:JSON.stringify({sku:selectedPackage.sku, player_id:checkoutForm.elements.player_id.value.trim(), quantity:1, server_id:'', request_key:requestKey, accept_terms:checkoutForm.elements.accept_terms.checked})});
+        const order = await api('/top-up/test-checkout', {method:'POST', body:JSON.stringify({sku:selectedPackage.sku, player_id:checkoutForm.elements.player_id.value.trim(), quantity:selectedPackage.detail_banner ? Number(checkoutForm.elements.quantity.value) : 1, server_id:'', request_key:requestKey, accept_terms:checkoutForm.elements.accept_terms.checked})});
         const session = await api('/top-up/test-orders/' + encodeURIComponent(order.id) + '/checkout', {method:'POST', body:'{}'});
         try {sessionStorage.setItem('sentryloot-supplier-checkout', JSON.stringify({slug:game.slug,sku:selectedPackage.sku,player_id:checkoutForm.elements.player_id.value.trim()}));} catch {}
         location.assign(session.checkout_url);
@@ -239,21 +673,38 @@ async function renderTopUpSupplierBrand(game) {
       } finally {button.disabled = false;}
     });
   }
+  const requestedIndex = brand.packages.findIndex(pack=>(pack.membership || pack.open_detail) && pack.sku===requestedSku);
+  const requestedType = new URLSearchParams(location.search).get('type');
+  if (requestedIndex >= 0 || ['shop','prime','weekly','mythic'].includes(requestedType)) {
+    const groupIndex=groups.findIndex(group=>requestedIndex>=0 ? group.items.some(item=>item.index===requestedIndex) : group.name === 'Shop');
+    if (groupIndex>=0) activeType=groupIndex;
+  }
+  typeButtons.forEach((button,i)=>button.setAttribute('aria-pressed',String(i===activeType)));
   filterPackages();
-  if (groups[0]?.items.length) selectPackage(groups[0].items[0].index);
+  if (requestedIndex >= 0 && cardsByIndex.has(requestedIndex)) selectPackage(requestedIndex);
+  else if (groups[activeType]?.items.length) selectPackage(groups[activeType].items[0].index);
   if (checkoutForm && !returnOrder) {
     try {
       const draft = JSON.parse(sessionStorage.getItem('sentryloot-supplier-checkout') || 'null');
       if (draft?.slug === game.slug) {
         const index = brand.packages.findIndex(pack => pack.sku === draft.sku);
-        if (cardsByIndex.has(index)) selectPackage(index);
+        if (cardsByIndex.has(index)) {
+          const groupIndex = groups.findIndex(group => group.items.some(item => item.index === index));
+          if (groupIndex >= 0) {
+            activeType = groupIndex;
+            typeButtons.forEach((button,i)=>button.setAttribute('aria-pressed',String(i===activeType)));
+            filterPackages();
+          }
+          selectPackage(index);
+        }
         if (/^[0-9]{3,40}$/.test(draft.player_id || '')) checkoutForm.elements.player_id.value = draft.player_id;
         sessionStorage.removeItem('sentryloot-supplier-checkout');
       }
     } catch {}
   }
   if (returnOrder && /^[A-Za-z0-9_-]+$/.test(returnOrder)) {
-    history.replaceState(history.state, '', location.pathname + location.hash);
+    const params = new URLSearchParams(location.search); params.delete('topup_return');
+    history.replaceState(history.state, '', location.pathname + (params.size ? '?' + params.toString() : '') + location.hash);
     try {sessionStorage.removeItem('sentryloot-supplier-checkout');} catch {}
     try {
       const order = await api('/top-up/test-orders/' + encodeURIComponent(returnOrder) + '/refresh', {method:'POST',body:'{}'});
