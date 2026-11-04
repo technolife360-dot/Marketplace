@@ -173,3 +173,12 @@
     body #app :is(.home-intro-link,.market-product-card,.market-card-cover img,.home-mobile-games img,.market-sidebar-main>a) { transition:none !important; transform:none !important; }
   }
 }
+
+@layer sentryloot-premium {
+  @media (min-width:841px) {
+    body #app .home-intro-image[src*="home-intro-premium-"] {
+      object-fit:contain !important;
+      object-position:right center !important;
+    }
+  }
+}

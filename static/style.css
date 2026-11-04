@@ -3604,7 +3604,8 @@ body #app .topup-supplier-page .tus-types .tus-type-icon[class*="i-midas:"] { fi
 @media(min-width:841px) {
  .topup-supplier-page .tus-hero-game .tus-hero-bg { object-position:center 42%; }
  .topup-supplier-page[data-supplier-game="pubg-mobile"] .tus-hero-bg { object-position:center bottom; }
- .topup-supplier-page[data-supplier-game="mobile-legends"] .tus-hero-bg { object-position:center 36%; }
+ .topup-supplier-page[data-supplier-game="mobile-legends"] .tus-hero-game { height:calc(100vw / 3 - 40px); min-height:0; max-height:none; }
+ .topup-supplier-page[data-supplier-game="mobile-legends"] .tus-hero-bg { object-fit:contain; object-position:center; }
 }
 @layer sentryloot-premium {
  body #app .topup-supplier-page .tus-types .tus-type-icon { width:10px!important; height:10px!important; flex:0 0 10px!important; }

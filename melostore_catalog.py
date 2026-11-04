@@ -155,7 +155,7 @@ PUBG_UC_IMAGES = {60: 'https://images.gamestorehub.com/site-assets/topup/pubg-mo
 
 GAME_BANNERS = {
     'pubg-mobile': 'https://images.gamestorehub.com/site-assets/topup/pubg-mobile/hero-f39ccb5ddd387864bb28.png',
-    'mobile-legends': 'https://images.gamestorehub.com/site-assets/topup/mobile-legends/hero-ddfe0151d91fc89a84ae.png'
+    'mobile-legends': 'https://images.gamestorehub.com/site-assets/topup/mobile-legends/hero-8a7908bdd8f08d46201c.png'
 }
 
 
