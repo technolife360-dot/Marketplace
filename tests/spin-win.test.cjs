@@ -21,17 +21,12 @@ test('wheel escapes labels received from the server',()=>{
  const html=f.ui.wheel([{id:'x',kind:'voucher',name:'<script>alert(1)</script>',weight:1}]);
  assert.match(html,/&lt;script>/);assert.doesNotMatch(html,/<script>/);
 });
-test('home renders the wheel for a guest and asks them to sign in to spin',async()=>{
- const root={isConnected:true,innerHTML:'',setAttribute(){},querySelector:()=>null};
- const context={window:{},me:null,adminText:(_uz,_ru,en)=>en,esc:String,
-  api:async path=>{
-   assert.equal(path,'/spin-win/preview');
-   return {enabled:true,prizes:[{id:'none',kind:'none',name:'No prize'}]};
-  }};
+test('home does not open or fetch the spin popup for a guest',async()=>{
+ const root={isConnected:true,innerHTML:'',showModal(){assert.fail('Guest popup opened');}};
+ const context={window:{},me:null,api:async()=>assert.fail('Guest spin request')};
  vm.createContext(context);vm.runInContext(fs.readFileSync('static/spin-win.js','utf8'),context);
  await context.window.SpinWin.home(root);
- assert.match(root.innerHTML,/class="sw-wheel"/);
- assert.match(root.innerHTML,/href="\/#login">Sign in to spin/);
+ assert.equal(root.innerHTML,'');
 });
 test('home spin keeps the wheel in place and celebrates only winning results',async()=>{
  for(const kind of ['voucher','none']){
@@ -40,8 +35,8 @@ test('home spin keeps the wheel in place and celebrates only winning results',as
   const wheel={style:{}};
   const frame={children:[],append(child){this.children.push(child);}};
   const result={innerHTML:''};
-  const elements={'.sw-spin':button,'.sw-wheel':wheel,'.sw-error':{},'[data-sw-result]':result,'.sw-wheel-wrap':frame};
-  const root={isConnected:true,innerHTML:'',setAttribute(){},querySelector:selector=>elements[selector]};
+  const elements={'.sw-popup-close':{addEventListener(){}},'.sw-spin':button,'.sw-wheel':wheel,'.sw-error':{},'[data-sw-result]':result,'.sw-wheel-wrap':frame};
+  const root={isConnected:true,innerHTML:'',addEventListener(){},showModal(){this.open=true;},querySelector:selector=>elements[selector]};
   const prizes=[{id:'bonus',kind:'voucher',name:'RM1'},{id:'none',kind:'none',name:'No prize'}];
   const award={prize_id:kind==='voucher'?'bonus':'none',prize_name:'RM1',kind};
   const context={window:{},me:{email_verified:true},adminText:(_uz,_ru,en)=>en,esc:String,
@@ -51,6 +46,8 @@ test('home spin keeps the wheel in place and celebrates only winning results',as
   vm.createContext(context);vm.runInContext(fs.readFileSync('static/spin-win.js','utf8'),context);
   await context.window.SpinWin.home(root);
   const markup=root.innerHTML;
+  assert.equal(root.open,true);
+  assert.match(markup,/class="sw-hub sw-spin"/);
   await click();
   assert.equal(root.innerHTML,markup);
   assert.equal(wheel.style.transform,kind==='voucher'?'rotate(1710deg)':'rotate(1530deg)');

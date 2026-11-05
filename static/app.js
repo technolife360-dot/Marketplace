@@ -523,7 +523,7 @@ async function renderHome(filters={}){
   </section>
   <div data-home-status></div>
 
-  <section data-home-spin></section>
+  <dialog class="sw-popup" data-home-spin aria-labelledby="home-spin-title"></dialog>
   ${homeGameCarouselMarkup()}
   <section class="home-topups" aria-labelledby="home-topups-title"><div class="home-section-heading"><div><h2 id="home-topups-title">Top up</h2><p>${t('O‘yin valutalari, sovg‘a kartalari va boshqalar.','Игровая валюта, подарочные карты и многое другое.','Game currency, gift cards and more.')}</p></div><a href="/top-up">${t('Barcha top-uplar','Все пополнения','View all top ups')} →</a></div><div data-home-topups aria-busy="true"><div class="loading" role="status"><span class="spinner"></span>${t('Top-uplar yuklanmoqda…','Загрузка пополнений…','Loading top ups…')}</div></div></section>
   <section class="home-catalog" aria-labelledby="home-listings-title"><div class="home-section-heading"><div><h2 id="home-listings-title">${filters.q?t('Qidiruv natijalari','Результаты поиска','Search results'):t('Yangi e’lonlar','Новые объявления','Latest listings')}</h2><p>${t('Narx, yetkazish muddati va sotuvchini solishtiring.','Сравните цену, сроки доставки и продавца.','Compare prices, delivery times, and sellers.')}</p></div>  <form id="hero-search-form" class="hero-search home-search" role="search">

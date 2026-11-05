@@ -7,7 +7,7 @@ window.SpinWin = (() => {
   const status=s=>({new:t('Yangi','Новый','New'),contacted:t('Bog‘lanildi','Связались','Contacted'),shipped:t('Yuborildi','Отправлен','Shipped'),delivered:t('Topshirildi','Вручён','Delivered'),credited:t('Bonusga tushdi','Бонус начислен','Credited'),no_prize:t('Sovrinsiz','Без приза','No prize')})[s]||s;
   const mode=d=>d.test_only?`<p class="sw-test">${t('SINOV REJIMI · haqiqiy sovrin yoki pul berilmaydi','ТЕСТОВЫЙ РЕЖИМ · без реальных призов или денег','TEST MODE · no real prizes or money')}</p>`:'';
   const odds=prizes=>`<div class="sw-odds"><h2>${t('Yutish imkoniyatlari','Вероятности выигрыша','Prize probabilities')}</h2><p>${t('G‘ildirak bo‘laklari ehtimollarni ifodalamaydi. Har bir natijani server tasodifiy tanlaydi.','Размер секторов не отражает вероятность. Каждый результат случайно выбирает сервер.','Segment sizes do not represent odds. Each result is randomly selected by the server.')}</p><ul>${prizes.map(p=>`<li><span>${h(name(p))}</span><b>${(p.weight/1000).toFixed(3)}%</b></li>`).join('')}</ul></div>`;
-  function wheel(prizes){
+  function wheel(prizes,centerAction=''){
     const count=prizes.length, step=360/count;
     const art=prizes.map((p,i)=>{
       const a=(i*step-90)*Math.PI/180,b=((i+1)*step-90)*Math.PI/180;
@@ -29,10 +29,11 @@ window.SpinWin = (() => {
       <svg class="sw-wheel" viewBox="0 0 400 400" role="img" aria-label="${t('Sovrinlar g‘ildiragi','Колесо призов','Prize wheel')}">
         <circle cx="200" cy="200" r="194" fill="#382719" stroke="#e7aa69" stroke-width="2"/>
         ${studs}${art}<circle cx="200" cy="200" r="177" fill="none" stroke="#c38a55" stroke-width="2"/>
-        <circle cx="200" cy="200" r="42" fill="#1a1515" stroke="#d49457" stroke-width="3"/>
+        ${centerAction?'':`<circle cx="200" cy="200" r="42" fill="#1a1515" stroke="#d49457" stroke-width="3"/>
         <circle cx="200" cy="200" r="34" fill="#f6b570"/>
-        <text x="200" y="208" text-anchor="middle" fill="#25170f" font-size="25" font-weight="800">SL</text>
+        <text x="200" y="208" text-anchor="middle" fill="#25170f" font-size="25" font-weight="800">SL</text>`}
       </svg>
+      ${centerAction}
     </div>`;
   }
   function result(record){
@@ -55,7 +56,7 @@ window.SpinWin = (() => {
   }
   function bindSpin(root,data){
     const button=root.querySelector('.sw-spin');
-    if(!button || !data.can_spin)return;
+    if(!button||!data.can_spin)return;
     button.addEventListener('click',async()=>{
       button.disabled=true;
       const error=root.querySelector('.sw-error');
@@ -72,7 +73,8 @@ window.SpinWin = (() => {
         }
         if(!root.isConnected)return;
         root.querySelector('[data-sw-result]').innerHTML=result(award);
-        button.textContent=t('Bugungi spin ishlatildi','Попытка на сегодня использована','Today’s spin is used');
+        const spinStatus=root.querySelector('[data-sw-state]')||button;
+        spinStatus.textContent=t('Bugungi spin ishlatildi','Попытка на сегодня использована','Today’s spin is used');
         const history=root.querySelector('[data-sw-history]');
         if(history)history.innerHTML=historyList([award,...data.history.filter(record=>record.id!==award.id)].slice(0,30));
         if(award.kind==='physical'||award.kind==='voucher')celebrate(root);
@@ -110,43 +112,47 @@ window.SpinWin = (() => {
     wheelFrame.append(confetti);
     setTimeout(()=>confetti.remove(),1900);
   }
-  async function home(root){
-    if(!root)return;
-    const signedIn=Boolean(me);
+  const dismissedFor=new Set();
+  async function home(dialog){
+    if(!dialog||!me)return;
     const verified=Boolean(me?.email_verified);
+    const visitor=JSON.stringify([me?.id,verified]);
+    if(dialog.open||dismissedFor.has(visitor))return;
+
     try{
       let data=await api(verified?'/spin-win':'/spin-win/preview');
       if(verified&&!data.enabled){
         const preview=await api('/spin-win/preview');
         data={...data,prizes:preview.prizes};
       }
-      if(!root.isConnected)return;
-      const action=!data.enabled
-        ? `<span class="sw-home-state">${t('Tez orada','Скоро','Coming soon')}</span>`
-        : !signedIn
-          ? `<a class="button-primary" href="/#login">${t('Kirish va aylantirish','Войти и крутить','Sign in to spin')} →</a>`
-          : !verified
-            ? `<a class="button-secondary" href="/#account">${t('Emailni tasdiqlash','Подтвердить почту','Verify your email')} →</a>`
-            : `<button class="button-primary sw-spin" type="button" ${data.can_spin?'':'disabled'}>${data.can_spin
-                ?t('Bepul aylantirish','Крутить бесплатно','Spin for free')
-                :t('Bugungi spin ishlatildi','Попытка на сегодня использована','Today’s spin is used')}</button>`;
-      root.className='sw-home';
-      root.setAttribute('aria-labelledby','home-spin-title');
-      root.innerHTML=`<div class="sw-home-copy">
-        <span class="sw-home-kicker">SENTRYLOOT REWARDS</span>
+      if(!dialog.isConnected||dialog.open||dismissedFor.has(visitor))return;
+
+      const canSpin=verified&&data.can_spin;
+      const spinLabel=t('Bepul aylantirish','Крутить бесплатно','Spin for free');
+      let state='';
+      if(!data.enabled)state=t('Tez orada','Скоро','Coming soon');
+      else if(!verified)state=t('Emailni tasdiqlang','Подтвердите почту','Verify your email');
+      else if(!canSpin)state=t('Bugungi spin ishlatildi','Попытка на сегодня использована','Today’s spin is used');
+      const centerAction=`<button class="sw-hub sw-spin" type="button" aria-label="${h(spinLabel)}" ${canSpin?'':'disabled'}>SPIN</button>`;
+      const closeLabel=t('Oynani yopish','Закрыть окно','Close dialog');
+      dialog.innerHTML=`
+        <button class="sw-popup-close" type="button" aria-label="${h(closeLabel)}" autofocus>×</button>
+        <span class="sw-popup-kicker">SENTRYLOOT REWARDS</span>
         <h2 id="home-spin-title">Spin <em>&amp; Win</em></h2>
-        <p>${t('Har kuni bitta bepul aylantirish.','Одна бесплатная попытка в день.','One free spin every day.')}</p>
-        <div class="sw-home-actions">${action}
-          ${verified&&data.enabled?`<a href="/#spin-win">${t('Natijalarim','Мои результаты','My results')} →</a>`:''}
-        </div>
-        ${data.test_only?mode(data):''}
+        ${wheel(data.prizes,centerAction)}
+        <p class="sw-popup-state" data-sw-state role="status">${h(state)}</p>
         <p class="sw-error" role="alert" hidden></p>
-        <div data-sw-result>${result(data.today)}</div>
-      </div><div class="sw-home-art">${wheel(data.prizes)}</div>`;
-      bindSpin(root,data);
+        <div data-sw-result>${result(data.today)}</div>`;
+      const dismiss=()=>dismissedFor.add(visitor);
+      dialog.addEventListener('cancel',dismiss,{once:true});
+      dialog.querySelector('.sw-popup-close').addEventListener('click',()=>{
+        dismiss();
+        dialog.close();
+      });
+      bindSpin(dialog,data);
+      dialog.showModal();
     }catch{
       // A temporary spin service failure must not block the storefront.
-      if(root.isConnected)root.innerHTML='';
     }
   }
   async function admin(page=1){
