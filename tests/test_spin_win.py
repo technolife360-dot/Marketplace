@@ -50,7 +50,7 @@ class SpinWinTests(unittest.TestCase):
             self.roll(uid=self.other)
         self.assertIsNone(self.route(self.other,'GET','/api/spin-win')['today'])
 
-    def test_production_physical_campaign_is_real_and_reserves_voucher_budget(self):
+    def test_production_vouchers_are_saved_in_the_real_wallet_during_test_checkout(self):
         with patch.dict(spin.os.environ,{'VERCEL_ENV':'production'}),patch.object(app,'MODE','production'):
             core=vars(app)
             self.assertEqual(spin.campaign_mode(core),'real')
@@ -58,13 +58,20 @@ class SpinWinTests(unittest.TestCase):
             state=spin.state(self.db,self.buyer,core)
             self.assertTrue(state['can_spin'])
             self.assertFalse(state['test_only'])
-            self.assertEqual([prize['id'] for prize in state['prizes']],['iphone','ps5','tv','none'])
-            with patch.object(spin.secrets,'randbelow',return_value=0),patch.object(rewards,'rates',side_effect=AssertionError('FX not needed')):
+            self.assertIn('rm10',[prize['id'] for prize in state['prizes']])
+            with self.fx(),patch.object(spin.secrets,'randbelow',return_value=5):
                 result=spin.spin(self.db,self.buyer,{},core)
-            self.assertEqual(result['prize_id'],'iphone')
+            self.assertEqual(result['status'],'saved_for_live_topup')
             self.assertFalse(result['test_only'])
-            self.assertEqual(spin.counters(self.db,'real')['awarded']['iphone'],1)
-            self.assertEqual(spin.counters(self.db,'test')['awarded']['iphone'],0)
+            self.assertEqual(spin.counters(self.db,'real')['spent_minor'],10)
+            self.assertEqual(spin.counters(self.db,'test')['spent_minor'],0)
+            lot,=rewards.lots(self.db,self.buyer,'real')
+            self.assertIsNone(lot['expires_at'])
+            self.assertEqual(rewards.wallet_values(self.db,self.buyer,'test','topup')['available_micro'],0)
+            self.assertEqual(rewards.wallet_values(self.db,self.buyer,'real','topup')['available_micro'],25000)
+            self.assertEqual(rewards.wallet_values(self.db,self.buyer,'real','account')['available_micro'],0)
+            with self.fx(),patch.object(rewards,'mode',return_value='test'):
+                self.assertEqual(rewards.wallet(self.db,self.buyer,core)['saved_spin_myr_minor'],10)
             self.assertEqual(spin.settings(self.db,'real')['budget_minor'],200000)
 
     def test_exact_odds_and_daily_result_are_idempotent(self):

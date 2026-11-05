@@ -4,6 +4,7 @@ All records use the existing private/RLS-protected configuration table. Quotes
 snapshot server FX before transactions; reserving/settling never calls a service.
 Ledger amounts are USD micro-units; legacy bonus points are deliberately separate.
 """
+import os
 import hashlib
 import json
 import math
@@ -84,10 +85,15 @@ def key_for(kind,uid,identifier):
 def lots(db,uid,current_mode):
     return [lot for lot in rows(db,key_for('lot',uid,'')) if lot['uid']==uid and lot['mode']==current_mode]
 
+def lot_is_active(lot, now):
+    expiry = lot['expires_at']
+    return lot['state'] == 'active' and (expiry is None or expiry > now)
+
+
 def wallet_values(db,uid,current_mode,kind=None):
     now=int(time.time());available=pending=exposure=0
     for lot in lots(db,uid,current_mode):
-        if lot['state']=='active' and lot['expires_at']>now and (kind is None or lot.get('scope','both') in ('both',kind)):available+=lot['remaining_micro']
+        if lot_is_active(lot,now) and (kind is None or lot.get('scope','both') in ('both',kind)):available+=lot['remaining_micro']
         elif lot['state']=='pending':pending+=lot['remaining_micro']
         if lot['state'] in ('revoked','frozen'):
             exposure+=max(0,lot['amount_micro']-lot['remaining_micro'])
@@ -102,7 +108,14 @@ def wallet(db,uid,core,fx=None):
     user=db.execute('SELECT currency FROM users WHERE id=?',(uid,)).fetchone()
     history=rows(db,key_for('entry',uid,''))
     history=[{k:v for k,v in row.items() if k!='uid'} for row in history if row['uid']==uid and row['mode']==current_mode]
-    return {**wallet_values(db,uid,current_mode),'mode':current_mode,'test_only':current_mode=='test',
+    saved_spin_minor = 0
+    if current_mode == 'test' and core['MODE'] == 'production' and os.environ.get('VERCEL_ENV') == 'production':
+        saved_spin_minor = sum(
+            lot['deferred_myr_minor'] * lot['remaining_micro'] // lot['amount_micro']
+            for lot in lots(db,uid,'real')
+            if lot.get('deferred_myr_minor') and lot_is_active(lot,time.time())
+        )
+    return {**wallet_values(db,uid,current_mode),'saved_spin_myr_minor':saved_spin_minor,'mode':current_mode,'test_only':current_mode=='test',
             'settings':settings(db),'display_currency':user['currency'] if user and user['currency'] in fx['rates'] else 'USD',
             'rates':fx['rates'],'usable_for':{kind:wallet_values(db,uid,current_mode,kind)['available_micro'] for kind in ('account','topup')},
             'history':sorted(history,key=lambda x:x['created_at'],reverse=True)[:50]}
@@ -112,10 +125,11 @@ def entry(db,uid,current_mode,kind,amount,reference,core):
     write(db,key_for('entry',uid,identifier),{'id':identifier,'uid':uid,'mode':current_mode,
           'type':kind,'amount_micro':amount,'reference':reference,'status':kind,'created_at':stamp()})
 
-def make_lot(db,uid,current_mode,identifier,amount,days,state,reference,core,scope='both'):
+def make_lot(db,uid,current_mode,identifier,amount,days,state,reference,core,scope='both',*,deferred_myr_minor=None):
     key=key_for('lot',uid,identifier)
     lot={'id':identifier,'uid':uid,'mode':current_mode,'amount_micro':amount,'remaining_micro':amount,
-         'state':state,'expires_at':int(time.time())+days*86400,'reference':reference,'scope':scope}
+         'state':state,'expires_at':None if days is None else int(time.time())+days*86400,'reference':reference,'scope':scope}
+    if deferred_myr_minor is not None:lot['deferred_myr_minor']=deferred_myr_minor
     write(db,key,lot)
     return identifier
 
@@ -238,8 +252,8 @@ def reserve(db,uid,quote_id,kind,source_id,lines,currency,subtotal,fee,core):
         campaign=check_campaign(db,value['campaign_code'],uid,value['mode'],'coupon',core)
         check_uses(db,campaign,uid,core);change_uses(db,campaign['id'],uid,1)
     allocations=[];remaining=value['spent_micro']
-    for lot in sorted(lots(db,uid,value['mode']),key=lambda x:(x['expires_at'],x['id'])):
-        if lot['state']!='active' or lot['expires_at']<=time.time() or lot.get('scope','both') not in ('both',kind):continue
+    for lot in sorted(lots(db,uid,value['mode']),key=lambda x:(x['expires_at'] is None,x['expires_at'],x['id'])):
+        if not lot_is_active(lot,time.time()) or lot.get('scope','both') not in ('both',kind):continue
         amount=min(remaining,lot['remaining_micro'])
         if amount:
             lot['remaining_micro']-=amount;remaining-=amount
@@ -324,7 +338,7 @@ def admin_view(db,core):
     issued=sum(x['amount_micro'] for x in all_lots if x['mode']==current_mode and x['state']=='active')
     pending=sum(x['remaining_micro'] for x in all_lots if x['mode']==current_mode and x['state']=='pending')
     spent=sum(x['spent_micro'] for x in all_purchases if x['mode']==current_mode and x['state']=='completed')
-    liability=sum(x['remaining_micro'] for x in all_lots if x['mode']==current_mode and x['state']=='active' and x['expires_at']>time.time())
+    liability=sum(x['remaining_micro'] for x in all_lots if x['mode']==current_mode and lot_is_active(x,time.time()))
     return {'settings':settings(db),'mode':current_mode,'test_only':current_mode=='test',
             'campaigns':[{**campaign_view(x),'used':uses(db,x,'')[0]['total']} for x in rows(db,PREFIX+'campaign:') if x['mode']==current_mode],
             'summary':{'issued_micro':issued,'spent_micro':spent,'pending_micro':pending,'liability_micro':liability}}

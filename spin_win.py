@@ -37,11 +37,6 @@ def campaign_mode(core):
     return rewards.mode(core)
 
 
-def vouchers_available(core, current_mode):
-    # The supplier checkout currently only supports sandbox voucher redemption.
-    return current_mode == 'test' or core['MODE'] != 'production'
-
-
 def settings(db, current_mode):
     return {**{'enabled':False,'budget_minor':0,'stock':{'iphone':0,'ps5':0,'tv':0},'version':0},
             **rewards.read(db,key(current_mode,'settings'),{})}
@@ -52,13 +47,13 @@ def counters(db, current_mode):
             **rewards.read(db,key(current_mode,'counters'),{})}
 
 
-def effective_prizes(config, totals, include_vouchers=True):
+def effective_prizes(config, totals):
     result=[]; missing=0
     for source in PRIZES:
         prize=dict(source)
         available=(prize['kind']=='none' or
                    (prize['kind']=='physical' and config['stock'][prize['id']]>totals['awarded'][prize['id']]) or
-                   (include_vouchers and prize['kind']=='voucher' and prize['minor']<=config['budget_minor']-totals['spent_minor']))
+                   (prize['kind']=='voucher' and prize['minor']<=config['budget_minor']-totals['spent_minor']))
         if available:result.append(prize)
         else:missing+=prize['weight']
     result[-1]['weight']+=missing
@@ -74,7 +69,7 @@ def state(db, uid, core):
     day=local.date().isoformat()
     record=rewards.read(db,key(current_mode,'daily:'+rewards.user_hash(uid)+':'+day))
     history=rewards.rows(db,key(current_mode,'daily:'+rewards.user_hash(uid)+':'))
-    prizes=effective_prizes(config,counters(db,current_mode),vouchers_available(core,current_mode))
+    prizes=effective_prizes(config,counters(db,current_mode))
     enabled=config['enabled'] and len(prizes)>1
     return {'enabled':enabled,'test_only':current_mode=='test','timezone':str(ZONE),
             'day':day,'next_reset':datetime.combine(local.date()+timedelta(days=1),datetime.min.time(),ZONE).isoformat(),
@@ -91,8 +86,7 @@ def spin(db, uid, data, core):
     prior=rewards.read(db,key(current_mode,'daily:'+rewards.user_hash(uid)+':'+day))
     if prior:return public_record(prior)
     # Obtain FX before taking the database lock. Failures never consume a spin.
-    include_vouchers=vouchers_available(core,current_mode)
-    fx=rewards.rates(core) if include_vouchers else None
+    fx=rewards.rates(core)
     db.execute('BEGIN IMMEDIATE')
     try:
         rewards.lock(db)
@@ -102,7 +96,7 @@ def spin(db, uid, data, core):
         if prior:
             db.execute('COMMIT');return public_record(prior)
         config=settings(db,current_mode); totals=counters(db,current_mode)
-        prizes=effective_prizes(config,totals,include_vouchers)
+        prizes=effective_prizes(config,totals)
         if not config['enabled'] or len(prizes)==1:
             rewards.fail(core,'No Spin & Win prizes are available right now.')
         ticket=secrets.randbelow(TOTAL)
@@ -117,7 +111,13 @@ def spin(db, uid, data, core):
         if prize['kind']=='voucher':
             amount=rewards.to_micro(prize['minor'],'MYR',fx['rates'])
             if amount<=0:rewards.fail(core,'Bonus conversion is unavailable.',503)
-            rewards.make_lot(db,uid,current_mode,'spin-'+identifier,amount,rewards.settings(db)['credit_expiry_days'],'active','Spin & Win '+identifier,core,scope='topup')
+            deferred = current_mode == 'real' and core['MODE'] == 'production'
+            days = None if deferred else rewards.settings(db)['credit_expiry_days']
+            rewards.make_lot(db,uid,current_mode,'spin-'+identifier,amount,days,'active',
+                             'Spin & Win '+identifier,core,scope='topup',
+                             deferred_myr_minor=prize['minor'] if deferred else None)
+            if deferred:
+                record['status']='saved_for_live_topup'
             rewards.entry(db,uid,current_mode,'spin_win',amount,identifier,core)
             totals['spent_minor']+=prize['minor']
         if prize['kind']=='physical':
@@ -145,7 +145,7 @@ def admin_view(db, core, page=1):
         user=db.execute('SELECT id,display_name,email FROM users WHERE id=?',(record['uid'],)).fetchone()
         selected.append({**record,'user':dict(user) if user else {'id':record['uid'],'display_name':'Deleted user','email':''}})
     return {'settings':settings(db,current_mode),'counters':counters(db,current_mode),'test_only':current_mode=='test',
-            'prizes':list(PRIZES),'vouchers_available':vouchers_available(core,current_mode),'winners':selected,'page':page,'total':len(winners)}
+            'prizes':list(PRIZES),'winners':selected,'page':page,'total':len(winners)}
 
 
 def save_settings(db,uid,data,core):
@@ -162,7 +162,7 @@ def save_settings(db,uid,data,core):
         rewards.lock(db); totals=counters(db,current_mode)
         if data['budget_minor']<totals['spent_minor'] or any(stock[k]<totals['awarded'][k] for k in stock):
             rewards.fail(core,'Limits cannot be lower than awards already issued.')
-        if data['enabled'] and len(effective_prizes(data,totals,vouchers_available(core,current_mode)))==1:
+        if data['enabled'] and len(effective_prizes(data,totals))==1:
             rewards.fail(core,'Add an available prize before enabling the campaign.')
         value={**data,'version':settings(db,current_mode)['version']+1}
         rewards.write(db,key(current_mode,'settings'),value)
@@ -198,7 +198,7 @@ def route(db,ctx,method,path,qs,data,core):
     if path=='/api/spin-win/preview' and method=='GET':
         current_mode = campaign_mode(core)
         config = settings(db, current_mode)
-        prizes = effective_prizes(config, counters(db, current_mode), vouchers_available(core,current_mode)) if config['enabled'] else []
+        prizes = effective_prizes(config, counters(db, current_mode)) if config['enabled'] else []
         return {
             'enabled': config['enabled'] and len(prizes)>1,
             'test_only': current_mode=='test',
