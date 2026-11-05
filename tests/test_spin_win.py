@@ -32,13 +32,40 @@ class SpinWinTests(unittest.TestCase):
     def test_guest_preview_exposes_prize_labels_without_personal_state(self):
         preview=self.route(None,'GET','/api/spin-win/preview')
         self.assertFalse(preview['enabled'])
-        self.assertIn('iphone',[prize['id'] for prize in preview['prizes']])
+        self.assertEqual(preview['prizes'],[])
         self.enable()
         self.roll()
         preview=self.route(None,'GET','/api/spin-win/preview')
         self.assertTrue(preview['enabled'])
         self.assertNotIn('iphone',[prize['id'] for prize in preview['prizes']])
         self.assertEqual(set(preview),{'enabled','test_only','prizes'})
+
+    def test_exhausted_campaign_does_not_consume_another_users_spin(self):
+        self.enable(budget_minor=10,stock={'iphone':0,'ps5':0,'tv':0})
+        self.roll()
+        state=self.route(self.other,'GET','/api/spin-win')
+        self.assertFalse(state['enabled'])
+        self.assertFalse(state['can_spin'])
+        with self.assertRaises(app.HttpError):
+            self.roll(uid=self.other)
+        self.assertIsNone(self.route(self.other,'GET','/api/spin-win')['today'])
+
+    def test_production_physical_campaign_is_real_and_reserves_voucher_budget(self):
+        with patch.dict(spin.os.environ,{'VERCEL_ENV':'production'}),patch.object(app,'MODE','production'):
+            core=vars(app)
+            self.assertEqual(spin.campaign_mode(core),'real')
+            spin.save_settings(self.db,self.admin,{'enabled':True,'budget_minor':200000,'stock':{'iphone':1,'ps5':1,'tv':2}},core)
+            state=spin.state(self.db,self.buyer,core)
+            self.assertTrue(state['can_spin'])
+            self.assertFalse(state['test_only'])
+            self.assertEqual([prize['id'] for prize in state['prizes']],['iphone','ps5','tv','none'])
+            with patch.object(spin.secrets,'randbelow',return_value=0),patch.object(rewards,'rates',side_effect=AssertionError('FX not needed')):
+                result=spin.spin(self.db,self.buyer,{},core)
+            self.assertEqual(result['prize_id'],'iphone')
+            self.assertFalse(result['test_only'])
+            self.assertEqual(spin.counters(self.db,'real')['awarded']['iphone'],1)
+            self.assertEqual(spin.counters(self.db,'test')['awarded']['iphone'],0)
+            self.assertEqual(spin.settings(self.db,'real')['budget_minor'],200000)
 
     def test_exact_odds_and_daily_result_are_idempotent(self):
         self.enable();state=self.route(self.buyer,'GET','/api/spin-win')
@@ -183,9 +210,13 @@ class SpinWinConcurrencyTests(unittest.TestCase):
         def request(uid):
             db=app.connect()
             try:return spin.spin(db,uid,{},vars(app))
+            except app.HttpError as exc:
+                if exc.status!=409:raise
+                return None
             finally:db.close()
         with self.fx(),patch.object(spin.secrets,'randbelow',return_value=0):
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
                 results=list(pool.map(request,[self.buyer,self.other]))
-        self.assertEqual(sorted(r['kind'] for r in results),['none','voucher'])
+        self.assertEqual([r['kind'] for r in results if r],['voucher'])
+        self.assertEqual(results.count(None),1)
         self.assertEqual(spin.counters(self.db,rewards.mode(vars(app)))['spent_minor'],10)
