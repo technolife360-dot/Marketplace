@@ -73,6 +73,7 @@
   ],
   "messages": {
     "de": {
+      "Stripe test order. No real money is charged and no real UC is delivered.": "Stripe-Testbestellung. Es wird kein echtes Geld abgebucht und es werden keine echten UC gutgeschrieben.",
       "Regional preferences": "Regionale Einstellungen",
       "Choose your country, display currency and interface language.": "Wähle dein Land, die Anzeigewährung und die Sprache.",
       "Country or region": "Land oder Region",
@@ -726,6 +727,7 @@
       " (optional)": " (optional angegeben)"
     },
     "fr": {
+      "Stripe test order. No real money is charged and no real UC is delivered.": "Commande de test Stripe. Aucun paiement réel ne sera prélevé et aucun UC réel ne sera crédité.",
       "Regional preferences": "Préférences régionales",
       "Choose your country, display currency and interface language.": "Choisissez votre pays, la devise et la langue de l’interface.",
       "Country or region": "Pays ou région",
@@ -1379,6 +1381,7 @@
       " (optional)": " (facultatif)"
     },
     "es": {
+      "Stripe test order. No real money is charged and no real UC is delivered.": "Pedido de prueba de Stripe. No se cobra dinero real ni se acreditan UC reales.",
       "Regional preferences": "Preferencias regionales",
       "Choose your country, display currency and interface language.": "Elige tu país, la moneda y el idioma de la interfaz.",
       "Country or region": "País o región",
@@ -2032,6 +2035,7 @@
       " (optional)": " (opcional)"
     },
     "it": {
+      "Stripe test order. No real money is charged and no real UC is delivered.": "Ordine di prova Stripe. Non verrà addebitato denaro reale e non verranno accreditati UC reali.",
       "Regional preferences": "Preferenze regionali",
       "Choose your country, display currency and interface language.": "Scegli il paese, la valuta e la lingua dell’interfaccia.",
       "Country or region": "Paese o regione",
@@ -2685,6 +2689,7 @@
       " (optional)": " (facoltativo)"
     },
     "pt": {
+      "Stripe test order. No real money is charged and no real UC is delivered.": "Pedido de teste do Stripe. Não será cobrado dinheiro real nem serão creditados UC reais.",
       "Regional preferences": "Preferências regionais",
       "Choose your country, display currency and interface language.": "Escolha o país, a moeda e o idioma da interface.",
       "Country or region": "País ou região",
@@ -3338,6 +3343,7 @@
       " (optional)": " (opcional)"
     },
     "nl": {
+      "Stripe test order. No real money is charged and no real UC is delivered.": "Stripe-testbestelling. Er wordt geen echt geld afgeschreven en er worden geen echte UC bijgeschreven.",
       "Regional preferences": "Regionale voorkeuren",
       "Choose your country, display currency and interface language.": "Kies je land, weergavevaluta en interfacetaal.",
       "Country or region": "Land of regio",
@@ -3991,6 +3997,7 @@
       " (optional)": " (optioneel)"
     },
     "pl": {
+      "Stripe test order. No real money is charged and no real UC is delivered.": "Zamówienie testowe Stripe. Nie pobierzemy prawdziwych pieniędzy ani nie przyznamy prawdziwych UC.",
       "Regional preferences": "Preferencje regionalne",
       "Choose your country, display currency and interface language.": "Wybierz kraj, walutę wyświetlania i język interfejsu.",
       "Country or region": "Kraj lub region",
@@ -4644,6 +4651,7 @@
       " (optional)": " (opcjonalnie)"
     },
     "tr": {
+      "Stripe test order. No real money is charged and no real UC is delivered.": "Stripe test siparişi. Gerçek para tahsil edilmez ve gerçek UC yüklenmez.",
       "Regional preferences": "Bölgesel tercihler",
       "Choose your country, display currency and interface language.": "Ülkenizi, görüntüleme para birimini ve arayüz dilini seçin.",
       "Country or region": "Ülke veya bölge",
@@ -5297,6 +5305,7 @@
       " (optional)": " (isteğe bağlı)"
     },
     "ar": {
+      "Stripe test order. No real money is charged and no real UC is delivered.": "طلب تجريبي عبر Stripe. لن تُخصم أي أموال حقيقية ولن تُضاف أي وحدات UC حقيقية.",
       "Regional preferences": "التفضيلات الإقليمية",
       "Choose your country, display currency and interface language.": "اختر بلدك وعملة العرض ولغة الواجهة.",
       "Country or region": "البلد أو المنطقة",
@@ -5950,6 +5959,7 @@
       " (optional)": " (اختياري)"
     },
     "ms": {
+      "Stripe test order. No real money is charged and no real UC is delivered.": "Pesanan ujian Stripe. Tiada wang sebenar akan dicaj dan tiada UC sebenar akan dikreditkan.",
       "Regional preferences": "Pilihan wilayah",
       "Choose your country, display currency and interface language.": "Pilih negara, mata wang paparan dan bahasa antara muka anda.",
       "Country or region": "Negara atau wilayah",
@@ -6603,6 +6613,7 @@
       " (optional)": " (pilihan)"
     },
     "zh": {
+      "Stripe test order. No real money is charged and no real UC is delivered.": "Stripe 测试订单。不会扣除真实款项，也不会发放真实 UC。",
       "Regional preferences": "地区偏好设置",
       "Choose your country, display currency and interface language.": "选择您的国家、显示货币和界面语言。",
       "Country or region": "国家或地区",

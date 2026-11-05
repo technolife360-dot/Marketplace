@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 import os
 import re
 import secrets
+import catalogue_experience
 import rewards_engine as rewards
 
 UNHANDLED = object()
@@ -64,6 +65,16 @@ def public_record(record):
     return {k:record[k] for k in ('id','day','created_at','prize_id','prize_name','kind','minor','status','test_only','settings_version')}
 
 
+def welcome_prize(db, daily_prefix, prizes):
+    voucher=next((prize for prize in prizes if prize['id']=='rm100'),None)
+    if voucher and not db.execute(
+        'SELECT 1 FROM platform_config WHERE key>=? AND key<? LIMIT 1',
+        (daily_prefix,daily_prefix+'~'),
+    ).fetchone():
+        return voucher
+    return None
+
+
 def state(db, uid, core):
     current_mode=campaign_mode(core); config=settings(db,current_mode); local=now().astimezone(ZONE)
     day=local.date().isoformat()
@@ -82,16 +93,18 @@ def state(db, uid, core):
 def spin(db, uid, data, core):
     if data:rewards.fail(core,'The server decides your prize. No spin parameters are accepted.',400)
     current_mode=campaign_mode(core)
+    daily_prefix=key(current_mode,'daily:'+rewards.user_hash(uid)+':')
     day=now().astimezone(ZONE).date().isoformat()
-    prior=rewards.read(db,key(current_mode,'daily:'+rewards.user_hash(uid)+':'+day))
+    prior=rewards.read(db,daily_prefix+day)
     if prior:return public_record(prior)
     # Obtain FX before taking the database lock. Failures never consume a spin.
     fx=rewards.rates(core)
+    email_notifications=[]
     db.execute('BEGIN IMMEDIATE')
     try:
         rewards.lock(db)
         local=now().astimezone(ZONE); day=local.date().isoformat()
-        daily_key=key(current_mode,'daily:'+rewards.user_hash(uid)+':'+day)
+        daily_key=daily_prefix+day
         prior=rewards.read(db,daily_key)
         if prior:
             db.execute('COMMIT');return public_record(prior)
@@ -99,10 +112,12 @@ def spin(db, uid, data, core):
         prizes=effective_prizes(config,totals)
         if not config['enabled'] or len(prizes)==1:
             rewards.fail(core,'No Spin & Win prizes are available right now.')
-        ticket=secrets.randbelow(TOTAL)
-        for prize in prizes:
-            ticket-=prize['weight']
-            if ticket<0:break
+        prize=welcome_prize(db,daily_prefix,prizes)
+        if prize is None:
+            ticket=secrets.randbelow(TOTAL)
+            for prize in prizes:
+                ticket-=prize['weight']
+                if ticket<0:break
         identifier=core['ident']()
         record={'id':identifier,'uid':uid,'day':day,'created_at':now().isoformat(),
                 'prize_id':prize['id'],'prize_name':prize['name'],'kind':prize['kind'],
@@ -125,8 +140,12 @@ def spin(db, uid, data, core):
             record['status_history']=[{'status':'new','at':record['created_at'],'actor_id':uid}]
             rewards.write(db,key(current_mode,'winner:'+identifier),record)
             for admin in db.execute('SELECT a.user_id FROM admin_accounts a JOIN users u ON u.id=a.user_id WHERE u.suspended=0').fetchall():
-                core['notify'](db,admin['user_id'],'spin_win',('TEST · ' if record['test_only'] else '')+'Spin & Win winner',
-                               f"{prize['name']} · winner account: {uid} · award: {identifier}",'/#admin-spin-win')
+                notification_id=core['notify'](db,admin['user_id'],
+                    'spin_win' if record['test_only'] else 'spin_win_admin',
+                    ('TEST · ' if record['test_only'] else '')+'Spin & Win winner',
+                    f"{prize['name']} · award: {identifier}",'/#admin-spin-win')
+                if not record['test_only'] and notification_id:
+                    email_notifications.append(notification_id)
             core['notify'](db,uid,'spin_win','Spin & Win',prize['name']+' · '+identifier,'/#spin-win')
         rewards.write(db,key(current_mode,'counters'),totals)
         rewards.write(db,daily_key,record)
@@ -134,6 +153,11 @@ def spin(db, uid, data, core):
         db.execute('COMMIT')
     except Exception:
         db.execute('ROLLBACK');raise
+    for notification_id in email_notifications:
+        try:
+            catalogue_experience.dispatch_emails(db,core,notification_id=notification_id)
+        except Exception as exc:
+            print('Spin & Win email dispatch failed:',type(exc).__name__)
     return public_record(record)
 
 

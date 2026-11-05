@@ -180,6 +180,20 @@ def send_verification_update(address: str, display_name: str, title: str, descri
     _deliver(message,idempotency_key='seller-review/'+notification_id)
 
 
+def send_spin_win_alert(address: str, award: str, notification_id: str) -> None:
+    """Tell the admin which prize to follow up in the private winner queue."""
+    base=os.environ.get('PUBLIC_BASE_URL','').strip().rstrip('/')
+    parsed=urlsplit(base)
+    if parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError('Spin & Win email requires an HTTPS public base URL')
+    message=EmailMessage()
+    message['Subject']='SentryLoot — Spin & Win grand prize won'
+    message['From']=_from_address()
+    message['To']=address
+    message.set_content(f'{award}\n\nOpen the Spin & Win admin panel to contact the winner and update fulfilment:\n{base}/#admin-spin-win\n')
+    _deliver(message,idempotency_key='spin-win/'+notification_id)
+
+
 def send_marketplace_alert(address: str, display_name: str, title: str, language: str = 'uz') -> None:
     if language in ('en','ru'):return _localized_email(address,display_name,language,'notification')
     """Opt-in discovery/chat alert. Never email private chat bodies or delivery codes."""

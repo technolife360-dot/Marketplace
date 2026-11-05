@@ -21,6 +21,13 @@ test('wheel escapes labels received from the server',()=>{
  const html=f.ui.wheel([{id:'x',kind:'voucher',name:'<script>alert(1)</script>',weight:1}]);
  assert.match(html,/&lt;script>/);assert.doesNotMatch(html,/<script>/);
 });
+test('the winner keeps claim instructions in their history on later days',async()=>{
+ const award={id:'award-123',kind:'physical',prize_name:'PlayStation 5',status:'new',created_at:'2026-11-06T00:00:00+08:00'};
+ const f=fixture({can_spin:true,enabled:true,prizes:[],next_reset:'2026-11-07T00:00:00+08:00',history:[award]});
+ await f.ui.customer();
+ assert.match(f.app.innerHTML,/award-123/);
+ assert.match(f.app.innerHTML,/will email your verified address to arrange delivery/);
+});
 test('home does not open or fetch the spin popup for a guest',async()=>{
  const root={isConnected:true,innerHTML:'',showModal(){assert.fail('Guest popup opened');}};
  const context={window:{},me:null,api:async()=>assert.fail('Guest spin request')};

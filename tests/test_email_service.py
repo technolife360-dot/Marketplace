@@ -86,6 +86,15 @@ class ResendEmailTests(unittest.TestCase):
         with patch.dict(os.environ,{'EMAIL_FROM':''}):
             self.assertFalse(email_service.is_configured())
 
+    def test_spin_win_alert_links_to_admin_queue_with_stable_retry_key(self):
+        with patch.object(email_service,'_deliver') as deliver:
+            email_service.send_spin_win_alert('admin@example.test','Smart TV · award: award-123','note-123')
+        message=deliver.call_args.args[0]
+        self.assertEqual(str(message['To']),'admin@example.test')
+        self.assertIn('Smart TV · award: award-123',message.get_content())
+        self.assertIn('https://sentryloot.example/#admin-spin-win',message.get_content())
+        self.assertEqual(deliver.call_args.kwargs['idempotency_key'],'spin-win/note-123')
+
 
 if __name__=='__main__':
     unittest.main()

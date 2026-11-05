@@ -722,7 +722,7 @@ def erase_account_personal_data(db, uid):
 def notify(db, uid, kind, title, body, href='/'):
     if not uid or (kind!='seller_verification_decision' and not catalogue_experience.notification_allowed(db,uid,kind)):return
     nid=ident();db.execute('INSERT INTO notifications(id,user_id,kind,title,body,href) VALUES(?,?,?,?,?,?)',(nid,uid,kind,title,body,href))
-    if kind=='seller_verification_decision' or (kind in ('message','favorite','seller_listing','saved_search') and catalogue_experience.settings(db,uid)['email']):
+    if kind in ('seller_verification_decision','spin_win_admin') or (kind in ('message','favorite','seller_listing','saved_search') and catalogue_experience.settings(db,uid)['email']):
         db.execute('INSERT INTO notification_outbox(notification_id,user_id) VALUES(?,?)',(nid,uid))
     return nid
 

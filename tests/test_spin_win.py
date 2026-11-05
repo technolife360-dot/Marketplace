@@ -23,6 +23,14 @@ class SpinWinTests(unittest.TestCase):
         with self.fx(),patch.object(spin.secrets,'randbelow',return_value=ticket):
             return self.route(uid or self.buyer,'POST','/api/spin-win/spin',{})
 
+    def mark_returning(self):
+        current_mode=spin.campaign_mode(vars(app))
+        day='2026-10-01'
+        record={'id':'previous-spin','day':day,'created_at':day+'T00:00:00+00:00',
+                'prize_id':'none','prize_name':'No prize this time','kind':'none',
+                'minor':0,'status':'no_prize','test_only':current_mode=='test','settings_version':1}
+        rewards.write(self.db,spin.key(current_mode,'daily:'+rewards.user_hash(self.buyer)+':'+day),record)
+
     def test_defaults_require_owner_to_activate_and_do_not_advertise_unstocked_prizes(self):
         state=self.route(self.buyer,'GET','/api/spin-win')
         self.assertFalse(state['enabled']);self.assertFalse(state['can_spin'])
@@ -33,7 +41,7 @@ class SpinWinTests(unittest.TestCase):
         preview=self.route(None,'GET','/api/spin-win/preview')
         self.assertFalse(preview['enabled'])
         self.assertEqual(preview['prizes'],[])
-        self.enable()
+        self.enable();self.mark_returning()
         self.roll()
         preview=self.route(None,'GET','/api/spin-win/preview')
         self.assertTrue(preview['enabled'])
@@ -63,19 +71,20 @@ class SpinWinTests(unittest.TestCase):
                 result=spin.spin(self.db,self.buyer,{},core)
             self.assertEqual(result['status'],'saved_for_live_topup')
             self.assertFalse(result['test_only'])
-            self.assertEqual(spin.counters(self.db,'real')['spent_minor'],10)
+            self.assertEqual(result['prize_id'],'rm100')
+            self.assertEqual(spin.counters(self.db,'real')['spent_minor'],100)
             self.assertEqual(spin.counters(self.db,'test')['spent_minor'],0)
             lot,=rewards.lots(self.db,self.buyer,'real')
             self.assertIsNone(lot['expires_at'])
             self.assertEqual(rewards.wallet_values(self.db,self.buyer,'test','topup')['available_micro'],0)
-            self.assertEqual(rewards.wallet_values(self.db,self.buyer,'real','topup')['available_micro'],25000)
+            self.assertEqual(rewards.wallet_values(self.db,self.buyer,'real','topup')['available_micro'],250000)
             self.assertEqual(rewards.wallet_values(self.db,self.buyer,'real','account')['available_micro'],0)
             with self.fx(),patch.object(rewards,'mode',return_value='test'):
-                self.assertEqual(rewards.wallet(self.db,self.buyer,core)['saved_spin_myr_minor'],10)
+                self.assertEqual(rewards.wallet(self.db,self.buyer,core)['saved_spin_myr_minor'],100)
             self.assertEqual(spin.settings(self.db,'real')['budget_minor'],200000)
 
     def test_exact_odds_and_daily_result_are_idempotent(self):
-        self.enable();state=self.route(self.buyer,'GET','/api/spin-win')
+        self.enable();self.mark_returning();state=self.route(self.buyer,'GET','/api/spin-win')
         self.assertEqual(sum(r['weight'] for r in state['prizes']),100000)
         self.assertEqual([r['weight'] for r in state['prizes'][:3]],[1,2,2])
         first=self.roll();second=self.roll(99999)
@@ -85,7 +94,7 @@ class SpinWinTests(unittest.TestCase):
         self.assertEqual(spin.counters(self.db,current)['awarded']['iphone'],1)
 
     def test_voucher_automatically_credits_topup_only_and_deducts_budget_once(self):
-        self.enable();award=self.roll(5)
+        self.enable();self.mark_returning();award=self.roll(5)
         self.assertEqual(award['minor'],10)
         current=rewards.mode(vars(app))
         self.assertEqual(rewards.wallet_values(self.db,self.buyer,current,'topup')['available_micro'],25000)
@@ -94,13 +103,13 @@ class SpinWinTests(unittest.TestCase):
         self.assertEqual(spin.counters(self.db,current)['spent_minor'],10)
 
     def test_no_prize_consumes_only_daily_spin(self):
-        self.enable();award=self.roll(99999)
+        self.enable();self.mark_returning();award=self.roll(99999)
         self.assertEqual(award['kind'],'none')
         self.assertEqual(rewards.wallet_values(self.db,self.buyer,rewards.mode(vars(app)))['available_micro'],0)
         self.assertEqual(self.roll(0)['id'],award['id'])
 
     def test_winner_private_queue_notification_and_fulfilment(self):
-        self.enable();award=self.roll()
+        self.enable();self.mark_returning();award=self.roll()
         queue=self.route(self.admin,'GET','/api/admin/spin-win')
         winner=queue['winners'][0]
         self.assertEqual(winner['uid'],self.buyer)
@@ -111,6 +120,43 @@ class SpinWinTests(unittest.TestCase):
         self.route(self.admin,'POST','/api/admin/spin-win/winners/'+award['id'],{'status':'contacted'})
         self.assertEqual(self.route(self.buyer,'GET','/api/spin-win')['today']['status'],'contacted')
         with self.assertRaises(app.HttpError):self.route(self.admin,'POST','/api/admin/spin-win/winners/'+award['id'],{'status':'new'})
+
+    def test_live_physical_win_queues_admin_email_and_retries_without_respin(self):
+        with patch.dict(spin.os.environ,{'VERCEL_ENV':'production'}),patch.object(app,'MODE','production'):
+            spin.save_settings(self.db,self.admin,{
+                'enabled':True,'budget_minor':10000,'stock':{'iphone':1,'ps5':1,'tv':1},
+            },vars(app))
+            self.mark_returning()
+            with patch.object(app.email_service,'is_configured',return_value=True),patch.object(
+                app.email_service,'send_spin_win_alert',side_effect=RuntimeError('temporary provider failure')
+            ) as send:
+                award=self.roll()
+                self.assertEqual(self.roll(),award)
+                send.assert_called_once()
+                payload=send.call_args.args
+            note=self.db.execute(
+                "SELECT n.id,q.status,q.attempts FROM notifications n JOIN notification_outbox q "
+                "ON q.notification_id=n.id WHERE n.kind='spin_win_admin' AND n.user_id=?", (self.admin,)
+            ).fetchone()
+            self.assertEqual((note['status'],note['attempts']),('failed',1))
+            self.assertEqual(payload[1:],('iPhone 18 Pro · award: '+award['id'],note['id']))
+            with patch.object(app.email_service,'is_configured',return_value=True),patch.object(
+                app.email_service,'send_spin_win_alert'
+            ) as send:
+                self.assertEqual(app.catalogue_experience.dispatch_emails(self.db,vars(app))['sent'],1)
+                self.assertEqual(app.catalogue_experience.dispatch_emails(self.db,vars(app))['sent'],0)
+                send.assert_called_once_with(*payload)
+                self.assertEqual(self.roll(4,uid=self.other)['kind'],'voucher')
+                send.assert_called_once()
+
+    def test_test_physical_win_never_queues_admin_email(self):
+        self.enable();self.mark_returning()
+        with patch.object(app.email_service,'is_configured',return_value=True),patch.object(
+            app.email_service,'send_spin_win_alert'
+        ) as send:
+            self.assertTrue(self.roll()['test_only'])
+            send.assert_not_called()
+        self.assertEqual(self.db.execute('SELECT count(*) AS total FROM notification_outbox').fetchone()['total'],0)
 
     def test_inventory_and_budget_exhaustion_move_probability_to_none(self):
         self.enable(budget_minor=10);self.roll()
@@ -125,12 +171,22 @@ class SpinWinTests(unittest.TestCase):
         self.enable()
         with patch.object(spin,'now',return_value=datetime(2026,11,5,15,59,59,tzinfo=timezone.utc)):
             first=self.roll(99999);self.assertEqual(first['day'],'2026-11-05')
+            self.assertEqual(first['prize_id'],'rm100')
         with patch.object(spin,'now',return_value=datetime(2026,11,5,16,0,0,tzinfo=timezone.utc)):
             self.assertTrue(self.route(self.buyer,'GET','/api/spin-win')['can_spin'])
             second=self.roll(99999);self.assertEqual(second['day'],'2026-11-06')
+            self.assertEqual(second['prize_id'],'none')
+
+    def test_first_spin_below_rm1_budget_uses_normal_odds(self):
+        self.enable(budget_minor=99)
+        with patch.object(spin,'now',return_value=datetime(2026,11,5,12,tzinfo=timezone.utc)):
+            self.assertEqual(self.roll(99999)['prize_id'],'none')
+        self.enable(budget_minor=100)
+        with patch.object(spin,'now',return_value=datetime(2026,11,6,12,tzinfo=timezone.utc)):
+            self.assertEqual(self.roll(99999)['prize_id'],'none')
 
     def test_fx_failure_and_notification_failure_leave_no_spin_or_prize_consumed(self):
-        self.enable()
+        self.enable();self.mark_returning()
         with patch.object(app.regional_preferences,'exchange_rates',return_value={'available':False}):
             with self.assertRaises(app.HttpError):self.route(self.buyer,'POST','/api/spin-win/spin',{})
         with patch.object(app,'notify',side_effect=RuntimeError('notification write failed')):
@@ -150,7 +206,7 @@ class SpinWinTests(unittest.TestCase):
 
     def test_mode_isolation_and_inventory_cannot_be_reset_below_awards(self):
         with patch.object(rewards,'mode',return_value='test'):
-            self.enable();award=self.roll()
+            self.enable();self.mark_returning();award=self.roll()
             self.assertTrue(award['test_only'])
             with self.assertRaises(app.HttpError):self.enable(stock={'iphone':0,'ps5':1,'tv':1})
         with patch.object(rewards,'mode',return_value='real'):
@@ -167,7 +223,8 @@ class SpinWinTests(unittest.TestCase):
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
                 results=list(pool.map(lambda _:request(),range(2)))
         self.assertEqual(results[0]['id'],results[1]['id'])
-        self.assertEqual(spin.counters(self.db,rewards.mode(vars(app)))['spent_minor'],10)
+        self.assertEqual(results[0]['prize_id'],'rm100')
+        self.assertEqual(spin.counters(self.db,rewards.mode(vars(app)))['spent_minor'],100)
 
 class SpinWinTopupTests(unittest.TestCase):
     setUp=SpinWinTests.setUp
@@ -195,7 +252,7 @@ class SpinWinTopupTests(unittest.TestCase):
         second=self.route(self.buyer,'POST','/api/top-up/test-checkout',data)
         self.assertEqual(first['id'],second['id'])
         self.assertEqual(self.route(self.buyer,'GET','/api/top-up/test-orders/'+first['id'])['total_minor'],quote['total_minor'])
-        self.assertEqual(rewards.wallet_values(self.db,self.buyer,'test','topup')['available_micro'],25000-quote['spent_micro'])
+        self.assertEqual(rewards.wallet_values(self.db,self.buyer,'test','topup')['available_micro'],250000-quote['spent_micro'])
 
     def test_supplier_quote_cannot_be_applied_to_different_sku(self):
         from tests import test_stripe_test_payments as stripe_fixtures
@@ -213,7 +270,7 @@ class SpinWinConcurrencyTests(unittest.TestCase):
     fx=SpinWinTests.fx
     enable=SpinWinTests.enable
     def test_different_buyers_cannot_exceed_last_voucher_budget(self):
-        self.enable(budget_minor=10,stock={'iphone':0,'ps5':0,'tv':0})
+        self.enable(budget_minor=100,stock={'iphone':0,'ps5':0,'tv':0})
         def request(uid):
             db=app.connect()
             try:return spin.spin(db,uid,{},vars(app))
@@ -224,6 +281,6 @@ class SpinWinConcurrencyTests(unittest.TestCase):
         with self.fx(),patch.object(spin.secrets,'randbelow',return_value=0):
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
                 results=list(pool.map(request,[self.buyer,self.other]))
-        self.assertEqual([r['kind'] for r in results if r],['voucher'])
+        self.assertEqual([r['prize_id'] for r in results if r],['rm100'])
         self.assertEqual(results.count(None),1)
-        self.assertEqual(spin.counters(self.db,rewards.mode(vars(app)))['spent_minor'],10)
+        self.assertEqual(spin.counters(self.db,rewards.mode(vars(app)))['spent_minor'],100)
