@@ -1,7 +1,7 @@
 /* Promotional credits are separate from withdrawable seller earnings. All values come from the server. */
 window.RewardsUI = (() => {
   const tr=(en,uz=en,ru=en)=>adminText(uz,ru,en), h=value=>esc(value??''), post=(path,data)=>api(path,{method:'POST',body:JSON.stringify(data)});
-  const money=(minor,currency)=>h(currency==='USD'?new Intl.NumberFormat('en',{style:'currency',currency:'USD'}).format(Number(minor||0)/100):fmt(Number(minor)||0,currency));
+  const money=(minor,currency)=>h(fmt(Number(minor)||0,currency));
   const timestamp=value=>typeof value==='number'&&value<1e12?value*1000:value;
   const date=value=>{const d=new Date(timestamp(value));return Number.isFinite(d.getTime())?h(d.toLocaleString(typeof localeTag==='function'?localeTag():'en')):'—'};
   function micro(value,data){const currency=data.display_currency||'USD',rate=currency==='USD'?1:Number(data.rates?.[currency]);if(!(rate>0))return h(new Intl.NumberFormat('en',{style:'currency',currency:'USD'}).format(Number(value||0)/1e6));return h(new Intl.NumberFormat(typeof localeTag==='function'?localeTag():'en',{style:'currency',currency,maximumFractionDigits:currency==='UZS'?0:2}).format(Number(value||0)/1e6*rate));}

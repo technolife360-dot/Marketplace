@@ -31,10 +31,14 @@ const TOPUP_CATALOG_IMAGE_FALLBACKS = {
 };
 
 const TOPUP_CATEGORIES = [
-  ['all', 'All'],
-  ['game', 'Game'], ['gift-card', 'Gift card'], ['social', 'Social'],
-  ['ewallet', 'Ewallet'], ['airtime-data', 'Airtime & Data (Pulsa & Data)'],
-  ['pln', 'PLN'], ['apps-subscriptions', 'Aplikasi & Langganan']
+  ['all', 'Barchasi', 'Все', 'All'],
+  ['game', 'O‘yin', 'Игра', 'Game'],
+  ['gift-card', 'Sovg‘a kartasi', 'Подарочная карта', 'Gift card'],
+  ['social', 'Ijtimoiy tarmoqlar', 'Социальные сети', 'Social media'],
+  ['ewallet', 'Elektron hamyon', 'Электронный кошелёк', 'E-wallet'],
+  ['airtime-data', 'Mobil aloqa va internet', 'Мобильная связь и интернет', 'Airtime & data'],
+  ['pln', 'PLN', 'PLN', 'PLN'],
+  ['apps-subscriptions', 'Ilovalar va obunalar', 'Приложения и подписки', 'Apps & subscriptions']
 ];
 
 function topupCategory(item) {
@@ -486,12 +490,12 @@ function topupSupplierBasePrice(pack) {
 
 function topupSupplierPrice(pack) {
   const original = topupSupplierBasePrice(pack);
-  return original ? globalThis.RegionPreferences?.estimate(pack.selling_price_cents / 100, 'USD') || original : '';
+  return original ? globalThis.RegionPreferences?.estimate(pack.selling_price_cents, 'USD') || original : '';
 }
 
 function topupSupplierPriceAttributes(pack) {
   const original = topupSupplierBasePrice(pack);
-  return original ? `data-region-money data-region-amount="${pack.selling_price_cents / 100}" data-region-currency="USD" data-region-original="${esc(original)}"` : '';
+  return original ? `data-region-money data-region-amount="${pack.selling_price_cents}" data-region-currency="USD" data-region-original="${esc(original)}"` : '';
 }
 
 function topupSupplierPackageLabel(pack) {
@@ -511,7 +515,8 @@ async function renderTopUpSupplierBrand(game) {
   brand.image_url = brand.image_url || TOPUP_CATALOG_IMAGE_FALLBACKS[game.slug] || '';
   brand.packages = topupSupplierPresentationPackages(game.slug, brand.packages);
   const t = adminText, groups = topupSupplierGroups(brand.packages, game.slug);
-  const category = TOPUP_CATEGORIES.find(([slug]) => slug === brand.category)?.[1] || '';
+  const categoryLabels = TOPUP_CATEGORIES.find(([slug]) => slug === brand.category)?.slice(1);
+  const category = categoryLabels ? t(...categoryLabels) : '';
   const heroArt = brand.banner_url || TOPUP_OFFICIAL_GAME_ART[game.slug] || brand.image_url;
   const packageArt = pack => {
     const kind = String(pack.type_name || '').toLowerCase();
@@ -534,7 +539,7 @@ async function renderTopUpSupplierBrand(game) {
     <div class="tus-layout"><div class="tus-main">
     ${groups.map((group,index)=>`<section class="tus-type-section" id="tus-type-${index}" data-supplier-section="${index}" aria-label="${esc(typeName(group))}" ${index?'hidden':''}><div class="tus-package-grid">${group.items.map(packageCard).join('')}</div>${productInfo(group)}</section>`).join('')}
     <p class="tus-empty" data-topup-package-empty hidden>${t('Mos paket topilmadi.','Подходящих пакетов не найдено.','No matching packages found.')}</p><div class="tus-more"><button type="button" data-supplier-more>${t('Ko‘proq ko‘rsatish','Показать ещё','Show more')}</button></div></div>
-    <aside class="tus-summary"><div class="tus-summary-title"><h2>${t('Tanlangan paket','Выбранный пакет','Your selection')}</h2></div><div class="tus-summary-brand">${brand.image_url?`<img src="${esc(brand.image_url)}" alt="">`:''}<span>${esc(brand.name)}</span></div><div class="tus-summary-empty" data-supplier-summary-empty>${icon('box')}<b>${t('Paketni tanlang','Выберите пакет','Select a package')}</b><p>${t('Paket tafsilotlari shu yerda ko‘rinadi.','Здесь появятся детали пакета.','Your package details will appear here.')}</p></div><div class="tus-summary-selected" data-supplier-summary-selected aria-live="polite" hidden></div>${game.slug !== 'pubg-mobile' && brand.category === 'game' ? '<div class="tus-customer-fields" data-supplier-customer-fields></div>' : ''}${game.slug === 'pubg-mobile' ? `<form id="tus-checkout-form" class="tus-checkout-form"><label class="field"><span>Player ID</span><input name="player_id" inputmode="numeric" autocomplete="off" pattern="[0-9]{3,40}" minlength="3" maxlength="40" placeholder="${t('Player ID kiriting','Введите Player ID','Enter Player ID')}" required aria-describedby="tus-player-help"></label><small id="tus-player-help">${t('PUBG Mobile profilidagi ID raqamingiz.','ID из вашего профиля PUBG Mobile.','Your numeric ID from your PUBG Mobile profile.')}</small><label class="field tus-quantity-field" data-supplier-quantity-field hidden><span>${t('Miqdor','Количество','Quantity')}</span><div class="tus-quantity-stepper"><button type="button" data-supplier-quantity-step="-1" aria-label="${t('Kamaytirish','Уменьшить','Decrease quantity')}">−</button><input type="number" name="quantity" inputmode="numeric" min="1" max="99" step="1" value="1" required disabled><button type="button" data-supplier-quantity-step="1" aria-label="${t('Ko‘paytirish','Увеличить','Increase quantity')}">+</button></div></label><label class="tus-test-consent"><input type="checkbox" name="accept_terms" required><span>${t('Player ID ni tekshirdim. Stripe test to‘loviga roziman; haqiqiy UC yetkazilmaydi.','Я проверил Player ID и согласен на тестовую оплату Stripe. Реальные UC не доставляются.','I checked my Player ID and agree to a Stripe test payment. No real UC will be delivered.')}</span></label><p class="tus-checkout-error" role="alert" hidden></p></form>` : ''}<div data-supplier-rewards></div><div class="tus-summary-total"><span>${t('Jami','Итого','Total')}</span><b>—</b></div><button type="submit" form="tus-checkout-form" class="tus-buy" disabled>${t('Xarid qilish','Купить сейчас','Buy now')}</button><p class="tus-checkout-note">${icon('shield')}<span>${t('Sotuv narxlari va xarid qilish imkoniyati tayyorlanmoqda.','Цены продажи и возможность покупки готовятся.','Selling prices and checkout are being prepared.')}</span></p></aside></div></section>`;
+    <aside class="tus-summary"><div class="tus-summary-title"><h2>${t('Tanlangan paket','Выбранный пакет','Your selection')}</h2></div><div class="tus-summary-brand">${brand.image_url?`<img src="${esc(brand.image_url)}" alt="">`:''}<span>${esc(brand.name)}</span></div><div class="tus-summary-empty" data-supplier-summary-empty>${icon('box')}<b>${t('Paketni tanlang','Выберите пакет','Select a package')}</b><p>${t('Paket tafsilotlari shu yerda ko‘rinadi.','Здесь появятся детали пакета.','Your package details will appear here.')}</p></div><div class="tus-summary-selected" data-supplier-summary-selected aria-live="polite" hidden></div>${game.slug !== 'pubg-mobile' && brand.category === 'game' ? '<div class="tus-customer-fields" data-supplier-customer-fields></div>' : ''}${game.slug === 'pubg-mobile' ? `<form id="tus-checkout-form" class="tus-checkout-form"><label class="field"><span>${t('O‘yinchi ID raqami','ID игрока','Player ID')}</span><input name="player_id" inputmode="numeric" autocomplete="off" pattern="[0-9]{3,40}" minlength="3" maxlength="40" placeholder="${t('Player ID kiriting','Введите Player ID','Enter Player ID')}" required aria-describedby="tus-player-help"></label><small id="tus-player-help">${t('PUBG Mobile profilidagi ID raqamingiz.','ID из вашего профиля PUBG Mobile.','Your numeric ID from your PUBG Mobile profile.')}</small><label class="field tus-quantity-field" data-supplier-quantity-field hidden><span>${t('Miqdor','Количество','Quantity')}</span><div class="tus-quantity-stepper"><button type="button" data-supplier-quantity-step="-1" aria-label="${t('Kamaytirish','Уменьшить','Decrease quantity')}">−</button><input type="number" name="quantity" inputmode="numeric" min="1" max="99" step="1" value="1" required disabled><button type="button" data-supplier-quantity-step="1" aria-label="${t('Ko‘paytirish','Увеличить','Increase quantity')}">+</button></div></label><label class="tus-test-consent"><input type="checkbox" name="accept_terms" required><span>${t('Player ID ni tekshirdim. Stripe test to‘loviga roziman; haqiqiy UC yetkazilmaydi.','Я проверил Player ID и согласен на тестовую оплату Stripe. Реальные UC не доставляются.','I checked my Player ID and agree to a Stripe test payment. No real UC will be delivered.')}</span></label><p class="tus-checkout-error" role="alert" hidden></p></form>` : ''}<div data-supplier-rewards></div><div class="tus-summary-total"><span>${t('Jami','Итого','Total')}</span><b>—</b></div><button type="submit" form="tus-checkout-form" class="tus-buy" disabled>${t('Xarid qilish','Купить сейчас','Buy now')}</button><p class="tus-checkout-note">${icon('shield')}<span>${t('Sotuv narxlari va xarid qilish imkoniyati tayyorlanmoqda.','Цены продажи и возможность покупки готовятся.','Selling prices and checkout are being prepared.')}</span></p></aside></div></section>`;
   const page = app.querySelector('.topup-supplier-page');
   const typeButtons = [...page.querySelectorAll('[data-supplier-type]')];
   const sections = [...page.querySelectorAll('[data-supplier-section]')];
@@ -548,50 +553,48 @@ async function renderTopUpSupplierBrand(game) {
     onChange:quote=>{
       requestKey = crypto.randomUUID();
       if (!quote) {refreshQuantity(); return;}
-      const total = page.querySelector('.tus-summary-total b');
-      ['regionMoney','regionAmount','regionCurrency','regionOriginal'].forEach(key=>delete total.dataset[key]);
-      total.textContent = fmt(quote.total_minor,quote.currency);
+      renderTotal(quote.total_minor,quote.currency,fmt(quote.total_minor,quote.currency,true));
+      renderPaymentNote(quote.total_minor,quote.currency);
     }
   }) : null;
   if (!supplierRewards) rewardsHost.hidden = true;
+  function renderTotal(amount,currency,original) {
+    const display = original ? globalThis.RegionPreferences?.estimate(amount,currency) || original : '—';
+    const featuredPrice = page.querySelector('[data-fpp-total]');
+    const nodes = [page.querySelector('.tus-summary-total b')];
+    if (featuredPrice) nodes.push(featuredPrice,page.querySelector('.tus-buy'));
+    for (const node of nodes) {
+      node.textContent = display;
+      if (original) {
+        node.dataset.regionMoney = '';
+        node.dataset.regionAmount = String(amount);
+        node.dataset.regionCurrency = currency;
+        node.dataset.regionOriginal = original;
+      } else {
+        ['regionMoney','regionAmount','regionCurrency','regionOriginal'].forEach(key=>delete node.dataset[key]);
+      }
+    }
+  }
+  function renderPaymentNote(amount,currency) {
+    const note = page.querySelector('.tus-checkout-note span');
+    note.dataset.originalCurrency = '';
+    note.textContent = t('Stripe sinov buyurtmasi. Haqiqiy pul yechilmaydi va haqiqiy UC berilmaydi.','Тестовый заказ Stripe. Реальные деньги не списываются, UC не начисляются.','Stripe test order. No real money is charged and no real UC is delivered.')
+      + ' ' + t('Asl to‘lov summasi','Исходная сумма платежа','Original payment amount') + ': ' + fmt(amount,currency,true);
+  }
   function refreshQuantity() {
     if (!selectedPackage) return;
     const quantity = selectedPackage.detail_banner ? Number(checkoutForm.elements.quantity.value) : 1;
     const valid = Number.isInteger(quantity) && quantity >= 1 && quantity <= (selectedPackage.max_quantity || 1);
     const priced = {...selectedPackage, selling_price_cents:selectedPackage.selling_price_cents * quantity};
-    const total = page.querySelector('.tus-summary-total b');
-    total.textContent = valid ? topupSupplierPrice(priced) || '—' : '—';
-    if (valid && topupSupplierBasePrice(priced)) {
-      total.dataset.regionMoney = '';
-      total.dataset.regionAmount = String(priced.selling_price_cents / 100);
-      total.dataset.regionCurrency = 'USD';
-      total.dataset.regionOriginal = topupSupplierBasePrice(priced);
-    } else {
-      ['regionMoney','regionAmount','regionCurrency','regionOriginal'].forEach(key=>delete total.dataset[key]);
-    }
-    const featuredPrice = page.querySelector('[data-fpp-total]');
-    if (featuredPrice) {
-      featuredPrice.textContent = total.textContent;
-      ['regionMoney','regionAmount','regionCurrency','regionOriginal'].forEach(key => {
-        if (key in total.dataset) featuredPrice.dataset[key] = total.dataset[key];
-        else delete featuredPrice.dataset[key];
-      });
-      page.querySelector('.tus-buy').textContent = valid ? topupSupplierPrice(priced) || '—' : '—';
-      const buy = page.querySelector('.tus-buy');
-      ['regionMoney','regionAmount','regionCurrency','regionOriginal'].forEach(key => {
-        if (key in total.dataset) buy.dataset[key] = total.dataset[key];
-        else delete buy.dataset[key];
-      });
-    }
+    const original = valid ? topupSupplierBasePrice(priced) : '';
+    renderTotal(priced.selling_price_cents,priced.selling_currency,original);
     checkoutForm?.querySelectorAll('[data-supplier-quantity-step]').forEach(button => {
       button.disabled = !valid || (Number(button.dataset.supplierQuantityStep) < 0 ? quantity <= 1 : quantity >= (selectedPackage.max_quantity || 1));
     });
     const summaryQuantity = page.querySelector('[data-supplier-quantity-summary]');
     if (summaryQuantity) summaryQuantity.textContent = valid ? String(quantity) : '—';
     page.querySelector('.tus-buy').disabled = !valid || !topupSupplierBasePrice(selectedPackage) || brand.payment_mode !== 'stripe_test';
-    if (valid && topupSupplierBasePrice(priced) && brand.payment_mode === 'stripe_test') {
-      page.querySelector('.tus-checkout-note span').textContent = t(`Stripe test. To‘lov: ${topupSupplierBasePrice(priced)} USD. Haqiqiy UC yetkazilmaydi.`,`Stripe test. Оплата: ${topupSupplierBasePrice(priced)} USD. Реальные UC не доставляются.`,`Stripe test. Payment: ${topupSupplierBasePrice(priced)} USD. No real UC delivery.`);
-    }
+    if (original && brand.payment_mode === 'stripe_test') renderPaymentNote(priced.selling_price_cents,priced.selling_currency);
   }
   function selectPackage(index) {
     const pack = brand.packages[index];
@@ -625,7 +628,7 @@ async function renderTopUpSupplierBrand(game) {
     total.textContent = price || '—';
     if (topupSupplierBasePrice(pack)) {
       total.dataset.regionMoney = '';
-      total.dataset.regionAmount = String(pack.selling_price_cents / 100);
+      total.dataset.regionAmount = String(pack.selling_price_cents);
       total.dataset.regionCurrency = 'USD';
       total.dataset.regionOriginal = topupSupplierBasePrice(pack);
     } else {
@@ -830,7 +833,7 @@ async function renderTopUpCatalog(selectedGame, selectedProduct) {
   } else {
     body = '<div class="topup-catalog-tools"><p data-topup-result-count role="status"></p><label class="topup-catalog-search"><span class="sr-only">' + adminText('Mahsulotlarni qidirish','Поиск товаров','Search products') + '</span><input type="search" data-topup-search placeholder="' + adminText('Mahsulotlarni qidirish…','Поиск товаров…','Search products…') + '" autocomplete="off"></label></div><div id="topup-catalog-products"><p class="topup-category-empty" data-topup-category-empty role="status" hidden></p><div class="topup-games-grid">' + rows.map(topupCatalogCard).join('') + '</div></div><div class="topup-catalog-more"><button type="button" class="button-secondary" data-topup-load-more>' + adminText('Ko‘proq ko‘rsatish','Показать ещё','Show more') + '</button></div>';
   }
-  const categoryNavigation = '<nav class="topup-categories" aria-label="' + adminText('Top Up kategoriyalari','Категории Top Up','Top Up categories') + '">' + TOPUP_CATEGORIES.map(([id, label]) => '<button type="button" class="topup-category" data-topup-category="' + id + '" aria-pressed="' + (id === 'all') + '" aria-controls="topup-catalog-products">' + esc(label) + '</button>').join('') + '</nav>';
+  const categoryNavigation = '<nav class="topup-categories" aria-label="' + adminText('Top Up kategoriyalari','Категории Top Up','Top Up categories') + '">' + TOPUP_CATEGORIES.map(([id, ...labels]) => '<button type="button" class="topup-category" data-topup-category="' + id + '" aria-pressed="' + (id === 'all') + '" aria-controls="topup-catalog-products">' + esc(adminText(...labels)) + '</button>').join('') + '</nav>';
   const catalogContent = '<div class="topup-hero topup-hero-image"><nav class="topup-breadcrumb topup-hero-back" aria-label="Breadcrumb"></nav><img class="topup-hero-background" src="https://images.gamestorehub.com/site-assets/topup-hero.jpg" alt="" fetchpriority="high"><div class="topup-hero-overlay"></div><div class="topup-hero-content"><div class="topup-hero-brand"><b>Sentry<span class="brand-dot">Loot</span></b></div><h1>' + esc(words.feature) + '</h1><p>' + words.intro + '</p></div></div>' + categoryNavigation + body + '<aside class="topup-safe-note">' + icon('shield') + '<p><b>' + adminText('Xaridlar va to‘lovlar','Покупки и оплата','Payments are being prepared') + '</b><br>' + adminText('To‘lov tizimi ulangach paketlarni xarid qilish mumkin bo‘ladi.','Пакеты можно будет купить после подключения платёжной системы.','Packages will be available to buy once a payment provider is connected.') + '</p></aside>';
   app.innerHTML = '<section class="page topup-page">' + (game ? body : catalogContent) + '</section>';
   const page = app.querySelector('.topup-page');

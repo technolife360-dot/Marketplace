@@ -101,6 +101,20 @@ test('purchase validation retains the actual quantity and ID limits', () => {
   }
 });
 
+test('Top Up and Spin & Win customer messages are translated in every regional language', () => {
+  const phrases = [
+    'Top ups & digital services', 'Top Up categories', 'Airtime & data', 'Apps & subscriptions',
+    'Your selection', 'Select a package', 'Stripe test checkout', 'Original payment amount',
+    'Saved Spin & Win vouchers', 'Available with live Top Up', 'One free spin every day',
+    'Spin for free', 'Today’s spin is used', 'No prize this time',
+    'Voucher saved. You can use it when live Top Up payments are enabled.',
+    'Your Top Up bonus was credited automatically.',
+  ];
+  for (const language of regionalLanguages) {
+    for (const phrase of phrases) assert.ok(data.messages[language][phrase]?.trim(), `${language}: ${phrase}`);
+  }
+});
+
 test('home, catalogue, cart, account, support and protection notices have real coverage', () => {
   const critical = [
     'Search results', 'All listings', 'Loading listings…', 'Could not load listings.',

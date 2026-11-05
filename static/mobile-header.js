@@ -76,7 +76,7 @@ window.MobileHeader = (() => {
       if (event.target.closest('[data-open-support-chat]')) close();
       const action = event.target.closest('[data-mobile-action]');
       if (action) { close(); doAction(action); }
-      if (event.target.closest('[data-mobile-region]')) { close(); window.RegionPreferences?.open(); }
+      if (event.target.closest('[data-mobile-region]')) { close(); openRegionPreferences(); }
       const language = event.target.closest('[data-mobile-language]');
       if (language) { close(); setLanguage(language.dataset.mobileLanguage); }
     });

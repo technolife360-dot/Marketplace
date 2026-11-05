@@ -34,12 +34,12 @@
   }
  }
  function numberLocale(language){return `${language||state.language||'en'}-${state.country}`}
+ function toMajor(amount,currency){return Number(amount)/(currency==='MYR'||currency==='USD'?100:1)}
  function estimate(amount,currency){
   if(!fx?.rates||Date.now()/1000-fx.updated_at>172800||currency===state.currency)return null;
   const from=Number(fx.rates[currency]),to=Number(fx.rates[state.currency]);
   if(!Number.isFinite(from)||from<=0||!Number.isFinite(to)||to<=0)return null;
-  // Existing marketplace ledger: MYR cents, UZS whole som. Never reinterpret it.
-  const major=Number(amount)/(currency==='MYR'?100:1);
+  const major=toMajor(amount,currency);
   if(!Number.isFinite(major))return null;
   try{return new Intl.NumberFormat(numberLocale(),{style:'currency',currency:state.currency}).format(major/from*to)}catch{return null}
  }
@@ -66,8 +66,29 @@
   return flight;
  }
  function sync(){refreshPrices()}
- function captureTopupDraft(){const form=root.document.querySelector('#topup-checkout-form');return form?{url:root.location.pathname+root.location.hash,quantity:root.document.getElementById('tu-quantity')?.value,player:form.querySelector('[name=player_id]')?.value}:null}
- function restoreTopupDraft(draft){if(!draft||draft.url!==root.location.pathname+root.location.hash)return;const quantity=root.document.getElementById('tu-quantity'),player=root.document.querySelector('#topup-checkout-form [name=player_id]');if(player&&draft.player)player.value=draft.player;if(quantity&&draft.quantity){quantity.value=draft.quantity;quantity.dispatchEvent(new Event('input',{bubbles:true}))}}
+ const topupForm='#topup-checkout-form,#tus-checkout-form';
+ function captureTopupDraft(){
+  const form=root.document.querySelector(topupForm);
+  if(!form)return null;
+  const quantity=form.elements.quantity||root.document.getElementById('tu-quantity');
+  return {url:root.location.href,form:form.id,quantity:quantity?.value,player:form.elements.player_id?.value,
+          packageIndex:root.document.querySelector('[data-supplier-package][aria-pressed="true"]')?.dataset.supplierPackage};
+ }
+ function restoreTopupDraft(draft){
+  if(!draft||draft.url!==root.location.href)return;
+  const form=root.document.getElementById(draft.form);
+  if(!form)return;
+  if(draft.packageIndex!==undefined)root.document.querySelector(`[data-supplier-package="${draft.packageIndex}"]`)?.click();
+  if(form.elements.player_id&&draft.player)form.elements.player_id.value=draft.player;
+  const quantity=form.elements.quantity||root.document.getElementById('tu-quantity');
+  if(quantity&&draft.quantity){quantity.value=draft.quantity;quantity.dispatchEvent(new Event('input',{bubbles:true}))}
+ }
+ async function save(preferences){
+  const next={...preferences,source:'manual'},draft=captureTopupDraft();
+  if(options.getUser())await options.saveUser(next);
+  state=next;write(root.localStorage,KEY,next);
+  await options.onChange(next);restoreTopupDraft(draft);sync();loadRates();
+ }
  function open(){
   if(root.document.querySelector('.region-preferences-dialog'))return;
   root.document.getElementById('language-menu').hidden=true;
@@ -92,15 +113,14 @@
   dialog.addEventListener('close',()=>{dialog.remove();root.document.getElementById('language-toggle')?.setAttribute('aria-expanded','false');root.document.getElementById('language-toggle')?.focus()},{once:true});
   dialog.querySelector('form').onsubmit=async event=>{
    event.preventDefault();submit.disabled=true;const error=dialog.querySelector('[data-region-error]');error.hidden=true;
-   const next={country:country.value,currency:currency.value,language:language.value,source:'manual'},draft=captureTopupDraft();
-   try{if(options.getUser())await options.saveUser(next);state=next;write(root.localStorage,KEY,next);await options.onChange(next);restoreTopupDraft(draft);sync();dialog.close();loadRates()}
+   try{await save({country:country.value,currency:currency.value,language:language.value});dialog.close()}
    catch(e){error.textContent=e.message;error.hidden=false}finally{submit.disabled=false}
   };
   root.document.body.append(dialog);root.SelectMenus?.enhanceAll?.(dialog);
   dialog.querySelectorAll('select').forEach(select=>root.SelectMenus?.enhance(select));dialog.showModal();country.nextElementSibling?.querySelector('button')?.focus();
  }
  function init(config){options=config;markets=config.markets;if(!bound&&root.document?.addEventListener){root.document.addEventListener('click',event=>{if(event.target.closest('[data-region-open]'))open()});bound=true}sync();loadRates()}
- const api={init,apply,open,money,translate,numberLocale,estimate,refreshPrices,loadRates,get state(){return {...state}}};
+ const api={init,apply,open,save,money,translate,numberLocale,toMajor,estimate,refreshPrices,loadRates,get state(){return {...state}}};
  root.RegionPreferences=api;
  if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

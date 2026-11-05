@@ -13,6 +13,7 @@ test('Top Up package, quantity total and shared fmt convert; raw settlement stay
  const context={Intl,RegionPreferences:api,localeTag:()=> 'en-GB',adminText:(_uz,_ru,en)=>en};vm.createContext(context);
  vm.runInContext(app.match(/function fmt\(n,c='UZS'\)\{[^\n]+/)[0]+detail.slice(detail.indexOf('function topupDetailPrice'),detail.indexOf('function renderTopUpDetail')),context);
  assert.equal(context.fmt(12000,'UZS'),'£0.75');assert.equal(context.fmt(12000,'UZS',true),'12,000 UZS');
+ assert.equal(context.fmt(499,'USD'),'£3.74');assert.equal(context.fmt(499,'USD',true),'4.99 USD');
  assert.equal(context.topupDetailPrice({price_minor:12000},3),'£2.25');assert.equal(context.topupDetailPrice({price_minor:0}),'Price not set');
 });
 
@@ -39,11 +40,11 @@ test('supplier USD cents convert once for region currency and refresh after rate
  const context={RegionPreferences:api,esc:String};vm.createContext(context);
  vm.runInContext(source.slice(source.indexOf('function topupSupplierBasePrice('),source.indexOf('async function renderTopUpSupplierBrand(')),context);
  const pack={selling_price_cents:499,selling_currency:'USD'};
- const nodes=[{dataset:{regionAmount:'4.99',regionCurrency:'USD',regionOriginal:'$4.99'},textContent:'$4.99'}];
+ const nodes=[{dataset:{regionAmount:'499',regionCurrency:'USD',regionOriginal:'$4.99'},textContent:'$4.99'}];
  root.document.querySelectorAll=selector=>selector==='[data-region-money]'?nodes:[];
  api.init({markets:[...markets,{country:'UZ',currency:'UZS'}],translate:(_uz,_ru,en)=>en});api.apply({country:'MY',currency:'MYR',language:'en'});
  assert.equal(context.topupSupplierPrice(pack),'$4.99');
- assert.match(context.topupSupplierPriceAttributes(pack),/data-region-amount="4.99"/);
+ assert.match(context.topupSupplierPriceAttributes(pack),/data-region-amount="499"/);
  await api.loadRates();
  assert.equal(context.topupSupplierPrice(pack),'RM 19.96');
  assert.equal(nodes[0].textContent,'RM 19.96');
@@ -59,4 +60,49 @@ test('supplier USD cents convert once for region currency and refresh after rate
  assert.equal(nodes[0].textContent,'$4.99');
  assert.equal(pack.selling_price_cents,499);
  assert.equal(context.topupSupplierPrice({}),'');
+});
+
+test('every selectable display currency formats all three stored money units',async()=>{
+ const {api,root}=fixture();
+ const allMarkets=JSON.parse(fs.readFileSync('static/asia-markets.json','utf8'));
+ const currencies=[...new Set(allMarkets.map(row=>row.currency))];
+ const rates=Object.fromEntries(currencies.map((currency,index)=>[currency,2+index/10]));
+ Object.assign(rates,{USD:1,MYR:4,UZS:12000});
+ root.fetch=async()=>({ok:true,json:async()=>({rates,updated_at:Date.now()/1000})});
+ api.init({markets:allMarkets,translate:(_uz,_ru,en)=>en});
+ await api.loadRates();
+ for(const currency of currencies){
+   const country=allMarkets.find(row=>row.currency===currency).country;
+   api.apply({country,currency,language:'en'});
+   const expected=new Intl.NumberFormat(`en-${country}`,{style:'currency',currency}).format(rates[currency]);
+   for(const [amount,source] of [[100,'USD'],[400,'MYR'],[12000,'UZS']]){
+     assert.equal(api.estimate(amount,source),currency===source?null:expected,`${source} → ${currency}`);
+   }
+ }
+});
+
+test('saving preferences preserves the selected supplier package and player ID after rerender',async()=>{
+ const {api,root,stored}=fixture();
+ root.location={href:'https://local.test/top-up/pubg-mobile'};
+ let form={id:'tus-checkout-form',elements:{player_id:{value:'12345678'},quantity:{value:'2'}}};
+ const selection={dataset:{supplierPackage:'4'}};
+ let restoredPackage,quantityUpdated=false;
+ root.Event=Event;
+ root.document.querySelector=selector=>{
+   if(selector.includes('#tus-checkout-form'))return form;
+   if(selector.includes('aria-pressed'))return selection;
+   if(selector==='[data-supplier-package="4"]')return {click(){restoredPackage=4;}};
+   return null;
+ };
+ root.document.getElementById=id=>id===form.id?form:null;
+ api.init({markets,getUser:()=>null,onChange:async()=>{
+   form={id:'tus-checkout-form',elements:{player_id:{value:''},quantity:{value:'1',dispatchEvent(){quantityUpdated=true;}}}};
+ }});
+ await api.save({country:'MY',currency:'GBP',language:'fr'});
+ assert.equal(restoredPackage,4);
+ assert.equal(form.elements.player_id.value,'12345678');
+ assert.equal(form.elements.quantity.value,'2');
+ assert.equal(quantityUpdated,true);
+ assert.equal(api.state.language,'fr');
+ assert.equal(JSON.parse(stored.get('sentryloot-region-v1')).currency,'GBP');
 });
