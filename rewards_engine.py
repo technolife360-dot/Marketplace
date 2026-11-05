@@ -124,6 +124,11 @@ def context(db,uid,data,core):
     if kind=='topup':
         quantity=data.get('quantity',1)
         if type(quantity) is not int or not 1<=quantity<=99:fail(core,'Choose a quantity from 1 to 99.',400)
+        if 'sku' in data:
+            if not core['stripe_test_topups'].enabled(core):fail(core,'Supplier test checkout is unavailable.')
+            offer=core['melostore_catalog'].test_checkout_offer(data['sku'])
+            if not offer or quantity!=1:fail(core,'Choose an available supplier test package.')
+            return [{'package_id':offer['id'],'quantity':1,'price_minor':offer['price_minor']}],'USD',offer['price_minor'],0
         row=db.execute('SELECT id,price_minor,currency FROM topup_packages WHERE id=? AND enabled=1',(data.get('package_id'),)).fetchone()
         if not row or row['price_minor']<=0:fail(core,'This Top Up package has no price.')
         return [{'package_id':row['id'],'quantity':quantity,'price_minor':row['price_minor']}],'UZS',row['price_minor']*quantity,0
@@ -174,7 +179,7 @@ def change_uses(db,campaign_id,uid,delta):
 
 def quote(db,uid,data,core):
     fx=rates(core);lines,currency,subtotal,fee=context(db,uid,data,core)
-    if currency not in ('UZS','MYR'):fail(core,'This checkout currency is not supported for promotional benefits.')
+    if currency not in ('UZS','MYR') and not (currency=='USD' and data['kind']=='topup' and 'sku' in data):fail(core,'This checkout currency is not supported for promotional benefits.')
     opts=settings(db)
     if not opts['enabled']:fail(core,'Promotional benefits are paused.')
     use_bonus=data.get('use_bonus',False)

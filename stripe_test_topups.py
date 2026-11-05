@@ -43,7 +43,7 @@ def checkout(db, uid, data, core):
     supplier = None
     if 'sku' in data:
         supplier = melostore_catalog.test_checkout_offer(data['sku'])
-        if not supplier or quantity != 1 or server or data.get('rewards_quote_id'):
+        if not supplier or quantity != 1 or server:
             raise core['HttpError'](409, 'This supplier test package is unavailable or has invalid checkout details.')
         package_id = supplier['id']
         # These references are intentionally unpriced and disabled in the legacy
@@ -77,7 +77,7 @@ def checkout(db, uid, data, core):
                 raise core['HttpError'](409, 'This package has no configured test price.')
             oid = core['ident']()
             if quote_id:
-                rewards_engine.reserve(db, uid, quote_id, 'topup', oid, [{'package_id': package_id, 'quantity': quantity, 'price_minor': package['price_minor']}], 'UZS', package['price_minor']*quantity, 0, core)
+                rewards_engine.reserve(db, uid, quote_id, 'topup', oid, [{'package_id': package_id, 'quantity': quantity, 'price_minor': package['price_minor']}], 'USD' if supplier else 'UZS', package['price_minor']*quantity, 0, core)
             db.execute('INSERT INTO topup_orders(id,reference,buyer_id,package_id,player_id,server_id,quantity,unit_price_minor,currency,fulfillment_note) VALUES(?,?,?,?,?,?,?,?,?,?)',
                 (oid, 'TEST-TU-'+core['secrets'].token_hex(4).upper(), uid, package_id, player, server, quantity, package['price_minor'], 'USD' if supplier else 'UZS', 'Stripe TEST only. No UC or supplier delivery.'))
             pay.write(db, request_record, {'id': oid, 'rewards_quote_id': quote_id})

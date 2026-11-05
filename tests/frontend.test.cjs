@@ -365,13 +365,13 @@ test('home paints public listings without waiting for the profile; abandoned req
  const homeSource=source.slice(start,source.indexOf('\nasync function renderComparison',start));
  for(const abandoned of [false,true]){
   const pending=[];const slot={innerHTML:'',setAttribute(){}};
-  const root={isConnected:true},category={insertAdjacentHTML(){}};
+  const root={isConnected:true,querySelector:()=>null},category={insertAdjacentHTML(){}};
   const context={window:{},app:{innerHTML:'',classList:{add(){}}},document:{body:{classList:{add(){}}}},
    bootstrapSessionReady:new Promise(()=>{}),URLSearchParams,Promise,marketGameLinks:[],
    api:()=>new Promise(resolve=>pending.push(resolve)),adminText:(uz,ru,en)=>en,
    marketSidebarMarkup:()=>'<aside></aside>',esc:String,icon:()=>'',
    setupMarketBanner(){},homeGameCarouselMarkup:()=>'<section class="home-mobile-games"></section>',marketCard:item=>'<article>'+item.title+'</article>',
-   MarketUX:{home(){}},openBrowse(){},
+   MarketUX:{home(){}},openBrowse(){},loadHomeTopups(){},
    $:selector=>selector==='#hero-search-form'?{}:selector==='.home-storefront'?root:selector==='[data-home-listings]'?slot:selector==='#home-category'?category:null};
   vm.createContext(context);vm.runInContext(homeSource,context);
   const loading=context.renderHome();

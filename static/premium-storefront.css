@@ -2,6 +2,32 @@
    theme paints. Protected select geometry and sidebar row sizes are unchanged. */
 @layer sentryloot-premium, sentryloot-icons, sentryloot-theme;
 @layer sentryloot-premium {
+  body #app .home-topups { margin:0 0 32px; min-width:0; }
+  body #app .home-topups > .home-section-heading { margin:0 0 16px; gap:16px; }
+  body #app .home-topups .home-section-heading > a { flex-shrink:0; }
+  body #app .home-topup-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:14px; }
+  body #app .home-topup-card { display:flex; flex-direction:column; min-width:0; overflow:hidden; color:#f4f5f7; text-decoration:none; background:#11151a; border:1px solid #2a3039; border-radius:14px; transition:border-color .18s ease; }
+  body #app .home-topup-card:hover { border-color:#ff9b42; }
+  body #app .home-topup-art { display:block; aspect-ratio:4/5; overflow:hidden; background:#090b0e; }
+  body #app .home-topup-art img { display:block; width:100%; height:100%; object-fit:cover; object-position:center; }
+  body #app .home-topup-copy { display:flex; flex-direction:column; gap:8px; padding:13px 12px; margin-top:auto; }
+  body #app .home-topup-copy strong { font-size:14px; line-height:1.4; }
+  body #app .home-topup-bottom { display:flex; align-items:center; justify-content:space-between; gap:8px; color:#a9b1bd; font-size:12px; line-height:1.5; }
+  body #app .home-topup-bottom > span:last-child { color:#ffb36b; }
+  @media(min-width:841px) and (max-width:1199px) {
+    body #app .home-topup-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  }
+  @media(max-width:840px) {
+    body #app .home-topups { margin:26px 0; }
+    body #app .home-topup-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+    body #app .home-topup-copy { padding:10px 8px; gap:5px; }
+    body #app .home-topup-copy strong { font-size:12px; }
+    body #app .home-topup-bottom { font-size:10px; gap:4px; }
+    body #app .home-topups .home-section-heading > a { font-size:12px; }
+  }
+  @media(prefers-reduced-motion:reduce) {
+    body #app .home-topup-card { transition:none; }
+  }
   :root, body {
     --bg:#090b0e !important; --deep:#090b0e !important;
     --paper:#11151a !important; --paper-soft:#191e25 !important;

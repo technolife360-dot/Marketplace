@@ -124,6 +124,15 @@ def snapshot():
     return json.loads(SNAPSHOT.read_text(encoding='utf-8'))
 
 
+def home_topups():
+    """Small public discovery payload; reuse existing supplier routes, without SKUs/costs."""
+    featured = json.loads((SNAPSHOT.parent / 'home-topups.json').read_text())
+    available = {item['slug'] for item in snapshot()['items']}
+    return [{key: item[key] for key in
+             ('slug', 'name', 'subtitle', 'image_url', 'image_width', 'image_height')}
+            for item in featured if item['slug'] in available]
+
+
 def public_catalog(existing):
     """Keep existing prices, packages, reviews and URLs, enrich with supplier brands."""
     by_slug = {item['slug']: item for item in existing}
