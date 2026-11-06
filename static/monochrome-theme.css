@@ -152,18 +152,8 @@ body .home-intro::after { background-image: linear-gradient(90deg, #000000eb, #0
 body .market-banner-dots button { background: #666666 !important; border: 0 !important; }
 body .market-banner-dots button[aria-current='true'] { background: #F1F1F1 !important; }
 body .icon, body .gallery-chevron { color: #F1F1F1 !important; }
-body .footer-social { background: #111111 !important; border: 1px solid #333333 !important; }
 progress::-webkit-progress-value { background: #AAAAAA !important; }
 progress::-moz-progress-bar { background: #AAAAAA !important; }
-body .footer-social[aria-label='TikTok'] { color: #F1F1F1 !important; }
-.footer-social[aria-label='TikTok'] svg { filter: drop-shadow(-1px -1px 0 #25F4EE) drop-shadow(1px 1px 0 #FE2C55); }
-body .footer-social[aria-label='Instagram'] { color: #E1306C !important; }
-.footer-social[aria-label='Instagram'] svg :is(rect, circle:not(:last-child)) { stroke: url('#footer-instagram-gradient'); }
-.footer-social[aria-label='Instagram'] svg circle:last-child { fill: url('#footer-instagram-gradient'); }
-body .footer-social[aria-label='Facebook'] { color: #0866FF !important; }
-body .footer-social[aria-label='YouTube'] { color: #FF0000 !important; }
-body .footer-social[aria-label='WhatsApp'] { color: #25D366 !important; }
-body .footer-social svg { color: inherit; }
 /* Native file and autofill controls use the same dark palette. */
 body input::file-selector-button {
   background: #242424 !important;
@@ -475,14 +465,8 @@ body .footer-links a:is(:hover, :focus-visible) {
   transform: translateX(3px) !important;
   text-decoration-color: currentColor !important;
 }
-body .footer-social { overflow: hidden; }
-body .footer-social svg {
-  transform-origin: center;
-  transition: transform 180ms ease !important;
-}
-body .footer-social:hover svg { transform: scale(1.25) !important; }
 @media(prefers-reduced-motion:reduce) {
-  body .footer-links a, body .footer-social svg { transition: none !important; }
+  body .footer-links a { transition: none !important; }
 }
 
 /* Give each language a separate, comfortably spaced row. */

@@ -53,7 +53,7 @@
 
   async function load(route) {
     if (initial?.route === route) return initial;
-    library ??= fetch('/static/info-pages-content.json?v=4').then(response => {
+    library ??= fetch('/static/info-pages-content.json?v=5').then(response => {
       if (!response.ok) throw new Error('Could not load the information page.');
       return response.json();
     }).catch(error => {
@@ -78,8 +78,10 @@
     const paymentIcons = {
       card: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M7 15h4"/>',
       device: '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="m9 11 2 2 4-4m-4 9h2"/>',
+      google: '<rect x="3" y="5" width="18" height="13" rx="2"/><path d="M3 9h18m-11 5 2 2 4-4"/>',
       bank: '<path d="M3 9h18L12 3 3 9Zm0 12h18M6 12v6m6-6v6m6-6v6"/>',
       wallet: '<path d="M21 10V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3m-5-2h.01"/><path d="M16 10h5v4h-5a2 2 0 1 1 0-4Z"/>',
+      link: '<path d="m13 2-9 12h7l-1 8 9-12h-7l1-8Z"/>',
     };
     const heading = pick(page.title,lang).replace('SentryLoot','<span>SentryLoot</span>');
     return `<div class="sl-about" data-info-route="about">
@@ -140,8 +142,8 @@
       </section>
 
       <section class="sl-about-payments" id="about-payments" aria-labelledby="about-payments-title" tabindex="-1">
+        <div class="sl-payment-inner">
         <header data-about-reveal>
-          <p class="sl-payment-status">${pick(payments.status,lang)}</p>
           <h2 id="about-payments-title">${title('about-payments')}</h2>
           ${paragraph('about-payments')}
         </header>
@@ -150,8 +152,12 @@
             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paymentIcons[method.icon]}</svg>
             <h3>${pick(method.title,lang)}</h3>
             <p>${pick(method.description,lang)}</p>
-            <ul class="sl-payment-brands" role="list">${method.brands.map(brand => `<li>${brand}</li>`).join('')}</ul>
           </article>`).join('')}
+        </div>
+        <ul class="sl-payment-brands" role="list" data-about-reveal>
+          ${payments.methods.flatMap(method => method.brands).map(brand => `<li><img src="/static/assets/payment-brands/${brand.toLowerCase().replaceAll(' ','-')}.svg" width="120" height="48" loading="lazy" decoding="async" alt="${brand}"></li>`).join('')}
+        </ul>
+        <p class="sl-payment-status">${pick(payments.status,lang)}</p>
         </div>
       </section>
 

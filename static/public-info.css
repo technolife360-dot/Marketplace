@@ -132,27 +132,25 @@ body:not(.home-page) .info-page-layout .legal-copy {color:#d4ceca}
 }
 .sl-about-contact .sl-about-actions {justify-content:flex-end}
 .sl-about-payments {
-  width:min(100%,1140px);margin:clamp(56px,8vw,118px) auto 0;
-  padding:clamp(18px,5vw,66px);border-radius:clamp(24px,5vw,52px) 10px clamp(24px,5vw,52px) 10px;
-  scroll-margin-top:120px;
+  margin:clamp(56px,8vw,118px) calc(-1 * clamp(12px,3vw,44px)) 0;
+  padding:clamp(54px,7vw,108px) clamp(20px,5vw,80px) clamp(50px,6vw,90px);
 }
-.sl-about-payments header {text-align:center;margin:0 auto clamp(22px,4vw,46px);max-width:650px}
-.sl-about-payments header p {margin:13px auto 0;font-size:15px;line-height:1.55}
-.sl-about-payments .sl-payment-status {
-  display:inline-flex;align-items:center;gap:8px;margin:0 0 14px;padding:5px 12px;border-radius:999px;
-  font-size:12px;font-weight:720;
-}
-.sl-payment-status::before {content:"";width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
-.sl-payment-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.sl-payment-inner {max-width:1040px;margin-inline:auto}
+.sl-about-payments header {text-align:center;margin:0 auto clamp(36px,5vw,65px)}
+.sl-about .sl-about-payments h2 {font-size:clamp(36px,5.5vw,74px);letter-spacing:-.045em;line-height:1.06}
+.sl-about-payments header p {max-width:55ch;margin:22px auto 0;font-size:clamp(16px,1.5vw,19px);line-height:1.5}
+.sl-about-payments .sl-payment-status {text-align:center;margin:24px 0 0;font-size:13px;line-height:1.45}
+.sl-payment-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(14px,1.75vw,24px)}
 .sl-payment-card {
-  display:flex;flex-direction:column;align-items:flex-start;min-width:0;
-  padding:clamp(15px,2.5vw,26px);border:1px solid;border-radius:18px;
+  min-width:0;min-height:clamp(156px,16vw,205px);
+  padding:clamp(18px,2vw,26px);border-radius:12px;
 }
-.sl-payment-card svg {box-sizing:content-box;padding:8px;border-radius:11px;margin-bottom:14px}
-.sl-payment-card h3 {margin:0;font-size:clamp(18px,2.1vw,24px);line-height:1.16;letter-spacing:-.035em}
-.sl-payment-card p {margin:7px 0 14px;font-size:14px;line-height:1.5}
-.sl-payment-brands {display:flex;flex-wrap:wrap;gap:6px;margin:auto 0 0;padding:0;list-style:none}
-.sl-payment-brands li {padding:5px 10px;border:1px solid;border-radius:7px;font-size:12px;font-weight:740;line-height:1.35}
+.sl-payment-card svg {display:block;width:36px;height:36px;margin-bottom:14px;stroke-width:1.85}
+.sl-payment-card h3 {margin:0;font-size:clamp(17px,1.7vw,22px);line-height:1.2;letter-spacing:-.02em}
+.sl-payment-card p {margin:11px 0 0;font-size:clamp(14px,1.45vw,17px);line-height:1.48}
+.sl-payment-brands {display:flex;flex-wrap:wrap;justify-content:center;gap:16px clamp(15px,2.6vw,32px);margin:clamp(38px,5vw,64px) 0 0;padding:0;list-style:none}
+.sl-payment-brands li {display:grid;place-items:center;width:clamp(65px,7vw,100px);height:40px}
+.sl-payment-brands img {display:block;width:100%;height:100%;object-fit:contain}
 
 @media (max-width:840px) {
   .info-page-header {margin-bottom:18px;padding:22px 17px}
@@ -171,8 +169,12 @@ body:not(.home-page) .info-page-layout .legal-copy {color:#d4ceca}
   .sl-about-nav a {padding-inline:7px;font-size:11px}
   .sl-about-principles {grid-template-columns:minmax(0,1fr)}
 }
-@media (max-width:560px) {
+@media (max-width:760px) {
+  .sl-payment-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:480px) {
   .sl-payment-grid {grid-template-columns:minmax(0,1fr)}
+  .sl-payment-card {min-height:0}
 }
 @media (prefers-reduced-motion:reduce) {
   .sl-about :is(.sl-about-nav a,.sl-about-button,.sl-about-button span) {transition:none}
@@ -193,13 +195,10 @@ body:not(.home-page) .info-page-layout .legal-copy {color:#d4ceca}
   body #app .sl-about .sl-about-button span {background-color:#17100e1a!important;color:#18100a!important}
   body #app .sl-about .sl-about-button:hover {background-color:#ffe4c4!important}
   body #app .sl-about a:focus-visible {outline-color:#f3b277!important}
-  body #app .sl-about .sl-about-payments {background:#f8f3ed!important}
-  body #app .sl-about .sl-about-payments :is(h2,h3,.sl-payment-brands li) {color:#201812!important}
-  body #app .sl-about .sl-about-payments p:not(.sl-payment-status) {color:#594e46!important}
-  body #app .sl-about .sl-payment-status {color:#773a13!important;background:#f3e1cf!important}
-  body #app .sl-about .sl-payment-card {background:#fffdfa!important;border-color:#e5d9cc!important}
-  body #app .sl-about .sl-payment-card svg {color:#773a13!important;background:#f5e8db!important}
-  body #app .sl-about .sl-payment-brands li {background:#f8f3ed!important;border-color:#e5d9cc!important}
+  body #app .sl-about .sl-about-payments {background:#fff!important}
+  body #app .sl-about .sl-about-payments :is(h2,h3,.sl-payment-card svg) {color:#141414!important}
+  body #app .sl-about .sl-about-payments p {color:#5d5870!important}
+  body #app .sl-about .sl-payment-card {background:#eff0f1!important}
   @media (max-width:840px) {
     body.mobile-site #app .sl-about h1 {font-size:clamp(44px,10.5vw,77px)!important;line-height:.96!important;letter-spacing:-.06em!important}
     body.mobile-site #app .sl-about h2 {font-size:clamp(28px,6.8vw,43px)!important;line-height:1.06!important;letter-spacing:-.05em!important}

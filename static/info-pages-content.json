@@ -1077,9 +1077,9 @@
           },
           "paragraphs": [
             {
-              "uz": "Stripe Malayziyada quyidagi usullarni qo‘llaydi. SentryLoot’da qaysi usul ko‘rinishi buyurtma turi, valyuta, qurilma va Stripe hisobining tasdiqlangan sozlamalariga bog‘liq.",
-              "ru": "Stripe поддерживает эти способы в Малайзии. Доступность на SentryLoot зависит от типа заказа, валюты, устройства и подтверждённых настроек аккаунта Stripe.",
-              "en": "Stripe supports these options in Malaysia. Availability on SentryLoot depends on the order type, currency, device and approved Stripe account settings."
+              "uz": "Xalqaro kartalardan mahalliy hamyonlargacha. Checkout’da mavjud usullar mamlakat, valyuta, qurilma va buyurtmaga qarab ko‘rsatiladi.",
+              "ru": "От международных карт до местных кошельков. Доступные способы оплаты зависят от страны, валюты, устройства и заказа.",
+              "en": "From international cards to local wallets. Checkout shows the options available for your country, currency, device and order."
             }
           ],
           "bullets": [],
@@ -1092,9 +1092,9 @@
                 "en": "Credit and debit cards"
               },
               "description": {
-                "uz": "Karta bilan Stripe Checkout sahifasida to‘lash.",
-                "ru": "Оплата банковской картой на странице Stripe Checkout.",
-                "en": "Pay by card on the Stripe Checkout page."
+                "uz": "Kredit yoki debet kartangiz bilan Stripe Checkout orqali to‘lang.",
+                "ru": "Оплата кредитной или дебетовой картой через Stripe Checkout.",
+                "en": "Use a credit or debit card through Stripe Checkout."
               },
               "brands": [
                 "Visa",
@@ -1104,31 +1104,46 @@
             {
               "icon": "device",
               "title": {
-                "uz": "Telefon orqali to‘lov",
-                "ru": "Оплата с телефона",
-                "en": "Device wallets"
+                "uz": "Apple Pay",
+                "ru": "Apple Pay",
+                "en": "Apple Pay"
               },
               "description": {
-                "uz": "Mos qurilmada saqlangan kartangiz bilan to‘lash.",
-                "ru": "Оплата сохранённой картой на совместимом устройстве.",
-                "en": "Pay with a saved card on a compatible device."
+                "uz": "Mos Apple qurilmasida Wallet’dagi kartangiz bilan to‘lang.",
+                "ru": "Оплата картой из Wallet на совместимом устройстве Apple.",
+                "en": "Use a card saved in Wallet on a compatible Apple device."
               },
               "brands": [
-                "Apple Pay",
+                "Apple Pay"
+              ]
+            },
+            {
+              "icon": "google",
+              "title": {
+                "uz": "Google Pay",
+                "ru": "Google Pay",
+                "en": "Google Pay"
+              },
+              "description": {
+                "uz": "Mos qurilma yoki brauzerda Google hisobingizdagi kartadan foydalaning.",
+                "ru": "Оплата сохранённой картой Google на совместимом устройстве или в браузере.",
+                "en": "Use a saved card on a compatible device or browser."
+              },
+              "brands": [
                 "Google Pay"
               ]
             },
             {
               "icon": "bank",
               "title": {
-                "uz": "Malayziya internet banki",
-                "ru": "Интернет-банкинг Малайзии",
-                "en": "Malaysian online banking"
+                "uz": "Internet banking",
+                "ru": "Интернет-банкинг",
+                "en": "Online banking"
               },
               "description": {
-                "uz": "MYR’da bank sahifasida tasdiqlanadi. Marketplace’da mavjudligi sotuvchiga pul o‘tkazish modeliga bog‘liq.",
-                "ru": "Подтверждение в банке, в MYR. Для площадки доступность зависит от схемы расчётов с продавцами.",
-                "en": "Approve in your bank in MYR. Marketplace availability depends on how seller payments are handled."
+                "uz": "FPX orqali Malayziya internet bankida MYR to‘lovini tasdiqlang.",
+                "ru": "Подтвердите платёж в MYR через интернет-банк Малайзии с FPX.",
+                "en": "Confirm a MYR payment with a Malaysian bank through FPX."
               },
               "brands": [
                 "FPX"
@@ -1137,17 +1152,33 @@
             {
               "icon": "wallet",
               "title": {
-                "uz": "Mahalliy elektron hamyon",
-                "ru": "Местный электронный кошелёк",
-                "en": "Local e-wallet"
+                "uz": "Hududiy elektron hamyon",
+                "ru": "Региональный кошелёк",
+                "en": "Regional e-wallet"
               },
               "description": {
-                "uz": "Malayziyadagi mijozlar uchun MYR’da GrabPay orqali to‘lash.",
-                "ru": "Оплата через GrabPay в MYR для покупателей из Малайзии.",
-                "en": "Pay in MYR with GrabPay as a customer in Malaysia."
+                "uz": "GrabPay Malayziya va Singapurdagi mos mahalliy to‘lovlar uchun.",
+                "ru": "GrabPay доступен для подходящих местных платежей в Малайзии и Сингапуре.",
+                "en": "GrabPay is available for eligible domestic payments in Malaysia and Singapore."
               },
               "brands": [
                 "GrabPay"
+              ]
+            },
+            {
+              "icon": "link",
+              "title": {
+                "uz": "Link orqali tezkor to‘lov",
+                "ru": "Быстрая оплата через Link",
+                "en": "Express checkout with Link"
+              },
+              "description": {
+                "uz": "Link’da saqlangan to‘lov ma’lumotlari bilan tezroq to‘lang.",
+                "ru": "Быстрая оплата с сохранёнными данными в Link.",
+                "en": "Check out faster with your saved payment details in Link."
+              },
+              "brands": [
+                "Link"
               ]
             }
           ]

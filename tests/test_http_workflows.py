@@ -467,7 +467,7 @@ class HTTPWorkflows(unittest.TestCase):
                 if path == '/about':
                     for about_section in ('Who we are', 'For sellers', 'Product and publisher rules', 'Payment status', 'Payment methods'):
                         self.assertIn(f'<h2>{about_section}</h2>', article)
-                    for payment_label in ('Live payments are currently disabled', 'Visa', 'Mastercard', 'Apple Pay', 'Google Pay', 'FPX', 'GrabPay'):
+                    for payment_label in ('Live payments are currently disabled', 'From international cards to local wallets', 'Visa', 'Mastercard', 'Apple Pay', 'Google Pay', 'FPX', 'GrabPay', 'Link'):
                         self.assertIn(payment_label, article)
                     self.assertNotIn('Top Up catalog', article)
                 self.assertIn(f'rel="canonical" href="{app.public_site_base()}{path}"', document)
@@ -476,6 +476,9 @@ class HTTPWorkflows(unittest.TestCase):
             ('/static/assets/about-orbit.webp', 'image/webp', b'WEBP'),
             ('/static/assets/geist-variable.woff2', 'font/woff2', b'wOF2'),
             ('/static/vendor/gsap-scrolltrigger-3.14.2.min.js', 'application/javascript; charset=utf-8', b'ScrollTrigger 3.14.2'),
+        ) + tuple(
+            (f'/static/assets/payment-brands/{brand}.svg', 'image/svg+xml', b'<svg')
+            for brand in ('visa', 'mastercard', 'apple-pay', 'google-pay', 'fpx', 'grabpay', 'link')
         )
         for path, content_type, signature in assets:
             with self.subTest(asset=path):

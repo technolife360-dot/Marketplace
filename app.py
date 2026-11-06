@@ -1647,8 +1647,10 @@ class Handler(BaseHTTPRequestHandler):
             if not f and re.fullmatch(r'/static/assets/game-art/(pubg-mobile|mobile-legends|valorant|free-fire|cs2|honor-of-kings|roblox|genshin-impact|fortnite|minecraft|gta-5|league-of-legends|dota-2|call-of-duty-mobile|ea-sports-fc)-(640|1280|3840)\.webp',parsed.path):
                 candidate=parsed.path.removeprefix('/static/')
                 if (ROOT/'static'/candidate).is_file(): f=candidate
-            if not f: self.send_error(404); return
-            data=(ROOT/'static'/f).read_bytes() if f!='index.html' else (ROOT/'static/index.html').read_bytes()
+            if not f and re.fullmatch(r'/static/assets/payment-brands/(visa|mastercard|apple-pay|google-pay|fpx|grabpay|link)\.svg', parsed.path):
+                f=parsed.path.removeprefix('/static/')
+            if not f or not (ROOT/'static'/f).is_file(): self.send_error(404); return
+            data=(ROOT/'static'/f).read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/webp' if f.endswith('.webp') else 'image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))
             if f.endswith('.ttf'):ctype='font/ttf'
             if f.endswith('.woff2'):ctype='font/woff2'

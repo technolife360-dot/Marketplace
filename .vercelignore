@@ -7,3 +7,7 @@ static/**/*.gif
 static/**/*.svg
 static/**/*.ico
 static/**/*.avif
+
+# The About page serves these small assets directly from the deployment.
+!static/assets/about-orbit.webp
+!static/assets/payment-brands/*.svg
