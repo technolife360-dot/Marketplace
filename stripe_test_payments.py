@@ -85,14 +85,14 @@ class StripeTestProvider:
         stripe_amount(amount_minor, currency)
         return PaymentIntent(self.name, amount_minor, currency, idempotency_key)
 
-    def session(self, oid, amount, currency, idem, kind='marketplace', expires_at=None, cancel_path=None, success_path=None):
+    def session(self, oid, amount, currency, idem, kind='marketplace', expires_at=None, cancel_path=None, success_path=None, checkout_policy=0):
         external_amount = stripe_amount(amount, currency)
         if cancel_path is not None and not re.fullmatch(r'/top-up/[a-z0-9-]+(?:\?package=[A-Za-z0-9_-]+)?', cancel_path):
             raise RuntimeError('Invalid checkout return path.')
         if success_path is not None and not re.fullmatch(r'/top-up/[a-z0-9-]+\?topup_return=[A-Za-z0-9_-]+(?:&package=[A-Za-z0-9_-]+)?', success_path):
             raise RuntimeError('Invalid checkout success path.')
         self.assert_account()
-        result = self.client.v1.checkout.sessions.create({
+        params = {
             'mode': 'payment',
             'client_reference_id': oid,
             'metadata': {'sentryloot_order': oid, 'sentryloot_mode': self.name, 'sentryloot_kind': kind},
@@ -105,7 +105,17 @@ class StripeTestProvider:
             'expires_at': expires_at if expires_at is not None else int(time.time())+1800,
             'success_url': self.base+success_path if success_path else self.base+('/#topup-order/' if kind=='topup' else '/#order/')+oid,
             'cancel_url': self.base+cancel_path if cancel_path else self.base+('/#topup-order/' if kind=='topup' else '/#order/')+oid,
-        }, options={'idempotency_key': 'checkout:'+idem})
+        }
+        if checkout_policy == 1:
+            # Keep the buyer's charge in the stored order currency. Stripe
+            # still picks eligible methods from the Dashboard configuration.
+            params['adaptive_pricing'] = {'enabled': False}
+            if kind == 'marketplace':
+                # FPX does not support separate charges and transfers.
+                params['excluded_payment_method_types'] = ['fpx']
+            else:
+                params['payment_intent_data'].pop('transfer_group')
+        result = self.client.v1.checkout.sessions.create(params, options={'idempotency_key': 'checkout:'+idem})
         self.test_object(result)
         if not result['id'].startswith('cs_test_') or urlsplit(result.get('url') or '').hostname != 'checkout.stripe.com':
             raise RuntimeError('Invalid Stripe test checkout session.')
@@ -189,11 +199,20 @@ class StripeTestProvider:
                 or intent['amount_received'] != external_amount):
             raise RuntimeError('Stripe test refund amount requires reconciliation.')
         refunds = self.client.v1.refunds.list({'payment_intent': provider_reference, 'limit': 100})
+        if refunds.get('has_more'):
+            raise RuntimeError('Stripe test refund history requires reconciliation.')
+        # FPX and GrabPay refunds can stay pending past Stripe's idempotency
+        # retention. Observe the existing refund instead of submitting again.
+        pending = [r for r in refunds['data'] if r.get('status') in ('pending', 'requires_action')]
+        if pending:
+            if len(refunds['data']) == 1 and pending[0]['amount'] == external_amount:
+                return {'id': pending[0]['id'], 'status': pending[0]['status']}
+            raise RuntimeError('Pending or partial refund needs reconciliation before continuing.')
         existing = [r for r in refunds['data'] if r.get('status') == 'succeeded']
-        if existing and not refunds.get('has_more') and sum(r['amount'] for r in existing) == external_amount:
+        if existing and sum(r['amount'] for r in existing) == external_amount:
             return {'id': existing[0]['id'], 'status': 'succeeded'}
-        if existing or refunds.get('has_more'):
-            raise RuntimeError('Partial refund needs reconciliation before continuing.')
+        if refunds['data']:
+            raise RuntimeError('Partial or unsuccessful refund needs reconciliation before continuing.')
         result = self.client.v1.refunds.create({'payment_intent': provider_reference, 'amount': external_amount},
                                              options={'idempotency_key': idempotency_key})
         return dict(result)
@@ -257,7 +276,7 @@ def start_checkout(db, oid, uid, core):
         # The v2 key also avoids the old key whose first attempt used a moving
         # expires_at value and became permanently unusable after an idempotency error.
         candidate={'idempotency_key':'v2:'+payment['idempotency_key'],
-                   'expires_at':int(time.time())+1800}
+                   'expires_at':int(time.time())+2100, 'checkout_policy':1}
         db.execute('INSERT INTO platform_config(key,value) VALUES(?,?) ON CONFLICT(key) DO NOTHING',
                    (PREFIX+attempt_key,json.dumps(candidate,separators=(',',':'))))
         attempt=read(db,attempt_key)
@@ -268,7 +287,7 @@ def start_checkout(db, oid, uid, core):
     try:
         session = core['configured_payment_provider']().session(
             oid,payment['amount_minor'],payment['currency'],attempt['idempotency_key'],
-            expires_at=attempt['expires_at'])
+            expires_at=attempt['expires_at'], checkout_policy=attempt.get('checkout_policy',0))
     except Exception as exc:
         error = getattr(exc, 'json_body', None)
         stripe_code = getattr(exc, 'code', None)

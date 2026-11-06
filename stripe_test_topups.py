@@ -1,4 +1,5 @@
 """Test-only Top Up orders. Never dispatches UC or calls a funded supplier."""
+import json
 import re
 import time
 
@@ -81,7 +82,7 @@ def checkout(db, uid, data, core):
             db.execute('INSERT INTO topup_orders(id,reference,buyer_id,package_id,player_id,server_id,quantity,unit_price_minor,currency,fulfillment_note) VALUES(?,?,?,?,?,?,?,?,?,?)',
                 (oid, 'TEST-TU-'+core['secrets'].token_hex(4).upper(), uid, package_id, player, server, quantity, package['price_minor'], 'USD' if supplier else 'UZS', 'Stripe TEST only. No UC or supplier delivery.'))
             pay.write(db, request_record, {'id': oid, 'rewards_quote_id': quote_id})
-            pay.write(db, 'topup:'+oid, {'idempotency_key': core['create_token'](), 'supplier_sku':supplier['sku'] if supplier else None})
+            pay.write(db, 'topup:'+oid, {'idempotency_key': core['create_token'](), 'supplier_sku':supplier['sku'] if supplier else None, 'checkout_policy':1})
             rewards_engine.sync_topup(db, oid, core)
         db.execute('COMMIT')
     except Exception:
@@ -109,15 +110,20 @@ def start(db, oid, uid, core):
     if provider.name != 'stripe_test':
         raise core['HttpError'](503, 'Stripe test is disabled.')
     try:
-        record = pay.read(db, 'topup:'+oid)
+        key = pay.PREFIX+'topup:'+oid
+        stored = db.execute('SELECT value FROM platform_config WHERE key=?', (key,)).fetchone()['value']
+        record = json.loads(stored)
         if not record.get('expires_at'):
-            record['expires_at'] = int(time.time())+1800
-            pay.write(db, 'topup:'+oid, record)
+            record['expires_at'] = int(time.time())+2100
+            # Concurrent requests must use the same expiry with the same Stripe key.
+            db.execute('UPDATE platform_config SET value=?,updated_at=CURRENT_TIMESTAMP WHERE key=? AND value=?',
+                       (json.dumps(record, separators=(',', ':')), key, stored))
+            record = pay.read(db, 'topup:'+oid)
         sku = record.get('supplier_sku') or ''
         membership = sku.startswith('pubgmmuc') or sku in ('pubgmucwmevp-s101','pubgm1ucwdp-s101','pubgm2ucwdp-s101')
         cancel_path = '/top-up/pubg-mobile' + ('?package='+sku if membership else '') if sku else None
         success_path = '/top-up/pubg-mobile?topup_return='+oid + ('&package='+sku if membership else '') if sku else None
-        result = provider.session(oid, order['total_minor'], order['currency'], record['idempotency_key'], kind='topup', expires_at=record['expires_at'], cancel_path=cancel_path, success_path=success_path)
+        result = provider.session(oid, order['total_minor'], order['currency'], record['idempotency_key'], kind='topup', expires_at=record['expires_at'], cancel_path=cancel_path, success_path=success_path, checkout_policy=record.get('checkout_policy',0))
     except Exception as exc:
         raise core['HttpError'](503, 'Stripe test checkout is unavailable. Retry from this order.') from exc
     pay.write(db, 'checkout:'+oid, {'id': result['id'], 'url': result['url'], 'expires_at': result['expires_at']})

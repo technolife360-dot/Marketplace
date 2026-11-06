@@ -31,6 +31,12 @@ def render(path):
         parts.append(f'<section class="info-section" id="{html.escape(section_id, quote=True)}"><h2>{html.escape(section["title"]["en"])}</h2>')
         # Paragraphs and bullets are trusted editorial content containing links.
         parts.extend(f'<p>{paragraph["en"]}</p>' for paragraph in section['paragraphs'])
+        if section.get('status'):
+            parts.append('<p><strong>'+html.escape(section['status']['en'])+'</strong></p>')
+        for method in section.get('methods', ()):
+            parts.append('<h3>'+html.escape(method['title']['en'])+'</h3><p>'
+                         +html.escape(method['description']['en'])+'</p><p>'
+                         +html.escape(' · '.join(method['brands']))+'</p>')
         if section['bullets']:
             parts.append('<ul>'+''.join(f'<li>{bullet["en"]}</li>' for bullet in section['bullets'])+'</ul>')
         parts.append('</section>')

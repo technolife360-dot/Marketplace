@@ -464,12 +464,25 @@ class HTTPWorkflows(unittest.TestCase):
                 titles.add(title)
                 article = re.search(r'<article class="legal-copy">(.*?)</article>', document, re.S).group(1)
                 self.assertIn(heading, article)
+                if path == '/about':
+                    for about_section in ('Who we are', 'For sellers', 'Product and publisher rules', 'Payment status', 'Payment methods'):
+                        self.assertIn(f'<h2>{about_section}</h2>', article)
+                    for payment_label in ('Live payments are currently disabled', 'Visa', 'Mastercard', 'Apple Pay', 'Google Pay', 'FPX', 'GrabPay'):
+                        self.assertIn(payment_label, article)
+                    self.assertNotIn('Top Up catalog', article)
                 self.assertIn(f'rel="canonical" href="{app.public_site_base()}{path}"', document)
                 self.assertIn('id="public-info-content"', document)
-        status, image, headers = self.guest.request('GET', '/static/assets/about-controller.webp')
-        self.assertEqual(status, 200)
-        self.assertEqual(headers['Content-Type'], 'image/webp')
-        self.assertEqual(image[8:12], b'WEBP')
+        assets = (
+            ('/static/assets/about-orbit.webp', 'image/webp', b'WEBP'),
+            ('/static/assets/geist-variable.woff2', 'font/woff2', b'wOF2'),
+            ('/static/vendor/gsap-scrolltrigger-3.14.2.min.js', 'application/javascript; charset=utf-8', b'ScrollTrigger 3.14.2'),
+        )
+        for path, content_type, signature in assets:
+            with self.subTest(asset=path):
+                status, payload, headers = self.guest.request('GET', path)
+                self.assertEqual(status, 200)
+                self.assertEqual(headers['Content-Type'], content_type)
+                self.assertIn(signature, payload)
 
     def test_experience_raw_import_and_store_routes_at_wsgi_boundary(self):
         import csv

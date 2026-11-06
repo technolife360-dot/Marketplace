@@ -216,6 +216,20 @@ class StripeTestFlows(unittest.TestCase):
         self.assertEqual(first.args,second.args)
         self.assertEqual(first.kwargs,second.kwargs)
         self.assertTrue(first.kwargs['options']['idempotency_key'].startswith('checkout:v2:'))
+        self.assertEqual(first.args[0]['adaptive_pricing'], {'enabled':False})
+        self.assertEqual(first.args[0]['excluded_payment_method_types'], ['fpx'])
+        self.assertNotIn('payment_method_types', first.args[0])
+
+    def test_checkout_preserves_existing_attempt_parameters(self):
+        provider = self.configure(); self.order()
+        self.db.execute('DELETE FROM platform_config WHERE key=?', (payments.PREFIX+'checkout:'+self.oid,))
+        payments.write(self.db, 'checkout_attempt:'+self.oid, {
+            'idempotency_key':'legacy_key', 'expires_at':int(time.time())+1800})
+        payments.start_checkout(self.db, self.oid, self.buyer, vars(app))
+        call = provider.client.v1.checkout.sessions.create.call_args
+        self.assertNotIn('adaptive_pricing', call.args[0])
+        self.assertNotIn('excluded_payment_method_types', call.args[0])
+        self.assertEqual(call.kwargs['options']['idempotency_key'], 'checkout:legacy_key')
 
     def test_expired_checkout_releases_stock_restores_cart_once_and_explains_retry(self):
         self.configure(); self.order()
@@ -323,8 +337,13 @@ class StripeTestFlows(unittest.TestCase):
         provider.client.v1.refunds.create.return_value = {'id': 're_fixture', 'status': 'pending'}
         self.assertEqual(payments.process(self.db, vars(app))['jobs'][0]['status'], 'retry')
         self.assertEqual(self.db.execute('SELECT stock FROM listings WHERE id=?', (self.listing,)).fetchone()['stock'], 0)
-        provider.client.v1.refunds.create.return_value = {'id': 're_fixture', 'status': 'succeeded'}
+        refund = {'id':'re_fixture', 'amount':self.session['amount_total'], 'status':'pending'}
+        provider.client.v1.refunds.list.return_value = {'data':[refund], 'has_more':False}
+        self.assertEqual(payments.process(self.db, vars(app))['jobs'][0]['status'], 'retry')
+        provider.client.v1.refunds.create.assert_called_once()
+        refund['status'] = 'succeeded'
         self.assertEqual(payments.process(self.db, vars(app))['jobs'][0]['status'], 'succeeded')
+        provider.client.v1.refunds.create.assert_called_once()
         self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?', (self.oid,)).fetchone()['status'], 'refunded')
         payments.process(self.db, vars(app)); self.pay()
         self.assertEqual(self.db.execute('SELECT stock FROM listings WHERE id=?', (self.listing,)).fetchone()['stock'], 1)
@@ -555,7 +574,12 @@ class StripeTestFlows(unittest.TestCase):
 
     def test_topup_purchase_delivery_confirmation_and_refund_are_test_only(self):
         self.topup_order()
-        price = self.provider.client.v1.checkout.sessions.create.call_args.args[0]['line_items'][0]['price_data']
+        params = self.provider.client.v1.checkout.sessions.create.call_args.args[0]
+        self.assertEqual(params['adaptive_pricing'], {'enabled':False})
+        self.assertNotIn('excluded_payment_method_types', params)
+        self.assertNotIn('payment_method_types', params)
+        self.assertNotIn('transfer_group', params['payment_intent_data'])
+        price = params['line_items'][0]['price_data']
         self.assertEqual(price['unit_amount'], 2000000)
         package = self.db.execute('SELECT stock_on_hand,stock_reserved FROM topup_packages WHERE id=(SELECT package_id FROM topup_orders WHERE id=?)', (self.oid,)).fetchone()
         self.pay()

@@ -42,79 +42,117 @@ body:not(.home-page) .info-page-layout .legal-copy {color:#d4ceca}
 .info-contents a:hover,.info-related a:hover {border-color:#986942}
 .info-related {margin:24px 0 0}
 
+@font-face {
+  font-family: "About Geist";
+  src: url("/static/assets/geist-variable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
 .sl-about {
-  --about-accent:#ff9b5b;
-  --about-muted:#b7b3bf;
-  width:min(100%,1260px);
+  --about-accent:#f8b56f;
+  --about-muted:#b9b6b0;
+  --about-ease:cubic-bezier(.22,1,.36,1);
+  width:min(100%,1440px);
   margin-inline:auto;
-  padding:clamp(28px,5vw,66px) clamp(16px,4vw,48px) clamp(36px,6vw,72px);
+  padding:clamp(12px,2.5vw,34px) clamp(12px,3vw,44px) clamp(48px,8vw,105px);
+  font-family:"About Geist",system-ui,sans-serif;
   overflow-wrap:anywhere;
 }
-.sl-about-hero {text-align:center}
-.sl-about-intro {max-width:740px;margin:0 auto clamp(22px,4vw,42px)}
-.sl-about-kicker {
-  margin:0 0 10px;font-size:11px;font-weight:750;
-  letter-spacing:.17em;text-transform:uppercase;
+.sl-about-hero {
+  position:relative;isolation:isolate;overflow:hidden;
+  border-radius:clamp(24px,4vw,48px);
+  background:radial-gradient(ellipse at 62% 78%,#493421,#141217 58%,#0b0b0e 90%);
 }
+.sl-about-scene,.sl-about-scene::after {position:absolute;inset:0;pointer-events:none}
+.sl-about-scene {z-index:-1;overflow:hidden}
+.sl-about-scene img {display:block;width:100%;height:100%;object-fit:cover;object-position:center 55%}
+.sl-about-scene::after {content:""}
+.sl-about-hero-inner {
+  display:grid;align-content:start;justify-items:center;gap:clamp(38px,6vw,85px);
+  min-height:clamp(520px,56vw,720px);padding:clamp(17px,3vw,36px) 16px 175px;
+  text-align:center;
+}
+.sl-about-nav {
+  display:flex;justify-content:center;flex-wrap:wrap;gap:2px;
+  max-width:100%;padding:3px;border:1px solid;border-radius:30px;
+}
+.sl-about-nav a {
+  display:flex;align-items:center;min-height:44px;padding:5px clamp(8px,1.5vw,20px);
+  border-radius:23px;font-size:12px;font-weight:650;text-decoration:none;
+  transition:background-color .3s var(--about-ease),color .3s var(--about-ease);
+}
+.sl-about-intro {width:min(100%,1080px)}
 .sl-about h1 {
-  margin:0;font-size:clamp(42px,6vw,82px);
-  line-height:1.02;letter-spacing:-.062em;font-weight:800;
+  margin:0;font-weight:790;font-size:clamp(50px,8vw,110px);
+  letter-spacing:-.072em;line-height:.92;
 }
-.sl-about h1 span {white-space:nowrap}
-.sl-about-lead {max-width:49ch;margin:13px auto 17px;font-size:clamp(15px,1.6vw,19px);line-height:1.52}
+.sl-about h1 span {display:block;letter-spacing:-.072em}
+.sl-about-lead {
+  max-width:54ch;margin:21px auto 22px;
+  font-size:clamp(15px,1.65vw,20px);line-height:1.55;
+}
+.sl-about-actions {display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px}
 .sl-about-button {
-  display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:9px;
-  padding:8px 18px;border:1px solid;border-radius:999px;
-  font-size:14px;font-weight:750;text-decoration:none;transition:background-color .18s,border-color .18s;
+  display:inline-flex;align-items:center;justify-content:space-between;gap:11px;
+  min-height:48px;padding:5px 6px 5px 16px;border:1px solid;border-radius:999px;
+  font-size:13px;font-weight:750;text-decoration:none;
+  transition:background-color .35s var(--about-ease),transform .35s var(--about-ease);
 }
-.sl-about-stage {
-  padding:clamp(9px,3vw,31px) clamp(9px,5vw,68px);
-  border:1px solid;border-radius:clamp(19px,4vw,44px);
-  background:radial-gradient(ellipse at 0 100%,#483273,transparent 65%),
-    radial-gradient(ellipse at 100% 95%,#7b3b20,transparent 62%),linear-gradient(180deg,#121018,#20172a);
+[dir="rtl"] .sl-about-button {padding:5px 16px 5px 6px}
+.sl-about-button span {
+  display:grid;place-items:center;width:33px;height:33px;flex:none;border-radius:50%;
+  font-size:16px;transition:transform .35s var(--about-ease);
 }
-.sl-about-showcase {overflow:hidden;border:1px solid;border-radius:16px;text-align:start}
-.sl-about-showcase-bar {
-  display:flex;align-items:center;justify-content:space-between;gap:9px;
-  min-height:48px;padding:8px clamp(10px,2vw,20px);
+.sl-about-button:hover span {transform:translateX(2px) rotate(-8deg)}
+.sl-about-button:active {transform:scale(.97)}
+.sl-about-platform,.sl-about-purpose,.sl-about-trust,.sl-about-contact {width:min(100%,1140px);margin:clamp(56px,8vw,118px) auto 0}
+.sl-about-heading {margin:0 0 23px}
+.sl-about h2 {margin:0;font-size:clamp(33px,5vw,66px);font-weight:780;letter-spacing:-.067em;line-height:1.02}
+.sl-about-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.sl-about-card {
+  display:flex;flex-direction:column;align-items:flex-start;min-width:0;
+  padding:clamp(17px,2.5vw,29px);border:1px solid;border-radius:20px;
 }
-.sl-about-showcase-bar strong {font-size:clamp(15px,2vw,23px);letter-spacing:-.04em;white-space:nowrap}
-.sl-about-showcase-bar a,.sl-about-showcase-label {font-size:12px}
-.sl-about-showcase-bar a {display:inline-flex;align-items:center;gap:5px;min-height:34px;text-underline-offset:4px}
-.sl-about-art {position:relative;isolation:isolate;min-height:clamp(132px,23vw,270px);display:flex;align-items:end;overflow:hidden}
-.sl-about-art img {position:absolute;inset-block:0;inset-inline-end:0;width:73%;height:100%;object-fit:cover;object-position:center 44%}
-.sl-about-art::after {content:"";position:absolute;inset:0;pointer-events:none}
-[dir="rtl"] .sl-about-art::after {transform:scaleX(-1)}
-.sl-about-art p {position:relative;z-index:1;max-width:14ch;margin:0;padding:clamp(11px,2.5vw,28px);font-size:clamp(19px,3.5vw,43px);font-weight:800;line-height:1.05;letter-spacing:-.04em}
-.sl-about-games {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;list-style:none;margin:0;padding:9px}
-.sl-about-games a {display:flex;align-items:center;gap:8px;min-height:44px;padding:5px;border:1px solid;border-radius:9px;font-size:12px;font-weight:650;text-decoration:none}
-.sl-about-games img {display:block;flex:none;width:34px;height:34px;border-radius:6px;object-fit:cover}
-.sl-about-platform,.sl-about-purpose,.sl-about-contact {margin-top:clamp(25px,4.5vw,58px)}
-.sl-about-platform {padding:clamp(20px,4vw,46px);border-radius:clamp(20px,3vw,38px) 8px;text-align:center}
-.sl-about-heading {margin:0 auto 19px;text-align:center}
-.sl-about-heading h2,.sl-about-contact h2 {margin:0;font-size:clamp(26px,4vw,48px);line-height:1.08;letter-spacing:-.045em;font-weight:780}
-.sl-about-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;text-align:start}
-.sl-about-purpose .sl-about-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
-.sl-about-card {display:flex;flex-direction:column;align-items:flex-start;min-width:0;padding:clamp(13px,2vw,23px);border:1px solid;border-radius:14px}
-.sl-about-card svg {width:24px;height:24px;margin-bottom:10px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.sl-about-card h3 {margin:0;font-size:clamp(16px,2vw,21px);font-weight:750;line-height:1.18}
-.sl-about-card p,.sl-about-contact p {margin:7px 0 0;font-size:14px;line-height:1.55}
-.sl-about-card a {display:inline-flex;align-items:center;gap:7px;min-height:44px;margin-top:auto;font-size:13px;font-weight:750;text-underline-offset:3px}
-.sl-about-status {margin:13px 0 0;font-size:12px}
+.sl-about-card h3,.sl-about-principles h3 {margin:0;font-size:clamp(20px,2.1vw,28px);font-weight:730;letter-spacing:-.045em;line-height:1.1}
+.sl-about-card p,.sl-about-principles p,.sl-about-purpose header p,.sl-about-contact p {margin:10px 0 0;font-size:15px;line-height:1.58}
+.sl-about-link,.sl-about-email {display:inline-flex;align-items:center;gap:8px;min-height:44px;font-size:13px;font-weight:700;text-underline-offset:4px}
+.sl-about-link {margin-top:auto;padding-top:8px}
+.sl-about-purpose,.sl-about-trust {
+  display:grid;grid-template-columns:minmax(0,.78fr) minmax(0,1.22fr);
+  gap:clamp(18px,5vw,80px);padding-top:clamp(21px,4vw,47px);border-top:1px solid;
+}
+.sl-about-purpose header p {max-width:49ch}
+.sl-about-principles {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.sl-about-principles article {min-width:0;padding-inline-start:14px;border-inline-start:1px solid}
 .sl-about-contact {
-  padding:clamp(23px,4vw,48px) 14px;border:1px solid;border-radius:24px;text-align:center;
-  background:repeating-linear-gradient(90deg,transparent 0 39px,#ffffff0a 39px 40px),
-    repeating-linear-gradient(0deg,transparent 0 39px,#ffffff0a 39px 40px),
-    radial-gradient(ellipse at 50% 140%,#793c42,transparent 70%),linear-gradient(180deg,#101013,#21141b);
+  display:flex;align-items:end;justify-content:space-between;gap:24px;
+  padding:clamp(20px,5vw,60px);border-radius:clamp(24px,4vw,42px);
+  background:radial-gradient(ellipse at 90% 145%,#77452e,transparent 67%),linear-gradient(130deg,#191417,#100e10);
 }
-.sl-about-contact p {max-width:53ch;margin-inline:auto}
-.sl-about-contact-links {display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:9px 17px;margin-top:16px}
-.sl-about-email {display:inline-flex;align-items:center;min-height:44px;font-size:14px;text-underline-offset:4px}
-.sl-about-revealed {animation:sl-about-rise .45s cubic-bezier(.2,.65,.3,1) both}
-@keyframes sl-about-rise {
-  from {opacity:.4;transform:translateY(16px)}
-  to {opacity:1;transform:translateY(0)}
+.sl-about-contact .sl-about-actions {justify-content:flex-end}
+.sl-about-payments {
+  width:min(100%,1140px);margin:clamp(56px,8vw,118px) auto 0;
+  padding:clamp(18px,5vw,66px);border-radius:clamp(24px,5vw,52px) 10px clamp(24px,5vw,52px) 10px;
+  scroll-margin-top:120px;
 }
+.sl-about-payments header {text-align:center;margin:0 auto clamp(22px,4vw,46px);max-width:650px}
+.sl-about-payments header p {margin:13px auto 0;font-size:15px;line-height:1.55}
+.sl-about-payments .sl-payment-status {
+  display:inline-flex;align-items:center;gap:8px;margin:0 0 14px;padding:5px 12px;border-radius:999px;
+  font-size:12px;font-weight:720;
+}
+.sl-payment-status::before {content:"";width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.sl-payment-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.sl-payment-card {
+  display:flex;flex-direction:column;align-items:flex-start;min-width:0;
+  padding:clamp(15px,2.5vw,26px);border:1px solid;border-radius:18px;
+}
+.sl-payment-card svg {box-sizing:content-box;padding:8px;border-radius:11px;margin-bottom:14px}
+.sl-payment-card h3 {margin:0;font-size:clamp(18px,2.1vw,24px);line-height:1.16;letter-spacing:-.035em}
+.sl-payment-card p {margin:7px 0 14px;font-size:14px;line-height:1.5}
+.sl-payment-brands {display:flex;flex-wrap:wrap;gap:6px;margin:auto 0 0;padding:0;list-style:none}
+.sl-payment-brands li {padding:5px 10px;border:1px solid;border-radius:7px;font-size:12px;font-weight:740;line-height:1.35}
 
 @media (max-width:840px) {
   .info-page-header {margin-bottom:18px;padding:22px 17px}
@@ -122,45 +160,48 @@ body:not(.home-page) .info-page-layout .legal-copy {color:#d4ceca}
   .info-topics {display:flex;flex-wrap:wrap;gap:6px;padding:0;border:0}
   .info-topics a {padding:7px 11px;border:1px solid var(--info-rule)}
 }
+@media (max-width:740px) {
+  .sl-about-hero-inner {min-height:510px;gap:50px;padding-bottom:130px}
+  .sl-about-scene img {object-position:56% center}
+  .sl-about-grid,.sl-about-purpose,.sl-about-trust {grid-template-columns:minmax(0,1fr)}
+  .sl-about-contact {display:block}
+  .sl-about-contact .sl-about-actions {justify-content:flex-start;margin-top:16px}
+}
+@media (max-width:390px) {
+  .sl-about-nav a {padding-inline:7px;font-size:11px}
+  .sl-about-principles {grid-template-columns:minmax(0,1fr)}
+}
 @media (max-width:560px) {
-  .sl-about-grid,.sl-about-purpose .sl-about-grid {grid-template-columns:minmax(0,1fr)}
-  .sl-about-showcase-label {display:none}
-  .sl-about-games {grid-template-columns:repeat(2,minmax(0,1fr))}
-  .sl-about-games img {width:29px;height:29px}
-  .sl-about-art img {width:80%}
+  .sl-payment-grid {grid-template-columns:minmax(0,1fr)}
 }
 @media (prefers-reduced-motion:reduce) {
-  .sl-about-revealed {animation:none}
-  .sl-about-button {transition:none}
+  .sl-about :is(.sl-about-nav a,.sl-about-button,.sl-about-button span) {transition:none}
+  .sl-about :is(.sl-about-button:active,.sl-about-button:hover span) {transform:none}
 }
-
 @layer sentryloot-theme {
   body #app .info-topics a[aria-current="page"] {background-color:#2d231b!important;color:#ffe1c5!important}
-  body #app .info-category,body #app .sl-about :is(.sl-about-kicker,.sl-about-showcase-bar strong span,h1 span) {color:var(--about-accent,#ffc68e)!important}
-  body #app .sl-about :is(.sl-about-lead,.sl-about-showcase-label,.sl-about-purpose .sl-about-card p,.sl-about-contact p) {color:var(--about-muted)!important}
-  body #app .sl-about .sl-about-stage {border-color:#443143!important}
-  body #app .sl-about .sl-about-showcase {background-color:#111116!important;border-color:#584457!important}
-  body #app .sl-about .sl-about-showcase-bar {background-color:#201a25!important}
-  body #app .sl-about .sl-about-art {background-color:#0c0b11!important}
-  body #app .sl-about .sl-about-art::after {background-image:linear-gradient(90deg,#0c0b11 14%,#0c0b11e0 27%,transparent 66%),linear-gradient(0deg,#0c0b11a3,transparent 54%)!important}
-  body #app .sl-about .sl-about-games a {background-color:#1d1a23!important;border-color:#332b3a!important}
-  body #app .sl-about .sl-about-games a:hover {border-color:#b16f58!important}
-  body #app .sl-about .sl-about-platform {background-color:#f9f7f4!important}
-  body #app .sl-about .sl-about-platform :is(h2,h3,svg) {color:#211c21!important}
-  body #app .sl-about .sl-about-platform :is(p,a) {color:#55434f!important}
-  body #app .sl-about .sl-about-platform .sl-about-kicker {color:#87452c!important}
-  body #app .sl-about .sl-about-platform .sl-about-card {background-color:#efebeb!important;border-color:#e7dfe1!important}
-  body #app .sl-about .sl-about-purpose .sl-about-card {background-color:#17161b!important;border-color:#2d2834!important}
-  body #app .sl-about .sl-about-purpose svg {color:#ffac79!important}
-  body #app .sl-about .sl-about-contact {border-color:#593440!important}
-  body #app .sl-about .sl-about-button,body #app .sl-about .sl-about-button span {color:#1e100c!important}
-  body #app .sl-about .sl-about-button {background-color:#ffa873!important;border-color:#ffa873!important}
-  body #app .sl-about .sl-about-button:hover {background-color:#ffd3b6!important;border-color:#ffd3b6!important}
-  body #app .sl-about a:focus-visible {outline-color:#b76c42!important}
+  body #app .info-category {color:#ffc68e!important}
+  body #app .sl-about .sl-about-scene::after {background-image:linear-gradient(180deg,#08080ad9 1%,#08080abf 31%,#08080a5c 62%,#08080a00 87%),radial-gradient(ellipse at center,#08080a5e,transparent 74%)!important}
+  body #app .sl-about .sl-about-nav {background-color:#17151adb!important;border-color:#555057!important}
+  body #app .sl-about .sl-about-nav a:hover {background-color:#333038!important}
+  body #app .sl-about h1 span {color:var(--about-accent)!important}
+  body #app .sl-about :is(.sl-about-card p,.sl-about-purpose header p,.sl-about-principles p,.sl-about-contact p) {color:var(--about-muted)!important}
+  body #app .sl-about .sl-about-lead {color:#e2dad0!important}
+  body #app .sl-about .sl-about-card {background-color:#1b181d!important;border-color:#332d36!important}
+  body #app .sl-about :is(.sl-about-purpose,.sl-about-trust,.sl-about-principles article) {border-color:#3b3032!important}
+  body #app .sl-about .sl-about-button {background-color:#f6d0a5!important;border-color:#f6d0a5!important;color:#18100a!important}
+  body #app .sl-about .sl-about-button span {background-color:#17100e1a!important;color:#18100a!important}
+  body #app .sl-about .sl-about-button:hover {background-color:#ffe4c4!important}
+  body #app .sl-about a:focus-visible {outline-color:#f3b277!important}
+  body #app .sl-about .sl-about-payments {background:#f8f3ed!important}
+  body #app .sl-about .sl-about-payments :is(h2,h3,.sl-payment-brands li) {color:#201812!important}
+  body #app .sl-about .sl-about-payments p:not(.sl-payment-status) {color:#594e46!important}
+  body #app .sl-about .sl-payment-status {color:#773a13!important;background:#f3e1cf!important}
+  body #app .sl-about .sl-payment-card {background:#fffdfa!important;border-color:#e5d9cc!important}
+  body #app .sl-about .sl-payment-card svg {color:#773a13!important;background:#f5e8db!important}
+  body #app .sl-about .sl-payment-brands li {background:#f8f3ed!important;border-color:#e5d9cc!important}
   @media (max-width:840px) {
-    body.mobile-site #app .sl-about h1 {
-      font-size:clamp(40px,9.7vw,65px)!important;line-height:1.02!important;letter-spacing:-.06em!important;
-    }
-    body.mobile-site #app .sl-about h2 {font-size:24px!important;line-height:1.16!important}
+    body.mobile-site #app .sl-about h1 {font-size:clamp(44px,10.5vw,77px)!important;line-height:.96!important;letter-spacing:-.06em!important}
+    body.mobile-site #app .sl-about h2 {font-size:clamp(28px,6.8vw,43px)!important;line-height:1.06!important;letter-spacing:-.05em!important}
   }
 }

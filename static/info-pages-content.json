@@ -930,42 +930,29 @@
         "en": "We are SentryLoot"
       },
       "lead": {
-        "uz": "O‘yinchilar va sotuvchilar uchun raqamli o‘yin mahsulotlari maydoni.",
-        "ru": "Площадка цифровых игровых товаров для игроков и продавцов.",
-        "en": "A marketplace for players, sellers and digital game goods."
+        "uz": "SentryLoot raqamli o‘yin mahsulotlarini qidirayotgan xaridorlar va ularni taklif qiladigan mustaqil sotuvchilar uchun marketplace.",
+        "ru": "SentryLoot — маркетплейс цифровых игровых товаров для покупателей и независимых продавцов.",
+        "en": "SentryLoot is a marketplace for people looking for digital game goods and independent sellers who offer them."
       },
       "sections": [
         {
+          "id": "about-purpose",
           "title": {
-            "uz": "Top Up katalogi",
-            "ru": "Каталог пополнений",
-            "en": "Top Up catalog"
+            "uz": "Biz kimmiz",
+            "ru": "Кто мы",
+            "en": "Who we are"
           },
           "paragraphs": [
             {
-              "uz": "O‘yin, hudud va paketni bir joyda ko‘rib chiqing. Xarid ochilganda paket, valyuta va kerakli o‘yinchi ma’lumotlari buyurtma tasdiqlanishidan oldin ko‘rsatiladi.",
-              "ru": "Сравнивайте игры, регионы и пакеты в одном каталоге. Когда покупки станут доступны, до подтверждения заказа будут видны пакет, валюта и необходимые данные игрока.",
-              "en": "Explore games, regions and packages in one catalog. When checkout opens, the package, payment currency and required player details will be shown before confirmation."
+              "uz": "SentryLoot xaridorlarga takliflarni solishtirish, sotuvchilarga esa e’lonlarini boshqarish uchun joy beradi. Sotuvchi mahsulot tavsifi va yetkazish shartlari uchun javobgar. Platforma e’lon qoidalari, buyurtma tarixi va yordam yo‘llarini yuritadi.",
+              "ru": "SentryLoot помогает покупателям сравнивать предложения, а продавцам — управлять объявлениями. Продавцы отвечают за описание товара и условия доставки. Площадка ведёт правила размещения, историю заказов и каналы поддержки.",
+              "en": "SentryLoot gives buyers a place to compare offers and sellers a place to manage their listings. Sellers are responsible for their product descriptions and delivery terms. We provide marketplace rules, order history and ways to get help."
             }
           ],
           "bullets": []
         },
         {
-          "title": {
-            "uz": "Marketplace",
-            "ru": "Маркетплейс",
-            "en": "Marketplace"
-          },
-          "paragraphs": [
-            {
-              "uz": "Mustaqil sotuvchilar raqamli o‘yin mahsulotlarini e’lon qiladi. Xaridor tavsif, narx, hudud va yetkazish shartlarini taqqoslay oladi.",
-              "ru": "Независимые продавцы размещают цифровые игровые товары. Покупатель может сравнить описание, цену, регион и условия доставки.",
-              "en": "Independent sellers list digital game goods. Buyers can compare the description, price, region and delivery details."
-            }
-          ],
-          "bullets": []
-        },
-        {
+          "id": "mission",
           "title": {
             "uz": "Vazifamiz",
             "ru": "Наша миссия",
@@ -973,14 +960,15 @@
           },
           "paragraphs": [
             {
-              "uz": "O‘yin mahsulotini tanlashda aniq ma’lumot berish. Xaridor nimani olayotganini, sotuvchi qanday shartlarga amal qilishini va muammo bo‘lsa qayerga murojaat etishni bilishi kerak.",
-              "ru": "Давать понятную информацию при выборе игрового товара. Покупатель должен знать, что получает, какие правила действуют для продавца и куда обратиться за помощью.",
-              "en": "Make it clear what buyers receive, what sellers are responsible for and where either side can turn for help."
+              "uz": "Xariddan oldin mahsulot, narx va yetkazish shartlarini tushunishni, muammo chiqqanda esa yordam topishni osonlashtirish.",
+              "ru": "Упростить проверку товара, цены и условий доставки до покупки и поиск помощи, если возникла проблема.",
+              "en": "Make it easier to understand the item, price and delivery terms before buying, and to find help when something goes wrong."
             }
           ],
           "bullets": []
         },
         {
+          "id": "vision",
           "title": {
             "uz": "Maqsadimiz",
             "ru": "Наше видение",
@@ -988,14 +976,184 @@
           },
           "paragraphs": [
             {
-              "uz": "O‘yin mahsulotlari uchun tushunarli katalog, aniq yetkazish shartlari va yordam yo‘li bor marketplace qurish.",
-              "ru": "Создать маркетплейс игровых товаров с понятным каталогом, ясными условиями доставки и доступной поддержкой.",
-              "en": "Build a game marketplace with an easy-to-browse catalog, clear delivery terms and accessible support."
+              "uz": "Mustaqil sotuvchilar uchun qoidalari ravshan, xaridorlar uchun takliflari taqqoslanadigan o‘yin marketplace’ini rivojlantirish.",
+              "ru": "Развивать игровой маркетплейс с понятными правилами для независимых продавцов и сопоставимыми предложениями для покупателей.",
+              "en": "Build a game marketplace with clear rules for independent sellers and offers buyers can compare."
             }
           ],
           "bullets": []
         },
         {
+          "id": "about-platform",
+          "title": {
+            "uz": "Xaridorlar uchun",
+            "ru": "Для покупателей",
+            "en": "For buyers"
+          },
+          "paragraphs": [
+            {
+              "uz": "Takliflarni ko‘ring va mahsulot, hudud, narx hamda yetkazish shartlarini solishtiring. Buyurtma bo‘yicha murojaat qilganda buyurtma raqamini ko‘rsating.",
+              "ru": "Сравнивайте товары, регионы, цены и условия доставки. При обращении по заказу укажите его номер.",
+              "en": "Compare offers by item, region, price and delivery terms. Include the order reference when asking for help with an order."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "id": "sellers",
+          "title": {
+            "uz": "Sotuvchilar uchun",
+            "ru": "Для продавцов",
+            "en": "For sellers"
+          },
+          "paragraphs": [
+            {
+              "uz": "Sotuvchilar e’lonni moderatsiyaga yuboradi. Tavsif, hudud va yetkazish shartlarini aniq ko‘rsatish hamda mahsulotni sotishga huquqi borligini tekshirish ularning zimmasida.",
+              "ru": "Продавцы отправляют объявления на модерацию. Они указывают точное описание, регион и условия доставки и проверяют своё право на продажу.",
+              "en": "Sellers submit listings for review. They are responsible for accurate descriptions, region and delivery terms, and for checking that they have the right to sell the item."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "id": "support",
+          "title": {
+            "uz": "Buyurtma bo‘yicha yordam",
+            "ru": "Помощь с заказом",
+            "en": "Order support"
+          },
+          "paragraphs": [
+            {
+              "uz": "Yetkazilmagan yoki tavsifga mos kelmagan buyurtma bo‘yicha yordamga murojaat qilish mumkin. Nizo sahifasida qanday dalil yuborish va ko‘rib chiqish tartibi tushuntirilgan.",
+              "ru": "По недоставленному заказу или товару, который не соответствует описанию, можно обратиться в поддержку. Политика разрешения споров объясняет, какие материалы нужны и как рассматривается обращение.",
+              "en": "Contact support about an order that has not arrived or does not match its description. The dispute policy explains what evidence to send and how the case is reviewed."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "id": "about-trust",
+          "title": {
+            "uz": "Mahsulot va noshir qoidalari",
+            "ru": "Правила товаров и издателей",
+            "en": "Product and publisher rules"
+          },
+          "paragraphs": [
+            {
+              "uz": "E’lonlar platforma qoidalari asosida ko‘rib chiqiladi. O‘yin noshiri akkaunt yoki buyumni sotish va boshqa odamga o‘tkazishni cheklashi mumkin. Tegishli noshir qoidalarini tekshiring.",
+              "ru": "Объявления проверяются по правилам площадки. Издатели могут ограничивать продажу и передачу аккаунтов или предметов. Проверяйте правила конкретного издателя.",
+              "en": "Listings are reviewed against marketplace rules. A publisher may restrict the sale or transfer of accounts or items. Check the relevant publisher rules."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "id": "payments",
+          "title": {
+            "uz": "To‘lov holati",
+            "ru": "Статус платежей",
+            "en": "Payment status"
+          },
+          "paragraphs": [
+            {
+              "uz": "SentryLoot’da real to‘lovlar hozir yopiq. Kimdir sizdan sayt tashqarisida pul o‘tkazishni so‘rasa, bu haqda yordam xizmatiga yozing.",
+              "ru": "Реальные платежи в SentryLoot пока отключены. Сообщите в поддержку, если вас просят заплатить за пределами площадки.",
+              "en": "Live payments on SentryLoot are currently disabled. If someone asks you to pay outside the site, report it to support."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "id": "about-payments",
+          "title": {
+            "uz": "To‘lov usullari",
+            "ru": "Способы оплаты",
+            "en": "Payment methods"
+          },
+          "status": {
+            "uz": "Real to‘lovlar hozir yopiq",
+            "ru": "Реальные платежи пока отключены",
+            "en": "Live payments are currently disabled"
+          },
+          "paragraphs": [
+            {
+              "uz": "Stripe Malayziyada quyidagi usullarni qo‘llaydi. SentryLoot’da qaysi usul ko‘rinishi buyurtma turi, valyuta, qurilma va Stripe hisobining tasdiqlangan sozlamalariga bog‘liq.",
+              "ru": "Stripe поддерживает эти способы в Малайзии. Доступность на SentryLoot зависит от типа заказа, валюты, устройства и подтверждённых настроек аккаунта Stripe.",
+              "en": "Stripe supports these options in Malaysia. Availability on SentryLoot depends on the order type, currency, device and approved Stripe account settings."
+            }
+          ],
+          "bullets": [],
+          "methods": [
+            {
+              "icon": "card",
+              "title": {
+                "uz": "Bank kartalari",
+                "ru": "Банковские карты",
+                "en": "Credit and debit cards"
+              },
+              "description": {
+                "uz": "Karta bilan Stripe Checkout sahifasida to‘lash.",
+                "ru": "Оплата банковской картой на странице Stripe Checkout.",
+                "en": "Pay by card on the Stripe Checkout page."
+              },
+              "brands": [
+                "Visa",
+                "Mastercard"
+              ]
+            },
+            {
+              "icon": "device",
+              "title": {
+                "uz": "Telefon orqali to‘lov",
+                "ru": "Оплата с телефона",
+                "en": "Device wallets"
+              },
+              "description": {
+                "uz": "Mos qurilmada saqlangan kartangiz bilan to‘lash.",
+                "ru": "Оплата сохранённой картой на совместимом устройстве.",
+                "en": "Pay with a saved card on a compatible device."
+              },
+              "brands": [
+                "Apple Pay",
+                "Google Pay"
+              ]
+            },
+            {
+              "icon": "bank",
+              "title": {
+                "uz": "Malayziya internet banki",
+                "ru": "Интернет-банкинг Малайзии",
+                "en": "Malaysian online banking"
+              },
+              "description": {
+                "uz": "MYR’da bank sahifasida tasdiqlanadi. Marketplace’da mavjudligi sotuvchiga pul o‘tkazish modeliga bog‘liq.",
+                "ru": "Подтверждение в банке, в MYR. Для площадки доступность зависит от схемы расчётов с продавцами.",
+                "en": "Approve in your bank in MYR. Marketplace availability depends on how seller payments are handled."
+              },
+              "brands": [
+                "FPX"
+              ]
+            },
+            {
+              "icon": "wallet",
+              "title": {
+                "uz": "Mahalliy elektron hamyon",
+                "ru": "Местный электронный кошелёк",
+                "en": "Local e-wallet"
+              },
+              "description": {
+                "uz": "Malayziyadagi mijozlar uchun MYR’da GrabPay orqali to‘lash.",
+                "ru": "Оплата через GrabPay в MYR для покупателей из Малайзии.",
+                "en": "Pay in MYR with GrabPay as a customer in Malaysia."
+              },
+              "brands": [
+                "GrabPay"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "about-contact",
           "title": {
             "uz": "SentryLoot bilan bog‘laning",
             "ru": "Свяжитесь с SentryLoot",
@@ -1003,16 +1161,16 @@
           },
           "paragraphs": [
             {
-              "uz": "Mahsulot, e’lon yoki buyurtma bo‘yicha savollaringizni yordam jamoasiga yuboring.",
-              "ru": "По вопросам товаров, объявлений или заказов обращайтесь в службу поддержки.",
-              "en": "Contact support with questions about a product, listing or order."
+              "uz": "Platforma, e’lon yoki buyurtma haqida savolingiz bo‘lsa, yordam xizmatiga yozing. Ommaviy biznes va aloqa ma’lumotlari Aloqa sahifasida beriladi.",
+              "ru": "Напишите в поддержку с вопросами о площадке, объявлении или заказе. Публичные данные компании и контакты доступны на странице контактов.",
+              "en": "Contact support with questions about the platform, a listing or an order. Find public business and support details on the Contact page."
             }
           ],
           "bullets": []
         }
       ],
       "path": "/about",
-      "showSalesNotice": true,
+      "showSalesNotice": false,
       "metadataTitle": {
         "uz": "Biz haqimizda",
         "ru": "О нас",

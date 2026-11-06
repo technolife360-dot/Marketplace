@@ -12,7 +12,9 @@
   const payload = document.getElementById('public-info-content');
   const initial = payload ? JSON.parse(payload.textContent) : null;
   let library;
-  let observer;
+  let motionEngine;
+  let aboutMotion;
+  let motionVersion = 0;
 
   const buy = {
     title:t('Xarid va sotuv','Покупка и продажа','Buy & Sell'),
@@ -51,7 +53,7 @@
 
   async function load(route) {
     if (initial?.route === route) return initial;
-    library ??= fetch('/static/info-pages-content.json?v=2').then(response => {
+    library ??= fetch('/static/info-pages-content.json?v=4').then(response => {
       if (!response.ok) throw new Error('Could not load the information page.');
       return response.json();
     }).catch(error => {
@@ -62,78 +64,104 @@
     return { ...content, page: content.pages[route] };
   }
 
-  function about(page, notice, lang) {
-    const [topup, market, mission, vision, contact] = page.sections;
-    const copy = entry => `<h3>${pick(entry.title,lang)}</h3><p>${pick(entry.paragraphs[0],lang)}</p>`;
-    const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
+  function about(page, lang) {
+    const sections = Object.fromEntries(page.sections.map(section=>[section.id,section]));
+    const title = id => pick(sections[id].title,lang);
+    const paragraph = id => `<p>${pick(sections[id].paragraphs[0],lang)}</p>`;
+    const copy = id => `<h3>${title(id)}</h3>${paragraph(id)}`;
+    const link = (href, label) => `<a class="sl-about-link" href="${href}">${label} <span aria-hidden="true">↗</span></a>`;
+    const button = (href, label, arrow) => `<a class="sl-about-button" href="${href}">${label} <span aria-hidden="true">${arrow}</span></a>`;
+    const marketplace = pick(t('Marketplace qanday ishlaydi','Как работает площадка','How the marketplace works'),lang);
+    const trustTitle = pick(t('Qoidalar va xavfsizlik','Правила и безопасность','Rules and safety'),lang);
+    const contact = pick(help.links[4][1],lang);
+    const payments = sections['about-payments'];
+    const paymentIcons = {
+      card: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M7 15h4"/>',
+      device: '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="m9 11 2 2 4-4m-4 9h2"/>',
+      bank: '<path d="M3 9h18L12 3 3 9Zm0 12h18M6 12v6m6-6v6m6-6v6"/>',
+      wallet: '<path d="M21 10V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3m-5-2h.01"/><path d="M16 10h5v4h-5a2 2 0 1 1 0-4Z"/>',
+    };
     const heading = pick(page.title,lang).replace('SentryLoot','<span>SentryLoot</span>');
-    const games = [
-      ['pubg-mobile','PUBG Mobile'], ['mobile-legends','Mobile Legends'],
-      ['free-fire','Free Fire'], ['honor-of-kings','Honor of Kings'],
-    ];
     return `<div class="sl-about" data-info-route="about">
-      <section class="sl-about-hero">
-        <header class="sl-about-intro">
-          <p class="sl-about-kicker">${pick(t('Biz haqimizda','О нас','About us'),lang)}</p>
-          <h1>${heading}</h1>
-          <p class="sl-about-lead">${pick(page.lead,lang)}</p>
-          <a class="sl-about-button" href="#about-platform">${pick(t('Platformani ko‘ring','О платформе','Explore the platform'),lang)} <span aria-hidden="true">↓</span></a>
-        </header>
-        <div class="sl-about-stage">
-          <div class="sl-about-showcase">
-            <div class="sl-about-showcase-bar">
-              <strong>Sentry<span>Loot</span></strong>
-              <span class="sl-about-showcase-label">${pick(t('O‘yin katalogidan','Из игрового каталога','From the game catalog'),lang)}</span>
-              <a href="/top-up">${pick(buy.links[2][1],lang)} <span aria-hidden="true">↗</span></a>
+      <section class="sl-about-hero" aria-labelledby="about-title">
+        <div class="sl-about-scene" aria-hidden="true">
+          <img src="/static/assets/about-orbit.webp" width="1440" height="960" alt="" fetchpriority="high" data-about-depth>
+        </div>
+        <div class="sl-about-hero-inner">
+          <nav class="sl-about-nav" aria-label="${pick(page.metadataTitle||page.title,lang)}">
+            <a href="#about-purpose">${title('about-purpose')}</a>
+            <a href="#about-platform">Marketplace</a>
+            <a href="#about-trust">${pick(t('Qoidalar','Правила','Rules'),lang)}</a>
+            <a href="#about-payments">${pick(t('To‘lovlar','Оплата','Payments'),lang)}</a>
+            <a href="#about-contact">${contact}</a>
+          </nav>
+          <div class="sl-about-intro">
+            <h1 id="about-title" data-about-intro>${heading}</h1>
+            <p class="sl-about-lead" data-about-intro>${pick(page.lead,lang)}</p>
+            <div class="sl-about-actions" data-about-intro>
+              ${button('#about-purpose',title('about-purpose'),'↓')}
             </div>
-            <div class="sl-about-art">
-              <img src="/static/assets/about-controller.webp" width="1200" height="800" alt="" fetchpriority="high">
-              <p>${pick(t('O‘yinlar. Paketlar. Marketplace.','Игры. Пополнения. Маркетплейс.','Games. Top Ups. Marketplace.'),lang)}</p>
-            </div>
-            <ul class="sl-about-games">
-              ${games.map(([slug,name])=>`<li><a href="/top-up/${slug}">
-                <img src="/static/assets/game-art/${slug}-640.webp" width="64" height="64" alt="">
-                <span>${name}</span>
-              </a></li>`).join('')}
-            </ul>
           </div>
         </div>
       </section>
+
+      <section class="sl-about-purpose" id="about-purpose" aria-labelledby="about-purpose-title" tabindex="-1">
+        <header data-about-reveal><h2 id="about-purpose-title">${title('about-purpose')}</h2>${paragraph('about-purpose')}</header>
+        <div class="sl-about-principles">
+          <article data-about-reveal>${copy('mission')}</article>
+          <article data-about-reveal>${copy('vision')}</article>
+        </div>
+      </section>
+
       <section class="sl-about-platform" id="about-platform" aria-labelledby="about-platform-title" tabindex="-1">
-        <header class="sl-about-heading" data-about-reveal>
-          <p class="sl-about-kicker">${pick(t('Platforma','Платформа','The platform'),lang)}</p>
-          <h2 id="about-platform-title">${pick(t('SentryLoot qanday ishlaydi','Как работает SentryLoot','How SentryLoot works'),lang)}</h2>
-        </header>
+        <header class="sl-about-heading" data-about-reveal><h2 id="about-platform-title">${marketplace}</h2></header>
         <div class="sl-about-grid">
           <article class="sl-about-card" data-about-reveal>
-            ${icon('search')}${copy(topup)}
-            <a href="/top-up">${pick(buy.links[2][1],lang)} <span aria-hidden="true">→</span></a>
+            ${copy('about-platform')}
+            ${link('/guide',pick(buy.links[3][1],lang))}
           </article>
           <article class="sl-about-card" data-about-reveal>
-            ${icon('cart')}${copy(market)}
-            <a href="/browse">${pick(buy.links[0][1],lang)} <span aria-hidden="true">→</span></a>
+            ${copy('sellers')}
+            ${link('/seller-policy',pick(trust.links[2][1],lang))}
           </article>
           <article class="sl-about-card" data-about-reveal>
-            ${icon('message')}<h3>${pick(help.links[0][1],lang)}</h3><p>${pick(contact.paragraphs[0],lang)}</p>
-            <a href="/support">${pick(t('Yordam olish','Получить помощь','Get help'),lang)} <span aria-hidden="true">→</span></a>
+            ${copy('support')}
+            ${link('/disputes',pick(trust.links[6][1],lang))}
           </article>
         </div>
-        <p class="sl-about-status">${pick(notice,lang)}</p>
       </section>
-      <section class="sl-about-purpose" id="about-purpose" aria-labelledby="about-purpose-title">
-        <header class="sl-about-heading" data-about-reveal>
-          <h2 id="about-purpose-title">${pick(t('Vazifamiz va maqsadimiz','Наша миссия и видение','Our mission and vision'),lang)}</h2>
+
+      <section class="sl-about-trust" id="about-trust" aria-labelledby="about-trust-title" tabindex="-1">
+        <header data-about-reveal><h2 id="about-trust-title">${trustTitle}</h2></header>
+        <div class="sl-about-principles">
+          <article data-about-reveal>${copy('about-trust')}${link('/policies',pick(trust.links[1][1],lang))}</article>
+          <article data-about-reveal>${copy('payments')}${link('/help/payments',pick(help.links[2][1],lang))}</article>
+        </div>
+      </section>
+
+      <section class="sl-about-payments" id="about-payments" aria-labelledby="about-payments-title" tabindex="-1">
+        <header data-about-reveal>
+          <p class="sl-payment-status">${pick(payments.status,lang)}</p>
+          <h2 id="about-payments-title">${title('about-payments')}</h2>
+          ${paragraph('about-payments')}
         </header>
-        <div class="sl-about-grid">
-          <article class="sl-about-card" data-about-reveal>${icon('shield')}${copy(mission)}</article>
-          <article class="sl-about-card" data-about-reveal>${icon('check')}${copy(vision)}</article>
+        <div class="sl-payment-grid">
+          ${payments.methods.map(method => `<article class="sl-payment-card" data-about-reveal>
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paymentIcons[method.icon]}</svg>
+            <h3>${pick(method.title,lang)}</h3>
+            <p>${pick(method.description,lang)}</p>
+            <ul class="sl-payment-brands" role="list">${method.brands.map(brand => `<li>${brand}</li>`).join('')}</ul>
+          </article>`).join('')}
         </div>
       </section>
-      <section class="sl-about-contact" id="about-contact" aria-labelledby="about-contact-title" data-about-reveal>
-        <h2 id="about-contact-title">${pick(contact.title,lang)}</h2>
-        <p>${pick(contact.paragraphs[0],lang)}</p>
-        <div class="sl-about-contact-links">
-          <a class="sl-about-button" href="/contact">${pick(help.links[4][1],lang)} <span aria-hidden="true">→</span></a>
+
+      <section class="sl-about-contact" id="about-contact" aria-labelledby="about-contact-title" tabindex="-1" data-about-reveal>
+        <div>
+          <h2 id="about-contact-title">${title('about-contact')}</h2>
+          ${paragraph('about-contact')}
+        </div>
+        <div class="sl-about-actions">
+          ${button('/contact',contact,'↗')}
           <a class="sl-about-email" href="mailto:sentryloot@gamestorehub.com">sentryloot@gamestorehub.com</a>
         </div>
       </section>
@@ -142,7 +170,7 @@
 
   function render(data, lang) {
     const {page, salesNotice, publisherRules} = data;
-    if (page.path === '/about') return about(page, salesNotice, lang);
+    if (page.path === '/about') return about(page, lang);
     const group = buy.links.some(([path])=>path===page.path) ? buy : help.links.some(([path])=>path===page.path) ? help : trust;
     const sections = page.sections.map((entry, index)=>({ ...entry, id:entry.id || `info-section-${index+1}` }));
     if (publisherRules) {
@@ -177,22 +205,56 @@
     </div>`;
   }
 
-  function activate(root) {
-    if (!root.querySelector('.sl-about') || !('IntersectionObserver' in window)
-      || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    observer = new IntersectionObserver(entries => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        observer.unobserve(entry.target);
-        entry.target.classList.add('sl-about-revealed');
+  function loadMotion() {
+    motionEngine ??= new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = '/static/vendor/gsap-scrolltrigger-3.14.2.min.js';
+      script.onload = () => {
+        if (window.gsap && window.ScrollTrigger) resolve(window.gsap);
+        else reject();
+      };
+      script.onerror = reject;
+      document.head.append(script);
+    });
+    return motionEngine;
+  }
+
+  async function activate(root) {
+    const page = root.querySelector('.sl-about');
+    if (!page || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const version = ++motionVersion;
+    const gsap = await loadMotion().catch(()=>null);
+    if (!gsap || version !== motionVersion || !page.isConnected) return;
+    gsap.registerPlugin(window.ScrollTrigger);
+    aboutMotion = gsap.matchMedia(page);
+    aboutMotion.add({
+      play: '(prefers-reduced-motion: no-preference)',
+      wide: '(min-width: 741px)',
+    }, ({ conditions, selector }) => {
+      if (!conditions.play) return;
+      const hero = selector('.sl-about-hero')[0];
+      if (hero.getBoundingClientRect().top >= -30) {
+        gsap.from(selector('[data-about-intro]'), { y:15, opacity:.55, duration:.85, stagger:.075, ease:'power3.out' });
       }
-    }, { threshold:0.12 });
-    root.querySelectorAll('[data-about-reveal]').forEach(element=>observer.observe(element));
+      if (conditions.wide) {
+        gsap.fromTo(selector('[data-about-depth]'), { scale:1.035 }, {
+          scale:1.13, yPercent:4, ease:'none',
+          scrollTrigger:{ trigger:hero, start:'top top', end:'bottom top', scrub:.7 },
+        });
+      }
+      for (const [index, element] of selector('[data-about-reveal]').entries()) {
+        gsap.from(element, {
+          y:conditions.wide?20:12, opacity:.62, duration:.75, delay:(index%3)*.055, ease:'power3.out',
+          scrollTrigger:{ trigger:element, start:'top 92%', once:true },
+        });
+      }
+    });
   }
 
   function stop() {
-    observer?.disconnect();
-    observer = null;
+    motionVersion++;
+    aboutMotion?.revert();
+    aboutMotion = null;
   }
 
   window.SENTRYLOOT_INFO_PAGES = { paths, load, render, activate, stop };

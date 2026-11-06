@@ -363,7 +363,7 @@ function currentPageAnchor(){
  const fragment=location.hash.slice(1),path=location.pathname.replace(/\/+$/,'')||'/';
  const infoRoute=window.SENTRYLOOT_INFO_PAGES?.paths[path];
  if(infoRoute&&/^info-section-[1-9][0-9]*$/.test(fragment))return fragment;
- if(infoRoute==='about'&&['about-platform','about-purpose','about-contact'].includes(fragment))return fragment;
+ if(infoRoute==='about'&&['about-platform','about-purpose','about-trust','about-payments','about-contact'].includes(fragment))return fragment;
  if(infoRoute==='support'&&['payments','orders','refunds'].includes(fragment))return fragment;
  if(/^\/top-up(?:\/[a-z0-9-]+){0,2}$/.test(location.pathname)&&(fragment==='topup-id-help'||/^purchase-reviews-topup-[a-z0-9-]+$/.test(fragment)))return fragment;
  return '';

@@ -14,7 +14,7 @@ Katalog — xaridor sotib oladigan **haqiqiy takliflar**: nom, tavsif, haqiqiy r
 
 ## Stripe sandbox
 
-Ulangan connector: **NexusVault sandbox**, test rejimi. Connector sayt serveriga API kalitlarini o‘zi bermaydi. Connect ro‘yxatini o‘qish muvaffaqiyatli bo‘ldi; ro‘yxat bo‘sh. Pul yechilmaydigan ikki API Checkout sessiyasi tekshirildi: 96000 UZS → 9600000 Stripe birligi; 300 MYR → 30000 Stripe birligi. Ikkalasi test va unpaid holatida. Bu saytdagi webhook yoki fulfillment E2E tekshiruvi emas. Connector expire operatsiyasini bermadi; audit sessiyalari odatiy muddati tugashigacha sandbox’da qoladi.
+Ulangan connector: **SentryLoot sandbox**, test rejimi. Default konfiguratsiyada karta, Apple Pay va Link yoqilgan; FPX, GrabPay va Google Pay mavjud emas. Apple Pay ko‘rinishi mos qurilma va brauzerga bog‘liq. Stripe API orqali Top Up va marketplace parametrlari bilan RM10 dan ikkita unpaid test sessiyasi yaratildi: ikkalasi MYR, karta va Link bilan ochildi. Bu saytdagi webhook yoki yetkazish sinovi emas. Connector sayt serveriga API kalitlarini bermaydi; eski sandbox uchun sozlangan kalit, account ID va webhook signing secret’ni boshqa hisob bilan aralashtirmang.
 
 Serverga sandbox cheklangan kaliti va shu sandbox hisob ID sini deployment secret sifatida kiriting. Kalitlarni chatga yoki Git’ga qo‘ymang:
 
@@ -29,6 +29,8 @@ Sandbox Dashboard’da webhook endpoint sifatida `https://<your-origin>/api/webh
 
 Ichki UZS → Stripe minor-unit konvertatsiyasi checkout, webhook, refund va settlement chegaralarida bajariladi. Eski versiyada noto‘g‘ri kichik summa bilan yaratilgan sessiyalar avtomatik yangi charge yaratmaydi: operator ularni sandbox’da tekshirib, reconcile qilishi kerak.
 
+Yangi Checkout sessiyalari buyurtmadagi charge valyutasini saqlaydi. Stripe Dashboard valyuta va xaridorga mos usullarni tanlaydi. Sandbox’da karta muvaffaqiyati, rad etilishi, 3D Secure, checkout bekor qilinishi, webhook takrorlanishi va refund yakunini har bir savdo yo‘lida tekshiring. FPX yoki GrabPay mavjud bo‘lgan hisobda redirect, qaytish va pending refund yakunini ham sinang. Pending refund keyingi ishga tushirishda qayta yaratilmaydi.
+
 ## Stripe Malaysia uchun live savdo
 
 1. Stripe arizasida Malayziyada ro‘yxatdan o‘tgan operator, sayt, biznes manzili va bank ma’lumotlaridan foydalaning. **Admin → Team & business profile** orqali tasdiqlangan yuridik nom, ommaviy biznes manzili, aloqa va haqiqiy ish vaqtini e’lon qiling. Bu ma’lumotlar Stripe hisobidagi ma’lumotga mos bo‘lsin. [Stripe Services Agreement](https://stripe.com/legal/ssa), [Stripe sayt talablari](https://support.stripe.com/questions/business-website-for-account-activation-faq).
@@ -37,6 +39,7 @@ Ichki UZS → Stripe minor-unit konvertatsiyasi checkout, webhook, refund va set
 4. `SPIN_WIN_REAL_AWARDS_ENABLED=false` bo‘lsin. Real sovrinli tasodifiy kampaniyani Stripe ishga tushirishidan ajrating va modelni Stripe’ga to‘liq ochiqlang. Avvalgi sovrin va vaucherlarni saqlang, ularni topshirish va ishlatish tartibini Stripe bilan kelishing. Pauza yangi yutuqlarni bloklaydi va oldingi g‘oliblar tarixini saqlaydi.
 5. `/terms`, `/privacy-policy`, `/refunds`, `/delivery`, `/disputes`, `/seller-policy`, `/contact` va `/about` sahifalarini tekshiring. Real paket yetkazish muddati, refund va bekor qilish mezonlari va muddatlari, komissiya hamda payout shartlarini ishga tushirishdan oldin operator tasdiqlaydi. Ularni checkout va tegishli mahsulot sahifasida ko‘rsating. [Stripe Website Checklist](https://docs.stripe.com/get-started/checklist/website).
 6. Tasdiqlangan qamrov bo‘yicha test adapterdan alohida live adapter, imzolangan webhook, idempotent fulfillment, refund va dispute reconciliation hamda Connect tekshiruvlarini tayyorlang. Checkout’dagi mahsulot, yakuniy summa va charge valyutasi saqlangan buyurtmaga mos bo‘lsin. Saytdagi display currency tanlovi charge yoki settlement valyutasini o‘zi o‘zgartirmaydi. [Checkout fulfillment](https://docs.stripe.com/checkout/fulfillment).
+7. [Stripe Payment methods](https://dashboard.stripe.com/settings/payment_methods) orqali tasdiqlangan hisobda karta va mos raqamli hamyonlarni tekshiring. [FPX](https://docs.stripe.com/payments/fpx) va [GrabPay](https://docs.stripe.com/payments/grabpay) Malayziya to‘lovlari uchun MYR talab qiladi. FPX uchun biznes ro‘yxat raqami kerak va u mavjud marketplace’dagi [separate charges and transfers modeliga mos emas](https://support.stripe.com/questions/stripe-product-compatibility-with-fpx). Top Up uchun FPX/GrabPay’ni faqat hisobda usul mavjud bo‘lsa va to‘lov, yetkazish hamda refund sinovlari o‘tgach yoqing. About Us’dagi ro‘yxat Stripe imkoniyatlarini ko‘rsatadi; live qabulni tasdiqlamaydi.
 
 ## Top Up supplier hali yo‘q
 
