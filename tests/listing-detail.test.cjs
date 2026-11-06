@@ -83,6 +83,7 @@ test('seasonal rank is omitted when empty but declared ranks remain visible',()=
 
 test('protection reflects the server policy without inventing a financial guarantee',()=>{
   const html=detail().markup({...item,after_sale_policy:{days:14,appeal_days:7,financial_guarantee:false}});
-  assert.match(html,/14/);assert.match(html,/after.*completion/i);assert.match(html,/24\/7/);
+  assert.match(html,/14/);assert.match(html,/after.*completion/i);assert.match(html,/href="\/support"/);
+  assert.doesNotMatch(html,/24\/7/);
   assert.doesNotMatch(html,/money.back guarantee/i);
 });

@@ -29,7 +29,14 @@ Sandbox Dashboard’da webhook endpoint sifatida `https://<your-origin>/api/webh
 
 Ichki UZS → Stripe minor-unit konvertatsiyasi checkout, webhook, refund va settlement chegaralarida bajariladi. Eski versiyada noto‘g‘ri kichik summa bilan yaratilgan sessiyalar avtomatik yangi charge yaratmaydi: operator ularni sandbox’da tekshirib, reconcile qilishi kerak.
 
-Live launch uchun UK operatori, mahsulot/market qamrovi, Stripe roziligi, real live adapter va webhook/refund/Connect tekshiruvlari alohida kerak. Sandbox muvaffaqiyati live ruxsat bermaydi. Display currency tanlovi charge yoki settlement valyutasini o‘zi o‘zgartirmaydi.
+## Stripe Malaysia uchun live savdo
+
+1. Stripe arizasida Malayziyada ro‘yxatdan o‘tgan operator, sayt, biznes manzili va bank ma’lumotlaridan foydalaning. **Admin → Team & business profile** orqali tasdiqlangan yuridik nom, ommaviy biznes manzili, aloqa va haqiqiy ish vaqtini e’lon qiling. Bu ma’lumotlar Stripe hisobidagi ma’lumotga mos bo‘lsin. [Stripe Services Agreement](https://stripe.com/legal/ssa), [Stripe sayt talablari](https://support.stripe.com/questions/business-website-for-account-activation-faq).
+2. Top Up, o‘yin buyumlari, Steam/gift card va kodlar, akkaunt e’lonlari hamda mustaqil sotuvchilarni alohida ko‘rsating. Stripe’dan qaysi toifa va bozorlarga ruxsat berilganini yozma aniqlashtiring. Top Up uchun supplier/noshir ruxsatini, akkaunt va buyumlar uchun transfer huquqini hujjatlashtiring. [Stripe cheklangan toifalari](https://stripe.com/legal/restricted-businesses).
+3. Marketplace uchun Stripe Connect’da Malaysia platformasi va sotuvchilarning aniq mamlakatlari bo‘yicha onboarding, payout va transchegaraviy qamrovni tekshiring. Merchant of record, komissiya, payout jadvali, refund, dispute va salbiy balans uchun mas’uliyatni belgilang. [Stripe Connect marketplace](https://docs.stripe.com/connect/marketplace).
+4. `SPIN_WIN_REAL_AWARDS_ENABLED=false` bo‘lsin. Real sovrinli tasodifiy kampaniyani Stripe ishga tushirishidan ajrating va modelni Stripe’ga to‘liq ochiqlang. Avvalgi sovrin va vaucherlarni saqlang, ularni topshirish va ishlatish tartibini Stripe bilan kelishing. Pauza yangi yutuqlarni bloklaydi va oldingi g‘oliblar tarixini saqlaydi.
+5. `/terms`, `/privacy-policy`, `/refunds`, `/delivery`, `/disputes`, `/seller-policy`, `/contact` va `/about` sahifalarini tekshiring. Real paket yetkazish muddati, refund va bekor qilish mezonlari va muddatlari, komissiya hamda payout shartlarini ishga tushirishdan oldin operator tasdiqlaydi. Ularni checkout va tegishli mahsulot sahifasida ko‘rsating. [Stripe Website Checklist](https://docs.stripe.com/get-started/checklist/website).
+6. Tasdiqlangan qamrov bo‘yicha test adapterdan alohida live adapter, imzolangan webhook, idempotent fulfillment, refund va dispute reconciliation hamda Connect tekshiruvlarini tayyorlang. Checkout’dagi mahsulot, yakuniy summa va charge valyutasi saqlangan buyurtmaga mos bo‘lsin. Saytdagi display currency tanlovi charge yoki settlement valyutasini o‘zi o‘zgartirmaydi. [Checkout fulfillment](https://docs.stripe.com/checkout/fulfillment).
 
 ## Top Up supplier hali yo‘q
 

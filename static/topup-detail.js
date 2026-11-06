@@ -79,19 +79,19 @@ function renderTopUpDetail(game, initialPackage) {
   form.addEventListener('submit',event=>{event.preventDefault();const invalid=Array.from(form.elements).find(field=>field.willValidate&&!field.validity.valid);if(invalid){q('#tu-player-error').hidden=false;q('#tu-player-error').textContent=t('ID faqat raqamlardan iborat bo‘lishi kerak. O‘yinchi ID: 3–40 ta raqam; server: 1–10 ta raqam.','ID должен содержать только цифры. ID игрока: 3–40 цифр; сервер: 1–10 цифр.','Use numbers only. Player ID: 3–40 digits; server: 1–10 digits.');invalid.setAttribute('aria-invalid','true');invalid.focus();return;}const count=topupQuantity(quantity.value);if(count===null){quantity.focus();return;}const player=form.elements.namedItem('player_id').value,server=form.elements.namedItem('server_id')?.value;const preview=q('#topup-details-preview');preview.hidden=false;preview.innerHTML='<b>'+t('Kiritilgan ma’lumotlar','Введённые данные','Your entered details')+'</b><p>'+esc(game.name)+' · '+esc(packLabel(selected))+' × '+count+' · '+topupDetailPrice(selected,count)+'</p><p>ID: '+esc(player)+(server?' · Server: '+esc(server):'')+'</p><small>'+t('Bu buyurtma emas. Ma’lumotlar yuborilmadi, hisob API orqali tekshirilmadi va pul yechilmadi.','Это не заказ. Данные не отправлены, аккаунт не проверен через API, деньги не списаны.','This is not an order. Nothing was submitted, your account was not verified through an API, and no payment was taken.')+'</small>';preview.scrollIntoView({block:'nearest',behavior:'smooth'});});
   const testBuy=q('.tu-purchase-actions .button-secondary');
   const testTerms=document.createElement('label');testTerms.className='field';testTerms.hidden=true;
-  testTerms.innerHTML='<span><input type="checkbox" data-tu-test-consent> '+t('Bu faqat xaridi. Haqiqiy UC yetkazilmaydi. Savdo shartlarini qabul qilaman.','Это покупка без доставки UC. Я принимаю условия покупки.','I have checked the Player ID and accept the checkout terms.')+'</span>';
+  testTerms.innerHTML='<span><input type="checkbox" data-tu-test-consent> '+t('Player ID’ni tekshirdim va to‘lov shartlarini qabul qilaman.','Я проверил ID игрока и принимаю условия оплаты.','I have checked the Player ID and accept the checkout terms.')+' '+t('Stripe sinov buyurtmasi. Haqiqiy pul yechilmaydi va UC yetkazilmaydi.','Тестовый заказ Stripe. Реальные деньги не списываются, UC не зачисляются.','Stripe test order. No real money is charged and no real UC is delivered.')+'</span>';
   q('.tu-purchase-actions').before(testTerms);
   function updateTestCheckout(){
     const ready=selected.payment_ready&&selected.payment_mode==='stripe_test';
     root.dataset.checkoutReady=String(Boolean(ready));
     testBuy.disabled=!ready||topupQuantity(quantity.value)===null;testTerms.hidden=!ready;
     if(!ready){testBuy.textContent=t('Xarid qilish','Купить сейчас','Buy now');q('.tu-checkout-state span').textContent=noCheckout;}
-    if(ready){testBuy.textContent=t('Stripe xaridi','покупка Stripe','Stripe checkout');q('.tu-checkout-state span').textContent=t('Davom etishdan oldin Player ID ni tekshiring.','Проверьте Player ID перед продолжением.','Check your Player ID before continuing.');}
+    if(ready){testBuy.textContent=t('Stripe sinov to‘lovi','Тестовая оплата Stripe','Stripe test checkout');q('.tu-checkout-state span').textContent=t('Davom etishdan oldin Player ID ni tekshiring.','Проверьте Player ID перед продолжением.','Check your Player ID before continuing.');}
   }
   testBuy.addEventListener('click',async()=>{
     if(!me){location.hash='login';return;}
     if(!form.reportValidity())return;
-    if(!q('[data-tu-test-consent]').checked){toast(t('xaridi shartlarini tasdiqlang.','Подтвердите условия покупки.','Confirm the checkout terms.'),'error');return;}
+    if(!q('[data-tu-test-consent]').checked){toast(t('Sinov xaridi shartlarini tasdiqlang.','Подтвердите условия тестовой покупки.','Confirm the checkout terms.'),'error');return;}
     testBuy.disabled=true;
     try{
       const promotion=rewards?.checkout();

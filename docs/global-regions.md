@@ -54,10 +54,10 @@ MYR is cents; UZS is whole som. Orders, commission, accounting, refunds, filters
 and Stripe test payment amounts are not converted or reinterpreted. Checkout
 still charges the order's original currency. No live Stripe settings are changed.
 
-## Future UK Stripe onboarding
+## Stripe Malaysia onboarding
 
-A UK business account and verification must be completed with Stripe before
-activating live payments. Profile country alone cannot enable a payment method.
+Complete verification for the Malaysian business and obtain approval for the
+relevant product categories before activating live payments. Profile country alone cannot enable a payment method.
 Use the existing hosted Checkout Sessions/webhook flow; eligible payment methods
 are selected dynamically by Stripe. Adaptive Pricing can be evaluated after the
 business/account and marketplace/Connect eligibility, supported currencies and

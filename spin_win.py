@@ -38,6 +38,12 @@ def campaign_mode(core):
     return rewards.mode(core)
 
 
+def awards_paused(current_mode, core):
+    # Keep existing awards readable and fulfillable during a launch review.
+    return (core['MODE']=='production' and current_mode=='real'
+            and os.environ.get('SPIN_WIN_REAL_AWARDS_ENABLED','').strip().lower()!='true')
+
+
 def settings(db, current_mode):
     return {**{'enabled':False,'budget_minor':0,'stock':{'iphone':0,'ps5':0,'tv':0},'version':0},
             **rewards.read(db,key(current_mode,'settings'),{})}
@@ -81,11 +87,12 @@ def state(db, uid, core):
     record=rewards.read(db,key(current_mode,'daily:'+rewards.user_hash(uid)+':'+day))
     history=rewards.rows(db,key(current_mode,'daily:'+rewards.user_hash(uid)+':'))
     prizes=effective_prizes(config,counters(db,current_mode))
-    enabled=config['enabled'] and len(prizes)>1
+    paused=awards_paused(current_mode,core)
+    enabled=not paused and config['enabled'] and len(prizes)>1
     return {'enabled':enabled,'test_only':current_mode=='test','timezone':str(ZONE),
             'day':day,'next_reset':datetime.combine(local.date()+timedelta(days=1),datetime.min.time(),ZONE).isoformat(),
             'can_spin':enabled and record is None,'today':public_record(record) if record else None,
-            'prizes':prizes,
+            'prizes':[] if paused else prizes,
             'history':[public_record(r) for r in sorted(history,key=lambda r:r['created_at'],reverse=True)[:30]],
             'redemption_bps':rewards.settings(db)['redemption_bps'],'credit_expiry_days':rewards.settings(db)['credit_expiry_days']}
 
@@ -97,6 +104,8 @@ def spin(db, uid, data, core):
     day=now().astimezone(ZONE).date().isoformat()
     prior=rewards.read(db,daily_prefix+day)
     if prior:return public_record(prior)
+    if awards_paused(current_mode,core):
+        rewards.fail(core,'New Spin & Win awards are paused.')
     # Obtain FX before taking the database lock. Failures never consume a spin.
     fx=rewards.rates(core)
     email_notifications=[]
@@ -169,6 +178,7 @@ def admin_view(db, core, page=1):
         user=db.execute('SELECT id,display_name,email FROM users WHERE id=?',(record['uid'],)).fetchone()
         selected.append({**record,'user':dict(user) if user else {'id':record['uid'],'display_name':'Deleted user','email':''}})
     return {'settings':settings(db,current_mode),'counters':counters(db,current_mode),'test_only':current_mode=='test',
+            'awards_paused':awards_paused(current_mode,core),
             'prizes':list(PRIZES),'winners':selected,'page':page,'total':len(winners)}
 
 
@@ -181,6 +191,8 @@ def save_settings(db,uid,data,core):
     if not isinstance(stock,dict) or set(stock)!={'iphone','ps5','tv'} or any(type(v) is not int or not 0<=v<=1000 for v in stock.values()):
         rewards.fail(core,'Enter valid total prize stock.',400)
     current_mode=campaign_mode(core)
+    if data['enabled'] and awards_paused(current_mode,core):
+        rewards.fail(core,'New Spin & Win awards are paused in this deployment.')
     db.execute('BEGIN IMMEDIATE')
     try:
         rewards.lock(db); totals=counters(db,current_mode)
@@ -222,7 +234,7 @@ def route(db,ctx,method,path,qs,data,core):
     if path=='/api/spin-win/preview' and method=='GET':
         current_mode = campaign_mode(core)
         config = settings(db, current_mode)
-        prizes = effective_prizes(config, counters(db, current_mode)) if config['enabled'] else []
+        prizes = effective_prizes(config, counters(db, current_mode)) if config['enabled'] and not awards_paused(current_mode,core) else []
         return {
             'enabled': config['enabled'] and len(prizes)>1,
             'test_only': current_mode=='test',

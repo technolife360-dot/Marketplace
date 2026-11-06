@@ -423,7 +423,7 @@ class HTTPWorkflows(unittest.TestCase):
         self.assertEqual(self.seller.request('POST','/api/seller/listings/bulk-pause',{'ids':[lid]})[0],200)
 
     def test_public_pages_static_assets_and_account_deep_links(self):
-        for path in ('/', '/browse', '/blog', '/selling', '/guide', '/fees', '/policies', '/support', '/help/orders', '/help/payments', '/help/refunds', '/help/chat', '/terms', '/refunds', '/seller-policy', '/prohibited-items', '/contact', '/privacy-policy', '/data-deletion', '/top-up', '/robots.txt', '/sitemap.xml', '/healthz'):
+        for path in ('/', '/browse', '/blog', '/selling', '/guide', '/fees', '/policies', '/support', '/help/orders', '/help/payments', '/help/refunds', '/help/chat', '/terms', '/refunds', '/delivery', '/disputes', '/about', '/seller-policy', '/prohibited-items', '/contact', '/privacy-policy', '/data-deletion', '/top-up', '/robots.txt', '/sitemap.xml', '/healthz'):
             with self.subTest(path=path):
                 status, _, _ = self.guest.request('GET', path)
                 self.assertEqual(status, 200)
@@ -442,6 +442,34 @@ class HTTPWorkflows(unittest.TestCase):
         self.assertEqual(self.guest.request('GET', '/unknown-page')[0], 404)
         self.assertEqual(self.guest.request('GET', '/static/../app.py')[0], 404)
 
+    def test_public_information_routes_return_distinct_page_content_without_javascript(self):
+        headings = {
+            '/selling': 'Prepare the listing', '/guide': 'Review the listing',
+            '/fees': 'How will prices and fees be shown?', '/support': 'Orders and delivery',
+            '/help/orders': 'Find an order', '/help/payments': 'Stripe test checkout',
+            '/help/refunds': 'When to contact us', '/help/chat': 'Open chat',
+            '/contact': 'Business and support details', '/terms': 'Buyer responsibilities',
+            '/policies': 'Product requirements', '/seller-policy': 'Identity verification, commission and payouts',
+            '/prohibited-items': 'Official publisher rules', '/refunds': 'Requesting cancellation or a refund',
+            '/delivery': 'Marketplace and accounts', '/disputes': 'Evidence and decision', '/about': 'Our mission',
+        }
+        titles = set()
+        for path, heading in headings.items():
+            with self.subTest(path=path):
+                status, payload, _ = self.guest.request('GET', path + '/')
+                self.assertEqual(status, 200)
+                document = payload.decode()
+                title = re.search(r'<title>([^<]+)</title>', document).group(1)
+                self.assertNotIn(title, titles)
+                titles.add(title)
+                article = re.search(r'<article class="legal-copy">(.*?)</article>', document, re.S).group(1)
+                self.assertIn(heading, article)
+                self.assertIn(f'rel="canonical" href="{app.public_site_base()}{path}"', document)
+                self.assertIn('id="public-info-content"', document)
+        status, image, headers = self.guest.request('GET', '/static/assets/about-controller.webp')
+        self.assertEqual(status, 200)
+        self.assertEqual(headers['Content-Type'], 'image/webp')
+        self.assertEqual(image[8:12], b'WEBP')
 
     def test_experience_raw_import_and_store_routes_at_wsgi_boundary(self):
         import csv

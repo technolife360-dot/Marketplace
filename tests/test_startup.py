@@ -6,6 +6,36 @@ from unittest.mock import Mock, patch
 import app
 
 
+class PreviewFramingHeaders(unittest.TestCase):
+    def test_only_loopback_development_server_allows_vscode_webviews(self):
+        def headers(mode, listener, host='127.0.0.1:8000', client='127.0.0.1'):
+            request = app._VercelRequest({
+                'REQUEST_METHOD': 'GET', 'HTTP_HOST': host, 'REMOTE_ADDR': client,
+            })
+            if listener:
+                request.server = app.Server.__new__(app.Server)
+                request.server.server_address = (listener, 8000)
+            with patch.object(app, 'MODE', mode):
+                request.secure_headers()
+            return dict(request._response_headers)
+
+        baseline = headers('development', None)
+        self.assertEqual(baseline['X-Frame-Options'], 'DENY')
+        self.assertIn("frame-ancestors 'none'", baseline['Content-Security-Policy'])
+        expected = dict(baseline)
+        expected.pop('X-Frame-Options')
+        expected['Content-Security-Policy'] = baseline['Content-Security-Policy'].replace(
+            "frame-ancestors 'none'", 'frame-ancestors vscode-webview: vscode-file://vscode-app')
+        self.assertEqual(headers('development', '127.0.0.1'), expected)
+        self.assertEqual(headers('development', '127.0.0.1', 'localhost:8000'), expected)
+        self.assertEqual(headers('development', '0.0.0.0'), baseline)
+        self.assertEqual(headers('development', '127.0.0.1', 'example.test'), baseline)
+        self.assertEqual(headers('development', '127.0.0.1', client='192.0.2.1'), baseline)
+        with patch.object(app, 'production_marketplace_sales_enabled', return_value=True):
+            production = headers('production', '127.0.0.1')
+        self.assertEqual(production, {**baseline, 'Strict-Transport-Security': 'max-age=31536000'})
+
+
 class ProductionStartup(unittest.TestCase):
     def setUp(self):
         self.settings = patch.multiple(app, MODE='production', DATABASE_URL='postgresql://test.invalid/db')

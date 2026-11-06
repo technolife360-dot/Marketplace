@@ -14,4 +14,6 @@ Campaigns default to disabled, zero physical stock and zero voucher budget. The 
 
 Data uses the existing private/RLS-protected platform_config table under spinwin: keys; there is no public winner feed or public email/address exposure. No new schema migration is required. API routes inherit the existing authentication, suspension, email verification, admin MFA and CSRF guards.
 
+Production pauses new real awards unless `SPIN_WIN_REAL_AWARDS_ENABLED=true` is explicitly set. Keep it disabled for Stripe review and launch. The pause leaves past results, bonus credit and the admin fulfillment queue available.
+
 Validation: tests/test_spin_win.py and tests/spin-win.test.cjs; existing rewards engine/risk/checkout tests and frontend tests. Preview screenshots in output/spin-win are from an isolated local TEST campaign. DEMO winner is generated fixture data, not an actual customer win.

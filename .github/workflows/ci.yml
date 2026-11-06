@@ -5,6 +5,19 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: sentryloot_ci
+          POSTGRES_PASSWORD: sentryloot-ci-test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres -d sentryloot_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -16,3 +29,24 @@ jobs:
         run: npm run build
       - name: Business workflow tests
         run: npm test
+      - name: Prepare PostgreSQL test database
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          {
+            printf 'CREATE ROLE anon NOLOGIN;\nCREATE ROLE authenticated NOLOGIN;\n'
+            cat supabase/migrations/*.sql
+            cat <<'SQL'
+          INSERT INTO public.users (id,email,password_hash,display_name)
+          VALUES ('ci-seller','seller@ci.invalid','unused','PostgreSQL CI seller');
+          INSERT INTO public.seller_profiles (user_id,shop_name,verification_status,selling_enabled)
+          VALUES ('ci-seller','PostgreSQL CI shop','pending',0);
+          SQL
+          } | docker exec -i "$POSTGRES_CONTAINER" psql -X -U postgres -d sentryloot_ci -v ON_ERROR_STOP=1 -f -
+      - name: PostgreSQL compatibility tests
+        env:
+          DATABASE_URL: postgresql://postgres:sentryloot-ci-test@127.0.0.1:${{ job.services.postgres.ports[5432] }}/sentryloot_ci
+          SENTRYLOOT_ENV_FILE: /dev/null
+          SENTRYLOOT_TEST_POSTGRES_TEMP: '1'
+          SENTRYLOOT_TEST_POSTGRES_READONLY: '1'
+        run: python -m unittest -v tests.test_admin_console_postgres tests.test_seller_verification_postgres

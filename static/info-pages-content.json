@@ -1,0 +1,1368 @@
+{
+  "pages": {
+    "selling": {
+      "title": {
+        "uz": "Sotishni boshlash",
+        "ru": "Как начать продавать",
+        "en": "Start selling"
+      },
+      "lead": {
+        "uz": "E’lon tayyorlashdan moderatsiyagacha bo‘lgan bosqichlar.",
+        "ru": "От подготовки объявления до проверки модератором.",
+        "en": "From preparing a listing to moderation."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "Avval nimani tekshirish kerak?",
+            "ru": "Что проверить сначала?",
+            "en": "What to check first"
+          },
+          "paragraphs": [
+            {
+              "uz": "Mahsulot sizga tegishli yoki uni sotishga vakolatingiz bo‘lishi kerak. O‘yin noshiri, platforma va hudud qoidalari aynan shu mahsulotning savdosiga ruxsat berishini tekshiring. Akkaunt savdosi uchun taxmin yoki boshqa saytdagi e’lon yetarli dalil emas.",
+              "ru": "Вы должны владеть товаром или иметь право его продавать. Проверьте правила издателя, платформы и региона именно для этого товара. Для продажи аккаунта догадок или объявлений на другом сайте недостаточно.",
+              "en": "You must own the product or have authority to sell it. Check the publisher, platform and regional rules for that exact product. Another marketplace listing is not proof that an account transfer is allowed."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "E’lonni tayyorlash",
+            "ru": "Подготовка объявления",
+            "en": "Prepare the listing"
+          },
+          "paragraphs": [],
+          "bullets": [
+            {
+              "uz": "O‘yin, platforma, hudud, mahsulot turi, narx, mavjudlik va yetkazish usulini aniq yozing.",
+              "ru": "Укажите игру, платформу, регион, тип товара, цену, наличие и способ доставки.",
+              "en": "State the game, platform, region, item type, price, availability and delivery method."
+            },
+            {
+              "uz": "Cheklovlar, aktivatsiya talablari va yetkazish muddatini yashirmang; rasmga maxfiy ma’lumot qo‘shmang.",
+              "ru": "Не скрывайте ограничения, требования активации и сроки доставки; не показывайте секреты на изображениях.",
+              "en": "Disclose restrictions, activation requirements and delivery time; keep secrets out of images."
+            },
+            {
+              "uz": "Parol, OTP, tiklash kodi, pasport yoki to‘lov kartasi ma’lumotini e’lon va chatga kiritmang.",
+              "ru": "Не публикуйте пароль, одноразовый код, код восстановления, паспортные или карточные данные.",
+              "en": "Never put passwords, one-time codes, recovery codes, identity documents or card details in a listing or chat."
+            }
+          ]
+        },
+        {
+          "title": {
+            "uz": "Moderatsiya va holat",
+            "ru": "Проверка и статус",
+            "en": "Review and status"
+          },
+          "paragraphs": [
+            {
+              "uz": "E’lon yuborilgach tekshiruvga tushadi. Tasdiqlash e’lon tavsifi va platforma qoidalariga mosligini ko‘rib chiqishni anglatadi; noshirning roziligi yoki mahsulot kafolati emas. Hozir haqiqiy savdo va sotuvchi to‘lovlari o‘chiq.",
+              "ru": "После отправки объявление проходит проверку. Одобрение означает проверку описания и правил площадки, но не разрешение издателя или гарантию товара. Реальные продажи и выплаты продавцам пока отключены.",
+              "en": "Submitted listings enter review. Approval is a marketplace check of the description and rules, not publisher authorization or a product guarantee. Live sales and seller payouts are disabled."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Keyingi qadam",
+            "ru": "Следующий шаг",
+            "en": "Next step"
+          },
+          "paragraphs": [
+            {
+              "uz": "<a href=\"/seller-policy\">Sotuvchi qoidalarini</a> o‘qing, so‘ng <a href=\"/#seller\">sotuvchi paneli</a> orqali e’lonni tayyorlang.",
+              "ru": "Ознакомьтесь с <a href=\"/seller-policy\">правилами продавца</a>, затем откройте <a href=\"/#seller\">панель продавца</a>.",
+              "en": "Read the <a href=\"/seller-policy\">seller policy</a>, then use the <a href=\"/#seller\">seller dashboard</a> to prepare a listing."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "path": "/selling"
+    },
+    "guide": {
+      "title": {
+        "uz": "Xarid qanday ishlaydi",
+        "ru": "Как проходит покупка",
+        "en": "How buying works"
+      },
+      "lead": {
+        "uz": "E’lonni tanlash, savol berish va buyurtma holatini tushunish.",
+        "ru": "Выбор объявления, вопросы продавцу и статус заказа.",
+        "en": "Choose a listing, ask questions and understand order status."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "1. E’lonni tekshiring",
+            "ru": "1. Проверьте объявление",
+            "en": "1. Review the listing"
+          },
+          "paragraphs": [
+            {
+              "uz": "O‘yin, server, platforma, hudud, narx, yetkazish va cheklovlarni solishtiring. Raqamli mahsulotdan foydalanish huquqi noshir qoidalariga bog‘liq; e’lon saytda ko‘rinishi avtomatik ruxsatni anglatmaydi.",
+              "ru": "Сравните игру, сервер, платформу, регион, цену, доставку и ограничения. Право использовать цифровой товар зависит от правил издателя; публикация объявления не означает автоматическое разрешение.",
+              "en": "Compare the game, server, platform, region, price, delivery and restrictions. Publisher rules govern use of digital items; appearing on the site does not establish permission."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "2. Sotuvchiga savol bering",
+            "ru": "2. Задайте вопрос продавцу",
+            "en": "2. Ask the seller"
+          },
+          "paragraphs": [
+            {
+              "uz": "Tavsif noaniq bo‘lsa, sayt ichidagi xabarlar orqali so‘rang. Tashqi to‘lovga o‘tmang, havola orqali login qilmang va maxfiy kod yubormang.",
+              "ru": "Если описание неясно, спрашивайте через сообщения на сайте. Не переходите к внешней оплате, не входите по подозрительным ссылкам и не передавайте секретные коды.",
+              "en": "Use on-site messages when details are unclear. Do not move to off-site payment, sign in through suspicious links or share security codes."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "3. Hozirgi buyurtma holati",
+            "ru": "3. Текущий статус заказов",
+            "en": "3. Current order status"
+          },
+          "paragraphs": [
+            {
+              "uz": "SentryLoot hozir haqiqiy to‘lovlarni qabul qilmaydi. Sinov buyurtmasi va sandbox holati haqiqiy pul o‘tganini yoki mahsulot yetkazilganini bildirmaydi. Kelajakdagi checkout ochilishidan oldin narx, komissiya, to‘lov usuli va qaytarim shartlari alohida e’lon qilinadi.",
+              "ru": "SentryLoot пока не принимает реальные платежи. Тестовый заказ и статус sandbox не означают перевод денег или доставку товара. Перед запуском оплаты будут отдельно опубликованы цены, комиссии, способы оплаты и условия возврата.",
+              "en": "SentryLoot does not currently accept live payments. A test order or sandbox status is not proof of a real payment or delivery. Prices, fees, payment methods and refund terms will be published before live checkout opens."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "4. Muammo bo‘lsa",
+            "ru": "4. Если возникла проблема",
+            "en": "4. If something goes wrong"
+          },
+          "paragraphs": [
+            {
+              "uz": "Buyurtma raqami va maxfiy bo‘lmagan dalillar bilan <a href=\"/help/orders\">buyurtma yordami</a> sahifasiga qarang. Shubhali e’lonni xabar qiling; kelishmovchilik bo‘lsa <a href=\"/help/refunds\">nizo bo‘yicha yordam</a>dan foydalaning.",
+              "ru": "С номером заказа и несекретными доказательствами откройте <a href=\"/help/orders\">помощь по заказам</a>. Сообщайте о подозрительных объявлениях; при споре смотрите <a href=\"/help/refunds\">помощь по спорам</a>.",
+              "en": "With the order number and non-sensitive evidence, use <a href=\"/help/orders\">order help</a>. Report suspicious listings and consult <a href=\"/help/refunds\">dispute help</a> for disagreements."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "path": "/guide"
+    },
+    "fees": {
+      "title": {
+        "uz": "Komissiya va to‘lovlar",
+        "ru": "Комиссии и платежи",
+        "en": "Fees and payments"
+      },
+      "lead": {
+        "uz": "Hozirgi to‘lov holati va savdo boshlanishidan oldin ochiqlanadigan xarajatlar.",
+        "ru": "Текущий статус оплаты и расходы, которые будут раскрыты до запуска продаж.",
+        "en": "Current payment status and costs to be disclosed before sales launch."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "Hozirgi holat",
+            "ru": "Текущий статус",
+            "en": "Current status"
+          },
+          "paragraphs": [
+            {
+              "uz": "Haqiqiy checkout, refund va sotuvchiga payout yoqilmagan. Sandbox buyurtmalari real pulni qabul qilmaydi, ushlab turmaydi yoki o‘tkazmaydi. Saytni escrow xizmati yoki moliyaviy kafolat deb qabul qilmang.",
+              "ru": "Реальная оплата, возвраты и выплаты продавцам отключены. Тестовые заказы не принимают, не удерживают и не переводят деньги. Сайт сейчас не является эскроу-сервисом или финансовой гарантией.",
+              "en": "Live checkout, refunds and seller payouts are disabled. Sandbox orders do not receive, hold or transfer money. The site is not currently an escrow service or financial guarantee."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Narx va komissiya qanday ko‘rsatiladi?",
+            "ru": "Как будут показаны цены и комиссии?",
+            "en": "How will prices and fees be shown?"
+          },
+          "paragraphs": [
+            {
+              "uz": "Savdo ochilganda xaridor tasdiqlashdan oldin mahsulot narxi, platforma komissiyasi, provayder to‘lovi va yakuniy summani ko‘rishi kerak. Sotuvchi komissiyasi va qoldiq alohida ko‘rsatiladi. Hozircha aniq foiz, minimal summa, payout muddati yoki valyuta kursi e’lon qilinmagan.",
+              "ru": "При запуске покупатель должен видеть цену товара, комиссию площадки, комиссию провайдера и итог до подтверждения. Комиссия продавца и остаток будут показаны отдельно. Точный процент, минимум, срок выплаты и курс пока не опубликованы.",
+              "en": "Before a live purchase is confirmed, the buyer should see item price, platform fee, provider fee and final total. Seller fees and net proceeds will be separate. No fixed percentage, minimum, payout time or exchange rate has been announced yet."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Tashqi to‘lov va Top Up",
+            "ru": "Внешние платежи и Top Up",
+            "en": "Off-site payments and Top Up"
+          },
+          "paragraphs": [
+            {
+              "uz": "Sotuvchi yoki yordam xodimi shaxsiy karta, kriptohamyon yoki messenjerga pul yuborishni so‘rasa, to‘lamang va <a href=\"/contact\">bizga xabar bering</a>. <a href=\"/top-up\">Top Up</a> katalogi ham hozir buyurtma qabul qilmaydi; provayder va yetkazib beruvchi ulangach shartlar e’lon qilinadi.",
+              "ru": "Если продавец или сотрудник просит отправить деньги на личную карту, криптокошелёк или в мессенджер, не платите и <a href=\"/contact\">сообщите нам</a>. Каталог <a href=\"/top-up\">Top Up</a> пока не принимает заказы; условия появятся после подключения провайдеров.",
+              "en": "If anyone asks you to pay a personal card, crypto wallet or messenger contact, do not pay and <a href=\"/contact\">tell us</a>. The <a href=\"/top-up\">Top Up</a> catalog cannot take orders yet; terms will be published after provider integration."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "path": "/fees",
+      "showSalesNotice": true
+    },
+    "support": {
+      "title": {
+        "uz": "Yordam markazi",
+        "ru": "Центр поддержки",
+        "en": "Help center"
+      },
+      "lead": {
+        "uz": "Muammo turini tanlang va aynan shu masala bo‘yicha ko‘rsatmani o‘qing.",
+        "ru": "Выберите тему и откройте инструкцию именно по вашему вопросу.",
+        "en": "Choose your topic for specific instructions."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "Buyurtma va yetkazish",
+            "ru": "Заказы и доставка",
+            "en": "Orders and delivery"
+          },
+          "paragraphs": [
+            {
+              "uz": "<a href=\"/help/orders\">Buyurtma sahifasi</a>da holatlar, yetkazish dalillari va muammo haqida xabar berish bosqichlari tushuntirilgan.",
+              "ru": "На странице <a href=\"/help/orders\">заказов</a> описаны статусы, подтверждение доставки и сообщения о проблемах.",
+              "en": "<a href=\"/help/orders\">Order help</a> explains statuses, delivery evidence and how to report a problem."
+            }
+          ],
+          "bullets": [],
+          "id": "orders"
+        },
+        {
+          "title": {
+            "uz": "To‘lovlar",
+            "ru": "Платежи",
+            "en": "Payments"
+          },
+          "paragraphs": [
+            {
+              "uz": "<a href=\"/help/payments\">To‘lov yordami</a> real to‘lovlar nega o‘chirilgani, sandbox nimani anglatishi va shubhali to‘lov so‘rovlarini qanday aniqlashni tushuntiradi.",
+              "ru": "<a href=\"/help/payments\">Помощь по оплате</a> объясняет, почему реальные платежи отключены, что означает sandbox и как распознать подозрительный запрос.",
+              "en": "<a href=\"/help/payments\">Payment help</a> explains why live payments are off, what sandbox means and how to spot suspicious requests."
+            }
+          ],
+          "bullets": [],
+          "id": "payments"
+        },
+        {
+          "title": {
+            "uz": "Qaytarim va nizo",
+            "ru": "Возвраты и споры",
+            "en": "Refunds and disputes"
+          },
+          "paragraphs": [
+            {
+              "uz": "Murojaat qanday yuborilishini <a href=\"/help/refunds\">qaytarim va nizo yordamida</a>, amaldagi shartlarni esa <a href=\"/refunds\">qaytarim siyosati</a> va <a href=\"/disputes\">nizolar siyosatida</a> ko‘ring.",
+              "ru": "Как подать обращение, объясняется в разделе <a href=\"/help/refunds\">помощи по возвратам и спорам</a>. Условия описаны в <a href=\"/refunds\">политике возвратов</a> и <a href=\"/disputes\">политике разрешения споров</a>.",
+              "en": "See <a href=\"/help/refunds\">refund and dispute help</a> for how to send a request. The rules are in the <a href=\"/refunds\">refund policy</a> and <a href=\"/disputes\">dispute policy</a>."
+            }
+          ],
+          "bullets": [],
+          "id": "refunds"
+        },
+        {
+          "title": {
+            "uz": "Aloqa",
+            "ru": "Контакты",
+            "en": "Contact"
+          },
+          "paragraphs": [
+            {
+              "uz": "<a href=\"/help/chat\">Chat haqida</a> yoki <a href=\"/contact\">aloqa sahifasi</a> orqali mos kanalni tanlang. Parol, OTP, karta raqami yoki hujjat nusxasini yubormang.",
+              "ru": "Выберите канал на странице <a href=\"/help/chat\">чата</a> или <a href=\"/contact\">контактов</a>. Не отправляйте пароли, коды, номера карт и документы.",
+              "en": "Use <a href=\"/help/chat\">chat help</a> or the <a href=\"/contact\">contact page</a>. Never send passwords, one-time codes, card numbers or identity documents."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "path": "/support"
+    },
+    "help/orders": {
+      "title": {
+        "uz": "Buyurtma va yetkazish yordami",
+        "ru": "Помощь по заказам и доставке",
+        "en": "Orders and delivery help"
+      },
+      "lead": {
+        "uz": "Buyurtma holati nimani anglatadi va muammo qanday yuboriladi?",
+        "ru": "Что означает статус заказа и как сообщить о проблеме?",
+        "en": "What order status means and how to report a problem."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "Buyurtmani topish",
+            "ru": "Как найти заказ",
+            "en": "Find an order"
+          },
+          "paragraphs": [
+            {
+              "uz": "Hisobga kiring va Buyurtmalar sahifasini oching. Buyurtma raqami, mahsulot nomi, holati va vaqtini tekshiring. Hozirgi sinov yozuvlari haqiqiy savdo yoki pul o‘tkazmasi emas.",
+              "ru": "Войдите в аккаунт и откройте страницу заказов. Проверьте номер, товар, статус и время. Текущие тестовые записи не являются реальной продажей или переводом денег.",
+              "en": "Sign in and open Orders. Check the reference, item, status and time. Current test records are not real sales or money transfers."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Yetkazish bo‘yicha savol",
+            "ru": "Вопрос по доставке",
+            "en": "Delivery question"
+          },
+          "paragraphs": [
+            {
+              "uz": "E’londagi yetkazish usuli va muddatini tekshiring, sotuvchidan sayt ichidagi xabarda aniqlik so‘rang. Mahsulotni olmagan bo‘lsangiz, “yetkazildi” degan belgiga tayanib yakunlashga shoshilmang.",
+              "ru": "Проверьте способ и срок доставки в объявлении, уточните детали у продавца в сообщениях сайта. Если товар не получен, не подтверждайте завершение лишь из-за отметки «доставлено».",
+              "en": "Check the delivery method and time in the listing, then ask the seller through site messages. If the item has not arrived, do not confirm completion solely because a status says delivered."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Muammoni xabar qilish",
+            "ru": "Как сообщить о проблеме",
+            "en": "Report an issue"
+          },
+          "paragraphs": [
+            {
+              "uz": "Buyurtma sahifasidagi nizo tugmasidan foydalaning yoki buyurtma raqami va qisqa tavsif bilan <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a> manziliga yozing. Skrinshot yuborsangiz, shaxsiy ma’lumotlar va kirish kodlarini yashiring. Nizo yo‘riqnomasi <a href=\"/help/refunds\">shu sahifada</a>.",
+              "ru": "Откройте спор из заказа или напишите на <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>, указав номер и краткое описание. На скриншотах скрывайте личные данные и коды доступа. Инструкция по спорам — <a href=\"/help/refunds\">здесь</a>.",
+              "en": "Use the dispute action on the order or email <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a> with the reference and a short description. Hide personal data and security codes in screenshots. See <a href=\"/help/refunds\">dispute guidance</a>."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "path": "/help/orders"
+    },
+    "help/payments": {
+      "title": {
+        "uz": "To‘lovlar bo‘yicha yordam",
+        "ru": "Помощь по платежам",
+        "en": "Payment help"
+      },
+      "lead": {
+        "uz": "Hozir qaysi to‘lov ishlaydi va shubhali so‘rovga qanday javob beriladi?",
+        "ru": "Какая оплата сейчас доступна и что делать с подозрительным запросом?",
+        "en": "What payment works now and how to handle a suspicious request."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "Stripe sinov to‘lovi",
+            "ru": "Тестовая оплата Stripe",
+            "en": "Stripe test checkout"
+          },
+          "paragraphs": [
+            {
+              "uz": "Ruxsatli sinovchilarga Stripe’ning alohida sinov to‘lov sahifasi ochiladi. Faqat Stripe sinov kartasidan foydalaning. Yakuniy summa va to‘lov valyutasini Stripe sahifasida tekshiring. Saytdagi valyuta ko‘rinishini almashtirish buyurtma valyutasini o‘zgartirmaydi. <a href=\"/privacy-policy\">Maxfiylik siyosati</a>ni ko‘ring.",
+              "ru": "Допущенные к тестированию пользователи переходят на тестовую страницу оплаты Stripe. Используйте только тестовые карты Stripe. Проверьте итоговую сумму и валюту на странице Stripe. Смена отображаемой валюты сайта не меняет валюту заказа. См. <a href=\"/privacy-policy\">политику конфиденциальности</a>.",
+              "en": "Authorized testers are sent to Stripe-hosted test Checkout. Use only Stripe test cards. Check the final amount and payment currency on Stripe’s page. Changing the site’s display currency does not change the order currency. See our <a href=\"/privacy-policy\">privacy policy</a>."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Haqiqiy to‘lovlar o‘chiq",
+            "ru": "Реальные платежи отключены",
+            "en": "Live payments are off"
+          },
+          "paragraphs": [
+            {
+              "uz": "Sayt haqiqiy karta, bank yoki kripto to‘lovlarini qabul qilmaydi. Ruxsatli test checkout mavjud bo‘lishi mumkin. Sinov buyurtmasi pul yechmaydi va o‘yinga paket yetkazmaydi.",
+              "ru": "Сайт не принимает реальные платежи картой, банковским переводом или криптовалютой. Допущенным тестировщикам может быть доступна тестовая оплата. Она не списывает деньги и не доставляет пакет в игру.",
+              "en": "The site does not take real card, bank or crypto payments. Authorized test checkout may be available. A test order does not charge money or deliver a game package."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Pul yechilgan deb o‘ylasangiz",
+            "ru": "Если вы видите списание",
+            "en": "If you see a charge"
+          },
+          "paragraphs": [
+            {
+              "uz": "Bank ilovasidagi operatsiya nomi, sanasi va summasini tekshiring. Karta raqamini yubormasdan <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a> manziliga yozing; ruxsatsiz operatsiya bo‘lsa darhol bankingizga ham xabar bering.",
+              "ru": "Проверьте название операции, дату и сумму в банке. Напишите на <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>, не присылая номер карты; о несанкционированной операции сразу сообщите банку.",
+              "en": "Check the merchant name, date and amount in your banking app. Email <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a> without your card number; report an unauthorized charge to your bank immediately too."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Tashqi to‘lov talab qilinsa",
+            "ru": "Если требуют внешнюю оплату",
+            "en": "If asked to pay off-site"
+          },
+          "paragraphs": [
+            {
+              "uz": "Shaxsiy kartaga, Telegramga yoki kriptohamyonga pul yubormang. Xabarni va e’lon havolasini <a href=\"/contact\">bizga yuboring</a>. Rasmiy narx va komissiyalar ochilganda <a href=\"/fees\">shu sahifada</a> tushuntiriladi.",
+              "ru": "Не отправляйте деньги на личную карту, в Telegram или на криптокошелёк. Передайте сообщение и ссылку на объявление через <a href=\"/contact\">контакты</a>. Будущие комиссии будут указаны <a href=\"/fees\">здесь</a>.",
+              "en": "Do not pay a personal card, Telegram contact or crypto wallet. Send the message and listing link through <a href=\"/contact\">contact</a>. Future fees will be explained <a href=\"/fees\">here</a>."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "path": "/help/payments",
+      "showSalesNotice": true
+    },
+    "help/refunds": {
+      "title": {
+        "uz": "Qaytarim va nizo yordami",
+        "ru": "Помощь по возвратам и спорам",
+        "en": "Refund and dispute help"
+      },
+      "lead": {
+        "uz": "Kelishmovchilikni qayd etish va dalillarni xavfsiz yuborish.",
+        "ru": "Как зафиксировать спор и безопасно передать доказательства.",
+        "en": "Record a disagreement and provide evidence safely."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "Qachon murojaat qilish kerak?",
+            "ru": "Когда обращаться?",
+            "en": "When to contact us"
+          },
+          "paragraphs": [
+            {
+              "uz": "Mahsulot tavsifga mos kelmasa, yetkazish bajarilmasa, sotuvchi tashqi to‘lov so‘rasa yoki hisobingizda siz qilmagan amal ko‘rinsa, darhol xabar bering. Hozir haqiqiy pul bilan savdo yo‘q; sandbox qaytarimi bankka pul qaytarilishi emas.",
+              "ru": "Сообщайте, если товар не соответствует описанию, доставка не выполнена, продавец требует внешнюю оплату или появились неизвестные действия. Реальные продажи отключены; тестовый возврат не возвращает деньги в банк.",
+              "en": "Report an item that differs from its description, failed delivery, off-site payment requests or unknown account activity. Live sales are off; a sandbox refund does not return bank funds."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Qanday yuboriladi?",
+            "ru": "Как подать обращение?",
+            "en": "How to submit"
+          },
+          "paragraphs": [
+            {
+              "uz": "Buyurtma sahifasida “Nizo” amalini tanlang. Buyurtma raqami, vaqt, muammo tavsifi va maxfiy bo‘lmagan dalillarni kiriting. Buyurtmaga kira olmasangiz <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a> manziliga yozing.",
+              "ru": "Выберите «Спор» на странице заказа. Укажите номер, время, описание и несекретные доказательства. Если заказ недоступен, напишите на <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>.",
+              "en": "Select Dispute on the order page. Include the reference, time, description and non-sensitive evidence. If you cannot access the order, email <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Ko‘rib chiqish va natija",
+            "ru": "Рассмотрение и результат",
+            "en": "Review and outcome"
+          },
+          "paragraphs": [
+            {
+              "uz": "Moderator yozuvlarni ko‘rib, qo‘shimcha ma’lumot so‘rashi mumkin. Hozir avtomatik kompensatsiya yoki aniq javob muddati va’da qilinmaydi. Haqiqiy savdo boshlanishidan oldin to‘lov provayderi va mahalliy huquqqa mos muddatlar <a href=\"/refunds\">siyosatda</a> e’lon qilinadi.",
+              "ru": "Модератор может запросить дополнительные сведения. Автоматическая компенсация и точный срок ответа пока не обещаются. Перед реальными продажами сроки будут опубликованы в <a href=\"/refunds\">политике</a> с учётом закона и платёжного провайдера.",
+              "en": "A moderator may request more information. No automatic compensation or fixed response time is promised now. Before live sales, timelines will be published in the <a href=\"/refunds\">policy</a> in line with the payment provider and applicable law."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "path": "/help/refunds"
+    },
+    "help/chat": {
+      "title": {
+        "uz": "Chat orqali yordam",
+        "ru": "Помощь в чате",
+        "en": "Chat support"
+      },
+      "lead": {
+        "uz": "Chat qachon foydali va unga qanday ma’lumot yuborish mumkin?",
+        "ru": "Когда полезен чат и какие данные можно отправлять?",
+        "en": "When chat helps and what information is safe to send."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "Chatni ochish",
+            "ru": "Открыть чат",
+            "en": "Open chat"
+          },
+          "paragraphs": [
+            {
+              "uz": "Quyidagi tugma Crisp yordam chatini ochadi. Brauzeringizda chatga rozilik berilmagan yoki chat yuklanmasa, aloqa sahifasidagi emailga yozing.",
+              "ru": "Кнопка ниже открывает чат поддержки Crisp. Если чат не разрешён в настройках конфиденциальности или не загрузился, напишите на email со страницы контактов.",
+              "en": "Use the button below to open Crisp support chat. If chat is disabled in your privacy settings or does not load, use the email on the contact page."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Nimani yozish kerak?",
+            "ru": "Что написать?",
+            "en": "What to include"
+          },
+          "paragraphs": [
+            {
+              "uz": "Muammo turi, buyurtma raqami bo‘lsa shu raqam va qisqa tavsifni yuboring. Parol, OTP, tiklash kodi, karta raqami, pasport yoki boshqa maxfiy hujjatni chatga joylamang.",
+              "ru": "Укажите тему, номер заказа при наличии и краткое описание. Не отправляйте пароль, код подтверждения, код восстановления, номер карты, паспорт или другие секретные документы.",
+              "en": "Send the topic, order reference if available and a short description. Do not send passwords, one-time codes, recovery codes, card numbers or identity documents."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Chatdan tashqari aloqa",
+            "ru": "Другие способы связи",
+            "en": "Other contact options"
+          },
+          "paragraphs": [
+            {
+              "uz": "Chat ishlamasa <a href=\"/contact\">aloqa sahifasi</a> yoki <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a> orqali yozing. Shoshilinch hisob xavfsizligi masalasida avval parolni almashtiring va xizmat provayderingizga xabar bering.",
+              "ru": "Если чат недоступен, используйте <a href=\"/contact\">контакты</a> или <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>. При угрозе аккаунту сначала смените пароль и сообщите своему провайдеру.",
+              "en": "If chat is unavailable, use <a href=\"/contact\">contact</a> or <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>. For urgent account security issues, change your password and contact your account provider first."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "action": {
+        "uz": "Chatni ochish",
+        "ru": "Открыть чат",
+        "en": "Open chat"
+      },
+      "path": "/help/chat"
+    },
+    "policies": {
+      "title": {
+        "uz": "Marketplace qoidalari",
+        "ru": "Правила маркетплейса",
+        "en": "Marketplace policies"
+      },
+      "lead": {
+        "uz": "Qaysi e’lonlar ko‘rib chiqiladi va qoidabuzarlik qanday hal qilinadi?",
+        "ru": "Какие объявления допускаются и как рассматриваются нарушения?",
+        "en": "Which listings are reviewed and how violations are handled."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "Mahsulotga qo‘yiladigan talablar",
+            "ru": "Требования к товару",
+            "en": "Product requirements"
+          },
+          "paragraphs": [
+            {
+              "uz": "O‘yin buyumi, kod, xizmat yoki boshqa raqamli mahsulot faqat sotuvchi unga haqli bo‘lsa va noshir hamda platforma shartlari ruxsat etsa ko‘rib chiqiladi. O‘yin katalogda borligi barcha turdagi savdoga ruxsat degani emas. Har bir mahsulot turi alohida tekshiriladi.",
+              "ru": "Игровой предмет, код, услуга или иной цифровой товар рассматривается лишь при праве продавца и разрешении издателя и платформы. Наличие игры в каталоге не разрешает все виды торговли. Каждый тип товара проверяется отдельно.",
+              "en": "An item, code, service or other digital product is considered only when the seller has rights to it and publisher and platform terms permit it. A game in the catalog does not authorize every type of trade. Each product type is reviewed separately."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "E’lon sifati va moderatsiya",
+            "ru": "Качество объявлений и модерация",
+            "en": "Listing quality and moderation"
+          },
+          "paragraphs": [
+            {
+              "uz": "Tavsif, rasm, narx, hudud, cheklovlar va yetkazish shartlari haqqoniy bo‘lishi kerak. Moderator e’lonni tahrirga qaytarishi, yashirishi yoki rad etishi mumkin. Moderatsiya tekshiruvi sotuvchining shaxsini, tovar haqiqiyligini yoki noshir roziligini kafolatlamaydi.",
+              "ru": "Описание, изображения, цена, регион, ограничения и доставка должны быть достоверными. Модератор может вернуть объявление на правку, скрыть или отклонить его. Проверка не гарантирует личность продавца, подлинность товара или согласие издателя.",
+              "en": "Descriptions, images, prices, regions, restrictions and delivery terms must be accurate. A moderator may return, hide or reject a listing. Review does not guarantee seller identity, authenticity or publisher consent."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Xavfsiz muomala",
+            "ru": "Безопасное общение",
+            "en": "Safe conduct"
+          },
+          "paragraphs": [
+            {
+              "uz": "Platformadan tashqari to‘lovga undash, fishing, kod so‘rash, soxta chek, aldov yoki boshqa foydalanuvchi ma’lumotini e’lon qilish taqiqlanadi. Shubhali e’lonni xabar qiling; tafsilotlar taqiqlangan mahsulotlar sahifasida.",
+              "ru": "Запрещены внешние платежи, фишинг, запрос кодов, поддельные чеки, обман и публикация чужих данных. Сообщайте о подозрительных объявлениях; детали на странице запрещённых товаров.",
+              "en": "Off-site payment requests, phishing, credential requests, fake receipts, deception and posting another person’s data are prohibited. Report suspicious listings; see prohibited items for detail."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Amaldagi holat",
+            "ru": "Текущий статус",
+            "en": "Current status"
+          },
+          "paragraphs": [
+            {
+              "uz": "Haqiqiy savdo yopiq. Publisher cheklovlari <a href=\"/prohibited-items\">taqiqlangan mahsulotlar</a> sahifasida keltirilgan; sotuvchining majburiyatlari <a href=\"/seller-policy\">alohida siyosatda</a>.",
+              "ru": "Реальные продажи закрыты. Ограничения издателей приведены на странице <a href=\"/prohibited-items\">запрещённых товаров</a>; обязанности продавца — в <a href=\"/seller-policy\">отдельной политике</a>.",
+              "en": "Live sales are closed. Publisher restrictions are listed under <a href=\"/prohibited-items\">prohibited items</a>; seller obligations have a <a href=\"/seller-policy\">separate policy</a>."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "path": "/policies"
+    },
+    "terms": {
+      "title": {
+        "uz": "Foydalanish shartlari",
+        "ru": "Условия использования",
+        "en": "Terms of use"
+      },
+      "lead": {
+        "uz": "Hisob, e’lon va sinov rejimidagi xizmatdan foydalanish shartlari.",
+        "ru": "Условия аккаунта, объявлений и текущего тестового режима.",
+        "en": "Rules for accounts, listings and the current preview service."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "Xizmat va operator",
+            "ru": "Сервис и оператор",
+            "en": "Service and operator"
+          },
+          "paragraphs": [
+            {
+              "uz": "SentryLoot o‘yin mahsulotlari va xizmatlari uchun marketplace tayyorlamoqda. Hozir haqiqiy to‘lov va savdo ishga tushmagan. Rasmiy yuridik shaxs rekvizitlari ro‘yxatdan o‘tgach e’lon qilinadi; hozirgi aloqa manzili <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>.",
+              "ru": "SentryLoot готовит маркетплейс игровых товаров и услуг. Реальные платежи и продажи ещё не запущены. Реквизиты юридического лица будут опубликованы после регистрации; текущий адрес связи — <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>.",
+              "en": "SentryLoot is preparing a marketplace for game items and services. Live payments and sales have not launched. Registered business details will be published after formation; contact us at <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Foydalanuvchi hisobi",
+            "ru": "Аккаунт пользователя",
+            "en": "User accounts"
+          },
+          "paragraphs": [
+            {
+              "uz": "Ro‘yxatdan o‘tishda to‘g‘ri ma’lumot bering va hisobingizni himoyalang. Boshqaning akkauntiga kirmang, login kodlarini ulashmang va xavfsizlik yoki moderatsiya cheklovlarini chetlab o‘tmang. Qoidabuzarlik aniqlansa e’lon yoki hisob vaqtincha cheklanishi mumkin.",
+              "ru": "Указывайте достоверные данные и защищайте аккаунт. Не входите в чужие аккаунты, не делитесь кодами и не обходите ограничения безопасности или модерации. При нарушении объявление или аккаунт могут быть ограничены.",
+              "en": "Provide accurate registration information and secure your account. Do not access another person’s account, share login codes or evade security and moderation limits. Violations may lead to listing or account restrictions."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Xaridor majburiyatlari",
+            "ru": "Обязанности покупателя",
+            "en": "Buyer responsibilities"
+          },
+          "paragraphs": [
+            {
+              "uz": "Tasdiqlashdan oldin mahsulot tavsifi, hudud, buyurtma ma’lumotlari, yakuniy summa va valyutani tekshiring. Buyurtma kelgach, yakunlashdan oldin natijani tekshiring. <a href=\"/delivery\">Yetkazish</a>, <a href=\"/refunds\">bekor qilish va qaytarim</a> hamda <a href=\"/disputes\">nizo</a> shartlarini o‘qing.",
+              "ru": "Перед подтверждением проверьте описание, регион, данные заказа, итоговую сумму и валюту. После доставки проверьте результат до завершения заказа. Ознакомьтесь с условиями <a href=\"/delivery\">доставки</a>, <a href=\"/refunds\">отмены и возврата</a> и <a href=\"/disputes\">разрешения споров</a>.",
+              "en": "Before confirming, check the product description, region, order details, final amount and currency. Check the delivery before marking the order complete. Read our <a href=\"/delivery\">delivery</a>, <a href=\"/refunds\">cancellation and refund</a> and <a href=\"/disputes\">dispute</a> policies."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "E’lonlar va uchinchi tomon qoidalari",
+            "ru": "Объявления и правила третьих лиц",
+            "en": "Listings and third-party rules"
+          },
+          "paragraphs": [
+            {
+              "uz": "Sotuvchi mahsulot tavsifi va unga bo‘lgan huquqi uchun javobgar. Noshir, platforma va mahalliy qonun talablariga zid mahsulotni e’lon qilish mumkin emas. SentryLoot moderatsiyasi bu uchinchi tomonlarning ruxsati emas. <a href=\"/policies\">Marketplace qoidalari</a> va <a href=\"/prohibited-items\">taqiqlar</a>ni o‘qing.",
+              "ru": "Продавец отвечает за описание и право на товар. Запрещено размещать товар вопреки правилам издателя, платформы или закона. Модерация SentryLoot не является разрешением третьих лиц. См. <a href=\"/policies\">правила площадки</a> и <a href=\"/prohibited-items\">запреты</a>.",
+              "en": "Sellers are responsible for descriptions and rights to products. Products contrary to publisher, platform or local law requirements may not be listed. SentryLoot review is not third-party permission. Read the <a href=\"/policies\">marketplace rules</a> and <a href=\"/prohibited-items\">prohibited items</a>."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Pul, nizolar va o‘zgarishlar",
+            "ru": "Деньги, споры и изменения",
+            "en": "Money, disputes and changes"
+          },
+          "paragraphs": [
+            {
+              "uz": "Sandbox yozuvlari pul majburiyati yoki haqiqiy qaytarim yaratmaydi. Real savdo ochilishidan oldin narx, komissiya, refund tartibi, operator rekvizitlari va amaldagi shartlar qayta e’lon qilinadi. Majburiy iste’molchi huquqlari saqlanadi. Muammo bo‘lsa <a href=\"/contact\">biz bilan bog‘laning</a>.",
+              "ru": "Записи sandbox не создают денежных обязательств или реального возврата. До запуска продаж будут опубликованы цены, комиссии, возвраты, реквизиты оператора и обновлённые условия. Обязательные права потребителей сохраняются. По вопросам <a href=\"/contact\">свяжитесь с нами</a>.",
+              "en": "Sandbox records do not create a real payment obligation or refund. Before live sales, prices, fees, refunds, operator details and updated terms will be published. Mandatory consumer rights remain applicable. <a href=\"/contact\">Contact us</a> about an issue."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "path": "/terms",
+      "showSalesNotice": true
+    },
+    "refunds": {
+      "title": {
+        "uz": "Qaytarim va bekor qilish siyosati",
+        "ru": "Политика возвратов и отмены",
+        "en": "Refund and cancellation policy"
+      },
+      "lead": {
+        "uz": "Hozirgi sinov rejimi va haqiqiy savdodan oldin belgilanadigan tartib.",
+        "ru": "Текущий тестовый режим и порядок, который будет установлен до продаж.",
+        "en": "The current test mode and the process to be set before live sales."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "Hozirgi cheklov",
+            "ru": "Текущее ограничение",
+            "en": "Current limitation"
+          },
+          "paragraphs": [
+            {
+              "uz": "Haqiqiy to‘lovlar o‘chiq. Sandbox refund yozuvi bank, karta yoki hamyonga pul qaytarilishini anglatmaydi. Shu sabab hozir real pulga nisbatan refund muddati yoki avtomatik kompensatsiya va’da qilinmaydi.",
+              "ru": "Реальные платежи отключены. Запись о тестовом возврате не означает возврат денег на карту, счёт или кошелёк. Поэтому сейчас не обещаются сроки денежного возврата или автоматическая компенсация.",
+              "en": "Live payments are disabled. A sandbox refund record does not send money to a bank, card or wallet. No real-money refund timeline or automatic compensation is promised now."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Nizoni yuborish",
+            "ru": "Подача спора",
+            "en": "Submitting a dispute"
+          },
+          "paragraphs": [
+            {
+              "uz": "Buyurtma sahifasidan nizo oching; buyurtma raqami, muammo turi, kutilgan va olingan mahsulot farqi hamda tegishli vaqtni ko‘rsating. Maxfiy bo‘lmagan dalil qo‘shing. Buyurtmaga kira olmasangiz <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a> manziliga yozing.",
+              "ru": "Откройте спор из заказа; укажите номер, тип проблемы, разницу между ожидаемым и полученным и дату. Добавьте несекретные доказательства. Если заказ недоступен, пишите на <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>.",
+              "en": "Open a dispute from the order page; include the reference, issue type, difference between expected and received product, and timing. Add non-sensitive evidence. If you cannot reach the order, email <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Ko‘rib chiqish",
+            "ru": "Рассмотрение",
+            "en": "Review"
+          },
+          "paragraphs": [
+            {
+              "uz": "Moderator buyurtma va xabarlar tarixini ko‘rib, tomonlardan qo‘shimcha izoh so‘rashi mumkin. Qaror mavjud dalilga tayangan holda qayd etiladi. Tizimda hozir real to‘lov provayderiga refund yuborish imkoniyati yo‘q.",
+              "ru": "Модератор может проверить историю заказа и сообщений, запросить дополнительные сведения и зафиксировать решение по доказательствам. Сейчас система не отправляет возврат через реального платёжного провайдера.",
+              "en": "A moderator may review order and message history, request more detail and record a decision based on evidence. The system cannot send a real refund through a payment provider yet."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Bekor qilish va qaytarim so‘rovi",
+            "ru": "Запрос отмены и возврата",
+            "en": "Requesting cancellation or a refund"
+          },
+          "paragraphs": [
+            {
+              "uz": "Buyurtma bajarilmagan bo‘lsa, imkon qadar tez buyurtma sahifasidan yoki <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a> orqali murojaat qiling. Buyurtma raqami, sabab va yetkazish holatini ko‘rsating. Yetkazilmagan, noto‘g‘ri yoki takroriy buyurtma bo‘lsa, <a href=\"/disputes\">nizo tartibini</a> ko‘ring.",
+              "ru": "Если заказ ещё не выполнен, как можно скорее обратитесь со страницы заказа или по адресу <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>. Укажите номер заказа, причину и статус доставки. Если товар не доставлен, не соответствует заказу или заказ продублирован, см. <a href=\"/disputes\">порядок разрешения споров</a>.",
+              "en": "If the order has not been fulfilled, contact us promptly from the order page or at <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>. Include the order reference, reason and delivery status. For missing, incorrect or duplicate orders, see our <a href=\"/disputes\">dispute process</a>."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Real savdo ochilishidan oldin",
+            "ru": "До запуска продаж",
+            "en": "Before live sales"
+          },
+          "paragraphs": [
+            {
+              "uz": "Ariza va qaytarim muddatlari, pul qaytish usuli hamda raqamli mahsulotlar bo‘yicha shartlar savdo ochilishidan oldin e’lon qilinadi. Bu sahifa amaldagi qonun bo‘yicha majburiy iste’molchi huquqlarini cheklamaydi.",
+              "ru": "Сроки обращения и возврата, способ возврата и условия для цифровых товаров будут опубликованы до начала продаж. Эта страница не ограничивает обязательные права потребителей по применимому закону.",
+              "en": "Request and refund timelines, the refund method and conditions for digital goods will be published before live sales. This policy does not limit mandatory consumer rights under applicable law."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "path": "/refunds",
+      "showSalesNotice": true
+    },
+    "delivery": {
+      "title": {
+        "uz": "Yetkazish siyosati",
+        "ru": "Политика доставки",
+        "en": "Delivery policy"
+      },
+      "lead": {
+        "uz": "Top Up va marketplace buyurtmalari qanday yetkaziladi.",
+        "ru": "Как выполняются пополнения и заказы маркетплейса.",
+        "en": "How digital top-ups and marketplace orders are delivered."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "Top Up",
+            "ru": "Пополнение",
+            "en": "Top Up"
+          },
+          "paragraphs": [
+            {
+              "uz": "Paketni, o‘yin hududini, Player ID va kerak bo‘lsa server ID’ni tasdiqlashdan oldin tekshiring. Real yetkazish yoqilganda, tasdiqlangan buyurtma tegishli o‘yin hisobiga raqamli tarzda yuboriladi. Paket uchun muddat xariddan oldin ko‘rsatiladi. Sinov to‘lovi o‘yinga valyuta jo‘natmaydi.",
+              "ru": "До подтверждения проверьте пакет, регион игры, ID игрока и при необходимости ID сервера. После запуска реальной доставки подтверждённое пополнение будет зачисляться в указанный игровой аккаунт. Срок будет показан перед покупкой. Тестовая оплата не зачисляет валюту.",
+              "en": "Before confirming, check the package, game region, player ID and server ID where required. Once live delivery is enabled, confirmed top-ups will be delivered digitally to the specified game account. The package delivery estimate will be shown before purchase. A test payment does not deliver game currency."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Marketplace va akkauntlar",
+            "ru": "Маркетплейс и аккаунты",
+            "en": "Marketplace and accounts"
+          },
+          "paragraphs": [
+            {
+              "uz": "Sotuvchi yetkazish usuli, muddat, platforma va hudud cheklovlarini e’londa ko‘rsatadi. Akkaunt transferi faqat noshir ruxsat bergan hollarda ko‘rib chiqiladi. Yetkazish bo‘yicha ma’lumotni buyurtma ichida tekshiring va maxfiy kirish ma’lumotlarini ochiq chatga yubormang.",
+              "ru": "Продавец указывает способ и срок доставки, платформу и региональные ограничения в объявлении. Передача аккаунта рассматривается только с разрешения издателя. Проверяйте доставку внутри заказа и не отправляйте секретные данные входа в открытый чат.",
+              "en": "Sellers specify the delivery method, timeframe, platform and region restrictions in each listing. Account transfers are considered only with publisher permission. Check delivery details in the order and keep private login details out of open chat."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Yetkazish kechiksa",
+            "ru": "При задержке доставки",
+            "en": "If delivery is delayed"
+          },
+          "paragraphs": [
+            {
+              "uz": "Buyurtma raqami bilan <a href=\"/contact\">yordamga yozing</a>. Yetkazilmagan yoki tavsifga mos kelmagan buyurtma uchun <a href=\"/refunds\">qaytarim va bekor qilish siyosatini</a> ko‘ring.",
+              "ru": "Сообщите номер заказа <a href=\"/contact\">службе поддержки</a>. Если заказ не доставлен или не соответствует описанию, см. <a href=\"/refunds\">политику возвратов и отмены</a>.",
+              "en": "Contact <a href=\"/contact\">support</a> with your order reference. For non-delivery or items that differ from the description, see our <a href=\"/refunds\">refund and cancellation policy</a>."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "path": "/delivery",
+      "showSalesNotice": true
+    },
+    "disputes": {
+      "title": {
+        "uz": "Nizolar va ularni hal qilish",
+        "ru": "Разрешение споров",
+        "en": "Dispute and resolution policy"
+      },
+      "lead": {
+        "uz": "Xaridor va sotuvchi kelishmovchilikni qanday qayd etadi va ko‘rib chiqadi.",
+        "ru": "Как покупатель и продавец сообщают о разногласии и как оно рассматривается.",
+        "en": "How buyers and sellers report an issue and how it is reviewed."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "Nizoni ochish",
+            "ru": "Открытие спора",
+            "en": "Opening a dispute"
+          },
+          "paragraphs": [
+            {
+              "uz": "Yetkazish bajarilmagan yoki mahsulot tavsifga mos kelmagan bo‘lsa, buyurtmani yakunlashdan oldin undagi nizo amalidan foydalaning. Buyurtma raqami va nima bo‘lganini yozing. Buyurtmaga kira olmasangiz, <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a> manziliga murojaat qiling.",
+              "ru": "Если заказ не доставлен или не соответствует описанию, откройте спор в заказе до его завершения. Укажите номер и опишите проблему. Если доступа к заказу нет, напишите на <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>.",
+              "en": "If the order was not delivered or differs from its description, use the dispute action in the order before completing it. Include the order reference and what happened. If you cannot access the order, email <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Dalil va qaror",
+            "ru": "Доказательства и решение",
+            "en": "Evidence and decision"
+          },
+          "paragraphs": [
+            {
+              "uz": "Har ikki tomon buyurtmaga tegishli dalil va izoh yuborishi mumkin. Parol, OTP va karta ma’lumotlarini yubormang. Moderator buyurtma tarixini va taqdim etilgan dalillarni ko‘rib, qaror va keyingi qadamni qayd qiladi. Pul bo‘yicha tartib <a href=\"/refunds\">qaytarim siyosatida</a> keltirilgan.",
+              "ru": "Обе стороны могут предоставить пояснения и относящиеся к заказу доказательства. Не отправляйте пароли, одноразовые коды и данные карты. Модератор изучит историю заказа и доказательства и зафиксирует решение и дальнейшие действия. Порядок возврата указан в <a href=\"/refunds\">политике возвратов</a>.",
+              "en": "Both parties can provide relevant evidence and an explanation. Keep passwords, one-time codes and card data out of evidence. A moderator reviews the order history and submissions and records the decision and next step. See the <a href=\"/refunds\">refund policy</a> for payment-related requests."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "path": "/disputes"
+    },
+    "about": {
+      "title": {
+        "uz": "Biz SentryLoot’miz",
+        "ru": "Мы — SentryLoot",
+        "en": "We are SentryLoot"
+      },
+      "lead": {
+        "uz": "O‘yinchilar va sotuvchilar uchun raqamli o‘yin mahsulotlari maydoni.",
+        "ru": "Площадка цифровых игровых товаров для игроков и продавцов.",
+        "en": "A marketplace for players, sellers and digital game goods."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "Top Up katalogi",
+            "ru": "Каталог пополнений",
+            "en": "Top Up catalog"
+          },
+          "paragraphs": [
+            {
+              "uz": "O‘yin, hudud va paketni bir joyda ko‘rib chiqing. Xarid ochilganda paket, valyuta va kerakli o‘yinchi ma’lumotlari buyurtma tasdiqlanishidan oldin ko‘rsatiladi.",
+              "ru": "Сравнивайте игры, регионы и пакеты в одном каталоге. Когда покупки станут доступны, до подтверждения заказа будут видны пакет, валюта и необходимые данные игрока.",
+              "en": "Explore games, regions and packages in one catalog. When checkout opens, the package, payment currency and required player details will be shown before confirmation."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Marketplace",
+            "ru": "Маркетплейс",
+            "en": "Marketplace"
+          },
+          "paragraphs": [
+            {
+              "uz": "Mustaqil sotuvchilar raqamli o‘yin mahsulotlarini e’lon qiladi. Xaridor tavsif, narx, hudud va yetkazish shartlarini taqqoslay oladi.",
+              "ru": "Независимые продавцы размещают цифровые игровые товары. Покупатель может сравнить описание, цену, регион и условия доставки.",
+              "en": "Independent sellers list digital game goods. Buyers can compare the description, price, region and delivery details."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Vazifamiz",
+            "ru": "Наша миссия",
+            "en": "Our mission"
+          },
+          "paragraphs": [
+            {
+              "uz": "O‘yin mahsulotini tanlashda aniq ma’lumot berish. Xaridor nimani olayotganini, sotuvchi qanday shartlarga amal qilishini va muammo bo‘lsa qayerga murojaat etishni bilishi kerak.",
+              "ru": "Давать понятную информацию при выборе игрового товара. Покупатель должен знать, что получает, какие правила действуют для продавца и куда обратиться за помощью.",
+              "en": "Make it clear what buyers receive, what sellers are responsible for and where either side can turn for help."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Maqsadimiz",
+            "ru": "Наше видение",
+            "en": "Our vision"
+          },
+          "paragraphs": [
+            {
+              "uz": "O‘yin mahsulotlari uchun tushunarli katalog, aniq yetkazish shartlari va yordam yo‘li bor marketplace qurish.",
+              "ru": "Создать маркетплейс игровых товаров с понятным каталогом, ясными условиями доставки и доступной поддержкой.",
+              "en": "Build a game marketplace with an easy-to-browse catalog, clear delivery terms and accessible support."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "SentryLoot bilan bog‘laning",
+            "ru": "Свяжитесь с SentryLoot",
+            "en": "Get in touch with SentryLoot"
+          },
+          "paragraphs": [
+            {
+              "uz": "Mahsulot, e’lon yoki buyurtma bo‘yicha savollaringizni yordam jamoasiga yuboring.",
+              "ru": "По вопросам товаров, объявлений или заказов обращайтесь в службу поддержки.",
+              "en": "Contact support with questions about a product, listing or order."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "path": "/about",
+      "showSalesNotice": true,
+      "metadataTitle": {
+        "uz": "Biz haqimizda",
+        "ru": "О нас",
+        "en": "About Us"
+      }
+    },
+    "sellerPolicy": {
+      "title": {
+        "uz": "Sotuvchi kelishuvi",
+        "ru": "Соглашение с продавцом",
+        "en": "Seller agreement"
+      },
+      "lead": {
+        "uz": "E’lon, yetkazish, xaridor bilan muomala va noshir ruxsati bo‘yicha talablar.",
+        "ru": "Требования к объявлениям, доставке, общению и разрешению издателя.",
+        "en": "Requirements for listings, delivery, buyer communication and publisher permission."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "Sotish huquqi",
+            "ru": "Право на продажу",
+            "en": "Right to sell"
+          },
+          "paragraphs": [
+            {
+              "uz": "Sotuvchi mahsulotga haqli ekanini va tegishli o‘yin, platforma hamda hudud qoidalari transferga ruxsat berishini tekshiradi. Akkaunt sotish uchun noshirning aniq ruxsati bo‘lmasa e’lon joylashtirmang. Taqiqlangan noshirlar va manbalar alohida sahifada.",
+              "ru": "Продавец проверяет право на товар и разрешение правил игры, платформы и региона. Не размещайте аккаунт без явного разрешения издателя. Издатели и источники перечислены отдельно.",
+              "en": "Sellers must verify their rights to the product and that game, platform and regional rules permit transfer. Do not list an account without clear publisher permission. Restricted publishers and sources are listed separately."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Tavsif va yetkazish",
+            "ru": "Описание и доставка",
+            "en": "Description and delivery"
+          },
+          "paragraphs": [
+            {
+              "uz": "Nomi, holati, narxi, cheklovi, mintaqasi, zaxirasi va yetkazish usulini aniq ko‘rsating. Xaridorni noto‘g‘ri xulosaga olib keladigan “kafolatlangan”, “ban bo‘lmaydi” kabi tasdiqlanmagan da’volarni yozmang. Kelishilgan mahsulotni tavsifga mos yetkazing.",
+              "ru": "Точно указывайте название, состояние, цену, ограничения, регион, наличие и доставку. Не обещайте без оснований «гарантию» или «отсутствие бана». Передавайте именно описанный товар.",
+              "en": "Describe name, condition, price, restrictions, region, stock and delivery accurately. Do not make unsupported promises such as “guaranteed” or “ban-proof.” Deliver the described product."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Muomala va ma’lumot xavfsizligi",
+            "ru": "Общение и безопасность данных",
+            "en": "Conduct and data safety"
+          },
+          "paragraphs": [
+            {
+              "uz": "Xaridorni platformadan tashqari to‘lovga undamang. Parol, OTP, tiklash kodi, karta raqami yoki shaxsiy hujjatni chatda so‘ramang. Shikoyatga dalil va aniq izoh bilan javob bering; yolg‘on dalil yoki soxta chek yubormang.",
+              "ru": "Не переводите покупателя на внешнюю оплату. Не запрашивайте пароль, код, номер карты или документы в чате. Отвечайте на жалобы по существу и не присылайте поддельные чеки или доказательства.",
+              "en": "Do not redirect buyers to off-site payment. Never request passwords, codes, card numbers or documents in chat. Respond to complaints with accurate evidence; do not submit fake receipts or proof."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Shaxsni tasdiqlash, komissiya va payout",
+            "ru": "Верификация, комиссия и выплаты",
+            "en": "Identity verification, commission and payouts"
+          },
+          "paragraphs": [
+            {
+              "uz": "Sotuvchi shaxsini tasdiqlash va platforma moderatsiyasidan o‘tadi. Real payout ochilishidan oldin to‘lov provayderi talab qilgan sotuvchi va bank ma’lumotlari ham tekshiriladi. <a href=\"/fees\">Komissiya</a>, payout jadvali, qaytarim va nizo bo‘yicha hisob-kitob shartlari real savdodan oldin e’lon qilinadi. Hozir test balansini bankka yechib bo‘lmaydi.",
+              "ru": "Продавец проходит проверку личности и модерацию. До запуска реальных выплат также проверяются данные продавца и банка, необходимые провайдеру. <a href=\"/fees\">Комиссии</a>, график выплат и правила расчётов при возвратах и спорах будут опубликованы до запуска. Тестовый баланс вывести в банк нельзя.",
+              "en": "Sellers go through identity verification and platform review. Live payouts will also require the seller and bank details required by the payment provider. <a href=\"/fees\">Commission</a>, payout timing and the treatment of refunds and disputes will be published before live sales. Sandbox balances cannot be withdrawn to a bank."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "path": "/seller-policy",
+      "showSalesNotice": true
+    },
+    "prohibited": {
+      "title": {
+        "uz": "Taqiqlangan mahsulotlar va akkauntlar",
+        "ru": "Запрещённые товары и аккаунты",
+        "en": "Prohibited items and accounts"
+      },
+      "lead": {
+        "uz": "Taqiqlangan toifalar va rasmiy manbasi tekshirilgan akkaunt cheklovlari.",
+        "ru": "Запрещённые категории и проверенные ограничения на продажу аккаунтов.",
+        "en": "Prohibited categories and account-sale restrictions checked against official sources."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "Umumiy taqiqlar",
+            "ru": "Общие запреты",
+            "en": "General prohibitions"
+          },
+          "paragraphs": [],
+          "bullets": [
+            {
+              "uz": "O‘g‘irlangan, buzilgan, ijaraga olingan, bahsli yoki egaligi tasdiqlanmagan akkaunt va buyumlar.",
+              "ru": "Украденные, взломанные, арендованные, спорные или неподтверждённые аккаунты и предметы.",
+              "en": "Stolen, compromised, rented, disputed or unverified accounts and items."
+            },
+            {
+              "uz": "Cheat, bot, exploit, zararli fayl, soxta valyuta, soxta chek yoki ruxsatsiz chargeback xizmatlari.",
+              "ru": "Читы, боты, эксплойты, вредоносные файлы, поддельная валюта, чеки или услуги по незаконному возврату платежа.",
+              "en": "Cheats, bots, exploits, malware, counterfeit currency or receipts, and unauthorized chargeback services."
+            },
+            {
+              "uz": "Parol, OTP, shaxsiy ma’lumot, to‘lov karta raqami yoki boshqa odamning hujjati.",
+              "ru": "Пароли, коды, личные данные, номера карт и документы других лиц.",
+              "en": "Passwords, one-time codes, personal data, card numbers or another person’s documents."
+            },
+            {
+              "uz": "Noshir yoki platforma taqiqlagan akkaunt transferi, buyum savdosi, boosting yoki tashqi to‘lov.",
+              "ru": "Передача аккаунтов, торговля предметами, бустинг или внешняя оплата, запрещённые издателем либо платформой.",
+              "en": "Account transfers, item trading, boosting or off-site payments forbidden by a publisher or platform."
+            }
+          ]
+        },
+        {
+          "title": {
+            "uz": "Akkaunt savdosi bo‘yicha qoida",
+            "ru": "Правило торговли аккаунтами",
+            "en": "Account-sale rule"
+          },
+          "paragraphs": [
+            {
+              "uz": "Quyidagi ro‘yxat keng tarqalgan xizmatlardan rasmiy qoidasi tasdiqlangan misollar; dunyodagi barcha o‘yinlarning to‘liq ro‘yxati emas. Ro‘yxatda yo‘q o‘yin avtomatik ruxsat etilgan hisoblanmaydi. Har bir yangi o‘yin, server va platforma shartlarini alohida tekshiramiz; aniq ruxsat bo‘lmasa akkaunt e’lonini qabul qilmaymiz.",
+              "ru": "Ниже приведены популярные сервисы с проверенными официальными правилами, а не все игры мира. Отсутствие игры в списке не означает разрешения. Для каждой новой игры, сервера и платформы нужна отдельная проверка; без явного разрешения аккаунт не принимается.",
+              "en": "These are common services with verified official rules, not every game worldwide. Absence from the list does not mean permission. Every new game, server and platform requires a separate review; without clear permission, account listings are not accepted."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "publisherList": true,
+      "path": "/prohibited-items"
+    },
+    "contact": {
+      "title": {
+        "uz": "Biz bilan bog‘lanish",
+        "ru": "Связаться с нами",
+        "en": "Contact us"
+      },
+      "lead": {
+        "uz": "Savdo, xavfsizlik, shikoyat yoki maxfiylik masalasi bo‘yicha yozing.",
+        "ru": "Напишите по вопросам торговли, безопасности, жалоб или конфиденциальности.",
+        "en": "Contact us about commerce, safety, complaints or privacy."
+      },
+      "sections": [
+        {
+          "title": {
+            "uz": "Biznes va yordam tafsilotlari",
+            "ru": "Данные компании и поддержки",
+            "en": "Business and support details"
+          },
+          "paragraphs": [
+            {
+              "uz": "Tasdiqlangan operator rekvizitlari va ish vaqti <a href=\"/#service-status\">xizmat holati sahifasida</a> e’lon qilinadi.",
+              "ru": "Подтверждённые данные оператора и часы работы публикуются на <a href=\"/#service-status\">странице статуса сервиса</a>.",
+              "en": "Verified business details and support hours are published on the <a href=\"/#service-status\">service status page</a>."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Email",
+            "ru": "Электронная почта",
+            "en": "Email"
+          },
+          "paragraphs": [
+            {
+              "uz": "Asosiy ishchi manzil: <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>. Xabar mavzusiga “Buyurtma”, “E’lon”, “Hisob xavfsizligi” yoki “Ma’lumotlarni o‘chirish” deb yozing. Buyurtma bo‘lsa raqamini qo‘shing.",
+              "ru": "Рабочий адрес: <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>. Укажите тему «Заказ», «Объявление», «Безопасность аккаунта» или «Удаление данных». Если есть заказ, добавьте номер.",
+              "en": "Work address: <a href=\"mailto:sentryloot@gamestorehub.com\">sentryloot@gamestorehub.com</a>. Use a subject such as “Order,” “Listing,” “Account security,” or “Data deletion.” Include the order reference when relevant."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Chat",
+            "ru": "Чат",
+            "en": "Chat"
+          },
+          "paragraphs": [
+            {
+              "uz": "<a href=\"/help/chat\">Chat sahifasi</a> orqali yordam oynasini ochishingiz mumkin. Chat yuklanmasa emaildan foydalaning.",
+              "ru": "Откройте окно поддержки на <a href=\"/help/chat\">странице чата</a>. Если чат недоступен, используйте email.",
+              "en": "Open the support window from <a href=\"/help/chat\">chat help</a>. If it does not load, use email."
+            }
+          ],
+          "bullets": []
+        },
+        {
+          "title": {
+            "uz": "Xavfsiz murojaat",
+            "ru": "Безопасное обращение",
+            "en": "Send information safely"
+          },
+          "paragraphs": [
+            {
+              "uz": "Parol, OTP, tiklash kodi, to‘liq karta raqami, pasport yoki maxfiy hujjatni email va chatga yubormang. Shubhali tranzaksiya bo‘lsa bankingizga, o‘yin akkaunti muammosi bo‘lsa noshirning rasmiy yordamiga ham murojaat qiling.",
+              "ru": "Не отправляйте пароль, одноразовый код, полный номер карты, паспорт и секретные документы. При подозрительной операции обращайтесь также в банк, а по игровому аккаунту — к издателю.",
+              "en": "Do not email or chat passwords, one-time codes, full card numbers, passports or sensitive documents. Contact your bank about suspicious charges and the publisher about a game account issue."
+            }
+          ],
+          "bullets": []
+        }
+      ],
+      "path": "/contact"
+    }
+  },
+  "publisherRules": [
+    [
+      "EA / EA SPORTS FC",
+      "https://tos.ea.com/legalapp/WEBTERMS/US/en/PC/06302022",
+      {
+        "uz": "EA hisobini sotish, ulashish yoki o‘tkazishni ruxsatsiz taqiqlaydi.",
+        "ru": "EA запрещает продажу, передачу или совместное использование аккаунта без разрешения.",
+        "en": "EA prohibits selling, sharing or transferring an account without authorization."
+      }
+    ],
+    [
+      "Valve / Steam",
+      "https://help.steampowered.com/en/faqs/view/7E78-08DB-AC21-CE32",
+      {
+        "uz": "Steam hisobini sotib olish yoki sotish mumkin emas.",
+        "ru": "Аккаунт Steam нельзя покупать или продавать.",
+        "en": "Steam accounts cannot be bought or sold."
+      }
+    ],
+    [
+      "Riot Games",
+      "https://www.riotgames.com/en/terms-of-service",
+      {
+        "uz": "Riot hisobini sotish, berish yoki boshqa kishiga kirishga ruxsat qilish mumkin emas.",
+        "ru": "Нельзя продавать или передавать аккаунт Riot либо давать к нему доступ другому лицу.",
+        "en": "Riot prohibits selling, transferring or allowing another person to access an account."
+      }
+    ],
+    [
+      "Epic Games / Fortnite",
+      "https://www.epicgames.com/help/c-45487929/c-38978022/can-i-buy-sell-or-share-an-epic-games-account-epic-games-a14738255",
+      {
+        "uz": "Epic akkauntini sotib olish, sotish yoki ulashish taqiqlangan.",
+        "ru": "Покупка, продажа и совместное использование аккаунта Epic запрещены.",
+        "en": "Epic prohibits buying, selling or sharing accounts."
+      }
+    ],
+    [
+      "Activision / Call of Duty",
+      "https://www.activision.com/legal/terms-of-use",
+      {
+        "uz": "Activision akkauntini sotish, olish yoki boshqa kishiga o‘tkazishni tan olmaydi.",
+        "ru": "Activision не признаёт продажу, покупку или передачу аккаунта.",
+        "en": "Activision does not recognize buying, selling or transferring accounts."
+      }
+    ],
+    [
+      "Blizzard / Battle.net",
+      "https://www.blizzard.com/en-us/legal/simple/bfbbb648-bcc6-4b78-a5c7-e2fe20c135df/blizzard-end-user-license-agreement",
+      {
+        "uz": "Blizzard akkauntini sotish, hadya qilish yoki almashtirishni taqiqlaydi.",
+        "ru": "Blizzard запрещает продажу, дарение и обмен аккаунтов.",
+        "en": "Blizzard prohibits selling, gifting or trading accounts."
+      }
+    ],
+    [
+      "Supercell",
+      "https://supercell.com/en/terms-of-service/",
+      {
+        "uz": "Supercell akkauntini sotib olish, sotish, ijaraga berish yoki hadya qilish mumkin emas.",
+        "ru": "Аккаунт Supercell нельзя покупать, продавать, сдавать в аренду или дарить.",
+        "en": "Supercell prohibits buying, selling, renting or giving away accounts."
+      }
+    ],
+    [
+      "Garena / Free Fire",
+      "https://ffsupport.garena.com/hc/en-us/articles/4501218599066-Account-Trading",
+      {
+        "uz": "Free Fire akkauntini ulashish, sotish yoki olish qoidaga zid.",
+        "ru": "Передача, продажа и покупка аккаунта Free Fire нарушают правила.",
+        "en": "Sharing, selling or buying a Free Fire account violates its rules."
+      }
+    ],
+    [
+      "Ubisoft",
+      "https://www.ubisoft.com/legal/export/documents/en-US-termsofuse-4.0.pdf",
+      {
+        "uz": "Ubisoft akkauntini sotib olish, sotish, almashtirish yoki o‘tkazish taqiqlangan.",
+        "ru": "Покупка, продажа, обмен или передача аккаунта Ubisoft запрещены.",
+        "en": "Ubisoft prohibits buying, selling, trading or transferring accounts."
+      }
+    ],
+    [
+      "Roblox",
+      "https://www.roblox.com/termsofuse",
+      {
+        "uz": "Roblox akkauntini yoki login ma’lumotini sotish va sotib olish taqiqlangan; qoidada tor yozma istisno mavjud.",
+        "ru": "Продажа и покупка аккаунта Roblox или данных входа запрещена; условия содержат узкое письменное исключение.",
+        "en": "Roblox prohibits selling or buying accounts and credentials, subject to a narrow written-agreement exception in its terms."
+      }
+    ],
+    [
+      "HoYoverse / COGNOSPHERE",
+      "https://fastcdn.hoyoverse.com/static-resource-v2/2024/10/14/e91e4cb40eb500c3ff6d9c9d123a3c07_2801687314927963507.pdf",
+      {
+        "uz": "Akkaunt sotilsa HoYoverse uni tugatishi mumkin; ruxsat etilgan transfer deb hisoblamaymiz.",
+        "ru": "При продаже HoYoverse может закрыть аккаунт; мы не считаем такую передачу разрешённой.",
+        "en": "HoYoverse may terminate an account if sold; we do not treat such transfer as permitted."
+      }
+    ],
+    [
+      "PUBG MOBILE",
+      "https://www.pubgmobile.com/terms.html",
+      {
+        "uz": "Rasmiy foydalanuvchi shartlari akkauntga kirishni sotish yoki ulashishni cheklaydi.",
+        "ru": "Официальные условия ограничивают продажу и передачу доступа к аккаунту.",
+        "en": "Official terms restrict selling or sharing account access."
+      }
+    ],
+    [
+      "PlayStation Network",
+      "https://www.playstation.com/en-us/legal/terms-of-service/",
+      {
+        "uz": "PSN akkauntlari va kontentining uchinchi tomonga savdosi yoki transferi cheklangan.",
+        "ru": "Продажа и передача аккаунтов PSN и контента третьим лицам ограничены.",
+        "en": "PSN account and content sales or transfers to others are restricted."
+      }
+    ],
+    [
+      "Microsoft / Xbox",
+      "https://www.microsoft.com/en-us/servicesagreement",
+      {
+        "uz": "Microsoft hisob ma’lumotini boshqa foydalanuvchiga o‘tkazish va Xbox xizmatidan tijoratda foydalanish cheklangan.",
+        "ru": "Передача учётных данных другому пользователю и коммерческое использование Xbox ограничены.",
+        "en": "Transferring Microsoft account credentials and commercial use of Xbox services are restricted."
+      }
+    ]
+  ],
+  "salesNotice": {
+    "uz": "Haqiqiy to‘lovlar hozircha yoqilmagan.",
+    "ru": "Реальные платежи пока не включены.",
+    "en": "Live payments are currently disabled."
+  }
+}

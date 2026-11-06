@@ -59,7 +59,7 @@ class SpinWinTests(unittest.TestCase):
         self.assertIsNone(self.route(self.other,'GET','/api/spin-win')['today'])
 
     def test_production_vouchers_are_saved_in_the_real_wallet_during_test_checkout(self):
-        with patch.dict(spin.os.environ,{'VERCEL_ENV':'production'}),patch.object(app,'MODE','production'):
+        with patch.dict(spin.os.environ,{'VERCEL_ENV':'production','SPIN_WIN_REAL_AWARDS_ENABLED':'true'}),patch.object(app,'MODE','production'):
             core=vars(app)
             self.assertEqual(spin.campaign_mode(core),'real')
             spin.save_settings(self.db,self.admin,{'enabled':True,'budget_minor':200000,'stock':{'iphone':1,'ps5':1,'tv':2}},core)
@@ -93,6 +93,32 @@ class SpinWinTests(unittest.TestCase):
         current=rewards.mode(vars(app))
         self.assertEqual(spin.counters(self.db,current)['awarded']['iphone'],1)
 
+    def test_real_awards_pause_preserves_claims_and_blocks_new_spins(self):
+        settings = {'enabled':True,'budget_minor':10000,'stock':{'iphone':1,'ps5':1,'tv':1}}
+        with patch.dict(spin.os.environ,{'VERCEL_ENV':'production','SPIN_WIN_REAL_AWARDS_ENABLED':'true'}),patch.object(app,'MODE','production'):
+            core = vars(app)
+            spin.save_settings(self.db,self.admin,settings,core)
+            self.mark_returning()
+            with self.fx(),patch.object(spin.secrets,'randbelow',return_value=0):
+                award = spin.spin(self.db,self.buyer,{},core)
+            self.assertEqual(award['kind'],'physical')
+            totals = spin.counters(self.db,'real')
+            spin.os.environ.pop('SPIN_WIN_REAL_AWARDS_ENABLED')
+            preview = spin.route(self.db,{},'GET','/api/spin-win/preview',{},{},core)
+            self.assertEqual(preview,{'enabled':False,'test_only':False,'prizes':[]})
+            state = spin.state(self.db,self.buyer,core)
+            self.assertFalse(state['can_spin'])
+            self.assertEqual(state['today']['id'],award['id'])
+            self.assertEqual(spin.spin(self.db,self.buyer,{},core),award)
+            with patch.object(rewards,'rates') as rates, self.assertRaisesRegex(app.HttpError,'paused'):
+                spin.spin(self.db,self.other,{},core)
+            rates.assert_not_called()
+            with self.assertRaisesRegex(app.HttpError,'paused'):
+                spin.save_settings(self.db,self.admin,settings,core)
+            self.assertEqual(spin.counters(self.db,'real'),totals)
+            self.assertEqual(spin.update_winner(self.db,self.admin,award['id'],{'status':'contacted'},core)['status'],'contacted')
+            self.assertTrue(spin.admin_view(self.db,core)['awards_paused'])
+
     def test_voucher_automatically_credits_topup_only_and_deducts_budget_once(self):
         self.enable();self.mark_returning();award=self.roll(5)
         self.assertEqual(award['minor'],10)
@@ -122,7 +148,7 @@ class SpinWinTests(unittest.TestCase):
         with self.assertRaises(app.HttpError):self.route(self.admin,'POST','/api/admin/spin-win/winners/'+award['id'],{'status':'new'})
 
     def test_live_physical_win_queues_admin_email_and_retries_without_respin(self):
-        with patch.dict(spin.os.environ,{'VERCEL_ENV':'production'}),patch.object(app,'MODE','production'):
+        with patch.dict(spin.os.environ,{'VERCEL_ENV':'production','SPIN_WIN_REAL_AWARDS_ENABLED':'true'}),patch.object(app,'MODE','production'):
             spin.save_settings(self.db,self.admin,{
                 'enabled':True,'budget_minor':10000,'stock':{'iphone':1,'ps5':1,'tv':1},
             },vars(app))

@@ -1,0 +1,166 @@
+.info-page-layout {
+  --info-accent:#ffc286;
+  --info-rule:#36322f;
+  width:min(100%,1120px);
+  color:#eeeae6;
+}
+.info-page-header {
+  margin-bottom:32px;
+  padding:30px 32px;
+  border:1px solid var(--info-rule);
+  border-radius:18px;
+  background:linear-gradient(110deg,#1d1814,#101010 62%);
+}
+.info-page-header .page-title {margin:8px 0 12px;color:#fff;line-height:1.12}
+.info-page-header > p:last-child {max-width:65ch;margin:0;color:#c9c2bc;line-height:1.6}
+.info-category {
+  margin:0;color:var(--info-accent);font-size:12px;
+  font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+}
+.info-page-grid {
+  display:grid;grid-template-columns:minmax(185px,235px) minmax(0,1fr);
+  gap:clamp(24px,4vw,60px);align-items:start;
+}
+.info-topics {display:grid;gap:4px;min-width:0;padding-inline-end:16px;border-inline-end:1px solid var(--info-rule)}
+.info-topics a {
+  display:flex;align-items:center;min-height:44px;padding:9px 13px;
+  color:#d6d0cb;border-radius:8px;text-decoration:none;line-height:1.35;
+}
+.info-topics a:hover,.info-topics a[aria-current="page"] {background:#2d231b;color:#ffe1c5}
+.info-topics a[aria-current="page"] {font-weight:700}
+body:not(.home-page) .info-page-layout .legal-copy {color:#d4ceca}
+.info-page-layout .info-section {margin:25px 0 0;padding-bottom:22px;border-color:var(--info-rule)}
+.info-page-layout .info-section h2 {color:#fff}
+.info-page-layout .info-section a,.info-page-layout .info-related a {color:#ffd4ab;text-underline-offset:3px}
+.info-page-layout :is(.info-section,.legal-copy) {min-width:0;overflow-wrap:anywhere}
+.info-page-layout .info-section,.sl-about section[id] {scroll-margin-block-start:105px}
+.info-contents,.info-related {display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
+.info-contents a,.info-related a {
+  display:inline-flex;align-items:center;min-height:40px;padding:6px 11px;
+  color:#f1dccb;border:1px solid var(--info-rule);border-radius:8px;text-decoration:none;
+}
+.info-contents a:hover,.info-related a:hover {border-color:#986942}
+.info-related {margin:24px 0 0}
+
+.sl-about {
+  --about-accent:#ff9b5b;
+  --about-muted:#b7b3bf;
+  width:min(100%,1260px);
+  margin-inline:auto;
+  padding:clamp(28px,5vw,66px) clamp(16px,4vw,48px) clamp(36px,6vw,72px);
+  overflow-wrap:anywhere;
+}
+.sl-about-hero {text-align:center}
+.sl-about-intro {max-width:740px;margin:0 auto clamp(22px,4vw,42px)}
+.sl-about-kicker {
+  margin:0 0 10px;font-size:11px;font-weight:750;
+  letter-spacing:.17em;text-transform:uppercase;
+}
+.sl-about h1 {
+  margin:0;font-size:clamp(42px,6vw,82px);
+  line-height:1.02;letter-spacing:-.062em;font-weight:800;
+}
+.sl-about h1 span {white-space:nowrap}
+.sl-about-lead {max-width:49ch;margin:13px auto 17px;font-size:clamp(15px,1.6vw,19px);line-height:1.52}
+.sl-about-button {
+  display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:9px;
+  padding:8px 18px;border:1px solid;border-radius:999px;
+  font-size:14px;font-weight:750;text-decoration:none;transition:background-color .18s,border-color .18s;
+}
+.sl-about-stage {
+  padding:clamp(9px,3vw,31px) clamp(9px,5vw,68px);
+  border:1px solid;border-radius:clamp(19px,4vw,44px);
+  background:radial-gradient(ellipse at 0 100%,#483273,transparent 65%),
+    radial-gradient(ellipse at 100% 95%,#7b3b20,transparent 62%),linear-gradient(180deg,#121018,#20172a);
+}
+.sl-about-showcase {overflow:hidden;border:1px solid;border-radius:16px;text-align:start}
+.sl-about-showcase-bar {
+  display:flex;align-items:center;justify-content:space-between;gap:9px;
+  min-height:48px;padding:8px clamp(10px,2vw,20px);
+}
+.sl-about-showcase-bar strong {font-size:clamp(15px,2vw,23px);letter-spacing:-.04em;white-space:nowrap}
+.sl-about-showcase-bar a,.sl-about-showcase-label {font-size:12px}
+.sl-about-showcase-bar a {display:inline-flex;align-items:center;gap:5px;min-height:34px;text-underline-offset:4px}
+.sl-about-art {position:relative;isolation:isolate;min-height:clamp(132px,23vw,270px);display:flex;align-items:end;overflow:hidden}
+.sl-about-art img {position:absolute;inset-block:0;inset-inline-end:0;width:73%;height:100%;object-fit:cover;object-position:center 44%}
+.sl-about-art::after {content:"";position:absolute;inset:0;pointer-events:none}
+[dir="rtl"] .sl-about-art::after {transform:scaleX(-1)}
+.sl-about-art p {position:relative;z-index:1;max-width:14ch;margin:0;padding:clamp(11px,2.5vw,28px);font-size:clamp(19px,3.5vw,43px);font-weight:800;line-height:1.05;letter-spacing:-.04em}
+.sl-about-games {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;list-style:none;margin:0;padding:9px}
+.sl-about-games a {display:flex;align-items:center;gap:8px;min-height:44px;padding:5px;border:1px solid;border-radius:9px;font-size:12px;font-weight:650;text-decoration:none}
+.sl-about-games img {display:block;flex:none;width:34px;height:34px;border-radius:6px;object-fit:cover}
+.sl-about-platform,.sl-about-purpose,.sl-about-contact {margin-top:clamp(25px,4.5vw,58px)}
+.sl-about-platform {padding:clamp(20px,4vw,46px);border-radius:clamp(20px,3vw,38px) 8px;text-align:center}
+.sl-about-heading {margin:0 auto 19px;text-align:center}
+.sl-about-heading h2,.sl-about-contact h2 {margin:0;font-size:clamp(26px,4vw,48px);line-height:1.08;letter-spacing:-.045em;font-weight:780}
+.sl-about-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;text-align:start}
+.sl-about-purpose .sl-about-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
+.sl-about-card {display:flex;flex-direction:column;align-items:flex-start;min-width:0;padding:clamp(13px,2vw,23px);border:1px solid;border-radius:14px}
+.sl-about-card svg {width:24px;height:24px;margin-bottom:10px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sl-about-card h3 {margin:0;font-size:clamp(16px,2vw,21px);font-weight:750;line-height:1.18}
+.sl-about-card p,.sl-about-contact p {margin:7px 0 0;font-size:14px;line-height:1.55}
+.sl-about-card a {display:inline-flex;align-items:center;gap:7px;min-height:44px;margin-top:auto;font-size:13px;font-weight:750;text-underline-offset:3px}
+.sl-about-status {margin:13px 0 0;font-size:12px}
+.sl-about-contact {
+  padding:clamp(23px,4vw,48px) 14px;border:1px solid;border-radius:24px;text-align:center;
+  background:repeating-linear-gradient(90deg,transparent 0 39px,#ffffff0a 39px 40px),
+    repeating-linear-gradient(0deg,transparent 0 39px,#ffffff0a 39px 40px),
+    radial-gradient(ellipse at 50% 140%,#793c42,transparent 70%),linear-gradient(180deg,#101013,#21141b);
+}
+.sl-about-contact p {max-width:53ch;margin-inline:auto}
+.sl-about-contact-links {display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:9px 17px;margin-top:16px}
+.sl-about-email {display:inline-flex;align-items:center;min-height:44px;font-size:14px;text-underline-offset:4px}
+.sl-about-revealed {animation:sl-about-rise .45s cubic-bezier(.2,.65,.3,1) both}
+@keyframes sl-about-rise {
+  from {opacity:.4;transform:translateY(16px)}
+  to {opacity:1;transform:translateY(0)}
+}
+
+@media (max-width:840px) {
+  .info-page-header {margin-bottom:18px;padding:22px 17px}
+  .info-page-grid {grid-template-columns:minmax(0,1fr);gap:20px}
+  .info-topics {display:flex;flex-wrap:wrap;gap:6px;padding:0;border:0}
+  .info-topics a {padding:7px 11px;border:1px solid var(--info-rule)}
+}
+@media (max-width:560px) {
+  .sl-about-grid,.sl-about-purpose .sl-about-grid {grid-template-columns:minmax(0,1fr)}
+  .sl-about-showcase-label {display:none}
+  .sl-about-games {grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sl-about-games img {width:29px;height:29px}
+  .sl-about-art img {width:80%}
+}
+@media (prefers-reduced-motion:reduce) {
+  .sl-about-revealed {animation:none}
+  .sl-about-button {transition:none}
+}
+
+@layer sentryloot-theme {
+  body #app .info-topics a[aria-current="page"] {background-color:#2d231b!important;color:#ffe1c5!important}
+  body #app .info-category,body #app .sl-about :is(.sl-about-kicker,.sl-about-showcase-bar strong span,h1 span) {color:var(--about-accent,#ffc68e)!important}
+  body #app .sl-about :is(.sl-about-lead,.sl-about-showcase-label,.sl-about-purpose .sl-about-card p,.sl-about-contact p) {color:var(--about-muted)!important}
+  body #app .sl-about .sl-about-stage {border-color:#443143!important}
+  body #app .sl-about .sl-about-showcase {background-color:#111116!important;border-color:#584457!important}
+  body #app .sl-about .sl-about-showcase-bar {background-color:#201a25!important}
+  body #app .sl-about .sl-about-art {background-color:#0c0b11!important}
+  body #app .sl-about .sl-about-art::after {background-image:linear-gradient(90deg,#0c0b11 14%,#0c0b11e0 27%,transparent 66%),linear-gradient(0deg,#0c0b11a3,transparent 54%)!important}
+  body #app .sl-about .sl-about-games a {background-color:#1d1a23!important;border-color:#332b3a!important}
+  body #app .sl-about .sl-about-games a:hover {border-color:#b16f58!important}
+  body #app .sl-about .sl-about-platform {background-color:#f9f7f4!important}
+  body #app .sl-about .sl-about-platform :is(h2,h3,svg) {color:#211c21!important}
+  body #app .sl-about .sl-about-platform :is(p,a) {color:#55434f!important}
+  body #app .sl-about .sl-about-platform .sl-about-kicker {color:#87452c!important}
+  body #app .sl-about .sl-about-platform .sl-about-card {background-color:#efebeb!important;border-color:#e7dfe1!important}
+  body #app .sl-about .sl-about-purpose .sl-about-card {background-color:#17161b!important;border-color:#2d2834!important}
+  body #app .sl-about .sl-about-purpose svg {color:#ffac79!important}
+  body #app .sl-about .sl-about-contact {border-color:#593440!important}
+  body #app .sl-about .sl-about-button,body #app .sl-about .sl-about-button span {color:#1e100c!important}
+  body #app .sl-about .sl-about-button {background-color:#ffa873!important;border-color:#ffa873!important}
+  body #app .sl-about .sl-about-button:hover {background-color:#ffd3b6!important;border-color:#ffd3b6!important}
+  body #app .sl-about a:focus-visible {outline-color:#b76c42!important}
+  @media (max-width:840px) {
+    body.mobile-site #app .sl-about h1 {
+      font-size:clamp(40px,9.7vw,65px)!important;line-height:1.02!important;letter-spacing:-.06em!important;
+    }
+    body.mobile-site #app .sl-about h2 {font-size:24px!important;line-height:1.16!important}
+  }
+}

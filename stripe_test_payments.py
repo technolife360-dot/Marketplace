@@ -87,9 +87,9 @@ class StripeTestProvider:
 
     def session(self, oid, amount, currency, idem, kind='marketplace', expires_at=None, cancel_path=None, success_path=None):
         external_amount = stripe_amount(amount, currency)
-        if cancel_path is not None and not re.fullmatch(r'/top-up/[a-z0-9-]+', cancel_path):
+        if cancel_path is not None and not re.fullmatch(r'/top-up/[a-z0-9-]+(?:\?package=[A-Za-z0-9_-]+)?', cancel_path):
             raise RuntimeError('Invalid checkout return path.')
-        if success_path is not None and not re.fullmatch(r'/top-up/[a-z0-9-]+\?topup_return=[A-Za-z0-9_-]+', success_path):
+        if success_path is not None and not re.fullmatch(r'/top-up/[a-z0-9-]+\?topup_return=[A-Za-z0-9_-]+(?:&package=[A-Za-z0-9_-]+)?', success_path):
             raise RuntimeError('Invalid checkout success path.')
         self.assert_account()
         result = self.client.v1.checkout.sessions.create({
