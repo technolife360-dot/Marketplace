@@ -137,15 +137,24 @@ window.SpinWin = (() => {
     wheelFrame.append(confetti);
     setTimeout(()=>confetti.remove(),1900);
   }
-  const dismissedFor=new Set();
+  const shownFor=new Set();
+  const popupKey=id=>`sentryloot:spin-win:shown:${id}`;
+  function popupShown(id){
+    if(shownFor.has(id))return true;
+    try{return window.sessionStorage?.getItem(popupKey(id))==='1'}catch{return false}
+  }
+  function resetHomePopup(id){
+    shownFor.delete(id);
+    try{window.sessionStorage?.removeItem(popupKey(id))}catch{}
+  }
   async function home(dialog){
     if(!dialog||!me?.email_verified)return;
     const visitor=me.id;
-    if(dialog.open||dismissedFor.has(visitor))return;
+    if(dialog.open||popupShown(visitor))return;
 
     try{
       const data=await api('/spin-win');
-      if(!dialog.isConnected||dialog.open||dismissedFor.has(visitor)||!data.enabled)return;
+      if(!dialog.isConnected||dialog.open||me?.id!==visitor||!me?.email_verified||popupShown(visitor)||!data.enabled)return;
 
       const canSpin=data.can_spin;
       const spinLabel=t('Bepul aylantirish','Крутить бесплатно','Spin for free');
@@ -160,14 +169,11 @@ window.SpinWin = (() => {
         <p class="sw-popup-state" data-sw-state role="status">${h(state)}</p>
         <p class="sw-error" role="alert" hidden></p>
         <div data-sw-result>${result(data.today)}</div>`;
-      const dismiss=()=>dismissedFor.add(visitor);
-      dialog.addEventListener('cancel',dismiss,{once:true});
-      dialog.querySelector('.sw-popup-close').addEventListener('click',()=>{
-        dismiss();
-        dialog.close();
-      });
+      dialog.querySelector('.sw-popup-close').addEventListener('click',()=>dialog.close());
       bindSpin(dialog,data);
       dialog.showModal();
+      shownFor.add(visitor);
+      try{window.sessionStorage?.setItem(popupKey(visitor),'1')}catch{}
     }catch{
       // A temporary spin service failure must not block the storefront.
     }
@@ -183,5 +189,5 @@ window.SpinWin = (() => {
     root.querySelectorAll('[data-sw-winner]').forEach(form=>bind(form,async f=>post('/admin/spin-win/winners/'+encodeURIComponent(form.dataset.swWinner),{status:f.get('status')})));
     root.querySelector('[data-sw-prev]').onclick=()=>admin(page-1);root.querySelector('[data-sw-next]').onclick=()=>admin(page+1);window.SelectMenus?.refresh?.(root);
   }
-  return {customer,admin,home,wheel};
+  return {customer,admin,home,wheel,resetHomePopup};
 })();

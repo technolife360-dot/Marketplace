@@ -81,16 +81,12 @@ function topupCatalogCard(item, index) {
 }
 
 function topupSupplierTypeIcon(name) {
-  const kinds = {UC:'liked', Coins:'buy', Diamonds:'diamond', Tokens:'diamond', Gems:'diamond', Shop:'transaction', 'Battle Pass':'battle-pass'};
-  const paths = {
-    diamond:'<path d="m3 8 4-5h10l4 5-9 13L3 8Zm0 0h18M7 3l5 18 5-18"/>',
-    liked:'<path d="M7 10v11H3V10h4Zm0 0 5-8a3 3 0 0 1 2 4l-1 4h6a2 2 0 0 1 2 2l-2 7a2 2 0 0 1-2 2H7"/>',
-    buy:'<path d="M4 7h16l1 14H3L4 7Z"/><path d="M8 8V6a4 4 0 0 1 8 0v2"/>',
-    transaction:'<path d="M2 3h3l3 13h11l3-10H6"/><circle cx="9" cy="21" r="1"/><circle cx="19" cy="21" r="1"/>',
-    'battle-pass':'<path d="M3 5h18v4a3 3 0 0 0 0 6v4H3v-4a3 3 0 0 0 0-6V5Z"/><path d="m12 8 1.2 2.5 2.8.4-2 2 .5 2.8-2.5-1.3-2.5 1.3.5-2.8-2-2 2.8-.4L12 8Z"/>'
+  const kinds = {
+    uc:'wallet', coins:'coins', diamonds:'gem', tokens:'gem', gems:'gem',
+    crystals:'gem', shop:'cart', 'battle pass':'ticket', 'first top-up bonus':'star'
   };
-  const kind = kinds[name];
-  return kind ? `<svg class="icon tus-type-icon i-midas:${kind}" style="width:10px!important;height:10px!important;flex:0 0 10px!important" viewBox="0 0 24 24" aria-hidden="true">${paths[kind]}</svg>` : '';
+  const type = name.trim().toLowerCase();
+  return icon(Object.hasOwn(kinds,type) ? kinds[type] : 'box','tus-type-icon');
 }
 
 function topupSupplierGroups(packages, slug = '') {

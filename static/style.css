@@ -3585,7 +3585,7 @@ body:not(.home-page) .listing-detail-page .listing-buy-button:hover { background
 }
 
 /* Supplier tabs and checkout controls share the surrounding text alignment. */
-body #app .topup-supplier-page .tus-types .tus-type-icon { width:10px; height:10px; flex:0 0 10px; color:inherit; }
+.topup-supplier-page .tus-types .tus-type-icon { width:24px; height:24px; flex:0 0 24px; color:inherit; }
 @layer sentryloot-premium {
 body #app .topup-supplier-page .tus-quantity-stepper button,
 body #app .topup-supplier-page .tus-quantity-stepper button:hover,
@@ -3594,7 +3594,6 @@ body #app .topup-supplier-page .tus-quantity-stepper button:active { background:
 body #app .topup-supplier-page .tus-checkout-note { display:grid; grid-template-columns:16px minmax(0,1fr); align-items:start; gap:8px; text-align:left; }
 body #app .topup-supplier-page .tus-checkout-note > .icon { width:16px; height:16px; margin:0; align-self:start; }
 body #app .topup-supplier-page .tus-checkout-note > span { display:block; min-width:0; line-height:16px; }
-body #app .topup-supplier-page .tus-types .tus-type-icon[class*="i-midas:"] { fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
 
 .topup-supplier-page .tus-customer-fields { display:grid; gap:18px; margin-top:18px; }
 .topup-supplier-page .tus-customer-fields .field { display:grid; gap:8px; }
@@ -3606,7 +3605,4 @@ body #app .topup-supplier-page .tus-types .tus-type-icon[class*="i-midas:"] { fi
  .topup-supplier-page[data-supplier-game="pubg-mobile"] .tus-hero-bg { object-position:center bottom; }
  .topup-supplier-page[data-supplier-game="mobile-legends"] .tus-hero-game { height:calc(100vw / 3 - 40px); min-height:0; max-height:none; }
  .topup-supplier-page[data-supplier-game="mobile-legends"] .tus-hero-bg { object-fit:contain; object-position:center; }
-}
-@layer sentryloot-premium {
- body #app .topup-supplier-page .tus-types .tus-type-icon { width:10px!important; height:10px!important; flex:0 0 10px!important; }
 }

@@ -35,6 +35,32 @@ test('home does not open or fetch the spin popup for a guest',async()=>{
  await context.window.SpinWin.home(root);
  assert.equal(root.innerHTML,'');
 });
+test('home popup is shown once across navigation and reload until sign-out',async()=>{
+ const stored=new Map();
+ const storage={getItem:key=>stored.get(key),setItem:(key,value)=>stored.set(key,value),removeItem:key=>stored.delete(key)};
+ const dialog=()=>({isConnected:true,open:false,showModal(){this.open=true;},querySelector:()=>({addEventListener(){}})});
+ let requests=0;
+ const load=()=>{
+  const context={window:{sessionStorage:storage},me:{id:'buyer',email_verified:true},adminText:(_uz,_ru,en)=>en,esc:String,
+   api:async()=>{requests++;return {enabled:true,can_spin:false,prizes:[{id:'none',kind:'none'}]};}};
+  vm.createContext(context);vm.runInContext(fs.readFileSync('static/spin-win.js','utf8'),context);
+  return context.window.SpinWin;
+ };
+ const first=dialog(),rerendered=dialog(),reloaded=dialog();
+ const ui=load();
+ await ui.home(first);
+ await ui.home(rerendered);
+ const afterReload=load();
+ await afterReload.home(reloaded);
+ assert.equal(first.open,true);
+ assert.equal(rerendered.open,false);
+ assert.equal(reloaded.open,false);
+ assert.equal(requests,1);
+ afterReload.resetHomePopup('buyer');
+ await afterReload.home(reloaded);
+ assert.equal(reloaded.open,true);
+ assert.equal(requests,2);
+});
 test('home spin keeps the wheel in place and celebrates only winning results',async()=>{
  for(const kind of ['voucher','none']){
   let click;
