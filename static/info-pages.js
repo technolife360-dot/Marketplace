@@ -155,7 +155,7 @@
           </article>`).join('')}
         </div>
         <ul class="sl-payment-brands" role="list" data-about-reveal>
-          ${payments.methods.flatMap(method => method.brands).map(brand => `<li><img src="/static/assets/payment-brands/${brand.toLowerCase().replaceAll(' ','-')}.svg" width="120" height="48" loading="lazy" decoding="async" alt="${brand}"></li>`).join('')}
+          ${payments.methods.flatMap(method => method.brands).map(brand => `<li><img src="/static/assets/payment-brands/${brand.toLowerCase().replaceAll(' ','-')}.svg?v=2" width="108" height="32" loading="lazy" decoding="async" alt="${brand}"></li>`).join('')}
         </ul>
         <p class="sl-payment-status">${pick(payments.status,lang)}</p>
         </div>
