@@ -16,7 +16,7 @@ test('guest Home review cards escape buyer text and clearly label test feedback'
  const rail={scrollWidth:300,clientWidth:300,scrollLeft:0,addEventListener(){}};
  const host={isConnected:true,innerHTML:'',setAttribute(){},querySelector:selector=>selector==='.home-review-rail'?rail:{},querySelectorAll:()=>[]};
  const context={window:{},ResizeObserver:class{observe(){}},api:async path=>{assert.equal(path,'/review-hub/home');return {count:0,rating:null,items:[{reviewer_name:'A***z',body:'<script>unsafe()</script>',rating:1,created_at:'2026-10-25T00:00:00Z',product_title:'<img src=x>',product_url:null,game_name:'PUBG Mobile',game_image_url:'https://images.gamestorehub.com/pubg.webp',test_only:true}]}},adminText:(_u,_r,en)=>en,esc:v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;'),icon:()=>'',parseServerDate:v=>new Date(v),localeTag:()=> 'en-US'};
- vm.createContext(context);vm.runInContext(source.slice(source.indexOf('function marketAvatarMarkup('),source.indexOf('\nfunction updateProfileAvatar(')),context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/purchase-reviews.js'),'utf8'),context);
+ vm.createContext(context);context.window||={};vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/account-menu.js'),'utf8'),context);vm.runInContext(source.slice(source.indexOf('function marketAvatarMarkup('),source.indexOf('\nfunction updateProfileAvatar(')),context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/purchase-reviews.js'),'utf8'),context);
  await context.window.ReviewHub.home(host);
  assert.match(host.innerHTML,/Test review/);assert.match(host.innerHTML,/alt="PUBG Mobile"/);assert.match(host.innerHTML,/pubg.webp/);
  assert.match(host.innerHTML,/&lt;script&gt;/);assert.doesNotMatch(host.innerHTML,/<script>|<img src=x>|verified reviews/);
@@ -35,7 +35,7 @@ test('empty Home reviews explain the state without an empty focusable carousel',
 test('header and profile menu render the uploaded photo with the shared avatar renderer',()=>{
  const button={classList:{toggle(){}},setAttribute(){}};
  const context={me:{id:'current-user',display_name:'Test Buyer',email:'buyer@example.test',avatar_url:'https://images.example.com/current.webp',created_at:'2026-10-01',email_verified:true},$:selector=>selector==='#account-button'?button:null,adminText:(_u,_r,en)=>en,esc:v=>String(v??''),parseServerDate:v=>new Date(v),localeTag:()=> 'en-US',icon:()=>''};
- vm.createContext(context);
+ vm.createContext(context);context.window||={};vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/account-menu.js'),'utf8'),context);
  vm.runInContext(source.slice(source.indexOf('function marketAvatarMarkup('),source.indexOf('\nfunction updateProfileAvatar(')),context);
  vm.runInContext(source.slice(source.indexOf('function syncProfileTrigger('),source.indexOf('async function refreshProfileBonusBalance(')),context);
  context.syncProfileTrigger();assert.match(button.innerHTML,/src="https:\/\/images.example.com\/current.webp"/);
@@ -51,7 +51,7 @@ test('a new avatar refreshes only the current owner and updates the header immed
  const own={className:'market-seller-avatar user-avatar',dataset:{avatarOwner:'current-user'},outerHTML:'old'},other={className:'market-seller-avatar user-avatar',dataset:{avatarOwner:'another-user'},outerHTML:'unchanged'};
  let refreshed=0;
  const context={me:{id:'current-user',display_name:'Test Buyer'},document:{querySelectorAll:()=>[own,other]},syncProfileTrigger(){refreshed++},esc:v=>String(v??'')};
- vm.createContext(context);vm.runInContext(source.slice(source.indexOf('function marketAvatarMarkup('),source.indexOf('\nfunction marketCardFacts(')),context);
+ vm.createContext(context);context.window||={};vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/account-menu.js'),'utf8'),context);vm.runInContext(source.slice(source.indexOf('function marketAvatarMarkup('),source.indexOf('\nfunction marketCardFacts(')),context);
  context.updateProfileAvatar('https://images.example.com/new.webp');
  assert.equal(context.me.avatar_url,'https://images.example.com/new.webp');assert.equal(refreshed,1);
  assert.match(own.outerHTML,/new.webp/);assert.equal(other.outerHTML,'unchanged');
@@ -255,7 +255,7 @@ test('home cards show verified seller reputation and sales without inventing rat
     adminText: (_uz, _ru, en) => en, esc: value => String(value ?? ''),
     icon: name => `<svg data-icon="${name}"></svg>`, fmt: value => String(value), categoryLabel: value => value,
   };
-  vm.createContext(context);
+  vm.createContext(context);context.window||={};vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/account-menu.js'),'utf8'),context);
   vm.runInContext(source.slice(start, source.indexOf('\nfunction setupMarketSidebarToggle(', start)), context);
   const item = {id: 'listing', title: 'Game item', available: 1, stock: 1, reserved: 0, status: 'published', attributes: {}, seller_rating: 4.9, review_count: 200};
   const empty=context.marketCard(item);
@@ -272,7 +272,7 @@ test('home cards show verified seller reputation and sales without inventing rat
 test('market cards show the actual owner name and photo with a safe initials fallback', () => {
   const start=source.indexOf('function marketSellerIdentity(');
   const context={adminText:(_uz,_ru,en)=>en,esc:value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),icon:name=>`<svg data-icon="${name}"></svg>`,fmt:()=> 'RM 129.90',categoryLabel:value=>value};
-  vm.createContext(context);
+  vm.createContext(context);context.window||={};vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/account-menu.js'),'utf8'),context);
   vm.runInContext(source.slice(start,source.indexOf('\nasync function showMarketListingDetails(',start)),context);
   const item={id:'offer',seller_id:'actual-owner',title:'Level 65 account',product_type:'account',game_name:'PUBG Mobile',platform:'Android / iOS',attributes:{original_email_included:'yes'},seller_name:'A shop name',seller_display_name:'Shuxrat Aliev',seller_avatar_url:'https://images.example.com/owner.webp',available:1};
   const html=context.marketCard(item);

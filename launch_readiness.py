@@ -120,6 +120,21 @@ def personal_export(db,uid):
     }
     result={'format_version':1,'generated_at':datetime.now(timezone.utc).isoformat(),'profile':profile}
     for key,(sql,args) in queries.items():result[key]=[dict(r) for r in db.execute(sql,args)]
+    result['community']={}
+    for table,fields in {
+        'community_profiles':'handle,bio,visibility,preferences,layout',
+        'community_posts':'id,kind,title,body,game_slug,audience,status,created_at,updated_at',
+        'community_comments':'id,post_id,body,created_at',
+        'community_saves':'post_id,folder,created_at',
+        'community_reactions':'post_id',
+        'community_follows':'target_id,created_at',
+        'community_blocks':'target_id',
+        'community_squad':'target_id',
+        'community_folders':'name,created_at',
+        'community_cases':'id,kind,post_id,name,email,reference,body,status,decision,created_at',
+        'community_media':'id,content_type,byte_size,created_at',
+    }.items():
+        result['community'][table]=[dict(r) for r in db.execute(f'SELECT {fields} FROM {table} WHERE user_id=?',(uid,))]
     result['notice']='Includes your own messages; does not include attachments, credentials, private deliveries or other users’ profile data.'
     return json.loads(json.dumps(result,default=str))
 

@@ -9,7 +9,7 @@ MAX_BYTES=4*1024*1024
 class InvalidVideo(ValueError):pass
 class VideoUnavailable(RuntimeError):pass
 
-def normalize(raw):
+def normalize(raw, *, preserve_audio=False):
     if not 20<=len(raw)<=MAX_BYTES or raw[4:8]!=b'ftyp':raise InvalidVideo('Choose an MP4 video up to 4 MB and 30 seconds.')
     try:
         import imageio_ffmpeg
@@ -26,7 +26,8 @@ def normalize(raw):
             if not duration or not size:raise InvalidVideo('The video could not be decoded.')
             seconds=int(duration[1])*3600+int(duration[2])*60+float(duration[3]);width,height=map(int,size.groups())
             if not 0<seconds<=30 or width*height>4000000:raise InvalidVideo('Use a video up to 30 seconds and 4 megapixels.')
-            command=base+['-loglevel','error','-map','0:v:0','-an','-map_metadata','-1','-vf','scale=960:960:force_original_aspect_ratio=decrease:force_divisible_by=2,fps=15','-t','30','-c:v','libx264','-preset','veryfast','-crf','28','-pix_fmt','yuv420p','-movflags','+faststart','-fs',str(MAX_BYTES),'-y',str(target)]
+            audio=['-map','0:a:0?','-c:a','aac','-b:a','96k'] if preserve_audio else ['-an']
+            command=base+audio+['-loglevel','error','-map','0:v:0','-map_metadata','-1','-vf','scale=960:960:force_original_aspect_ratio=decrease:force_divisible_by=2,fps=15','-t','30','-c:v','libx264','-preset','veryfast','-crf','28','-pix_fmt','yuv420p','-movflags','+faststart','-fs',str(MAX_BYTES),'-y',str(target)]
             result=subprocess.run(command,capture_output=True,timeout=8,check=False)
             if result.returncode or not target.is_file():raise InvalidVideo('The video could not be decoded. Try another MP4.')
             value=target.read_bytes()

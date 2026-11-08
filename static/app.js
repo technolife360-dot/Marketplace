@@ -19,6 +19,8 @@ function translateSource(source,language=locale){if(language==='uz')return sourc
 function localized(value,language=locale){const source=String(value??'');if(language==='uz')return source;const trimmed=source.trim(),start=source.indexOf(trimmed),lead=start<0?'':source.slice(0,start),tail=start<0?'':source.slice(start+trimmed.length),exact=translateSource(source,language)??translateSource(trimmed,language);if(exact!==undefined)return source===trimmed?exact:lead+exact+tail;const english=language!=='ru';let validation=trimmed.match(/^(\d+)[–-](\d+) belgi kiriting\.$/);if(validation)return lead+(english?`Enter ${validation[1]}–${validation[2]} characters.`:`Введите ${validation[1]}–${validation[2]} символов.`)+tail;let paymentNotice=trimmed.match(/^To‘lov: (.+)\. Sandbox natijasi real pul o‘tkazmasi emas\.$/);if(paymentNotice)return lead+(english?'Payment: ':'Оплата: ')+paymentNotice[1]+(english?'. Sandbox does not transfer real money.':'. Тестовый режим не переводит реальные деньги.')+tail;if(trimmed.includes(' · ')){const parts=trimmed.split(/( · )/g),mapped=parts.map(part=>{const piece=part.trim(),translated=translateSource(piece,language);if(translated!==undefined)return part===piece?translated:part.replace(piece,translated);const listingDate=piece.match(/^E’lon (.+)$/);if(listingDate)return part.replace('E’lon ',english?'Listing ':'Объявление ');const prefix=piece.match(/^(Sotuvchi:|Xaridor:)\s*(.*)$/);if(prefix){const label=prefix[1]==='Sotuvchi:'?(english?'Seller:':'Продавец:'):(english?'Buyer:':'Покупатель:');return part.replace(prefix[1],label)}const tailStatus=piece.match(/^(.*?)(Holat: tasdiqlanmagan)$/);if(tailStatus)return part.replace(tailStatus[2],english?'Status: unverified':'Статус: не подтверждён');return part});const joined=parts.map((_,i)=>mapped[i]).join('');if(joined!==trimmed)return lead+joined+tail}let prefixMatch=trimmed.match(/^(Yetkazish usuli:|To‘lov:)\s*(.*)$/);if(prefixMatch){const prefix=prefixMatch[1]==='To‘lov:'?(english?'Payment:':'Оплата:'):(english?'Delivery method:':'Способ доставки:');return lead+prefix+' '+prefixMatch[2]+tail}let dynamic=trimmed.match(/^Salom, (.+)$/);if(dynamic)return lead+(english?'Hello, ':'Здравствуйте, ')+dynamic[1]+tail;dynamic=trimmed.match(/^Buyurtma (.+)$/);if(dynamic)return lead+(english?'Order ':'Заказ ')+dynamic[1]+tail;dynamic=trimmed.match(/^Hozirda (\d+) ta ko‘rinadigan e’lon\.$/);if(dynamic)return lead+(english?`${dynamic[1]} listings available.`:`Доступно объявлений: ${dynamic[1]}.`)+tail;dynamic=trimmed.match(/^(\d+) yangi$/);if(dynamic)return lead+(english?`${dynamic[1]} new`:`${dynamic[1]} новых`)+tail;dynamic=trimmed.match(/^Talablar: (.+)$/);if(dynamic)return lead+(english?'Requirements: ':'Требования: ')+dynamic[1]+tail;dynamic=trimmed.match(/^Hisob (.+) sanasida yaratilgan\.$/);if(dynamic)return lead+(english?`Account created on ${dynamic[1]}.`:`Аккаунт создан ${dynamic[1]}.`)+tail;dynamic=trimmed.match(/^(\d+) dona$/);if(dynamic)return lead+(english?`${dynamic[1]} items`:`${dynamic[1]} шт.`)+tail;return english?source:source}
 function adminText(uz,ru,en){return locale==='ru'?ru:locale==='uz'?uz:(window.RegionPreferences?.translate(en,locale)||window.BOZOR_EXTRA_COPY?.[locale]?.[uz]||en)}
 function renderSupportWidget(){
+ if(new URLSearchParams(location.search).get('open_chat')==='1'&&window.SentryLootSupport){const url=new URL(location.href);url.searchParams.delete('open_chat');history.replaceState(null,'',url);window.SentryLootSupport.open()}
+
  window.$crisp=window.$crisp||[];
  if(window.__sentryLootCrispLocale!==locale){window.__sentryLootCrispLocale=locale;window.$crisp.push(['config','locale',[locale]])}
  if(!document.documentElement.dataset.crispSupportBound){
@@ -201,9 +203,7 @@ function marketSellerIdentity(it){
  return {name,avatar:it.seller_avatar_url||it.seller?.avatar_url||'',id:it.store_id||it.seller_id||''};
 }
 function marketAvatarMarkup(name,avatar='',className='market-seller-avatar',owner=''){
- const initials=String(name||'').trim().split(/\s+/u).slice(0,2).map(part=>Array.from(part)[0]||'').join('').toLocaleUpperCase()||'?';
- const photo=typeof avatar==='string'&&/^https:\/\//i.test(avatar)?avatar:'';
- return `<span class="${className} user-avatar" data-avatar-owner="${esc(owner)}" aria-hidden="true"><span>${esc(initials)}</span>${photo?`<img data-seller-avatar src="${esc(photo)}" alt="" width="64" height="64" loading="lazy" decoding="async" referrerpolicy="no-referrer">`:''}</span>`;
+ return window.SentryLootAccount.avatar(name,avatar,className,owner);
 }
 function updateProfileAvatar(url){
  if(!me)return;me.avatar_url=url;
@@ -291,7 +291,7 @@ function setupMarketSidebarToggle(){
 }
 function marketSidebarMarkup(filters={}, {mobile=false}={}){
  const t=(uz,ru,en)=>adminText(uz,ru,en);
- const entries=[...(mobile?[['/#home','home',t('Bosh sahifa','Главная','Home'),location.pathname==='/'&&(!location.hash||location.hash==='#home')]]:[]),['/browse','gamepad',t('Bozor','Маркет','Marketplace'),(!mobile||location.pathname==='/browse')&&!filters.category&&!filters.game&&filters.sort!=='price_asc'],['/top-up','wallet','Top Up',false],['/browse?category=accounts','user',t('Akkauntlar','Аккаунты','Accounts'),filters.category==='accounts'],['/browse?category=currency','layers',t('O‘yin valyutasi','Игровая валюта','Game Currency'),filters.category==='currency'],['/browse?category=services','settings',t('O‘yin xizmatlari','Игровые услуги','Game Services'),filters.category==='services'],['/browse?sort=price_asc','ticket',t('Eng arzon','Самые дешёвые','Lowest prices'),filters.sort==='price_asc'&&!filters.category&&!filters.game]];
+ const entries=[...(mobile?[['/#home','home',t('Bosh sahifa','Главная','Home'),location.pathname==='/'&&(!location.hash||location.hash==='#home')]]:[]),['/browse','gamepad',t('Bozor','Маркет','Marketplace'),(!mobile||location.pathname==='/browse')&&!filters.category&&!filters.game&&filters.sort!=='price_asc'],['/top-up','wallet','Top Up',false],['/community','users',t('Hamjamiyat','Сообщество','Community'),false],['/browse?category=accounts','user',t('Akkauntlar','Аккаунты','Accounts'),filters.category==='accounts'],['/browse?category=currency','layers',t('O‘yin valyutasi','Игровая валюта','Game Currency'),filters.category==='currency'],['/browse?category=services','settings',t('O‘yin xizmatlari','Игровые услуги','Game Services'),filters.category==='services'],['/browse?sort=price_asc','ticket',t('Eng arzon','Самые дешёвые','Lowest prices'),filters.sort==='price_asc'&&!filters.category&&!filters.game]];
  const row=([href,glyph,label,active])=>`<a href="${href}" ${active?'aria-current="page"':''}><span class="market-nav-icon" aria-hidden="true">${icon(glyph)}</span><span>${label}</span></a>`;
  const personal=me?[
   ['/#messages','message',t('Xabarlar','Сообщения','Messages')],
@@ -652,25 +652,7 @@ function syncProfileTrigger(){
  button.setAttribute('aria-label',adminText('Profil menyusini ochish','Открыть меню профиля','Open profile menu'));
 }
 function profileMenuMarkup(){
- const t=(uz,ru,en)=>adminText(uz,ru,en);
- const created=parseServerDate(me.created_at).toLocaleDateString(localeTag(),{year:'numeric',month:'long'});
- const menuRow=(href,glyph,title,description)=>`<a class="profile-menu-row" href="${href}"><span class="profile-menu-icon" aria-hidden="true">${icon(glyph)}</span><span class="profile-menu-copy"><b>${title}</b><small>${description}</small></span><span class="profile-menu-end" aria-hidden="true">${icon('arrow-up-right')}</span></a>`;
- return `<button class="profile-backdrop" type="button" data-profile-close aria-label="${t('Menyuni yopish','Закрыть меню','Close menu')}"></button><aside class="profile-dropdown" id="profile-dropdown" role="dialog" aria-label="${t('Profil menyusi','Меню профиля','Profile menu')}" tabindex="-1"><div class="profile-shell">
-  <header class="profile-hero"><button type="button" class="profile-glass-close" data-profile-close aria-label="${t('Menyuni yopish','Закрыть меню','Close menu')}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 8m0-8-8 8"/></svg></button><div class="profile-identity">${marketAvatarMarkup(me.display_name||me.email,me.avatar_url,'profile-avatar',me.id)}<div class="profile-person"><span class="profile-eyebrow">SENTRYLOOT · ${t('HISOB','АККАУНТ','ACCOUNT')}</span><h2>${esc(me.display_name)}</h2><p>${esc(me.email)}</p></div></div><div class="profile-badges"><span class="profile-badge ${me.email_verified?'is-verified':'is-pending'}"><span></span>${me.email_verified?t('Email tasdiqlangan','Email подтверждён','Email verified'):t('Email tasdiqlanmagan','Email не подтверждён','Email not verified')}</span><span class="profile-badge">${me.seller?t('Sotuvchi','Продавец','Seller'):t('Xaridor','Покупатель','Buyer')}</span></div></header>
-  <div class="profile-content">
-   <div class="profile-account-card"><span class="profile-account-icon" aria-hidden="true">${icon('shield')}</span><div><b>${t('Hisob holati','Статус аккаунта','Account status')}</b><small>${t('A’zo bo‘lgan sana','Дата регистрации','Member since')} · ${esc(created)}</small></div><span class="profile-account-status">${me.email_verified?t('Faol','Активен','Active'):t('Tekshiring','Проверьте','Action needed')}</span></div>
-   <div class="profile-points-line"><span>${t('Eski bonus ballar','Прежние бонусные баллы','Legacy bonus points')}</span><b id="profile-bonus-balance" aria-live="polite">${t('Yuklanmoqda…','Загрузка…','Loading…')}</b></div>
-   <nav class="profile-menu" aria-label="${t('Hisob sozlamalari','Настройки аккаунта','Account settings')}">
-    ${menuRow('/#account','settings',t('Hisob sozlamalari','Настройки аккаунта','Account settings'),t('Profil, xavfsizlik va sozlamalar','Профиль, безопасность и настройки','Profile, security and preferences'))}
-    ${menuRow('/#rewards','ticket',t('Bonus va vaucherlar','Бонусы и ваучеры','Rewards & vouchers'),t('Xarid uchun bonus krediti','Бонусы на покупки','Your promotional purchase credit'))}
-    ${me.seller?menuRow('/#wallet','wallet',t('Hamyon','Кошелёк','Wallet'),t('Sotuvchi mablag‘lari','Средства продавца','Seller funds'))+menuRow('/#payout-options','arrow-up-right',t('Pul yechish','Вывод средств','Payout options'),t('Mablag‘ yechish sozlamalari','Настройки вывода средств','Payout settings')):''}
-    ${me.email_verified?`<button class="profile-menu-row profile-menu-button" type="button" data-action="link-facebook"><span class="profile-menu-icon" aria-hidden="true"><span class="facebook-mark">f</span></span><span class="profile-menu-copy"><b>${t('Facebook’ni ulash','Подключить Facebook','Link Facebook')}</b><small>${t('Hisobingizga xavfsiz ulash','Безопасное подключение аккаунта','Securely connect your account')}</small></span></button>`:''}
-   </nav>
-   <nav class="profile-menu profile-account-actions" aria-label="${t('Yordam va hisob','Помощь и аккаунт','Help and account')}">
-    <button class="profile-menu-row profile-menu-button" type="button" data-open-support-chat><span class="profile-menu-icon" aria-hidden="true">${icon('message')}</span><span class="profile-menu-copy"><b>${t('Yordam chatini ochish','Открыть чат поддержки','Open support chat')}</b><small>${t('Savolingiz bo‘lsa, bizga yozing','Напишите нам, если нужна помощь','Send us a message if you need help')}</small></span></button>
-    <button class="profile-menu-row profile-menu-button profile-sign-out" type="button" data-action="logout"><span class="profile-menu-icon" aria-hidden="true">${icon('arrow-up-right')}</span><span class="profile-menu-copy"><b>${t('Hisobdan chiqish','Выйти из аккаунта','Sign out')}</b></span></button>
-   </nav>
-  </div></div></aside>`;
+ return window.SentryLootAccount.menu(me,{t:adminText,icon,created:parseServerDate(me.created_at).toLocaleDateString(localeTag(),{year:'numeric',month:'long'})});
 }
 async function refreshProfileBonusBalance(){
  const balance=$('#profile-bonus-balance');if(!balance)return;
@@ -922,3 +904,11 @@ async function renderStripeTestConnect(){
  app.querySelector('[data-stripe-onboard]').onclick=async event=>{const button=event.currentTarget;button.disabled=true;try{const result=await api('/seller/stripe-test/connect',{method:'POST',body:JSON.stringify({test_only:true})});location.assign(result.onboarding_url)}catch(error){toast(error.message,'error');button.disabled=false}};
  app.querySelectorAll('[data-test-payout-amount]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{const result=await api('/seller/stripe-test/payout',{method:'POST',body:JSON.stringify({amount_minor:Number(button.dataset.testPayoutAmount),currency:button.dataset.currency,request_key:crypto.randomUUID(),test_only:true})});toast('Stripe TEST payout · '+result.status);await renderStripeTestConnect()}catch(error){toast(error.message,'error');button.disabled=false}});
 }
+
+// Refresh the canonical identity after edits in another SentryLoot tab or bfcache return.
+async function refreshSharedAccountIdentity(){
+ if(document.visibilityState!=='visible')return;
+ try{const result=await api('/me');if(result.user?.id!==me?.id){await bootstrap();return}if(result.user){me=result.user;csrf=result.csrf||csrf;updateProfileAvatar(me.avatar_url);if($('#profile-dropdown')){const root=$('#profile-menu-root');root.innerHTML=profileMenuMarkup();void refreshProfileBonusBalance()}}}catch{}
+}
+document.addEventListener('visibilitychange',refreshSharedAccountIdentity);
+window.addEventListener('pageshow',event=>{if(event.persisted)void refreshSharedAccountIdentity()});

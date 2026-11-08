@@ -49,4 +49,4 @@ jobs:
           SENTRYLOOT_ENV_FILE: /dev/null
           SENTRYLOOT_TEST_POSTGRES_TEMP: '1'
           SENTRYLOOT_TEST_POSTGRES_READONLY: '1'
-        run: python -m unittest -v tests.test_admin_console_postgres tests.test_seller_verification_postgres
+        run: python -m unittest -v tests.test_admin_console_postgres tests.test_seller_verification_postgres tests.test_community_postgres

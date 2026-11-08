@@ -856,56 +856,7 @@ body .ux-following .ux-following-discover { background:#1B1B1B !important; }
 body .ux-following .ux-following-discover:hover { background:#252525 !important; border-color:#777 !important; }
 }
 
-/* Compact liquid-glass profile: the page behind the panel remains sharp. */
-@layer sentryloot-theme {
-body #profile-menu-root>.profile-backdrop { background:transparent !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
-body #profile-menu-root .profile-dropdown { top:90px !important; width:min(350px,calc(100vw - 24px)) !important; max-height:calc(100dvh - 104px) !important; border:0 !important; border-radius:20px !important; background:transparent !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important; box-shadow:0 20px 60px #00000055 !important; }
-body #profile-menu-root .profile-dropdown .profile-shell { border:1px solid rgba(255,255,255,.24) !important; border-radius:20px !important; background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,.055) 45%,rgba(255,255,255,.10)),rgba(12,12,12,.42) !important; -webkit-backdrop-filter:blur(18px) saturate(145%) !important; backdrop-filter:blur(18px) saturate(145%) !important; box-shadow:inset 0 1px 0 #FFFFFF40,inset 1px 0 0 #FFFFFF10 !important; }
-body #profile-menu-root .profile-hero { position:relative; padding:18px 16px 14px !important; border-bottom:1px solid #FFFFFF18 !important; background:linear-gradient(120deg,#FFFFFF12,#FFFFFF03) !important; }
-body #profile-menu-root .profile-identity { gap:10px; padding-right:20px; }
-body #profile-menu-root .profile-avatar { width:42px; height:42px; border:1px solid #FFFFFF40 !important; background:linear-gradient(140deg,#FFFFFF35,#FFFFFF0A) !important; box-shadow:inset 0 1px 0 #FFFFFF38 !important; font-size:17px; font-weight:600; }
-body #profile-menu-root .profile-person h2 { margin:4px 0 2px; font-size:16px; line-height:1.35; letter-spacing:-.2px; }
-body #profile-menu-root .profile-person p { font-size:11px; line-height:1.5; color:#CCCCCC !important; }
-body #profile-menu-root .profile-eyebrow { font-size:8px; font-weight:500; letter-spacing:1.2px; color:#C9C9C9 !important; }
-body #profile-menu-root .profile-badges { gap:6px; margin-top:12px; padding-top:10px; border-color:#FFFFFF14 !important; }
-body #profile-menu-root :is(.profile-badge,.profile-account-status) { background:linear-gradient(140deg,#FFFFFF12,#FFFFFF05) !important; border:1px solid #FFFFFF24 !important; box-shadow:inset 0 1px 0 #FFFFFF12 !important; font-weight:500; }
-body #profile-menu-root .profile-badge { min-height:22px; padding:3px 8px; font-size:9px; }
-body #profile-menu-root .profile-content { display:grid; gap:14px; padding:12px !important; }
-body #profile-menu-root .profile-menu { display:grid; gap:5px; margin:0 !important; }
-body #profile-menu-root .profile-menu h2 { margin:2px 4px 3px; font-size:10px; line-height:1.5; font-weight:500; letter-spacing:.3px; color:#C3C3C3 !important; }
-body #profile-menu-root .profile-dropdown :is(.profile-account-card,.profile-menu-row,.profile-bonus-card,.profile-wallet-card) { min-height:52px !important; gap:10px !important; margin:0 !important; padding:10px !important; border:1px solid #FFFFFF20 !important; border-radius:12px !important; background:linear-gradient(120deg,#FFFFFF12,#FFFFFF04) !important; box-shadow:inset 0 1px 0 #FFFFFF18 !important; -webkit-backdrop-filter:blur(8px) !important; backdrop-filter:blur(8px) !important; transform:none !important; text-decoration:none; }
-body #profile-menu-root .profile-dropdown .profile-menu-row:is(:hover,:focus-visible) { background:linear-gradient(120deg,#FFFFFF25,#FFFFFF0A) !important; border-color:#FFFFFF40 !important; box-shadow:inset 0 1px 0 #FFFFFF24 !important; transform:none !important; }
-body #profile-menu-root :is(.profile-account-icon,.profile-menu-icon,.profile-bonus-icon,.profile-wallet-icon) { display:grid; place-items:center; width:32px !important; height:32px !important; flex:0 0 32px !important; border-radius:9px !important; background:linear-gradient(135deg,#FFFFFF1A,#FFFFFF05) !important; border:1px solid #FFFFFF20 !important; box-shadow:inset 0 1px 0 #FFFFFF12 !important; }
-body #profile-menu-root .profile-menu-copy b,body #profile-menu-root .profile-account-card b { font-size:12px; line-height:1.4; font-weight:500; }
-body #profile-menu-root .profile-menu-copy small,body #profile-menu-root .profile-account-card small { margin-top:2px; font-size:10px; line-height:1.5; color:#C5C5C5 !important; }
-body #profile-menu-root .profile-bonus-card small,body #profile-menu-root .profile-wallet-card small { font-size:10px; line-height:1.5; color:#C5C5C5 !important; }
-body #profile-menu-root .profile-bonus-card b { margin:2px 0; font-size:14px; line-height:1.4; }
-body #profile-menu-root .profile-account-status { padding:4px 7px; font-size:9px; }
-body #profile-menu-root .profile-edit-form { margin-top:6px; padding:12px !important; border:1px solid #FFFFFF20 !important; border-radius:12px; background:linear-gradient(135deg,#FFFFFF0E,#FFFFFF03) !important; }
-body #profile-menu-root .profile-edit-form :is(input,.site-select-trigger,.button-primary) { background:linear-gradient(135deg,#FFFFFF16,#FFFFFF06) !important; border:1px solid #FFFFFF30 !important; box-shadow:inset 0 1px 0 #FFFFFF12 !important; }
-body #profile-menu-root .profile-edit-form .form-grid { grid-template-columns:minmax(0,1fr); gap:0; }
-body #profile-menu-root .site-select-popup { background:linear-gradient(135deg,#FFFFFF20,#FFFFFF08),rgba(20,20,20,.78) !important; border:1px solid #FFFFFF35 !important; -webkit-backdrop-filter:blur(18px) saturate(140%) !important; backdrop-filter:blur(18px) saturate(140%) !important; box-shadow:inset 0 1px 0 #FFFFFF28,0 12px 36px #00000044 !important; }
-body #profile-menu-root .site-select-search { background:#FFFFFF0D !important; border-color:#FFFFFF30 !important; }
-body #profile-menu-root .site-select-list>button:is(:hover,:focus-visible),body #profile-menu-root .site-select-list>button[aria-selected=true] { background:#FFFFFF15 !important; border-color:#FFFFFF24 !important; }
-body #profile-menu-root .profile-glass-close { position:absolute; top:9px; right:9px; display:grid; place-items:center; width:24px; min-width:24px; height:24px; min-height:0; padding:0; border:1px solid #FFFFFF25 !important; border-radius:8px; background:linear-gradient(135deg,#FFFFFF1A,#FFFFFF06) !important; box-shadow:inset 0 1px 0 #FFFFFF14 !important; }
-body #profile-menu-root .profile-glass-close svg { display:block; width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.4; stroke-linecap:round; }
-body #profile-menu-root .profile-glass-close:hover { background:#FFFFFF26 !important; }
-body #profile-menu-root :is(.profile-menu-row,.profile-glass-close):focus-visible { outline:2px solid #FFFFFF99; outline-offset:2px; }
-@media(max-width:600px) { body #profile-menu-root .profile-dropdown { top:78px !important; right:12px !important; max-height:calc(100dvh - 90px) !important; } }
-}
-
-/* Both sidebar groups reuse the same row and icon geometry. */
-@layer sentryloot-theme {
-body .market-sidebar-account>h2 { color:#AAAAAA !important; }
-body #profile-menu-root .profile-content { gap:10px !important; }
-body #profile-menu-root .profile-points-line { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 4px 2px;font-size:11px;line-height:1.5; }
-body #profile-menu-root .profile-points-line>span { color:#C5C5C5 !important; }
-body #profile-menu-root .profile-points-line>b { font-size:11px;font-weight:500;text-align:right; }
-body #profile-menu-root .profile-menu-end { display:grid;place-items:center;flex:0 0 24px;width:24px;height:24px; }
-body #profile-menu-root .profile-sign-out { min-height:44px !important; }
-body #profile-menu-root .profile-menu-icon { overflow:hidden; }
-body #profile-menu-root .profile-menu-icon>.icon { display:block;position:static;margin:0;transform:none; }
-}
+@layer sentryloot-theme { body .market-sidebar-account>h2 { color:#AAAAAA !important; } }
 
 /* The sidebar has one independent toggle; row and glyph dimensions never change. */
 @layer sentryloot-theme {
