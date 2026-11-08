@@ -171,3 +171,18 @@ h1,h2,h3,strong,[data-user-content]{overflow-wrap:anywhere}.player-main>strong,.
 .album-prev{left:12px}.album-next{right:12px}
 .album-counter{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);padding:4px 12px;background:#111c;border-radius:20px;font-size:12px;color:#fff}
 @media(max-width:600px){.upload-preview-item>img{height:140px}.album-arrow{width:36px;height:36px}}
+
+/* Frosted profile surface; preserve the existing identity and avatar layout. */
+.profile-hero>.profile-info{
+ background:linear-gradient(135deg,rgba(255,255,255,.1),rgba(255,255,255,.025) 60%,rgba(255,185,81,.05)),rgba(15,20,24,.62);
+ -webkit-backdrop-filter:blur(22px) saturate(140%);
+ backdrop-filter:blur(22px) saturate(140%);
+ border-radius:14px 14px 0 0;
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.16),inset 1px 0 0 rgba(255,255,255,.035),inset -1px 0 0 rgba(255,255,255,.035),0 -10px 30px rgba(0,0,0,.12);
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+ .profile-hero>.profile-info{background:linear-gradient(135deg,#252c31,#171c20)}
+}
+@media(prefers-reduced-transparency:reduce){
+ .profile-hero>.profile-info{background:#1b2126;-webkit-backdrop-filter:none;backdrop-filter:none}
+}
