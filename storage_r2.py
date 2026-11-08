@@ -113,6 +113,70 @@ def evidence_url(key):
     return _client().generate_presigned_url('get_object', Params={'Bucket': bucket, 'Key': key}, ExpiresIn=300)
 
 
+def read_evidence(key, maximum):
+    """Bounded server-only reads for safety analysis; never fetch arbitrary URLs."""
+    key = _key(key)
+    _, _, _, _, bucket, _ = _settings()
+    result = _client().get_object(Bucket=bucket, Key=key)
+    stream = result['Body']
+    try:
+        if result.get('ContentLength', maximum + 1) > maximum:
+            raise ValueError('Private media exceeds the analysis limit')
+        body = stream.read(maximum + 1)
+        if len(body) > maximum:
+            raise ValueError('Private media exceeds the analysis limit')
+        return body
+    finally:
+        stream.close()
+
+
+def upload_origin():
+    return 'https://' + _settings()[0] + '.r2.cloudflarestorage.com'
+
+
+def evidence_upload_url(key, size):
+    """Upload-only lease for an unpublished staging object, with signed length."""
+    key = _key(key)
+    _, _, _, _, bucket, _ = _settings()
+    return _client().generate_presigned_url('put_object', Params={
+        'Bucket': bucket, 'Key': key, 'ContentType': 'application/octet-stream',
+        'ContentLength': size}, ExpiresIn=1800)
+
+
+def download_evidence(key, destination, expected_size):
+    """Stream a server-owned object to disk; never accept arbitrary URLs."""
+    key = _key(key)
+    _, _, _, _, bucket, _ = _settings()
+    result = _client().get_object(Bucket=bucket, Key=key)
+    stream = result['Body']
+    try:
+        if result.get('ContentLength') != expected_size:
+            raise ValueError('Upload size mismatch')
+        received = 0
+        with destination.open('wb') as target:
+            while chunk := stream.read(1024 * 1024):
+                received += len(chunk)
+                if received > expected_size:
+                    raise ValueError('Upload size mismatch')
+                target.write(chunk)
+        if received != expected_size:
+            raise ValueError('Incomplete upload')
+    finally:
+        stream.close()
+
+
+def put_private_media(key, stream, content_type):
+    key = _key(key)
+    if content_type not in ('image/webp', 'video/mp4'):
+        raise ValueError('Invalid private media type')
+    _, _, _, _, bucket, _ = _settings()
+    from boto3.s3.transfer import TransferConfig
+    _client().upload_fileobj(stream, bucket, key, ExtraArgs={
+        'ContentType': content_type, 'CacheControl': 'private, no-store',
+        'ContentDisposition': 'inline; filename="community.' + ('mp4' if content_type == 'video/mp4' else 'webp') + '"'},
+        Config=TransferConfig(multipart_threshold=8*1024*1024, multipart_chunksize=8*1024*1024, max_concurrency=2))
+
+
 def delete_evidence(key):
     key = _key(key)
     _, _, _, _, bucket, _ = _settings()

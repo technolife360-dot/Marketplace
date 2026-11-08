@@ -133,8 +133,10 @@ def personal_export(db,uid):
         'community_folders':'name,created_at',
         'community_cases':'id,kind,post_id,name,email,reference,body,status,decision,created_at',
         'community_media':'id,content_type,byte_size,created_at',
+        'community_uploads':'id,content_type,byte_size,state,media_id',
     }.items():
         result['community'][table]=[dict(r) for r in db.execute(f'SELECT {fields} FROM {table} WHERE user_id=?',(uid,))]
+    result['community']['community_post_media']=[dict(r) for r in db.execute('SELECT a.post_id,a.media_id,a.position FROM community_post_media a JOIN community_posts p ON p.id=a.post_id WHERE p.user_id=? ORDER BY a.post_id,a.position',(uid,))]
     result['notice']='Includes your own messages; does not include attachments, credentials, private deliveries or other users’ profile data.'
     return json.loads(json.dumps(result,default=str))
 

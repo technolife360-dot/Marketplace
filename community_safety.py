@@ -86,15 +86,20 @@ def prepare(db, uid, source, core):
 
 def review_token(db, pid):
     row=db.execute('SELECT p.*,s.rights_at,s.listing_id FROM community_posts p JOIN community_post_state s ON s.post_id=p.id WHERE p.id=?',(pid,)).fetchone()
-    return hashlib.sha256(json.dumps(dict(row) if row else {},sort_keys=True,default=str).encode()).hexdigest()
+    value=dict(row) if row else {}
+    value['media_ids']=[r['media_id'] for r in db.execute('SELECT media_id FROM community_post_media WHERE post_id=? ORDER BY position',(pid,)).fetchall()]
+    return hashlib.sha256(json.dumps(value,sort_keys=True,default=str).encode()).hexdigest()
 
 
-def record_submission(db, pid, lid, requested, permission):
+def record_submission(db, pid, lid, requested, permission, *, decision=None, note=''):
     db.execute('''INSERT INTO community_post_state(post_id,listing_id,review_status,rights_at)
         VALUES(?,?,?,?) ON CONFLICT(post_id) DO UPDATE SET listing_id=excluded.listing_id,
-        review_status=excluded.review_status,review_note='',reviewer_id=NULL,rights_at=excluded.rights_at,
+        review_status=excluded.review_status,review_note=excluded.review_note,reviewer_id=NULL,rights_at=excluded.rights_at,
         updated_at=CURRENT_TIMESTAMP''', (pid,lid,'pending' if requested == 'published' else 'draft',
         datetime.now(timezone.utc).isoformat() if permission else None))
+    if decision is not None:
+        db.execute('UPDATE community_post_state SET review_status=?,review_note=? WHERE post_id=?',
+                   (decision, note, pid))
 
 
 def remove_object(core, row):
@@ -162,6 +167,8 @@ def route(handler,db,ctx,method,path,qs,data,core):
                 out=c.post_view(db,p,uid,core,authors=authors)
                 for key in ('media_url','thumbnail_url'):
                     if out.get(key):out[key]+='?review=1'
+                for attachment in out['media']:
+                    attachment['url']+='?review=1'
                 out['review_token']=review_token(db,p['id'])
                 return enrich(db,[out],uid,core)[0]
             if method=='POST':

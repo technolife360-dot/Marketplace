@@ -144,3 +144,30 @@ h1,h2,h3,strong,[data-user-content]{overflow-wrap:anywhere}.player-main>strong,.
 @media(max-width:1100px) { .watch-layout { grid-template-columns:minmax(0,1fr); max-width:900px; gap:28px; } .related-list { grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; } }
 @media(max-width:600px) { .watch-layout { gap:24px; } .related-list { grid-template-columns:minmax(0,1fr); gap:14px; } .related-post { grid-template-columns:150px minmax(0,1fr); gap:12px; } .related-copy>strong { font-size:13px; } .related-copy>span { font-size:11px; } .related-copy>small { font-size:10px; } }
 @media(max-width:360px) { .related-post { grid-template-columns:125px minmax(0,1fr); gap:10px; } }
+
+/* Composer media picker: one accessible upload icon, with selected media above it. */
+.field>.post-upload{min-height:0;padding:0;border:0;background:none;overflow:visible;align-items:flex-start;gap:12px}
+.post-upload .upload-icon{position:relative;flex:none;margin:0;cursor:pointer;overflow:hidden;transition:background .15s,border-color .15s}
+.post-upload .upload-icon:hover{background:#ffb95120;border-color:var(--gold)}
+.post-upload .upload-icon:focus-within{outline:2px solid var(--gold);outline-offset:4px}
+.post-upload .upload-icon:has(input:disabled){opacity:.5;cursor:wait}
+.post-upload .upload-icon input[type=file]{position:absolute;inset:0;width:100%;height:100%;max-width:none;margin:0;padding:0;opacity:0;cursor:inherit}
+.post-upload>.upload-preview{width:100%;max-width:100%;max-height:300px;margin:0;border-radius:10px;object-fit:contain;background:#050709}
+.post-upload>span.upload-preview{padding:16px;background:var(--surface2)}
+
+.upload-previews{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;width:100%}
+.upload-previews:empty{display:none}
+.upload-preview-item{position:relative;min-width:0;border-radius:10px;overflow:hidden;background:#050709}
+.upload-preview-item>img,.upload-preview-item>video{width:100%;height:180px;object-fit:contain}
+.upload-preview-item:only-child>video{height:auto;max-height:300px}
+.upload-preview-item>span{display:block;padding:20px}
+.remove-upload{position:absolute;top:6px;right:6px;width:32px;height:32px;border:1px solid #ffffff50;border-radius:50%;background:#111c;color:white;font-size:24px;line-height:1;display:grid;place-items:center}
+.album-count{position:absolute;top:12px;right:12px;display:flex;align-items:center;gap:5px;padding:5px 8px;border-radius:7px;background:#000a;color:white;font-size:12px}
+.album-count>.icon{width:15px;height:15px}
+.media-stage>.album-viewer{width:100%;height:100%;position:relative;background:#050709;display:grid;place-items:center}
+.album-viewer>img{width:100%;height:100%;max-height:100%;object-fit:contain}
+.album-viewer>img[hidden]{display:none}
+.album-arrow{position:absolute;top:50%;transform:translateY(-50%);width:40px;height:40px;display:grid;place-items:center;border:1px solid #fff4;border-radius:50%;background:#111c;color:#fff;font-size:32px;line-height:1}
+.album-prev{left:12px}.album-next{right:12px}
+.album-counter{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);padding:4px 12px;background:#111c;border-radius:20px;font-size:12px;color:#fff}
+@media(max-width:600px){.upload-preview-item>img{height:140px}.album-arrow{width:36px;height:36px}}

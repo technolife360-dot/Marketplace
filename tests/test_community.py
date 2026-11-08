@@ -3,10 +3,15 @@ import io
 import unittest
 from unittest.mock import patch
 import app
+import community_moderation as automatic
 from tests import test_http_workflows as workflow
 
 class CommunityWorkflows(unittest.TestCase):
-    setUp=workflow.HTTPWorkflows.setUp
+    def setUp(self):
+        workflow.HTTPWorkflows.setUp(self)
+        for dependency,value in (('configured',True),('classify',automatic.Result('approved'))):
+            patcher=patch.object(automatic,dependency,return_value=value)
+            patcher.start();self.addCleanup(patcher.stop)
     tearDown=workflow.HTTPWorkflows.tearDown
     signed_client=workflow.HTTPWorkflows.signed_client
 
@@ -21,7 +26,7 @@ class CommunityWorkflows(unittest.TestCase):
         body={'kind':'achievement','title':'My first milestone','body':'A real player achievement.','game_slug':'pubg-mobile','status':'published','permission':True,**data}
         status,p,_=self.req(client,'POST','/posts',body)
         self.assertEqual(status,201,p)
-        if body['status']=='published':
+        if body['status']=='published' and p['review_status']=='pending':
             status,result,_=self.admin.request('POST','/api/admin/community/review/'+p['id'],{'decision':'approved','note':'Reviewed test content.','review_token':self.admin.request('GET','/api/admin/community/review/'+p['id'])[1]['review_token']})
             self.assertEqual(status,200,result)
             p=self.req(client,'GET','/posts/'+p['id'])[1]
@@ -215,7 +220,7 @@ class CommunityWorkflows(unittest.TestCase):
             self.assertEqual(self.req(self.guest,'GET','/profiles/'+self.seller_id)[0],404)
 
     def test_r2_upload_is_private_and_signing_requires_post_access(self):
-        with patch.object(app.storage_r2,'is_configured',return_value=True),patch.object(app.storage_r2,'put_evidence') as put,patch.object(app.storage_r2,'evidence_url',return_value='https://private.r2.cloudflarestorage.com/lease') as sign:
+        with patch.object(app.storage_r2,'is_configured',return_value=True),patch.object(app.storage_r2,'put_evidence') as put,patch.object(app.storage_r2,'read_evidence',return_value=self.image()),patch.object(app.storage_r2,'evidence_url',return_value='https://private.r2.cloudflarestorage.com/lease') as sign:
             status,m,_=self.req(self.seller,'POST','/media',raw=self.image(),content_type='image/png')
             self.assertEqual(status,201,m);put.assert_called_once();self.assertEqual(put.call_args.args[1][:4],b'RIFF')
             self.assertEqual(self.req(self.guest,'GET','/media/'+m['id'])[0],404);sign.assert_not_called()

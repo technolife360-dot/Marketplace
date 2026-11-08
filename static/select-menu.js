@@ -18,16 +18,25 @@ window.SelectMenus=(()=>{
    label();if(trigger.disabled!==select.disabled)trigger.disabled=select.disabled;trigger.setAttribute('aria-required',String(select.required));
    const caption=[...select.selectedOptions].map(option=>option.label).join(', ')||text('Tanlang','Выберите','Choose an option');if(value.textContent!==caption)value.textContent=caption;
    const snapshot=JSON.stringify([...select.options].map(o=>[o.label,o.value,o.disabled,o.parentElement.disabled||false,o.hidden,o.selected]));
-   if(signature!==snapshot){signature=snapshot;list.innerHTML=[...select.options].map((o,index)=>`<button type="button" role="option" data-option="${index}" aria-selected="${o.selected}" ${o.disabled||o.parentElement.disabled?'disabled':''}><span>${escape(o.label)}</span><span class="site-select-check" aria-hidden="true">✓</span></button>`).join('');options=[...list.children];filter()}
+   if(signature!==snapshot){signature=snapshot;list.innerHTML=[...select.options].map((o,index)=>`<button type="button" class="site-select-option" role="option" data-option="${index}" aria-selected="${o.selected}" ${o.disabled||o.parentElement.disabled?'disabled':''}><span>${escape(o.label)}</span><span class="site-select-check" aria-hidden="true">✓</span></button>`).join('');options=[...list.children];filter()}
    const hint=text('Qidirish…','Поиск…','Search options…');if(search.placeholder!==hint){search.placeholder=hint;search.setAttribute('aria-label',hint)}
    const hideSearch=select.options.length<=8;if(search.hidden!==hideSearch)search.hidden=hideSearch;const noResults=text('Natija topilmadi','Ничего не найдено','No options found');if(empty.textContent!==noResults)empty.textContent=noResults;
    if(select.multiple)list.setAttribute('aria-multiselectable','true');
    if(select.disabled&&active===state)close();
   }
   function close(focus=false){if(popup.matches(':popover-open'))popup.hidePopover();popup.hidden=true;trigger.setAttribute('aria-expanded','false');if(active===state)active=null;if(focus&&trigger.isConnected)trigger.focus({preventScroll:true})}
-  function position(){const rect=trigger.getBoundingClientRect();popup.style.left=rect.left+'px';popup.style.top=(rect.bottom+6)+'px';popup.style.width=rect.width+'px';const available=Math.max(60,window.innerHeight-rect.bottom-24-(search.hidden?16:60));list.style.maxHeight=Math.min(180,available)+'px'}
+  function position(){const rect=trigger.getBoundingClientRect();popup.style.left=rect.left+'px';popup.style.top=(rect.bottom+6)+'px';popup.style.width=rect.width+'px';const available=Math.max(0,window.innerHeight-rect.bottom-24-(search.hidden?16:60));list.style.maxHeight=Math.min(180,available)+'px'}
+  function makeSpace(){
+   list.style.maxHeight='180px';
+   const needed=()=>Math.max(0,trigger.getBoundingClientRect().bottom+6+Math.min(180,list.scrollHeight)+(search.hidden?16:60)+24-window.innerHeight);
+   for(let parent=picker.parentElement;parent&&needed()>0;parent=parent.parentElement){
+    if(parent===document.scrollingElement)break;
+    if(/auto|scroll/.test(getComputedStyle(parent).overflowY)&&parent.scrollHeight>parent.clientHeight)parent.scrollTop+=needed();
+   }
+   if(needed()>0)window.scrollBy({top:needed(),behavior:'instant'});
+  }
   function open(){if(select.disabled)return;if(active&&active!==state)active.close();search.value='';sync();filter();popup.hidden=false;position();
-   if(popup.showPopover)popup.showPopover();trigger.setAttribute('aria-expanded','true');active=state;
+   if(popup.showPopover)popup.showPopover();makeSpace();position();trigger.setAttribute('aria-expanded','true');active=state;
    const selected=options.find(o=>o.getAttribute('aria-selected')==='true'&&!o.disabled&&!o.hidden);if(!search.hidden)search.focus({preventScroll:true});else(selected||options.find(o=>!o.disabled&&!o.hidden))?.focus({preventScroll:true});if(selected)list.scrollTop=selected.offsetTop-list.offsetTop;
   }
   trigger.addEventListener('click',()=>popup.hidden?open():close());

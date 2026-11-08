@@ -13,7 +13,7 @@ The community lives at `/community`. Marketplace and Top Up keep their existing 
 - Circle: followers, following and a private squad list.
 - Notifications: real follow/reaction/comment events, idempotent delivery and mark-as-read.
 - Showcase layout: up to twelve posts, drag/drop and keyboard-accessible move buttons.
-- Moderation: every new post and edit enters a human review queue before publication, including images and clips. Admins can inspect private submission media with explicit review access. Approval includes a content revision token; edits invalidate an open review. Production admin MFA requirements apply.
+- Automatic safety: new posts and edits are classified server-side before publication using OpenAI GPT-4.1 mini. Captions, primary media and optional thumbnails are analysed for real violence/graphic injury, nudity/sexual content, dangerous real-world acts and recreational drug content. Ordinary non-graphic gameplay is allowed. Safe posts publish immediately; violations stay hidden with a localized reason; uncertain results remain private drafts. Provider/configuration/decoding errors fail closed. New cover images must pass the same checks. The public Community sidebar no longer includes Moderation. Existing authenticated staff report/rights/appeal controls and stale-review protection remain available for support cases; normal publication no longer waits for a person.
 - Copyright/privacy: rights holders can submit private cases without signing up. Authors can appeal a removal; successful appeals return the post to review. Comments can be reported and removed. Case contacts are restricted to authorized staff.
 - Marketplace: verified sellers can attach an owned, active listing from the same game to a moment. The post reads current price, stock and listing availability from the marketplace.
 - Shared account menu: home and community use `account-menu.js`/`.css`, the same avatar/name and canonical account routes. Visibility changes refresh account identity after edits in another tab.
@@ -30,15 +30,16 @@ Media uses the existing private R2 evidence bucket. Access is checked before gen
 
 Account deletion removes showcase data and objects. The existing authenticated retention cron also removes unreferenced uploads older than seven days, twenty per run. Referenced drafts, post media and covers remain intact.
 
-## Current upload limits
+## Upload handling
 
-- Images: JPG, PNG or WebP, 4 MB per upload; normalized to WebP.
-- Gameplay clips: MP4, 4 MB and 30 seconds, normalized to H.264/AAC. Audio is preserved for community clips. Existing dispute/evidence videos still strip audio.
-- 20 uploads per account/hour; 512 MB per-account stored-media ceiling.
+- New composer images use private staged uploads and normalize to WebP.
+- New MP4 uploads preserve duration and audio, with stripped metadata and incremental safety checks.
+- The former 4 MB / 30-second composer cutoff and 512 MB account ceiling are removed. The legacy small-body endpoint remains for profile images/old clients.
+- 20 upload reservations per account/hour prevent automated abuse. Provider and server processing capacity still apply; see the R2 direct upload section below.
 
-Optional Cloudflare Stream supports MP4 uploads up to 200 MB / 180 seconds. Configure `CF_STREAM_ACCOUNT_ID`, `CF_STREAM_API_TOKEN`, `CF_STREAM_SIGNING_KEY_ID` and `CF_STREAM_SIGNING_KEY_PEM` on the server. The signing PEM can be base64 encoded. Reservation requests enforce signed playback, one-hour upload expiry and maximum duration. Browser uploads use resumable TUS chunks; only a scoped upload URL reaches the browser. Processing must finish before a post can be submitted. Playback uses locally signed RSA tokens lasting five minutes. Each account may retain at most fifty Stream uploads, in addition to existing short-clip/image quotas. Unreferenced Stream videos are included in retention and erasure.
+Optional Cloudflare Stream supports MP4 uploads up to 200 MB / 180 seconds. Configure `CF_STREAM_ACCOUNT_ID`, `CF_STREAM_API_TOKEN`, `CF_STREAM_SIGNING_KEY_ID` and `CF_STREAM_SIGNING_KEY_PEM` on the server. The signing PEM can be base64 encoded. Reservation requests enforce signed playback, one-hour upload expiry and maximum duration. The current composer reserves `/api/community/uploads` and sends new images and MP4 clips directly to private R2 storage; it does not choose Stream based on account settings. The legacy Stream API and signed playback remain for existing media and integrations. Processing must finish before a post can be submitted. Playback uses locally signed RSA tokens lasting five minutes. Each account may retain at most fifty Stream uploads, in addition to existing short-clip/image quotas. Unreferenced Stream videos are included in retention and erasure.
 
-No automatic Content ID matching, content classifier or legal adjudication is claimed. Moderation is a human operation. Staff must review the queue and handle private rights cases. Account export includes the user's own community records through the existing reauthenticated export endpoint.
+Automatic safety is implemented in `community_moderation.py`; it is a probabilistic classifier, not a guarantee or copyright matcher. Videos are decoded in bounded windows and sampled at roughly one frame per second, including later windows; audio is not analysed. Brief violations between samples can be missed. Stream videos cannot auto-publish in this initial version: their full media needs an asynchronous scanner, and a poster/caption is never accepted as proof that a video is safe. Do not enable large-video uploads publicly until that scanner exists. No account bans or payment decisions are automated. Staff still handle private reports, rights cases and appeals. Account export includes the user's own community records through the existing reauthenticated export endpoint.
 
 ## Deployment order
 
@@ -70,3 +71,53 @@ Browser checks covered desktop 1586×992, mobile 390×844 and 320px width, page 
 ## Latest scope
 
 Shared identity, moderation, rights cases, country opt-in, Stream processing/signing and stale-review protection have WSGI/unit regressions. Cloudflare Stream credentials were absent in the local preview, so provider calls are mocked in tests; real-account upload and playback remain a deployment check. Local fixtures are never production content.
+
+## Automatic safety operations
+
+Store `OPENAI_API_KEY` only in `~/Desktop/SentryLoot-Secrets/.env` locally and the hosting provider's server-side secret store in production. Never put real keys into the marketplace workspace or Git. Requests use a fixed OpenAI endpoint, structured boolean outputs, a 16-second timeout, bounded private media reads, and `store: false`. Credentials, raw provider errors and user media are never included in audit logs. The audit stores policy version, decision and category codes. The existing publish rate limit bounds external calls; each edit is rechecked, and the browser cannot supply an approval. No additional database migration is required.
+
+Configure the server key and verify billing/rate limits before deployment. The synthetic live API probes returned HTTP 429 with `billing_not_active`; real classification is blocked until the connected OpenAI project activates API billing. Mocked service-contract and real decoding/workflow tests do not establish real-world classifier accuracy. New provider data flow and sampling limits are disclosed in the composer, Safety & rights and English/Uzbek/Russian privacy notices.
+
+
+### Community albums and R2 direct uploads (2026-11-08)
+
+The composer now has one icon-only, keyboard-accessible media picker. It accepts
+several images or one MP4, with per-image removal and an ordered album viewer.
+`media_ids` is the authoritative attachment list; `media_id` remains the cover
+for existing clients. Every attachment has the post's visibility, ownership and
+block checks. Every image is scanned; album edits invalidate staff review tokens.
+
+New composer uploads use `POST /api/community/uploads` (size and type only),
+a signed PUT straight to private R2, then `POST /uploads/{id}/complete`.
+Production file bytes bypass Vercel's 4.5 MB request boundary. Development alone
+uses authenticated 3 MB chunks at `/uploads/{id}/chunk?offset=…` so the same
+large-file workflow is testable without cloud credentials. There is no former
+4 MB / 30-second composer cutoff. R2's single-PUT service boundary is 5 GiB;
+server disk/CPU availability, supported formats, image decoding budgets and
+upload-rate protections still apply. Larger objects require multipart ingestion.
+Do not describe storage or processing as physically unlimited.
+
+Unpublished originals are staged privately and never served by the media API.
+The server validates the declared size, decodes/re-encodes images, or remuxes MP4
+streams with faststart and stripped metadata, without truncating duration. It
+stores a separate final object, commits metadata, then deletes the staging
+object. Thus a replay of a staging PUT cannot change an approved post. Finalize
+is idempotent; concurrent processing uses a lease. Expired abandoned staging
+objects are cleaned by existing retention and account-erasure workflows.
+
+MP4 safety checks progress in chronological 16-second windows through owner-only
+`POST /api/community/media/{id}/check`. The Publish action continues checking
+until complete. Each window is sampled at about one frame/second, including
+later windows; audio is not analyzed. Cache decisions bind the caption and
+policy version to immutable server-owned media. Incomplete checks or provider
+failures cannot publish. There is no 30-second analysis truncation for new
+uploads. Legacy bounded clips and Stream playback remain readable.
+
+Apply `supabase/migrations/20261108010000_community_albums_uploads.sql` before
+deploying this code. The new tables are server-only with RLS and revoked browser
+role grants. Existing R2 credentials must have object read/write access to the
+private bucket. Bucket CORS permits **PUT only** from `https://gamestorehub.com`
+and `https://www.gamestorehub.com`; it grants no public read access. The community
+page's CSP permits connect requests only to its configured R2 account endpoint.
+All authentication/CSRF checks remain on reservation, completion, local chunks
+and safety-check API calls. Provider keys remain outside the repository.

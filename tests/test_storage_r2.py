@@ -103,3 +103,25 @@ class R2StorageTests(unittest.TestCase):
             self.assertFalse(storage_r2.is_listing_url('https://other.example.com/' + key))
             self.assertFalse(storage_r2.is_listing_url('https://assets.gamestorehub.com/' + key + '?x=1'))
             self.assertFalse(storage_r2.is_listing_url('https://assets.gamestorehub.com/../private.webp'))
+
+class R2DirectUploadTests(unittest.TestCase):
+    def test_staging_signature_is_put_only_size_bound_and_expires(self):
+        key='a'*24+'/'+'b'*48+'.webp';client=MagicMock()
+        client.generate_presigned_url.return_value='https://example.invalid/put-lease'
+        with patch.dict(os.environ,R2_ENV),patch.object(storage_r2,'_client',return_value=client):
+            self.assertEqual(storage_r2.evidence_upload_url(key,123),'https://example.invalid/put-lease')
+        client.generate_presigned_url.assert_called_once_with('put_object',Params={'Bucket':R2_ENV['R2_EVIDENCE_BUCKET'],'Key':key,'ContentType':'application/octet-stream','ContentLength':123},ExpiresIn=1800)
+
+    def test_streaming_download_checks_length_and_always_closes(self):
+        import io,tempfile
+        from pathlib import Path
+        key='a'*24+'/'+'b'*48+'.webp'
+        for declared,expected in [(4,4),(5,4),(4,5)]:
+            stream=io.BytesIO(b'data');client=MagicMock();client.get_object.return_value={'Body':stream,'ContentLength':declared}
+            with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,R2_ENV),patch.object(storage_r2,'_client',return_value=client):
+                target=Path(directory)/'source'
+                if declared==expected==4:
+                    storage_r2.download_evidence(key,target,expected);self.assertEqual(target.read_bytes(),b'data')
+                else:
+                    with self.assertRaises(ValueError):storage_r2.download_evidence(key,target,expected)
+                self.assertTrue(stream.closed)

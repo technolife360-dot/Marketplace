@@ -5,11 +5,13 @@ import re
 import secrets
 import community_safety as safety
 import community_video
+import community_moderation as automatic
+import community_uploads
 from dataclasses import dataclass
 from pathlib import Path
 
 UNHANDLED = object()
-TABLES = ('community_profiles','community_media','community_posts','community_follows','community_saves',
+TABLES = ('community_profiles','community_media','community_posts','community_post_media','community_follows','community_saves',
           'community_reactions','community_comments','community_blocks','community_events','community_reports','community_squad','community_folders') + safety.TABLES
 SCHEMA = (
     """CREATE TABLE IF NOT EXISTS community_profiles (
@@ -19,7 +21,7 @@ SCHEMA = (
         preferences TEXT NOT NULL DEFAULT '{}', layout TEXT NOT NULL DEFAULT '[]')""",
     """CREATE TABLE IF NOT EXISTS community_media (
         id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        object_key TEXT NOT NULL UNIQUE, content_type TEXT NOT NULL, byte_size INTEGER NOT NULL,
+        object_key TEXT NOT NULL UNIQUE, content_type TEXT NOT NULL, byte_size BIGINT NOT NULL,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""",
     """CREATE TABLE IF NOT EXISTS community_posts (
         id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -30,6 +32,11 @@ SCHEMA = (
         status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published','hidden','deleted')),
         comments_enabled INTEGER NOT NULL DEFAULT 1, pinned INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""",
+    """CREATE TABLE IF NOT EXISTS community_post_media (
+        post_id TEXT NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
+        media_id TEXT NOT NULL REFERENCES community_media(id), position INTEGER NOT NULL CHECK(position>=0),
+        PRIMARY KEY(post_id,media_id), UNIQUE(post_id,position))""",
+    'CREATE INDEX IF NOT EXISTS community_post_media_object ON community_post_media(media_id)',
     """CREATE TABLE IF NOT EXISTS community_follows (
         user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         target_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -69,13 +76,15 @@ SCHEMA = (
     'CREATE INDEX IF NOT EXISTS community_events_user ON community_events(user_id,created_at DESC)',
     'CREATE INDEX IF NOT EXISTS community_media_owner ON community_media(user_id,created_at)',
 )
-SCHEMA += safety.SCHEMA
+SCHEMA += safety.SCHEMA + community_uploads.SCHEMA
+TABLES += community_uploads.TABLES
 DEFAULTS = {'show_country':False,'comments':'everyone','notify_follow':True,'notify_reaction':True,'notify_comment':True,'games':[]}
 
 
 def migrate(db, postgres=False):
     for statement in SCHEMA: db.execute(statement)
     if postgres:
+        db.execute('ALTER TABLE community_media ALTER COLUMN byte_size TYPE BIGINT')
         for table in TABLES:
             db.execute(f'ALTER TABLE public.{table} ENABLE ROW LEVEL SECURITY')
             db.execute(f'REVOKE ALL ON public.{table} FROM PUBLIC, anon, authenticated')
@@ -146,12 +155,12 @@ def acl(uid):
 
 def get_post(db, pid, uid, core):
     rule,params=acl(uid)
-    row=db.execute('SELECT p.* FROM community_posts p WHERE p.id=? AND p.status NOT IN (\'deleted\',\'hidden\') AND '+rule,(pid,*params)).fetchone()
+    row=db.execute("SELECT p.* FROM community_posts p WHERE p.id=? AND p.status<>'deleted' AND (p.status<>'hidden' OR p.user_id=?) AND "+rule,(pid,uid or '',*params)).fetchone()
     if not row: fail(core,404,'This post is private or unavailable.')
     return row
 
 
-def post_view(db,row,uid,core,authors=None,metrics=None):
+def post_view(db,row,uid,core,authors=None,metrics=None,attachments=None):
     author=authors[row['user_id']] if authors is not None else profile(db,row['user_id'],uid,core)
     result=dict(row)
     for key in ('media_id','thumbnail_id'):
@@ -159,6 +168,12 @@ def post_view(db,row,uid,core,authors=None,metrics=None):
     if row['media_id']:
         media=db.execute('SELECT content_type FROM community_media WHERE id=?',(row['media_id'],)).fetchone()
         result['media_type']=media['content_type'] if media else ''
+    if attachments is None:
+        attachments=db.execute('SELECT m.id,m.content_type FROM community_post_media a JOIN community_media m ON m.id=a.media_id WHERE a.post_id=? ORDER BY a.position',(row['id'],)).fetchall()
+    if not attachments and row['media_id']:
+        attachments=[{'id':row['media_id'],'content_type':result.get('media_type','')}]
+    result['media']=[{'id':m['id'],'url':'/api/community/media/'+m['id'],'content_type':m['content_type']} for m in attachments]
+    result['media_ids']=[m['id'] for m in attachments]
     if metrics is None:
         metrics=dict(db.execute("""SELECT
             (SELECT COUNT(*) FROM community_reactions WHERE post_id=?) reactions,
@@ -199,12 +214,16 @@ def post_views(db,rows,uid,core):
         EXISTS(SELECT 1 FROM community_saves s WHERE s.user_id=? AND s.post_id=p.id) saved,
         COALESCE(m.content_type,'') media_type FROM community_posts p LEFT JOIN community_media m ON m.id=p.media_id
         WHERE p.id IN ("""+placeholders+')',(uid or '',uid or '',*ids)).fetchall()}
+    albums={}
+    for m in db.execute('SELECT a.post_id,m.id,m.content_type FROM community_post_media a JOIN community_media m ON m.id=a.media_id WHERE a.post_id IN ('+placeholders+') ORDER BY a.post_id,a.position',ids).fetchall():
+        albums.setdefault(m['post_id'],[]).append(m)
     out=[]
     for row in rows:
         m=metrics[row['id']];m.pop('id',None)
         # Avoid media lookups and per-author queries for a bounded feed page.
         value=dict(row);media=value['media_id'];value['media_id']=None
-        p=post_view(db,value,uid,core,authors,m);p['media_id']=media;p['media_url']='/api/community/media/'+media if media else ''
+        attachments=albums.get(row['id'],[{'id':media,'content_type':m['media_type']}] if media else [])
+        p=post_view(db,value,uid,core,authors,m,attachments);p['media_id']=media;p['media_url']='/api/community/media/'+media if media else ''
         out.append(p)
     return out
 
@@ -229,6 +248,7 @@ def disk_path(core,key):
 
 
 def erase(db,uid,core):
+    community_uploads.cleanup(db,core,uid)
     for row in db.execute('SELECT object_key FROM community_media WHERE user_id=?',(uid,)).fetchall():
         safety.remove_object(core,row)
     db.execute('DELETE FROM community_cases WHERE user_id=?',(uid,))
@@ -244,8 +264,9 @@ def erase(db,uid,core):
 def cleanup_media(db,core):
     """Purge unreferenced uploads after seven days; referenced drafts/covers stay intact."""
     from datetime import datetime,timedelta,timezone
+    community_uploads.cleanup(db,core)
     cutoff=(datetime.now(timezone.utc)-timedelta(days=7)).strftime('%Y-%m-%d 00:00:00')
-    unused="NOT EXISTS(SELECT 1 FROM community_posts p WHERE p.media_id=m.id OR p.thumbnail_id=m.id) AND NOT EXISTS(SELECT 1 FROM community_profiles p WHERE p.cover_id=m.id)"
+    unused="NOT EXISTS(SELECT 1 FROM community_posts p WHERE p.media_id=m.id OR p.thumbnail_id=m.id) AND NOT EXISTS(SELECT 1 FROM community_post_media a WHERE a.media_id=m.id) AND NOT EXISTS(SELECT 1 FROM community_profiles p WHERE p.cover_id=m.id)"
     rows=db.execute('SELECT m.id FROM community_media m WHERE m.created_at<? AND '+unused+' ORDER BY m.created_at LIMIT 20',(cutoff,)).fetchall()
     deleted=0
     for item in rows:
@@ -269,7 +290,10 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
     if ctx.get('user') and ctx['user']['suspended']: core['require_user'](ctx)
     if method in ('POST','PATCH','DELETE') and path!='/api/community/cases':
         core['require_verified'](ctx)
-        core['check_rate'](db,'community-write',uid,120,3600)
+        if not re.fullmatch(r'/api/community/(?:uploads/[A-Za-z0-9_-]+/chunk|media/[A-Za-z0-9_-]+/check)',path):
+            core['check_rate'](db,'community-write',uid,120,3600)
+    upload_result=community_uploads.route(handler,db,ctx,method,path,qs,data,raw,core)
+    if upload_result is not UNHANDLED:return upload_result
     try:
         extra=safety.route(handler,db,ctx,method,path,qs,data,core)
     except community_video.Unavailable as exc:fail(core,503,str(exc))
@@ -305,7 +329,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         return {'user':ctx['user'],'profile':me,'csrf':ctx['csrf'],
                 'unread':db.execute('SELECT COUNT(*) AS total FROM community_events WHERE user_id=? AND seen=0',(uid or '',)).fetchone()['total'],
                 'games':[dict(r) for r in db.execute('SELECT slug,name FROM games ORDER BY name').fetchall()],
-                'admin':bool(uid and core['is_admin'](db,uid)), 'image_limit':4*1024*1024,'video_limit':4*1024*1024,'video_seconds':30, 'stream_enabled':community_video.configured(), 'stream_limit':community_video.MAX_BYTES, 'stream_seconds':community_video.MAX_SECONDS}
+                'admin':bool(uid and core['is_admin'](db,uid)), 'r2_upload_origin':core['storage_r2'].upload_origin() if core.get('storage_r2') and core['storage_r2'].is_configured() else '', 'stream_enabled':community_video.configured(), 'stream_limit':community_video.MAX_BYTES, 'stream_seconds':community_video.MAX_SECONDS}
     if part=='/profile' and method in ('POST','PATCH'):
         uid=ensure_profile(db,ctx,core);current=profile_row(db,uid)
         handle=text(core,data.get('handle',current['handle']),24,3).lower()
@@ -332,6 +356,10 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
                 if not db.execute('SELECT 1 FROM games WHERE slug=?',(game,)).fetchone(): fail(core,400,'Unknown game.')
         cover=data.get('cover_id',current['cover_id']) or None
         if cover and not db.execute("SELECT 1 FROM community_media WHERE id=? AND user_id=? AND content_type='image/webp'",(cover,uid)).fetchone():fail(core,400,'Choose one of your uploaded cover images.')
+        if cover and cover != current['cover_id']:
+            try: result=automatic.assess(db,uid,[cover],'Community profile cover',core)
+            except automatic.Unavailable as exc:fail(core,503,str(exc))
+            if result.status!='approved':fail(core,422,result.note)
         name=text(core,data.get('display_name',ctx['user']['display_name']),60,2)
         layout=data.get('layout',unpack(current['layout'],[]))
         if not isinstance(layout,list) or len(layout)>12 or any(not isinstance(i,str) for i in layout):fail(core,400,'Pin up to 12 published posts.')
@@ -350,8 +378,6 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
     if part=='/media' and method=='POST':
         uid=ensure_profile(db,ctx,core)
         core['check_rate'](db,'community-upload',uid,20,3600)
-        used=db.execute('SELECT COALESCE(SUM(byte_size),0) AS total FROM community_media WHERE user_id=?',(uid,)).fetchone()['total']
-        if used+len(raw)>512*1024*1024:fail(core,413,'Your media storage is full. Contact support to manage your uploads.')
         if len(raw)>4*1024*1024:fail(core,413,'Upload a file up to 4 MB.')
         mime=handler.headers.get('Content-Type','').split(';')[0]
         if mime=='video/mp4':
@@ -380,7 +406,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         allowed=bool(media and media['user_id']==uid)
         if media and not allowed:
             rule,params=acl(uid)
-            allowed=bool(db.execute("SELECT 1 FROM community_posts p WHERE (p.media_id=? OR p.thumbnail_id=?) AND p.status='published' AND "+rule,(mid,mid,*params)).fetchone())
+            allowed=bool(db.execute("SELECT 1 FROM community_posts p WHERE (p.media_id=? OR p.thumbnail_id=? OR EXISTS(SELECT 1 FROM community_post_media a WHERE a.post_id=p.id AND a.media_id=?)) AND p.status='published' AND "+rule,(mid,mid,mid,*params)).fetchone())
             if not allowed:
                 p=profile_row(db,media['user_id']);allowed=bool(p and p['cover_id']==mid and visible_profile(db,p,uid))
         if media and q('review')=='1':
@@ -473,8 +499,22 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         if not db.execute('SELECT 1 FROM games WHERE slug=?',(game,)).fetchone():fail(core,400,'Choose a game.')
         if status=='published' and data.get('permission') is not True:fail(core,400,'Confirm you have permission to share this content.')
         media=source.get('media_id') or None;thumb=source.get('thumbnail_id') or None
-        for mid in (media,thumb):
+        if 'media_ids' in data:
+            media_ids=data['media_ids']
+        elif old and 'media_id' not in data:
+            media_ids=[r['media_id'] for r in db.execute('SELECT media_id FROM community_post_media WHERE post_id=? ORDER BY position',(old['id'],)).fetchall()] or ([media] if media else [])
+        else:
+            media_ids=[media] if media else []
+        if not isinstance(media_ids,list) or any(not isinstance(mid,str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}',mid) for mid in media_ids) or len(set(media_ids))!=len(media_ids):
+            fail(core,400,'Choose unique uploaded images or one video.')
+        media=media_ids[0] if media_ids else None
+        media_types=[]
+        for mid in media_ids+([thumb] if thumb else []):
             if mid and not db.execute('SELECT 1 FROM community_media WHERE id=? AND user_id=?',(mid,uid)).fetchone():fail(core,400,'Only your own uploaded media can be used.')
+        for mid in media_ids:
+            media_types.append(db.execute('SELECT content_type FROM community_media WHERE id=?',(mid,)).fetchone()['content_type'])
+        if len(media_ids)>1 and any(m.startswith('video/') for m in media_types):
+            fail(core,400,'Choose multiple images or a single video, not both.')
         if thumb and db.execute('SELECT content_type FROM community_media WHERE id=?',(thumb,)).fetchone()['content_type']!='image/webp':fail(core,400,'Choose an image thumbnail.')
         if status=='published' and kind in ('moment','item') and not media:fail(core,400,'Upload an image or a gameplay clip before publishing.')
         linked=source.get('linked_items',[])
@@ -490,7 +530,12 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
             stream=db.execute('SELECT state FROM community_streams WHERE media_id=?',(media,)).fetchone()
             if stream and status=='published' and stream['state']!='ready':fail(core,409,'Wait until video processing has finished.')
         requested=status
-        status='draft'  # Published intent enters the human review queue.
+        result=None
+        if requested=='published':
+            core['check_rate'](db,'community-safety-check',uid,20,3600)
+            try: result=automatic.assess(db,uid,media_ids+([thumb] if thumb else []),json.dumps({'title':title,'body':body},ensure_ascii=False),core)
+            except automatic.Unavailable as exc:fail(core,503,str(exc))
+        status='published' if result and result.status=='approved' else 'hidden' if result and result.status=='rejected' else 'draft'
         pid=old['id'] if old else core['ident']()
         db.execute('BEGIN IMMEDIATE')
         try:
@@ -499,7 +544,14 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
                 media_id=excluded.media_id,thumbnail_id=excluded.thumbnail_id,linked_items=excluded.linked_items,audience=excluded.audience,status=excluded.status,
                 comments_enabled=excluded.comments_enabled,pinned=excluded.pinned,updated_at=CURRENT_TIMESTAMP''',
                 (pid,uid,kind,title,body,game,media,thumb,json.dumps(linked),audience,status,int(comments),int(pinned)))
-            safety.record_submission(db,pid,lid,requested,data.get('permission') is True)
+            db.execute('DELETE FROM community_post_media WHERE post_id=?',(pid,))
+            for position,mid in enumerate(media_ids):
+                db.execute('INSERT INTO community_post_media(post_id,media_id,position) VALUES(?,?,?)',(pid,mid,position))
+            safety.record_submission(db,pid,lid,requested,data.get('permission') is True,
+                                     decision=result.status if result else None,note=result.note if result else '')
+            if result:
+                core['audit'](db,uid,'community.automatic_check','post',pid,
+                              {'policy':automatic.POLICY_VERSION,'decision':result.status,'categories':list(result.categories)})
             db.execute('COMMIT')
         except Exception:db.execute('ROLLBACK');raise
         return (200 if old else 201),post_view(db,get_post(db,pid,uid,core),uid,core)

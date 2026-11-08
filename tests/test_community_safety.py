@@ -6,11 +6,16 @@ import unittest
 from unittest.mock import patch
 import app
 import community_video as video
+import community_moderation as automatic
+import community_safety
 from tests import test_http_workflows as workflow
 from tests import test_community as communityTests
 
 class CommunitySafety(unittest.TestCase):
-    setUp=workflow.HTTPWorkflows.setUp
+    def setUp(self):
+        communityTests.CommunityWorkflows.setUp(self)
+        patcher=patch.object(automatic,'classify',return_value=automatic.Result('pending'))
+        patcher.start();self.addCleanup(patcher.stop)
     tearDown=workflow.HTTPWorkflows.tearDown
     signed_client=workflow.HTTPWorkflows.signed_client
     req=communityTests.CommunityWorkflows.req
@@ -19,8 +24,11 @@ class CommunitySafety(unittest.TestCase):
     image=communityTests.CommunityWorkflows.image
 
     def pending(self,**changes):
-        result=self.req(self.seller,'POST','/posts',{'kind':'achievement','title':'A real milestone','game_slug':'pubg-mobile','status':'published','permission':True,**changes})
-        self.assertEqual(result[0],201,result[1]);return result[1]
+        # Explicit legacy/appeal queue fixture. Normal safe posts now auto-publish.
+        result=self.req(self.seller,'POST','/posts',{'kind':'achievement','title':'A real milestone','game_slug':'pubg-mobile',**changes,'status':'draft','permission':True})
+        self.assertEqual(result[0],201,result[1])
+        community_safety.record_submission(self.db,result[1]['id'],None,'published',True)
+        return self.req(self.seller,'GET','/posts/'+result[1]['id'])[1]
     def inspect(self,pid):
         status,p,_=self.admin.request('GET','/api/admin/community/review/'+pid)
         self.assertEqual(status,200,p);return p

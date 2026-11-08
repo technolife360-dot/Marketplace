@@ -3,6 +3,7 @@ import os
 import unittest
 import app
 import community
+import community_safety
 
 @unittest.skipUnless(os.environ.get('SENTRYLOOT_TEST_POSTGRES_TEMP')=='1','Requires explicitly enabled PostgreSQL TEMP fixtures')
 class CommunityPostgres(unittest.TestCase):
@@ -38,6 +39,15 @@ class CommunityPostgres(unittest.TestCase):
         self.assertEqual(public['reactions'],1);self.assertTrue(public['liked']);self.assertEqual(public['author']['followers'],1)
         self.db.execute("INSERT INTO community_blocks VALUES('qa-author','qa-reader')")
         self.assertEqual(self.feed(),[])
+    def test_album_order_and_large_media_sizes_survive_postgres_serialization(self):
+        self.db.execute("INSERT INTO community_media(id,user_id,object_key,content_type,byte_size) VALUES('qa-media-a','qa-author','qa-a','image/webp',3000000000),('qa-media-b','qa-author','qa-b','image/webp',20)")
+        self.db.execute("UPDATE community_posts SET media_id='qa-media-a' WHERE id='qa-public'")
+        self.db.execute("INSERT INTO community_post_media VALUES('qa-public','qa-media-a',0),('qa-public','qa-media-b',1)")
+        post=self.feed()[0]
+        self.assertEqual(post['media_ids'],['qa-media-a','qa-media-b'])
+        self.assertEqual([m['url'] for m in post['media']],['/api/community/media/qa-media-a','/api/community/media/qa-media-b'])
+        self.assertEqual(self.db.execute("SELECT byte_size FROM community_media WHERE id='qa-media-a'").fetchone()['byte_size'],3000000000)
+
     def test_players_search_and_saved_filter_use_portable_sql(self):
         players=community.route(None,self.db,self.ctx,'GET','/api/community/players',{'q':['Author']},{},b'',self.core)['players']
         self.assertEqual(players[0]['id'],'qa-author')
@@ -65,3 +75,17 @@ class CommunityPostgres(unittest.TestCase):
         self.db.execute("INSERT INTO community_saves(user_id,post_id,folder) VALUES('qa-reader','qa-public','Highlights')")
         result=community.route(None,self.db,self.ctx,'GET','/api/community/folders',{}, {},b'',self.core)
         self.assertEqual(result['folders'],['Clutches','Highlights'])
+
+    def test_hidden_posts_stay_private_but_the_author_can_correct_them(self):
+        self.db.execute("UPDATE community_posts SET status='hidden' WHERE id='qa-public'")
+        self.assertEqual(community.get_post(self.db,'qa-public','qa-author',self.core)['status'],'hidden')
+        with self.assertRaises(app.HttpError):community.get_post(self.db,'qa-public','qa-reader',self.core)
+        self.assertEqual(self.feed(),[])
+
+    def test_automatic_decision_and_reason_are_saved_without_a_human_reviewer(self):
+        community_safety.record_submission(self.db,'qa-public',None,'published',True,
+                                           decision='rejected',note='Automatic safety decision')
+        result=self.db.execute("SELECT review_status,review_note,reviewer_id FROM community_post_state WHERE post_id='qa-public'").fetchone()
+        self.assertEqual(result['review_status'],'rejected')
+        self.assertEqual(result['review_note'],'Automatic safety decision')
+        self.assertIsNone(result['reviewer_id'])
