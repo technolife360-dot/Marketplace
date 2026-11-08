@@ -173,8 +173,8 @@ h1,h2,h3,strong,[data-user-content]{overflow-wrap:anywhere}.player-main>strong,.
 @media(max-width:600px){.upload-preview-item>img{height:140px}.album-arrow{width:36px;height:36px}}
 
 /* Clear glass: the cover continues behind the transparent information panel. */
-.profile-hero{display:grid;grid-template-rows:240px auto;background:transparent;isolation:isolate}
-.profile-hero>.profile-cover{grid-area:1 / 1 / 3 / 2;height:100%;min-height:0}
+.profile-hero{position:relative;display:grid;grid-template-rows:240px auto;background:transparent;isolation:isolate}
+.profile-hero>.profile-cover{position:absolute;inset:0;height:100%;min-height:0;z-index:0}
 .profile-hero>.profile-cover::after{display:none}
 .profile-hero>.profile-info{
  grid-area:2 / 1 / 3 / 2;
