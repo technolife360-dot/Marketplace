@@ -219,7 +219,7 @@ def route(handler,db,ctx,method,path,qs,data,core):
         db.execute('BEGIN IMMEDIATE')
         try:
             db.execute('UPDATE users SET id=id WHERE id=?',(uid,))
-            count=db.execute("SELECT COUNT(*) FROM community_media WHERE user_id=? AND content_type='video/stream'",(uid,)).fetchone()[0]
+            count=db.execute("SELECT COUNT(*) AS total FROM community_media WHERE user_id=? AND content_type='video/stream'",(uid,)).fetchone()['total']
             if count>=50:c.fail(core,429,'Video storage limit reached. Remove unused videos first.')
             remote,url=video.reserve(size,uid);mid=core['ident']()
             db.execute('INSERT INTO community_media(id,user_id,object_key,content_type,byte_size) VALUES(?,?,?,?,?)',(mid,uid,'stream:'+remote,'video/stream',size))

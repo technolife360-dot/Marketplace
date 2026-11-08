@@ -19,7 +19,7 @@ class CommunityPostgres(unittest.TestCase):
         self.db.execute("INSERT INTO games VALUES('qa-game','QA game')")
         self.db.execute("INSERT INTO community_profiles(user_id,handle) VALUES('qa-author','author'),('qa-reader','reader')")
         self.db.execute("INSERT INTO community_posts(id,user_id,kind,title,game_slug,audience,status) VALUES('qa-public','qa-author','achievement','First milestone','qa-game','public','published'),('qa-private','qa-author','achievement','Private milestone','qa-game','private','published'),('qa-followers','qa-author','achievement','Circle milestone','qa-game','followers','published')")
-        self.core={'HttpError':app.HttpError,'require_user':lambda c:c['uid']}
+        self.core={'HttpError':app.HttpError,'require_user':lambda c:c['uid'],'is_admin':lambda db,uid:False}
         self.ctx={'uid':'qa-reader','user':None}
     def cleanup(self):
         try:self.db.execute('ROLLBACK')
@@ -45,3 +45,23 @@ class CommunityPostgres(unittest.TestCase):
         self.assertEqual(len(self.feed({'mode':['saved']})),1)
         self.db.execute("UPDATE community_profiles SET visibility='private' WHERE user_id='qa-author'")
         self.assertEqual(self.feed({'mode':['saved']}),[])
+
+    def test_guest_and_member_bootstrap_and_profile_counts_use_named_columns(self):
+        guest={'uid':None,'user':None,'csrf':''}
+        result=community.route(None,self.db,guest,'GET','/api/community/meta',{}, {},b'',self.core)
+        self.assertEqual(result['unread'],0)
+        self.assertEqual(result['games'],[{'slug':'qa-game','name':'QA game'}])
+        self.assertIsNone(result['profile'])
+        member={**self.ctx,'csrf':'test-csrf'}
+        result=community.route(None,self.db,member,'GET','/api/community/meta',{}, {},b'',self.core)
+        self.assertEqual(result['profile']['followers'],0)
+        self.assertEqual(result['profile']['following_count'],0)
+        self.assertEqual(result['csrf'],'test-csrf')
+        profile=community.route(None,self.db,self.ctx,'GET','/api/community/profiles/qa-author',{}, {},b'',self.core)
+        self.assertEqual(profile['followers'],0)
+
+    def test_folder_names_use_named_postgres_columns(self):
+        self.db.execute("INSERT INTO community_folders(user_id,name) VALUES('qa-reader','Clutches')")
+        self.db.execute("INSERT INTO community_saves(user_id,post_id,folder) VALUES('qa-reader','qa-public','Highlights')")
+        result=community.route(None,self.db,self.ctx,'GET','/api/community/folders',{}, {},b'',self.core)
+        self.assertEqual(result['folders'],['Clutches','Highlights'])

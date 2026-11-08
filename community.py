@@ -127,8 +127,8 @@ def profile(db, target, uid, core, *, owner=False):
     result={k:row[k] for k in ('id','display_name','country','created_at','avatar_url','handle','bio','visibility')}
     if row['id']!=uid and not unpack(row['preferences'],{}).get('show_country',False):result['country']=''
     result.update(following=following(db,uid,row['id']), owner=row['id']==uid,
-        followers=db.execute('SELECT COUNT(*) FROM community_follows WHERE target_id=?',(row['id'],)).fetchone()[0],
-        following_count=db.execute('SELECT COUNT(*) FROM community_follows WHERE user_id=?',(row['id'],)).fetchone()[0],
+        followers=db.execute('SELECT COUNT(*) AS total FROM community_follows WHERE target_id=?',(row['id'],)).fetchone()['total'],
+        following_count=db.execute('SELECT COUNT(*) AS total FROM community_follows WHERE user_id=?',(row['id'],)).fetchone()['total'],
         cover_url='/api/community/media/'+row['cover_id'] if row['cover_id'] else '',
         layout=unpack(row['layout'],[]))
     if result['owner']: result['preferences']={**DEFAULTS,**unpack(row['preferences'],{})}
@@ -303,7 +303,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
     if part=='/meta' and method=='GET':
         me=profile(db,uid,uid,core) if uid and profile_row(db,uid) else None
         return {'user':ctx['user'],'profile':me,'csrf':ctx['csrf'],
-                'unread':db.execute('SELECT COUNT(*) FROM community_events WHERE user_id=? AND seen=0',(uid or '',)).fetchone()[0],
+                'unread':db.execute('SELECT COUNT(*) AS total FROM community_events WHERE user_id=? AND seen=0',(uid or '',)).fetchone()['total'],
                 'games':[dict(r) for r in db.execute('SELECT slug,name FROM games ORDER BY name').fetchall()],
                 'admin':bool(uid and core['is_admin'](db,uid)), 'image_limit':4*1024*1024,'video_limit':4*1024*1024,'video_seconds':30, 'stream_enabled':community_video.configured(), 'stream_limit':community_video.MAX_BYTES, 'stream_seconds':community_video.MAX_SECONDS}
     if part=='/profile' and method in ('POST','PATCH'):
@@ -350,7 +350,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
     if part=='/media' and method=='POST':
         uid=ensure_profile(db,ctx,core)
         core['check_rate'](db,'community-upload',uid,20,3600)
-        used=db.execute('SELECT COALESCE(SUM(byte_size),0) FROM community_media WHERE user_id=?',(uid,)).fetchone()[0]
+        used=db.execute('SELECT COALESCE(SUM(byte_size),0) AS total FROM community_media WHERE user_id=?',(uid,)).fetchone()['total']
         if used+len(raw)>512*1024*1024:fail(core,413,'Your media storage is full. Contact support to manage your uploads.')
         if len(raw)>4*1024*1024:fail(core,413,'Upload a file up to 4 MB.')
         mime=handler.headers.get('Content-Type','').split(';')[0]
@@ -475,7 +475,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         media=source.get('media_id') or None;thumb=source.get('thumbnail_id') or None
         for mid in (media,thumb):
             if mid and not db.execute('SELECT 1 FROM community_media WHERE id=? AND user_id=?',(mid,uid)).fetchone():fail(core,400,'Only your own uploaded media can be used.')
-        if thumb and db.execute('SELECT content_type FROM community_media WHERE id=?',(thumb,)).fetchone()[0]!='image/webp':fail(core,400,'Choose an image thumbnail.')
+        if thumb and db.execute('SELECT content_type FROM community_media WHERE id=?',(thumb,)).fetchone()['content_type']!='image/webp':fail(core,400,'Choose an image thumbnail.')
         if status=='published' and kind in ('moment','item') and not media:fail(core,400,'Upload an image or a gameplay clip before publishing.')
         linked=source.get('linked_items',[])
         if isinstance(linked,str):linked=unpack(linked,[])
@@ -558,7 +558,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
     if part=='/folders' and method=='GET':
         core['require_user'](ctx)
         rule,params=acl(uid)
-        return {'folders':sorted(set([r[0] for r in db.execute('SELECT name FROM community_folders WHERE user_id=?',(uid,))]+[r[0] for r in db.execute('SELECT DISTINCT s.folder FROM community_saves s JOIN community_posts p ON p.id=s.post_id WHERE s.user_id=? AND p.status=\'published\' AND '+rule+' ORDER BY s.folder',(uid,*params))]))}
+        return {'folders':sorted(set([r['name'] for r in db.execute('SELECT name FROM community_folders WHERE user_id=?',(uid,))]+[r['folder'] for r in db.execute('SELECT DISTINCT s.folder FROM community_saves s JOIN community_posts p ON p.id=s.post_id WHERE s.user_id=? AND p.status=\'published\' AND '+rule+' ORDER BY s.folder',(uid,*params))]))}
     if part=='/notifications' and method=='GET':
         core['require_user'](ctx)
         rows=db.execute('SELECT e.*,u.display_name,p.handle,COALESCE(av.value,\'\') avatar_url FROM community_events e JOIN users u ON u.id=e.actor_id JOIN community_profiles p ON p.user_id=u.id LEFT JOIN platform_config av ON av.key=\'public_avatar:\'||u.id WHERE e.user_id=? AND u.suspended=0 ORDER BY e.created_at DESC,e.id DESC LIMIT 100',(uid,)).fetchall()
