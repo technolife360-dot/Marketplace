@@ -527,3 +527,194 @@ def send_order_confirmation(
 
     except URLError:
         raise RuntimeError('Resend API connection failed') from None
+
+
+def send_order_update(
+    address: str,
+    display_name: str,
+    reference: str,
+    status: str,
+    description: str,
+    language: str = 'uz'
+) -> None:
+    """Send order status updates using the published Resend template."""
+
+    if not is_configured():
+        raise RuntimeError('Transactional email is not configured')
+
+    provider = os.environ.get(
+        'EMAIL_PROVIDER', 'disabled'
+    ).strip().lower()
+
+    # Use the new professional Resend template
+    if provider == 'resend':
+
+        api_key = (
+            os.environ.get('RESEND_API_KEY')
+            or os.environ.get('EMAIL_API_KEY')
+            or ''
+        ).strip()
+
+        template_id = os.environ.get(
+            'RESEND_ORDER_STATUS_TEMPLATE_ID', ''
+        ).strip()
+
+        if not api_key or not template_id:
+            raise RuntimeError(
+                'Order status template configuration is missing'
+            )
+
+        recipient = parseaddr(address)[1].strip()
+
+        if not recipient or '@' not in recipient:
+            raise ValueError('Invalid recipient email')
+
+        base = os.environ.get(
+            'PUBLIC_BASE_URL',
+            'https://gamestorehub.com'
+        ).strip().rstrip('/')
+
+        parsed = urlsplit(base)
+
+        if (
+            parsed.scheme not in ('https', 'http')
+            or not parsed.netloc
+            or parsed.username
+            or parsed.password
+        ):
+            raise ValueError(
+                'PUBLIC_BASE_URL must be an absolute HTTP(S) URL'
+            )
+
+        if (
+            os.environ.get('MARKETPLACE_MODE', 'development').lower()
+            == 'production'
+            and parsed.scheme != 'https'
+        ):
+            raise ValueError('HTTPS is required in production')
+
+        order_url = base + '/#orders'
+
+        payload = {
+            'from': _from_address(),
+            'to': [recipient],
+            'template': {
+                'id': template_id,
+                'variables': {
+                    'FIRST_NAME': display_name.strip() or 'there',
+                    'ORDER_ID': str(reference),
+                    'ORDER_STATUS': str(status),
+                    'ORDER_DESCRIPTION': str(description),
+                    'ORDER_URL': order_url,
+                    'SUPPORT_EMAIL': os.environ.get(
+                        'SUPPORT_EMAIL',
+                        'sentryloot@gamestorehub.com'
+                    ).strip(),
+                },
+            },
+        }
+
+        req = Request(
+            'https://api.resend.com/emails',
+            data=json.dumps(payload).encode('utf-8'),
+            headers={
+                'Authorization': 'Bearer ' + api_key,
+                'Content-Type': 'application/json',
+                'User-Agent': 'SentryLoot/1.0',
+            },
+            method='POST',
+        )
+
+        try:
+            with urlopen(req, timeout=12) as response:
+                response.read(4096)
+
+                if not 200 <= response.status < 300:
+                    raise RuntimeError(
+                        'Resend rejected order status email'
+                    )
+
+        except HTTPError as exc:
+            raise RuntimeError(
+                f'Resend order status returned HTTP {exc.code}'
+            ) from None
+
+        except URLError:
+            raise RuntimeError(
+                'Resend API connection failed'
+            ) from None
+
+        return
+
+    # Keep the existing SMTP email behavior
+    if language in ('en', 'ru'):
+        return _localized_email(
+            address,
+            display_name,
+            language,
+            'order',
+            reference=reference,
+            status=status
+        )
+
+    base = os.environ.get(
+        'PUBLIC_BASE_URL', ''
+    ).strip().rstrip('/')
+
+    parsed = urlsplit(base)
+
+    if (
+        parsed.scheme not in ('http', 'https')
+        or not parsed.netloc
+        or parsed.username
+        or parsed.password
+    ):
+        raise ValueError(
+            'PUBLIC_BASE_URL must be an absolute HTTP(S) URL'
+        )
+
+    if (
+        os.environ.get('MARKETPLACE_MODE', 'development').lower()
+        == 'production'
+        and parsed.scheme != 'https'
+    ):
+        raise ValueError('PUBLIC_BASE_URL must use HTTPS in production')
+
+    name = display_name.strip() or 'foydalanuvchi'
+    url = f'{base}/#orders'
+    subject = f'SentryLoot — buyurtma {reference}: {status}'
+
+    message = EmailMessage()
+    message['Subject'] = subject
+    message['From'] = _from_address()
+    message['To'] = address
+
+    message.set_content(
+        f'Salom, {name}.\n\n{description}\n'
+        f'Buyurtma: {reference}\n'
+        f'Holat: {status}\n\n'
+        f'Buyurtmalarni ko‘rish: {url}\n\n'
+        'Xavfsizlik uchun emailda parol yoki '
+        'yetkazish ma’lumotlari yuborilmaydi.'
+    )
+
+    footer = (
+        'Xavfsizlik uchun emailda parol yoki '
+        'maxfiy yetkazish ma’lumotlari yuborilmaydi.'
+    )
+
+    message.add_alternative(
+        _brand_html(
+            description,
+            'Buyurtma yangilandi',
+            name,
+            [description],
+            'Buyurtmalarni ko‘rish',
+            url,
+            footer,
+            [('Buyurtma', reference), ('Holat', status)]
+        ),
+        subtype='html'
+    )
+
+    _deliver(message)
