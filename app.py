@@ -1910,17 +1910,121 @@ class Handler(BaseHTTPRequestHandler):
                 if not linked:
                     db.execute('INSERT INTO oauth_identities(provider,subject,user_id) VALUES(?,?,?)',(provider,subject,ctx['uid']))
                 return 302,{'ok':True},{'Location':'/?oauth_linked=facebook#home','Set-Cookie':[clear]}
+            
+            new_oauth_user = False
+
+            
+            # Track whether this is a newly created OAuth account
+            new_oauth_user = False
+
             if linked:
-                if linked['suspended']: raise HttpError(403,'Hisobingiz vaqtincha cheklangan.')
-                user_id=linked['id']
+                if linked['suspended']:
+                    raise HttpError(403, 'Hisobingiz vaqtincha cheklangan.')
+
+                user_id = linked['id']
+
             else:
-                if db.execute('SELECT id FROM users WHERE email=?',(email,)).fetchone():
-                    return 302,{'ok':False},{'Location':'/?oauth_error=account_exists#login','Set-Cookie':[clear]}
-                terms=db.execute("SELECT value FROM platform_config WHERE key='terms_version'").fetchone()['value']
-                user_id=ident()
-                db.execute('INSERT INTO users(id,email,password_hash,display_name,country,language,currency,email_verified,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,1,?,?)',(user_id,email,password_hash(create_token()),name,oauth_country,oauth_language,ASIA_COUNTRY_CURRENCIES[oauth_country],terms,now_iso()))
-                db.execute('INSERT INTO oauth_identities(provider,subject,user_id) VALUES(?,?,?)',(provider,subject,user_id))
-            session_token,csrf=session_create(db,user_id); self.set_session(session_token,db)
+                if db.execute(
+                    'SELECT id FROM users WHERE email=?', (email,)
+                ).fetchone():
+                    return 302, {'ok': False}, {
+                        'Location': '/?oauth_error=account_exists#login',
+                        'Set-Cookie': [clear]
+                    }
+
+                terms = db.execute(
+                    "SELECT value FROM platform_config WHERE key='terms_version'"
+                ).fetchone()['value']
+
+                user_id = ident()
+
+                db.execute(
+                    'INSERT INTO users(id,email,password_hash,display_name,country,language,currency,email_verified,accepted_terms_version,accepted_terms_at) VALUES(?,?,?,?,?,?,?,1,?,?)',
+                    (
+                        user_id,
+                        email,
+                        password_hash(create_token()),
+                        name,
+                        oauth_country,
+                        oauth_language,
+                        ASIA_COUNTRY_CURRENCIES[oauth_country],
+                        terms,
+                        now_iso()
+                    )
+                )
+
+                db.execute(
+                    'INSERT INTO oauth_identities(provider,subject,user_id) VALUES(?,?,?)',
+                    (provider, subject, user_id)
+                )
+
+                new_oauth_user = True
+
+            # Create the login session
+            session_token, csrf = session_create(db, user_id)
+            self.set_session(session_token, db)
+
+            # Fetch the actual account details
+            oauth_user = db.execute(
+                'SELECT email,display_name,language FROM users WHERE id=?',
+                (user_id,)
+            ).fetchone()
+
+            # Send the correct email for Google authentication
+            if provider == 'google' and oauth_user:
+                try:
+                    if new_oauth_user:
+                        # First Google registration: Welcome Email
+                        email_service.send_welcome_email(
+                            address=oauth_user['email'],
+                            display_name=oauth_user['display_name'],
+                            user_id=str(user_id)
+                        )
+
+                        print('Google Welcome Email sent successfully.')
+
+                    else:
+                        # Returning Google user: Security Alert
+                        email_service.send_security_update(
+                            address=oauth_user['email'],
+                            display_name=oauth_user['display_name'],
+                            description='Your SentryLoot account was successfully signed in with Google.',
+                            language=oauth_user['language']
+                        )
+
+                        print('Google sign-in alert sent successfully.')
+
+                except Exception as exc:
+                    print(
+                        'Google email notification failed:',
+                        type(exc).__name__
+                    )
+
+            return 302, {'ok': True}, {
+                'Location': '/#contact-details' if account_contacts.enabled() and not account_contacts.verified(db, user_id) else '/#home',
+                'Set-Cookie': [clear]
+            }
+
+            # Send Welcome Email only for a newly created Google account
+            if new_oauth_user and provider == 'google':
+                try:
+                    email_service.send_welcome_email(
+                        address=email,
+                        display_name=name,
+                        user_id=str(user_id)
+                    )
+                    print('Google Welcome Email sent successfully.')
+
+                except Exception as exc:
+                    print(
+                        'Google Welcome Email failed:',
+                        type(exc).__name__
+                    )
+
+            return 302,{'ok':True},{
+                'Location':'/#contact-details' if account_contacts.enabled() and not account_contacts.verified(db,user_id) else '/#home',
+                'Set-Cookie':[clear]
+            }
             return 302,{'ok':True},{'Location':'/#contact-details' if account_contacts.enabled() and not account_contacts.verified(db,user_id) else '/#home','Set-Cookie':[clear]}
         if path=='/api/webhooks/didit' and method=='POST':
             payload=identity_service.verify_webhook(raw_body,self.headers.get('X-Signature-V2',''),self.headers.get('X-Timestamp',''))
@@ -1992,11 +2096,60 @@ class Handler(BaseHTTPRequestHandler):
             result={'message':'Agar bu email tasdiqlanmagan hisobga tegishli bo‘lsa, yangi havola yuborildi.'}
             if MODE=='development' and not email_service.is_configured() and raw: result['verification_token']=raw
             return result
+        
         if path=='/api/verify' and method=='POST':
-            token=clean_text(data.get('token'),'Token',20,200); tok=db.execute("SELECT * FROM email_tokens WHERE token_hash=? AND purpose='verify' AND consumed_at IS NULL AND expires_at>?",(hash_token(token),now_iso())).fetchone()
-            if not tok: raise HttpError(400,'Tasdiqlash havolasi noto‘g‘ri yoki muddati o‘tgan.')
-            db.execute("UPDATE email_tokens SET consumed_at=CURRENT_TIMESTAMP WHERE user_id=? AND purpose='verify' AND consumed_at IS NULL",(tok['user_id'],)); db.execute('UPDATE users SET email_verified=1 WHERE id=?',(tok['user_id'],)); raw,csrf=session_create(db,tok['user_id']); self.set_session(raw,db)
-            return {'user':user_view(db,tok['user_id']),'csrf':csrf}
+            token=clean_text(data.get('token'),'Token',20,200)
+
+            tok=db.execute(
+                "SELECT * FROM email_tokens WHERE token_hash=? AND purpose='verify' AND consumed_at IS NULL AND expires_at>?",
+                (hash_token(token),now_iso())
+            ).fetchone()
+
+            if not tok:
+                raise HttpError(400,'Tasdiqlash havolasi noto‘g‘ri yoki muddati o‘tgan.')
+
+            # Get user information for the Welcome Email
+            welcome_user=db.execute(
+                'SELECT email,display_name FROM users WHERE id=?',
+                (tok['user_id'],)
+            ).fetchone()
+
+            # Verify the email address
+            db.execute(
+                "UPDATE email_tokens SET consumed_at=CURRENT_TIMESTAMP WHERE user_id=? AND purpose='verify' AND consumed_at IS NULL",
+                (tok['user_id'],)
+            )
+
+            db.execute(
+                'UPDATE users SET email_verified=1 WHERE id=?',
+                (tok['user_id'],)
+            )
+
+            # Create user session
+            raw,csrf=session_create(db,tok['user_id'])
+            self.set_session(raw,db)
+
+            # Send Welcome Email after successful verification
+            if (
+                welcome_user
+                and email_service.is_configured()
+                and os.environ.get('EMAIL_PROVIDER','').strip().lower() == 'resend'
+            ):
+                try:
+                    email_service.send_welcome_email(
+                        address=welcome_user['email'],
+                        display_name=welcome_user['display_name'],
+                        user_id=str(tok['user_id'])
+                    )
+                    print('SentryLoot Welcome Email sent successfully.')
+
+                except Exception as exc:
+                    print(f'Welcome Email delivery failed: {type(exc).__name__}')
+
+            return {
+                'user':user_view(db,tok['user_id']),
+                'csrf':csrf
+            }
         if path=='/api/password-reset' and method=='POST':
             if not email_service.is_configured() and MODE!='development': raise HttpError(503,'Parolni tiklash uchun xavfsiz email yuborish xizmati konfiguratsiyasi kerak.')
             check_rate(db,'password_reset',self.client_address[0],5)
@@ -2017,18 +2170,47 @@ class Handler(BaseHTTPRequestHandler):
             tok=db.execute("SELECT * FROM email_tokens WHERE token_hash=? AND purpose='password_reset' AND consumed_at IS NULL AND expires_at>?",(hash_token(token),now_iso())).fetchone()
             if not tok: raise HttpError(400,'Tiklash tokeni noto‘g‘ri yoki muddati o‘tgan.')
             db.execute('UPDATE users SET password_hash=? WHERE id=?',(password_hash(password),tok['user_id'])); db.execute("UPDATE email_tokens SET consumed_at=CURRENT_TIMESTAMP WHERE user_id=? AND purpose='password_reset' AND consumed_at IS NULL",(tok['user_id'],)); db.execute('DELETE FROM sessions WHERE user_id=?',(tok['user_id'],)); return {'message':'Parol yangilandi. Qayta tizimga kiring.'}
+        
         if path=='/api/login' and method=='POST':
             check_rate(db,'login',self.client_address[0],8)
-            email=clean_text(data.get('email'),'Email',3,254).lower(); row=db.execute('SELECT * FROM users WHERE email=?',(email,)).fetchone()
-            if not row or not password_ok(str(data.get('password','')),row['password_hash']): raise HttpError(401,'Email yoki parol noto‘g‘ri.')
-            if row['suspended']: raise HttpError(403,'Hisobingiz vaqtincha cheklangan.')
-            if not row['email_verified']: raise HttpError(403,'Email tasdiqlanmagan. Ro‘yxatdan o‘tishda olingan havoladan foydalaning.')
+            email=clean_text(data.get('email'),'Email',3,254).lower()
+            row=db.execute('SELECT * FROM users WHERE email=?',(email,)).fetchone()
+
+            if not row or not password_ok(str(data.get('password','')),row['password_hash']):
+                raise HttpError(401,'Email yoki parol noto‘g‘ri.')
+
+            if row['suspended']:
+                raise HttpError(403,'Hisobingiz vaqtincha cheklangan.')
+
+            if not row['email_verified']:
+                raise HttpError(403,'Email tasdiqlanmagan. Ro‘yxatdan o‘tishda olingan havoladan foydalaning.')
+
             if marketplace_operations.enabled(db,row['id']):
-                if not data.get('otp'): return {'mfa_required':True}
-                if not marketplace_operations.consume_otp(db,row['id'],data.get('otp'),globals()): raise HttpError(403,'Authenticator yoki tiklash kodi noto‘g‘ri yoki ishlatilgan.')
+                if not data.get('otp'):
+                    return {'mfa_required':True}
+                if not marketplace_operations.consume_otp(db,row['id'],data.get('otp'),globals()):
+                    raise HttpError(403,'Authenticator yoki tiklash kodi noto‘g‘ri yoki ishlatilgan.')
+
+            # Create session first
             raw,csrf=session_create(db,row['id'])
-            db.execute('UPDATE sessions SET mfa_verified=1 WHERE token_hash=?',(hash_token(decode_session(raw)),))
-            self.set_session(raw,db); return {'user':user_view(db,row['id']),'csrf':csrf}
+            db.execute(
+                'UPDATE sessions SET mfa_verified=1 WHERE token_hash=?',
+                (hash_token(decode_session(raw)),)
+            )
+            self.set_session(raw,db)
+
+            # Notify user after successful login
+            try:
+                email_service.send_security_update(
+                    address=row['email'],
+                    display_name=row['display_name'],
+                    description='Your SentryLoot account was successfully signed in.',
+                    language=row['language']
+                )
+            except Exception as exc:
+                print('Sign-in notification failed:', type(exc).__name__)
+
+            return {'user':user_view(db,row['id']),'csrf':csrf}
         if path=='/api/logout' and method=='POST':
             if uid:
                 session_token=decode_session(self.cookie())

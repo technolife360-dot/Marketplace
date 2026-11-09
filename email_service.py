@@ -254,3 +254,90 @@ def send_monitor_alert(address: str, workflow: str, run_url: str) -> None:
     description='Monitoring tekshiruvi xato bilan yakunlandi. Sababni GitHub run sahifasida tekshiring. Bu xabarda mijoz ma’lumotlari yoki maxfiy kalitlar yo‘q.'
     message.set_content(description+'\n\nWorkflow: '+workflow+'\n'+run_url)
     message.add_alternative(_brand_html(description,'Monitoring tekshiruvi',address,[description,workflow],'Tekshiruvni ochish',run_url,'Bu operatsion monitoring xabari.'),subtype='html');_deliver(message)
+
+
+def send_welcome_email(
+    address: str,
+    display_name: str,
+    user_id: str = ''
+) -> None:
+    """Send the published SentryLoot Welcome template through Resend."""
+
+    if not is_configured():
+        raise RuntimeError('Transactional email is not configured')
+
+    template_id = os.environ.get(
+        'RESEND_WELCOME_TEMPLATE_ID', ''
+    ).strip()
+
+    api_key = (
+        os.environ.get('RESEND_API_KEY')
+        or os.environ.get('EMAIL_API_KEY')
+        or ''
+    ).strip()
+
+    if not template_id:
+        raise RuntimeError('Welcome template ID is missing')
+
+    if not api_key:
+        raise RuntimeError('Resend API key is missing')
+
+    if os.environ.get('EMAIL_PROVIDER', '').strip().lower() != 'resend':
+        raise RuntimeError('Welcome template requires Resend')
+
+    recipient = parseaddr(address)[1]
+
+    if not recipient or '@' not in recipient:
+        raise ValueError('Invalid recipient email')
+
+    base_url = os.environ.get(
+        'PUBLIC_BASE_URL', 'https://gamestorehub.com'
+    ).strip().rstrip('/')
+
+    payload = {
+        'from': _from_address(),
+        'to': [recipient],
+        'template': {
+            'id': template_id,
+            'variables': {
+                'FIRST_NAME': display_name.strip() or 'there',
+                'SITE_URL': base_url,
+                'SUPPORT_EMAIL': os.environ.get(
+                    'SUPPORT_EMAIL',
+                    'sentryloot@gamestorehub.com'
+                ).strip(),
+            },
+        },
+    }
+
+    req = Request(
+        'https://api.resend.com/emails',
+        data=json.dumps(payload).encode('utf-8'),
+        headers={
+            'Authorization': 'Bearer ' + api_key,
+            'Content-Type': 'application/json',
+            'User-Agent': 'SentryLoot/1.0',
+        },
+        method='POST',
+    )
+
+    if user_id:
+        req.add_header(
+            'Idempotency-Key',
+            'welcome-' + str(user_id)
+        )
+
+    try:
+        with urlopen(req, timeout=12) as response:
+            response.read(4096)
+
+            if not 200 <= response.status < 300:
+                raise RuntimeError('Resend rejected Welcome email')
+
+    except HTTPError as exc:
+        raise RuntimeError(
+            f'Resend API returned HTTP {exc.code}'
+        ) from None
+
+    except URLError:
+        raise RuntimeError('Resend API connection failed') from None
