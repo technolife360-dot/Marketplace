@@ -1,157 +1,1307 @@
 /* Account and order tools use the existing session and CSRF boundary. */
-window.OperationsUX=(()=>{
- const t=(uz,ru,en)=>adminText(uz,ru,en),s=v=>esc(v),e=encodeURIComponent;
- let fieldId=0;
- const field=(name,label,options='')=>{const id='ops-field-'+(++fieldId);return `<div class="field"><label for="${id}">${label}</label><input id="${id}" name="${name}" ${options}></div>`};
- const passwordFields=(needsOtp=true)=>field('password',t('Amaldagi sayt paroli','Текущий пароль сайта','Current site password'),'type="password" autocomplete="current-password" required')+(needsOtp?field('otp',t('2FA / tiklash kodi · yoqilgan bo‘lsa','2FA / код восстановления · если включено','2FA / recovery code · if enabled'),'autocomplete="one-time-code" maxlength="50"'):'');
- function bind(form,action){if(!form)return;form.addEventListener('submit',async event=>{event.preventDefault();const button=form.querySelector('[type=submit],button:not([type])'),values=Object.fromEntries(new FormData(form));if(button)button.disabled=true;form.querySelector('.ops-error')?.remove();try{await action(values,form)}catch(error){const box=document.createElement('p');box.className='notice error ops-error';box.setAttribute('role','alert');box.textContent=error.message;form.prepend(box);toast(error.message,'error')}finally{if(button?.isConnected)button.disabled=false}})}
- function modal(title,body){const dialog=document.createElement('dialog');dialog.className='ux-preview-dialog ops-modal';dialog.setAttribute('aria-label',title);dialog.innerHTML=`<header><h2>${title}</h2><button class="button-secondary" type="button" data-close>×</button></header>${body}`;document.body.append(dialog);dialog.querySelector('[data-close]').setAttribute('aria-label',t('Yopish','Закрыть','Close'));dialog.querySelector('[data-close]').onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();return dialog}
- function deviceLabel(agent){const a=String(agent||'');const browser=/Edg\//.test(a)?'Edge':/OPR\//.test(a)?'Opera':/Firefox\//.test(a)?'Firefox':/Chrome\//.test(a)?'Chrome':/Safari\//.test(a)?'Safari':t('Brauzer','Браузер','Browser');const os=/Android/.test(a)?'Android':/iPhone|iPad/.test(a)?'iOS':/Windows/.test(a)?'Windows':/Macintosh|Mac OS/.test(a)?'macOS':/Linux/.test(a)?'Linux':'';return [browser,os].filter(Boolean).join(' · ')}
- async function account(){
-  if(!me){location.hash='login';return}const [security,blocks]=await Promise.all([api('/security'),api('/blocks')]);
-  app.innerHTML=`<section class="page ops-account">${pageTitle(t('Hisobim','Мой аккаунт','My account'),t('Profil va hisob sozlamalari.','Профиль и настройки аккаунта.','Profile and account settings.'))}<nav class="ops-account-nav"><a href="/#orders">${icon('box')}${t('Buyurtmalar','Заказы','Orders')}</a><a href="/#messages">${icon('message')}${t('Xabarlar','Сообщения','Messages')}</a><a href="/#favorites">${icon('heart')}${t('Saqlanganlar','Избранное','Saved')}</a><a href="/#support-tickets">${icon('shield')}${t('Yordam murojaatlari','Обращения в поддержку','Support requests')}</a>${me.seller?`<a href="/#seller">${t('Sotuvchi paneli','Панель продавца','Seller dashboard')}</a>`:'<a href="/#seller">'+t('Sotishni boshlash','Начать продавать','Start selling')+'</a>'}</nav><div class="ops-account-grid"><section class="panel ops-profile-card"><span class="ux-eyebrow">${t('SHAXSIY MA’LUMOTLAR','ЛИЧНЫЕ ДАННЫЕ','PROFILE DETAILS')}</span><h2>${s(me.display_name)}</h2><p class="help">${s(me.email)} · ${me.email_verified?t('Email tasdiqlangan','Email подтверждён','Email verified'):t('Email tasdiqlanmagan','Email не подтверждён','Email unverified')}</p><div class="ops-avatar-settings">${marketAvatarMarkup(me.display_name,me.avatar_url,'ops-profile-avatar',me.id)}<div><button type="button" class="button-secondary" id="ops-avatar-change">${t('Profil rasmini tanlash','Выбрать фото профиля','Change profile photo')}</button><input type="file" id="ops-avatar-file" accept="image/jpeg,image/png,image/webp" hidden><p class="field-hint">${t('Profil rasmi hammaga ko‘rinadi. JPG, PNG yoki WebP.','Фото профиля видно всем. JPG, PNG или WebP.','Your profile photo is public. JPG, PNG or WebP.')}</p><p class="ops-avatar-error" role="alert" hidden></p></div></div><form id="ops-profile-form"><div class="ops-profile-fields">${field('display_name',t('Ism','Имя','Name'),`value="${s(me.display_name)}" minlength="2" maxlength="80" required`)}${me.phone_verification_enabled?`<div class="field"><label>${t('Telefon raqami','Номер телефона','Phone number')}</label><input type="tel" value="${s(me.phone||'')}" readonly aria-label="${t('Telefon raqami','Номер телефона','Phone number')}"><a class="text-link" href="#contact-details">${me.phone_verified?t('Raqamni almashtirish','Изменить номер','Change number'):t('Telefonni tasdiqlash','Подтвердить телефон','Verify phone number')} →</a></div>`:''}<div class="field"><label>${t('Mamlakat','Страна','Country')}</label><select name="country">${countryOptions(me.country)}</select></div><div class="field"><label>${t('Til','Язык','Language')}</label><select name="language">${languageOptions(me.language||locale)}</select></div><div class="field"><label>${t('Ko‘rsatish valyutasi','Валюта отображения','Display currency')}</label><select name="currency">${currencyOptions(me.currency)}</select></div></div><button class="button-primary">${t('Saqlash','Сохранить','Save changes')}</button></form></section><section class="panel ops-security-card"><span class="ux-eyebrow">${t('HISOB HIMOYASI','ЗАЩИТА АККАУНТА','ACCOUNT PROTECTION')}</span><h2>${t('Ikki bosqichli kirish','Двухэтапная проверка','Two-step verification')}</h2><p class="help">${t('Authenticator ilovasidagi kod yoki bir martalik tiklash kodi bilan kirishni himoyalang.','Защитите вход кодом Authenticator или одноразовым кодом восстановления.','Protect sign-in with an Authenticator code or a single-use recovery code.')}</p><div class="ops-status ${security.mfa_enabled?'is-on':''}">${security.mfa_enabled?t('2FA yoqilgan','2FA включена','2FA enabled'):t('2FA hali yoqilmagan','2FA пока выключена','2FA not enabled')}</div>${security.mfa_enabled?`<p class="help">${t('Qolgan tiklash kodlari','Осталось кодов восстановления','Recovery codes remaining')}: ${security.recovery_codes_remaining}</p>`:''}<button class="button-secondary" id="ops-mfa">${security.mfa_enabled?t('2FA ni o‘chirish','Отключить 2FA','Turn off 2FA'):t('Authenticator ulash','Подключить Authenticator','Set up Authenticator')}</button><h3>${t('Bog‘langan kirish usullari','Способы входа','Linked sign-in methods')}</h3><p class="help">${security.linked_providers.length?security.linked_providers.map(s).join(' · '):t('Email va sayt paroli','Email и пароль сайта','Email and site password')}</p><p class="help">${t('Google/Facebook ishlatsangiz va sayt parolingiz bo‘lmasa, “Parolni tiklash” orqali yarating.','Если входите через Google/Facebook и нет пароля сайта, создайте его через восстановление пароля.','If you use Google/Facebook without a site password, set one through password reset.')}</p><a class="text-link" href="/#password-reset">${t('Parolni tiklash','Восстановить пароль','Reset site password')} →</a></section></div><div class="ops-account-settings"><details class="panel ops-disclosure ops-password"><summary><span>${t('Parolni almashtirish','Изменить пароль','Change password')}</span><span class="ops-disclosure-mark" aria-hidden="true">+</span></summary><div class="ops-disclosure-body"><form id="ops-password-form">${passwordFields()}${field('new_password',t('Yangi parol','Новый пароль','New password'),'type="password" autocomplete="new-password" minlength="10" maxlength="256" required')}<p class="help">${t('Parol yangilangach barcha qurilmalardan chiqiladi.','После смены пароля все сеансы будут завершены.','Changing your password signs out all devices.')}</p><button class="button-secondary">${t('Parolni yangilash','Обновить пароль','Update password')}</button></form></div></details><details class="panel ops-disclosure ops-email"><summary><span>${t('Emailni almashtirish','Изменить email','Change email')}</span><span class="ops-disclosure-mark" aria-hidden="true">+</span></summary><div class="ops-disclosure-body"><form id="ops-email-form">${field('email',t('Yangi email','Новый email','New email address'),'type="email" autocomplete="email" maxlength="254" required')}${passwordFields()}<p class="help">${t('Yangi manzil tasdiqlanmaguncha eski email o‘zgarmaydi.','Текущий email не изменится до подтверждения нового.','Your current email stays in place until you confirm the new address.')}</p><button class="button-secondary">${t('Tasdiqlash xatini yuborish','Отправить подтверждение','Send confirmation')}</button></form></div></details><details class="panel ops-disclosure ops-sessions"><summary><span>${t('Faol qurilmalar','Активные устройства','Active devices')} <small>${security.sessions.length}</small></span><span class="ops-disclosure-mark" aria-hidden="true">+</span></summary><div class="ops-disclosure-body"><div class="ops-device-actions"><p class="help">${t('Hisobingiz ochiq turgan brauzerlar. Tanimagan qurilmangiz bo‘lsa, shu yerdan chiqaring.','Браузеры с открытым сеансом. Завершите сеанс, если не узнаёте устройство.','Browsers signed into your account. Sign out any device you do not recognize.')}</p><button class="button-secondary" data-revoke="others">${t('Boshqa qurilmalardan chiqish','Выйти на других устройствах','Sign out other devices')}</button></div>${security.sessions.map(v=>`<div class="ops-session"><div><b>${s(deviceLabel(v.user_agent))}</b><small>${v.current?t('Joriy qurilma','Это устройство','This device')+' · ':''}${s(v.network_label||'')} · ${t('Oxirgi faollik','Активность','Last active')}: ${v.last_seen_at?parseServerDate(v.last_seen_at).toLocaleString(localeTag()):'—'}</small></div><button class="ux-text-button" data-revoke="${s(v.id)}">${t('Chiqish','Завершить','Sign out')}</button></div>`).join('')}</div></details><details class="panel ops-disclosure ops-blocks"><summary><span>${t('Bloklangan foydalanuvchilar','Заблокированные пользователи','Blocked users')}</span><span class="ops-disclosure-mark" aria-hidden="true">+</span></summary><div class="ops-disclosure-body">${blocks.map(b=>`<div class="ops-session"><b>${s(b.name)}</b><button class="ux-text-button" data-unblock="${s(b.id)}">${t('Blokdan chiqarish','Разблокировать','Unblock')}</button></div>`).join('')||`<p class="help">${t('Bloklangan foydalanuvchilar yo‘q.','Нет заблокированных пользователей.','No blocked users.')}</p>`}</div></details></div><nav class="ops-account-shortcuts" aria-label="${t('Qo‘shimcha imkoniyatlar','Другие возможности','More account tools')}"><a id="trade-saved-link" class="text-link" href="/#saved-searches">${t('Saqlangan qidiruvlar','Сохранённые поиски','Saved searches')} →</a><a id="ex-preferences-link" class="text-link" href="/#notification-settings">${t('Bildirishnoma sozlamalari','Настройки уведомлений','Notification settings')} →</a><a class="text-link" href="/#topup-saved">${t('Saqlangan Top Up','Сохранённые Top Up','Saved Top Up')} →</a><a class="text-link" href="/#benefits" data-membership-link>${t('Takliflar va a’zolik','Приглашения и участие','Invitations and membership')} →</a></nav></section>`;
-  const avatarInput=$('#ops-avatar-file'),avatarButton=$('#ops-avatar-change');
-  avatarButton.onclick=()=>avatarInput.click();
-  avatarInput.onchange=async()=>{const file=avatarInput.files?.[0];if(!file)return;const errorBox=app.querySelector('.ops-avatar-error');errorBox.hidden=true;avatarButton.disabled=true;avatarButton.setAttribute('aria-busy','true');try{const image=await prepareListingPhoto(file);const response=await fetch('/api/profile/avatar',{method:'POST',headers:{'Content-Type':image.type,'X-CSRF-Token':csrf},body:image});const result=await response.json();if(!response.ok)throw Error(localized(result.error||'Could not upload profile photo.'));updateProfileAvatar(result.url);toast(t('Profil rasmi saqlandi','Фото профиля сохранено','Profile photo saved'));await account()}catch(error){errorBox.textContent=error.message;errorBox.hidden=false;toast(error.message,'error')}finally{avatarButton.disabled=false;avatarButton.removeAttribute('aria-busy');avatarInput.value=''}};
-  bind($('#ops-profile-form'),async d=>{const r=await api('/profile',{method:'POST',body:JSON.stringify(d)});me=r.user;locale=me.language;localStorage.setItem(localeKey,locale);document.documentElement.lang=locale;syncProfileTrigger();syncLanguageMenu();toast(t('Profil saqlandi','Профиль сохранён','Profile saved'));await account()});
-  bind($('#ops-password-form'),async d=>{await api('/security/password',{method:'POST',body:JSON.stringify(d)});me=null;csrf='';location.hash='login';toast(t('Parol yangilandi. Qayta kiring.','Пароль обновлён. Войдите снова.','Password updated. Sign in again.'))});
-  bind($('#ops-email-form'),async(d,f)=>{const r=await api('/security/email',{method:'POST',body:JSON.stringify(d)});f.reset();const box=document.createElement('p');box.className='notice';box.textContent=r.message;f.append(box);if(r.confirmation_token){const a=document.createElement('a');a.className='text-link';a.href='/#email-change/'+e(r.confirmation_token);a.textContent=t('Lokal sinov: emailni tasdiqlash','Локальный тест: подтвердить email','Local test: confirm email');f.append(a)}});
-  $('#ops-mfa').onclick=()=>{
-   const enabled=security.mfa_enabled;
-   const dialog=modal(enabled?t('2FA ni o‘chirish','Отключить 2FA','Turn off 2FA'):t('Authenticator ulash','Подключить Authenticator','Set up Authenticator'),`<form id="ops-mfa-form">${passwordFields(enabled)}<button class="button-primary">${t('Davom etish','Продолжить','Continue')}</button></form>`);
-   bind(dialog.querySelector('form'),async d=>{
-    if(enabled){await api('/security/mfa/disable',{method:'POST',body:JSON.stringify(d)});dialog.close();await account();return}
-    const setup=await api('/security/mfa/setup',{method:'POST',body:JSON.stringify(d)});
-    if(!dialog.isConnected)return;
-    dialog.querySelector('form').outerHTML=`<form id="ops-enroll">
-     <p class="help">${t('Google Authenticator ilovasida + tugmasini bosing, “QR kodni skanerlash”ni tanlang va quyidagi kodni skanerlang.','В Google Authenticator нажмите +, выберите «Сканировать QR-код» и отсканируйте код ниже.','In Google Authenticator, tap +, choose “Scan a QR code”, and scan the code below.')}</p>
-     ${setup.qr_image?`<div class="ops-mfa-qr"><img src="${s(setup.qr_image)}" alt="${t('Authenticator ulash uchun shaxsiy QR kod','Личный QR-код для подключения Authenticator','Private QR code for Authenticator setup')}" width="240" height="240"></div>`:''}
-     <p class="help ops-mfa-expiry">${t('Kod 10 daqiqa amal qiladi. QR kod va maxfiy kalitni hech kimga yubormang.','Код действует 10 минут. Никому не передавайте QR-код и секретный ключ.','This setup expires in 10 minutes. Keep the QR code and secret key private.')}</p>
-     <details class="ops-mfa-manual"><summary>${t('Skanerlay olmaysizmi? Kalitni qo‘lda kiriting','Не получается сканировать? Введите ключ вручную','Cannot scan? Enter the key manually')}</summary>
-      <p class="help">${t('Vaqtga asoslangan hisobni tanlang, nomiga SentryLoot yozing va ushbu kalitni kiriting.','Выберите ключ по времени, укажите имя SentryLoot и введите этот ключ.','Choose a time-based account, name it SentryLoot, and enter this key.')}</p>
-      ${field('secret',t('Maxfiy sozlash kaliti','Секретный ключ настройки','Secret setup key'),`value="${s(setup.secret)}" readonly spellcheck="false" autocomplete="off"`)}
+window.OperationsUX = (() => {
+  const t = (uz, ru, en) => adminText(uz, ru, en),
+    s = (v) => esc(v),
+    e = encodeURIComponent;
+  let fieldId = 0;
+  const field = (name, label, options = "") => {
+    const id = "ops-field-" + ++fieldId;
+    return `<div class="field"><label for="${id}">${label}</label><input id="${id}" name="${name}" ${options}></div>`;
+  };
+  const passwordFields = (needsOtp = true) =>
+    field(
+      "password",
+      t(
+        "Amaldagi sayt paroli",
+        "Текущий пароль сайта",
+        "Current site password",
+      ),
+      'type="password" autocomplete="current-password" required',
+    ) +
+    (needsOtp
+      ? field(
+          "otp",
+          t(
+            "2FA / tiklash kodi · yoqilgan bo‘lsa",
+            "2FA / код восстановления · если включено",
+            "2FA / recovery code · if enabled",
+          ),
+          'autocomplete="one-time-code" maxlength="50"',
+        )
+      : "");
+  function bind(form, action) {
+    if (!form) return;
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = form.querySelector("[type=submit],button:not([type])"),
+        values = Object.fromEntries(new FormData(form));
+      if (button) button.disabled = true;
+      form.querySelector(".ops-error")?.remove();
+      try {
+        await action(values, form);
+      } catch (error) {
+        const box = document.createElement("p");
+        box.className = "notice error ops-error";
+        box.setAttribute("role", "alert");
+        box.textContent = error.message;
+        form.prepend(box);
+        toast(error.message, "error");
+      } finally {
+        if (button?.isConnected) button.disabled = false;
+      }
+    });
+  }
+  function modal(title, body) {
+    const dialog = document.createElement("dialog");
+    dialog.className = "ux-preview-dialog ops-modal";
+    dialog.setAttribute("aria-label", title);
+    dialog.innerHTML = `<header><h2>${title}</h2><button class="button-secondary" type="button" data-close>×</button></header>${body}`;
+    document.body.append(dialog);
+    dialog
+      .querySelector("[data-close]")
+      .setAttribute("aria-label", t("Yopish", "Закрыть", "Close"));
+    dialog.querySelector("[data-close]").onclick = () => dialog.close();
+    dialog.addEventListener("close", () => dialog.remove());
+    dialog.showModal();
+    return dialog;
+  }
+  function deviceLabel(agent) {
+    const a = String(agent || "");
+    const browser = /Edg\//.test(a)
+      ? "Edge"
+      : /OPR\//.test(a)
+        ? "Opera"
+        : /Firefox\//.test(a)
+          ? "Firefox"
+          : /Chrome\//.test(a)
+            ? "Chrome"
+            : /Safari\//.test(a)
+              ? "Safari"
+              : t("Brauzer", "Браузер", "Browser");
+    const os = /Android/.test(a)
+      ? "Android"
+      : /iPhone|iPad/.test(a)
+        ? "iOS"
+        : /Windows/.test(a)
+          ? "Windows"
+          : /Macintosh|Mac OS/.test(a)
+            ? "macOS"
+            : /Linux/.test(a)
+              ? "Linux"
+              : "";
+    return [browser, os].filter(Boolean).join(" · ");
+  }
+  async function account() {
+    if (!me) {
+      location.hash = "login";
+      return;
+    }
+    const [security, blocks] = await Promise.all([
+      api("/security"),
+      api("/blocks"),
+    ]);
+    app.innerHTML = `<section class="page ops-account">${pageTitle(t("Hisobim", "Мой аккаунт", "My account"), t("Profil va hisob sozlamalari.", "Профиль и настройки аккаунта.", "Profile and account settings."))}<nav class="ops-account-nav"><a href="/#orders">${icon("box")}${t("Buyurtmalar", "Заказы", "Orders")}</a><a href="/#messages">${icon("message")}${t("Xabarlar", "Сообщения", "Messages")}</a><a href="/#favorites">${icon("heart")}${t("Saqlanganlar", "Избранное", "Saved")}</a><a href="/#support-tickets">${icon("shield")}${t("Yordam murojaatlari", "Обращения в поддержку", "Support requests")}</a>${me.seller ? `<a href="/#seller">${t("Sotuvchi paneli", "Панель продавца", "Seller dashboard")}</a>` : '<a href="/#seller">' + t("Sotishni boshlash", "Начать продавать", "Start selling") + "</a>"}</nav><div class="ops-account-grid"><section class="panel ops-profile-card"><span class="ux-eyebrow">${t("SHAXSIY MA’LUMOTLAR", "ЛИЧНЫЕ ДАННЫЕ", "PROFILE DETAILS")}</span><h2>${s(me.display_name)}</h2><p class="help">${s(me.email)} · ${me.email_verified ? t("Email tasdiqlangan", "Email подтверждён", "Email verified") : t("Email tasdiqlanmagan", "Email не подтверждён", "Email unverified")}</p><div class="ops-avatar-settings">${marketAvatarMarkup(me.display_name, me.avatar_url, "ops-profile-avatar", me.id)}<div><button type="button" class="button-secondary" id="ops-avatar-change">${t("Profil rasmini tanlash", "Выбрать фото профиля", "Change profile photo")}</button><input type="file" id="ops-avatar-file" accept="image/jpeg,image/png,image/webp" hidden><p class="field-hint">${t("Profil rasmi hammaga ko‘rinadi. JPG, PNG yoki WebP.", "Фото профиля видно всем. JPG, PNG или WebP.", "Your profile photo is public. JPG, PNG or WebP.")}</p><p class="ops-avatar-error" role="alert" hidden></p></div></div><form id="ops-profile-form"><div class="ops-profile-fields">${field("display_name", t("Ism", "Имя", "Name"), `value="${s(me.display_name)}" minlength="2" maxlength="80" required`)}${me.phone_verification_enabled ? `<div class="field"><label>${t("Telefon raqami", "Номер телефона", "Phone number")}</label><input type="tel" value="${s(me.phone || "")}" readonly aria-label="${t("Telefon raqami", "Номер телефона", "Phone number")}"><a class="text-link" href="#contact-details">${me.phone_verified ? t("Raqamni almashtirish", "Изменить номер", "Change number") : t("Telefonni tasdiqlash", "Подтвердить телефон", "Verify phone number")} →</a></div>` : ""}<div class="field"><label>${t("Mamlakat", "Страна", "Country")}</label><select name="country">${countryOptions(me.country)}</select></div><div class="field"><label>${t("Til", "Язык", "Language")}</label><select name="language">${languageOptions(me.language || locale)}</select></div><div class="field"><label>${t("Ko‘rsatish valyutasi", "Валюта отображения", "Display currency")}</label><select name="currency">${currencyOptions(me.currency)}</select></div></div><button class="button-primary">${t("Saqlash", "Сохранить", "Save changes")}</button></form></section><section class="panel ops-security-card"><span class="ux-eyebrow">${t("HISOB HIMOYASI", "ЗАЩИТА АККАУНТА", "ACCOUNT PROTECTION")}</span><h2>${t("Ikki bosqichli kirish", "Двухэтапная проверка", "Two-step verification")}</h2><p class="help">${t("Authenticator ilovasidagi kod yoki bir martalik tiklash kodi bilan kirishni himoyalang.", "Защитите вход кодом Authenticator или одноразовым кодом восстановления.", "Protect sign-in with an Authenticator code or a single-use recovery code.")}</p><div class="ops-status ${security.mfa_enabled ? "is-on" : ""}">${security.mfa_enabled ? t("2FA yoqilgan", "2FA включена", "2FA enabled") : t("2FA hali yoqilmagan", "2FA пока выключена", "2FA not enabled")}</div>${security.mfa_enabled ? `<p class="help">${t("Qolgan tiklash kodlari", "Осталось кодов восстановления", "Recovery codes remaining")}: ${security.recovery_codes_remaining}</p>` : ""}<button class="button-secondary" id="ops-mfa">${security.mfa_enabled ? t("2FA ni o‘chirish", "Отключить 2FA", "Turn off 2FA") : t("Authenticator ulash", "Подключить Authenticator", "Set up Authenticator")}</button><h3>${t("Bog‘langan kirish usullari", "Способы входа", "Linked sign-in methods")}</h3><p class="help">${security.linked_providers.length ? security.linked_providers.map(s).join(" · ") : t("Email va sayt paroli", "Email и пароль сайта", "Email and site password")}</p><p class="help">${t("Google/Facebook ishlatsangiz va sayt parolingiz bo‘lmasa, “Parolni tiklash” orqali yarating.", "Если входите через Google/Facebook и нет пароля сайта, создайте его через восстановление пароля.", "If you use Google/Facebook without a site password, set one through password reset.")}</p><a class="text-link" href="/#password-reset">${t("Parolni tiklash", "Восстановить пароль", "Reset site password")} →</a></section></div><div class="ops-account-settings"><details class="panel ops-disclosure ops-password"><summary><span>${t("Parolni almashtirish", "Изменить пароль", "Change password")}</span><span class="ops-disclosure-mark" aria-hidden="true">+</span></summary><div class="ops-disclosure-body"><form id="ops-password-form">${passwordFields()}${field("new_password", t("Yangi parol", "Новый пароль", "New password"), 'type="password" autocomplete="new-password" minlength="10" maxlength="256" required')}<p class="help">${t("Parol yangilangach barcha qurilmalardan chiqiladi.", "После смены пароля все сеансы будут завершены.", "Changing your password signs out all devices.")}</p><button class="button-secondary">${t("Parolni yangilash", "Обновить пароль", "Update password")}</button></form></div></details><details class="panel ops-disclosure ops-email"><summary><span>${t("Emailni almashtirish", "Изменить email", "Change email")}</span><span class="ops-disclosure-mark" aria-hidden="true">+</span></summary><div class="ops-disclosure-body"><form id="ops-email-form">${field("email", t("Yangi email", "Новый email", "New email address"), 'type="email" autocomplete="email" maxlength="254" required')}${passwordFields()}<p class="help">${t("Yangi manzil tasdiqlanmaguncha eski email o‘zgarmaydi.", "Текущий email не изменится до подтверждения нового.", "Your current email stays in place until you confirm the new address.")}</p><button class="button-secondary">${t("Tasdiqlash xatini yuborish", "Отправить подтверждение", "Send confirmation")}</button></form></div></details><details class="panel ops-disclosure ops-sessions"><summary><span>${t("Faol qurilmalar", "Активные устройства", "Active devices")} <small>${security.sessions.length}</small></span><span class="ops-disclosure-mark" aria-hidden="true">+</span></summary><div class="ops-disclosure-body"><div class="ops-device-actions"><p class="help">${t("Hisobingiz ochiq turgan brauzerlar. Tanimagan qurilmangiz bo‘lsa, shu yerdan chiqaring.", "Браузеры с открытым сеансом. Завершите сеанс, если не узнаёте устройство.", "Browsers signed into your account. Sign out any device you do not recognize.")}</p><button class="button-secondary" data-revoke="others">${t("Boshqa qurilmalardan chiqish", "Выйти на других устройствах", "Sign out other devices")}</button></div>${security.sessions.map((v) => `<div class="ops-session"><div><b>${s(deviceLabel(v.user_agent))}</b><small>${v.current ? t("Joriy qurilma", "Это устройство", "This device") + " · " : ""}${s(v.network_label || "")} · ${t("Oxirgi faollik", "Активность", "Last active")}: ${v.last_seen_at ? parseServerDate(v.last_seen_at).toLocaleString(localeTag()) : "—"}</small></div><button class="ux-text-button" data-revoke="${s(v.id)}">${t("Chiqish", "Завершить", "Sign out")}</button></div>`).join("")}</div></details><details class="panel ops-disclosure ops-blocks"><summary><span>${t("Bloklangan foydalanuvchilar", "Заблокированные пользователи", "Blocked users")}</span><span class="ops-disclosure-mark" aria-hidden="true">+</span></summary><div class="ops-disclosure-body">${blocks.map((b) => `<div class="ops-session"><b>${s(b.name)}</b><button class="ux-text-button" data-unblock="${s(b.id)}">${t("Blokdan chiqarish", "Разблокировать", "Unblock")}</button></div>`).join("") || `<p class="help">${t("Bloklangan foydalanuvchilar yo‘q.", "Нет заблокированных пользователей.", "No blocked users.")}</p>`}</div></details></div><nav class="ops-account-shortcuts" aria-label="${t("Qo‘shimcha imkoniyatlar", "Другие возможности", "More account tools")}"><a id="trade-saved-link" class="text-link" href="/#saved-searches">${t("Saqlangan qidiruvlar", "Сохранённые поиски", "Saved searches")} →</a><a id="ex-preferences-link" class="text-link" href="/#notification-settings">${t("Bildirishnoma sozlamalari", "Настройки уведомлений", "Notification settings")} →</a><a class="text-link" href="/#topup-saved">${t("Saqlangan Top Up", "Сохранённые Top Up", "Saved Top Up")} →</a><a class="text-link" href="/#benefits" data-membership-link>${t("Takliflar va a’zolik", "Приглашения и участие", "Invitations and membership")} →</a></nav></section>`;
+    const avatarInput = $("#ops-avatar-file"),
+      avatarButton = $("#ops-avatar-change");
+    avatarButton.onclick = () => avatarInput.click();
+    avatarInput.onchange = async () => {
+      const file = avatarInput.files?.[0];
+      if (!file) return;
+      const errorBox = app.querySelector(".ops-avatar-error");
+      errorBox.hidden = true;
+      avatarButton.disabled = true;
+      avatarButton.setAttribute("aria-busy", "true");
+      try {
+        const image = await prepareListingPhoto(file);
+        const response = await fetch("/api/profile/avatar", {
+          method: "POST",
+          headers: { "Content-Type": image.type, "X-CSRF-Token": csrf },
+          body: image,
+        });
+        const result = await response.json();
+        if (!response.ok)
+          throw Error(
+            localized(result.error || "Could not upload profile photo."),
+          );
+        updateProfileAvatar(result.url);
+        toast(
+          t(
+            "Profil rasmi saqlandi",
+            "Фото профиля сохранено",
+            "Profile photo saved",
+          ),
+        );
+        await account();
+      } catch (error) {
+        errorBox.textContent = error.message;
+        errorBox.hidden = false;
+        toast(error.message, "error");
+      } finally {
+        avatarButton.disabled = false;
+        avatarButton.removeAttribute("aria-busy");
+        avatarInput.value = "";
+      }
+    };
+    bind($("#ops-profile-form"), async (d) => {
+      const r = await api("/profile", {
+        method: "POST",
+        body: JSON.stringify(d),
+      });
+      me = r.user;
+      locale = me.language;
+      localStorage.setItem(localeKey, locale);
+      document.documentElement.lang = locale;
+      syncProfileTrigger();
+      syncLanguageMenu();
+      toast(t("Profil saqlandi", "Профиль сохранён", "Profile saved"));
+      await account();
+    });
+    bind($("#ops-password-form"), async (d) => {
+      await api("/security/password", {
+        method: "POST",
+        body: JSON.stringify(d),
+      });
+      me = null;
+      csrf = "";
+      location.hash = "login";
+      toast(
+        t(
+          "Parol yangilandi. Qayta kiring.",
+          "Пароль обновлён. Войдите снова.",
+          "Password updated. Sign in again.",
+        ),
+      );
+    });
+    bind($("#ops-email-form"), async (d, f) => {
+      const r = await api("/security/email", {
+        method: "POST",
+        body: JSON.stringify(d),
+      });
+      f.reset();
+      const box = document.createElement("p");
+      box.className = "notice";
+      box.textContent = r.message;
+      f.append(box);
+      if (r.confirmation_token) {
+        const a = document.createElement("a");
+        a.className = "text-link";
+        a.href = "/#email-change/" + e(r.confirmation_token);
+        a.textContent = t(
+          "Lokal sinov: emailni tasdiqlash",
+          "Локальный тест: подтвердить email",
+          "Local test: confirm email",
+        );
+        f.append(a);
+      }
+    });
+    $("#ops-mfa").onclick = () => {
+      const enabled = security.mfa_enabled;
+      const dialog = modal(
+        enabled
+          ? t("2FA ni o‘chirish", "Отключить 2FA", "Turn off 2FA")
+          : t(
+              "Authenticator ulash",
+              "Подключить Authenticator",
+              "Set up Authenticator",
+            ),
+        `<form id="ops-mfa-form">${passwordFields(enabled)}<button class="button-primary">${t("Davom etish", "Продолжить", "Continue")}</button></form>`,
+      );
+      bind(dialog.querySelector("form"), async (d) => {
+        if (enabled) {
+          await api("/security/mfa/disable", {
+            method: "POST",
+            body: JSON.stringify(d),
+          });
+          dialog.close();
+          await account();
+          return;
+        }
+        const setup = await api("/security/mfa/setup", {
+          method: "POST",
+          body: JSON.stringify(d),
+        });
+        if (!dialog.isConnected) return;
+        dialog.querySelector("form").outerHTML = `<form id="ops-enroll">
+     <p class="help">${t("Google Authenticator ilovasida + tugmasini bosing, “QR kodni skanerlash”ni tanlang va quyidagi kodni skanerlang.", "В Google Authenticator нажмите +, выберите «Сканировать QR-код» и отсканируйте код ниже.", "In Google Authenticator, tap +, choose “Scan a QR code”, and scan the code below.")}</p>
+     ${setup.qr_image ? `<div class="ops-mfa-qr"><img src="${s(setup.qr_image)}" alt="${t("Authenticator ulash uchun shaxsiy QR kod", "Личный QR-код для подключения Authenticator", "Private QR code for Authenticator setup")}" width="240" height="240"></div>` : ""}
+     <p class="help ops-mfa-expiry">${t("Kod 10 daqiqa amal qiladi. QR kod va maxfiy kalitni hech kimga yubormang.", "Код действует 10 минут. Никому не передавайте QR-код и секретный ключ.", "This setup expires in 10 minutes. Keep the QR code and secret key private.")}</p>
+     <details class="ops-mfa-manual"><summary>${t("Skanerlay olmaysizmi? Kalitni qo‘lda kiriting", "Не получается сканировать? Введите ключ вручную", "Cannot scan? Enter the key manually")}</summary>
+      <p class="help">${t("Vaqtga asoslangan hisobni tanlang, nomiga SentryLoot yozing va ushbu kalitni kiriting.", "Выберите ключ по времени, укажите имя SentryLoot и введите этот ключ.", "Choose a time-based account, name it SentryLoot, and enter this key.")}</p>
+      ${field("secret", t("Maxfiy sozlash kaliti", "Секретный ключ настройки", "Secret setup key"), `value="${s(setup.secret)}" readonly spellcheck="false" autocomplete="off"`)}
      </details>
-     ${field('otp',t('Ilovadagi 6 xonali kod','6-значный код из приложения','6-digit code from your app'),'type="text" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="one-time-code" required')}
-     <button class="button-primary">${t('2FA ni yoqish','Включить 2FA','Enable 2FA')}</button>
+     ${field("otp", t("Ilovadagi 6 xonali kod", "6-значный код из приложения", "6-digit code from your app"), 'type="text" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="one-time-code" required')}
+     <button class="button-primary">${t("2FA ni yoqish", "Включить 2FA", "Enable 2FA")}</button>
     </form>`;
-    bind(dialog.querySelector('form'),async data=>{
-     const result=await api('/security/mfa/enable',{method:'POST',body:JSON.stringify({otp:data.otp})});
-     if(!dialog.isConnected)return;
-     dialog.querySelector('form').outerHTML=`<div class="ops-recovery"><p>${t('Bu kodlar faqat bir marta ko‘rsatiladi. Har biri bir marta ishlaydi. Ishonchli joyga saqlang.','Эти коды показываются один раз. Каждый действует однократно. Сохраните их в безопасном месте.','These codes are shown only once. Each works once. Store them somewhere safe.')}</p><pre>${result.recovery_codes.map(s).join('\n')}</pre><p class="help">${t('Ilovadagi joriy kod qayta ishlamaydi; keyingi yangi kodni kuting.','Текущий код приложения повторно не сработает; дождитесь следующего.','The current app code cannot be reused; wait for the next code.')}</p><button type="button" class="button-primary" id="ops-done">${t('Saqladim','Сохранил','I saved my codes')}</button></div>`;
-     dialog.querySelector('#ops-done').onclick=()=>{dialog.close();account()}
-    })
-   })
-  };
-  app.querySelectorAll('[data-revoke]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{const r=await api('/security/sessions/'+b.dataset.revoke,{method:'DELETE'});if(r.signed_out){me=null;csrf='';location.hash='login'}else await account()}catch(error){toast(error.message,'error');b.disabled=false}});
-  app.querySelectorAll('[data-unblock]').forEach(b=>b.onclick=async()=>{try{await api('/blocks/'+e(b.dataset.unblock),{method:'DELETE'});await account()}catch(error){toast(error.message,'error')}})
- }
- async function unlock(){if(!me){location.hash='login';return}app.innerHTML=`<section class="page"><div class="form-card ops-unlock">${pageTitle(t('Kirishni tasdiqlang','Подтвердите вход','Verify your sign-in'))}<p class="help">${t('Authenticator yoki bir martalik tiklash kodini kiriting.','Введите код Authenticator или одноразовый код восстановления.','Enter an Authenticator code or a single-use recovery code.')}</p><form id="ops-unlock-form">${field('otp',t('Xavfsizlik kodi','Код безопасности','Security code'),'autocomplete="one-time-code" maxlength="50" required')}<button class="button-primary">${t('Tasdiqlash','Подтвердить','Verify')}</button></form><button class="ux-text-button" data-action="logout">${t('Chiqish','Выйти','Sign out')}</button></div></section>`;bind($('#ops-unlock-form'),async d=>{await api('/security/unlock',{method:'POST',body:JSON.stringify(d)});location.hash='home'})}
- async function confirmEmail(token){if(!me){app.innerHTML=`<section class="page">${pageTitle(t('Emailni tasdiqlash','Подтверждение email','Confirm email change'))}<p>${t('Avval hisobingizga kiring, keyin xatdagi havolani yana oching.','Войдите в аккаунт, затем снова откройте ссылку из письма.','Sign in to your account, then reopen the link from your email.')}</p><a class="button-primary" href="/#login">${t('Kirish','Войти','Sign in')}</a></section>`;return}app.innerHTML=`<section class="page"><div class="form-card">${pageTitle(t('Yangi emailni tasdiqlash','Подтвердить новый email','Confirm your new email'))}<form id="ops-confirm-email"><button class="button-primary">${t('Emailni yangilash','Обновить email','Confirm email change')}</button></form></div></section>`;bind($('#ops-confirm-email'),async()=>{const r=await api('/security/email/confirm',{method:'POST',body:JSON.stringify({token})});me=r.user;location.hash='account'})}
- async function tickets(queue=false){if(!me){location.hash='login';return}const rows=await api('/support/tickets'+(queue?'?queue=1':''));app.innerHTML=`<section class="page ops-support">${pageTitle(queue?t('Yordam navbati','Очередь поддержки','Support queue'):t('Yordam murojaatlarim','Мои обращения','My support requests'),t('Murojaat raqami va javoblar shu yerda saqlanadi.','Номер обращения и ответы сохраняются здесь.','Track your request and every reply in one place.'))}${me.is_admin?`<div class="actions"><a href="/#admin-support">${t('Barcha murojaatlar','Все обращения','All requests')}</a><a href="/#catalog-readiness">${t('Katalog sifati','Качество каталога','Catalogue readiness')}</a></div>`:''}<div class="ops-support-layout"><div class="panel">${rows.map(r=>`<a class="ops-ticket-row" href="/#support-ticket/${e(r.id)}"><div><b>${s(r.subject)}</b><small>#${s(r.id)} · ${parseServerDate(r.updated_at).toLocaleString(localeTag())}</small></div><span class="ux-chip">${stateLabel(r.status)}</span></a>`).join('')||empty(t('Murojaatlar hali yo‘q','Обращений пока нет','No support requests yet'))}</div><div class="panel"><h2>${t('Yangi murojaat','Новое обращение','New request')}</h2><form id="ops-ticket-create">${field('subject',t('Mavzu','Тема','Subject'),'minlength="5" maxlength="120" required')}<div class="field"><label>${t('Bo‘lim','Раздел','Category')}</label><select name="category">${[['general',t('Umumiy savol','Общий вопрос','General question')],['delivery',t('Yetkazish','Доставка','Delivery')],['account',t('Hisob','Аккаунт','Account')],['listing',t('E’lon','Объявление','Listing')],['dispute',t('Nizo','Спор','Dispute')]].map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></div>${field('order_id',t('Buyurtma ID · ixtiyoriy','ID заказа · необязательно','Order ID · optional'),'maxlength="100"')}<div class="field"><label>${t('Muammo tafsilotlari','Описание проблемы','Describe the issue')}</label><textarea name="body" minlength="10" maxlength="5000" rows="5" required></textarea></div><p class="help">${t('Parol yoki tiklash kodini yubormang.','Не отправляйте пароль или коды восстановления.','Do not include passwords or recovery codes.')}</p><button class="button-primary">${t('Murojaat yuborish','Отправить обращение','Submit request')}</button></form></div></div></section>`;bind($('#ops-ticket-create'),async d=>{const r=await api('/support/tickets',{method:'POST',body:JSON.stringify(d)});location.hash='support-ticket/'+e(r.id)})}
- function stateLabel(v){return ({open:t('Javob kutilmoqda','Ожидается ответ','Awaiting support'),waiting_customer:t('Sizning javobingiz kerak','Нужен ваш ответ','Your reply needed'),resolved:t('Yakunlangan','Решено','Resolved'),reviewing:t('Ko‘rib chiqilmoqda','Рассматривается','Under review'),disputed:t('Nizo ochilgan','Открыт спор','Dispute open')})[v]||v}
- async function ticket(id){if(!me){location.hash='login';return}const r=await api('/support/tickets/'+e(id)),v=r.ticket;app.innerHTML=`<section class="page ops-case">${pageTitle(s(v.subject),'#'+s(v.id),`<span class="ux-chip">${stateLabel(v.status)}</span>`)}${v.order_id?`<a class="button-secondary" href="/#order/${e(v.order_id)}">${t('Buyurtmani ochish','Открыть заказ','Open order')}</a>`:''}<div class="panel ops-case-thread">${r.entries.map(m=>`<article><header><b>${m.is_support?t('Yordam jamoasi','Поддержка','Support team'):t('Foydalanuvchi','Пользователь','Customer')}</b><time>${parseServerDate(m.created_at).toLocaleString(localeTag())}</time></header><p data-user-content>${s(m.body)}</p></article>`).join('')}<form id="ops-ticket-reply"><div class="field"><label>${t('Javob','Ответ','Reply')}</label><textarea name="body" minlength="2" maxlength="5000" required></textarea></div><div class="field"><label>${t('Holat','Статус','Status')}</label><select name="status"><option value="${r.can_manage?'waiting_customer':'open'}">${r.can_manage?t('Foydalanuvchi javobini kutish','Ожидать ответа пользователя','Await customer reply'):t('Javob so‘rash / qayta ochish','Запросить ответ / открыть снова','Request a reply / reopen')}</option>${r.can_manage?`<option value="open">${t('Ko‘rib chiqishni davom ettirish','Продолжить рассмотрение','Keep open')}</option>`:''}<option value="resolved">${t('Yakunlash','Завершить','Resolve')}</option></select></div><button class="button-primary">${t('Javob yuborish','Отправить ответ','Send reply')}</button></form></div></section>`;bind($('#ops-ticket-reply'),async d=>{await api('/support/tickets/'+e(id),{method:'POST',body:JSON.stringify(d)});await ticket(id)})}
- async function dispute(oid){if(!me){location.hash='login';return}const route=location.href,r=await api('/disputes/'+e(oid));if(location.href!==route)return;app.innerHTML=`<section class="page ops-case ops-dispute-page${!r.report?' ops-dispute-opening':''}">${pageTitle(t('Buyurtma bo‘yicha nizo','Спор по заказу','Order dispute')+' · '+s(r.order.reference),'',`<span class="ux-chip">${r.report?stateLabel(r.report.status):(window.OrderFlow?.statusLabel(r.order.status)||stateLabel(r.order.status))}</span>`)}${r.report?`<div class="panel"><h2>${t('Murojaat sababi','Причина обращения','Reason for the dispute')}</h2><p class="detail-desc" data-user-content>${s(r.report.details)}</p><p class="help">${r.report.response_due_at?t('Dalil va izoh uchun maqsadli muddat','Целевой срок для пояснений','Target time for evidence and replies')+': '+parseServerDate(r.report.response_due_at).toLocaleString(localeTag()):''}</p>${r.report.resolution?`<div class="notice"><b>${t('Moderator izohi / qarori','Примечание / решение модератора','Moderator note / decision')}</b><p data-user-content>${s(r.report.resolution)}</p></div>`:''}</div>` : r.can_open?`<div class="panel"><p>${t('Muammoni batafsil yozing. Nizo ochilganda moderator va sotuvchi xabardor qilinadi.','Опишите проблему. Продавец и модератор получат уведомление.','Describe the issue. Opening a dispute notifies the seller and moderator.')}</p><form id="ops-open-dispute"><div class="field"><label>${t('Sabab va tafsilotlar','Причина и подробности','Reason and details')}</label><textarea name="details" minlength="10" maxlength="3000" required></textarea></div><button class="button-danger">${t('Nizo ochish','Открыть спор','Open dispute')}</button></form></div>`:`<section class="panel ops-dispute-unavailable"><h2>${t('Bu holatda nizo ochilmaydi','Спор недоступен в этом статусе','A dispute cannot be opened at this stage')}</h2><p>${t('Nizo to‘langan va yetkazilayotgan buyurtma bo‘yicha xaridor tomonidan ochiladi. Buyurtma sahifasida mavjud amallarni ko‘ring.','Спор открывает покупатель по оплаченному заказу в процессе доставки. Доступные действия указаны на странице заказа.','The buyer can open a dispute on a paid order during delivery. Your order page shows the actions currently available.')}</p><a class="button-secondary" href="/#order/${e(oid)}">${t('Buyurtmani ochish','Открыть заказ','Open order')}</a></section>`}<div class="panel ops-case-thread">${!r.entries.length?`<h2>${t('Nizo jarayoni','Рассмотрение спора','Dispute process')}</h2><p class="help">${r.can_open?t('Muammoni yozing, so‘ng dalillarni biriktiring. Yangiliklar shu sahifada ko‘rinadi.','Опишите проблему, затем приложите доказательства. Обновления появятся здесь.','Describe the issue, then attach supporting evidence. Updates will appear on this page.'):t('Buyurtma holati va mavjud amallarni buyurtma sahifasida tekshiring. Yordam kerak bo‘lsa support bilan bog‘laning.','Проверьте статус и доступные действия на странице заказа. При необходимости обратитесь в поддержку.','Check the order page for its status and available actions. Contact support if you need help.')}</p><a class="text-link" href="/#support-tickets">${t('Yordamga murojaat qilish','Обратиться в поддержку','Contact support')} →</a>`:''}${r.entries.map(m=>`<article><header><b>${s(m.sender_name)}</b><time>${parseServerDate(m.created_at).toLocaleString(localeTag())}</time></header><p data-user-content>${s(m.body)}</p>${m.image_url&&m.media_type==='video'?`<video class="ops-evidence" controls preload="metadata" src="${s(m.image_url)}"></video>`:m.image_url?`<a href="${s(m.image_url)}" target="_blank" rel="noopener noreferrer"><img class="ops-evidence" src="${s(m.image_url)}" alt="${t('Nizo dalili','Доказательство','Dispute evidence')}"></a>`:''}${m.image_private?`<p class="help">${t('Dalil rasmi moderatorga yuborilgan.','Фото доказательства отправлено модератору.','Evidence photo submitted to the moderator.')}</p>`:''}${m.image_unavailable?`<p class="help">${t('Rasm vaqtincha ochilmadi','Фото временно недоступно','Image temporarily unavailable')}</p>`:''}</article>`).join('')}${r.can_reply?`<form id="ops-dispute-reply"><div class="field"><label>${t('Izoh','Комментарий','Comment')}</label><textarea name="body" minlength="2" maxlength="5000" required></textarea></div><button class="button-primary">${t('Izoh yuborish','Отправить комментарий','Post comment')}</button></form><form id="ops-dispute-photo"><div class="field"><label>${t('Dalil rasmi · maxfiy · 5 MB gacha','Фото доказательства · приватно · до 5 МБ','Evidence photo · private · up to 5 MB')}</label><input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required></div><p class="help">${t('Rasm faqat siz va moderatorga ko‘rinadi. Parol, OTP va shaxsiy ma’lumotlarni yoping.','Фото видно только вам и модератору. Закройте пароль, OTP и личные данные.','Only you and moderators can view the photo. Redact passwords, OTPs, and personal information.')}</p><button class="button-secondary">${t('Rasm yuborish','Отправить фото','Upload evidence')}</button></form>`:''}${r.can_manage&&r.can_reply?`<div class="actions">${[['request_info',t('Qo‘shimcha dalil so‘rash','Запросить доказательства','Request more information')],['release_seller',t('Sotuvchi foydasiga yakunlash','Решить в пользу продавца','Resolve for seller')],['refund_buyer',t('Xaridor foydasiga yakunlash','Решить в пользу покупателя','Resolve for buyer')]].map(([v,l])=>`<button class="button-secondary" data-decision="${v}">${l}</button>`).join('')}</div>`:''}</div></section>`;
-  bind($('#ops-open-dispute'),async d=>{await api('/orders/'+e(oid)+'/dispute',{method:'POST',body:JSON.stringify(d)});await dispute(oid)});bind($('#ops-dispute-reply'),async d=>{await api('/disputes/'+e(oid),{method:'POST',body:JSON.stringify(d)});await dispute(oid)});bind($('#ops-dispute-photo'),async(_,form)=>{const file=form.elements.photo.files[0];if(!file||file.size>5*1024*1024)throw Error(t('Rasm 5 MB dan kichik bo‘lsin','Фото должно быть меньше 5 МБ','Photo must be under 5 MB'));const response=await fetch('/api/disputes/'+e(oid)+'/photos',{method:'POST',headers:{'Content-Type':file.type,'X-CSRF-Token':csrf},body:file});const data=await response.json();if(!response.ok)throw Error(data.error);await dispute(oid)});
-  app.querySelectorAll('[data-decision]').forEach(b=>b.onclick=()=>{const action=b.dataset.decision,dialog=modal(t('Moderator qarori','Решение модератора','Moderator decision'),`<p class="help">${t('Bu amal haqiqiy pul o‘tkazmaydi.','Расчёты пока в sandbox. Действие не переводит реальные деньги.','This does not transfer real money.')}</p><form><div class="field"><label>${t('Qaror asoslari','Основания решения','Reason for the decision')}</label><textarea name="note" minlength="5" maxlength="2000" required></textarea></div><button class="button-primary">${t('Qarorni saqlash','Сохранить решение','Save decision')}</button></form>`);bind(dialog.querySelector('form'),async d=>{await api('/admin/disputes/'+e(oid),{method:'POST',body:JSON.stringify({...d,action})});dialog.close();await dispute(oid)})})
- }
- function readinessOverview(r){
-  if(!r)return '';
-  const p=r.payments,b=r.business,u=r.topup;
-  const paymentLabels={
-   local_sandbox:t('Mahalliy sinov rejimi','Локальный тестовый режим','Local sandbox'),
-   test_configuration_present:t('Test sozlamalari bor; tekshiruv kerak','Тестовые настройки есть; нужна проверка','Test configuration present; verification needed'),
-   needs_test_configuration:t('Stripe test sozlamalari kerak','Настройте Stripe в тестовом режиме','Stripe test configuration needed'),
-   closed:t('To‘lovlar yopiq','Платежи закрыты','Payments closed')
-  };
-  const card=(title,state,description,href,action)=>`<article class="ops-launch-card"><h3>${title}</h3><strong>${state}</strong><p class="help">${description}</p><a class="text-link" href="${href}">${action} →</a></article>`;
-  return `<section class="panel ops-launch-overview" aria-labelledby="launch-overview-title">
-   <h2 id="launch-overview-title">${t('Savdoga tayyorgarlik','Готовность к продажам','Launch readiness')}</h2>
-   <p class="help">${t('Bu tayyorgarlik hisoboti. Haqiqiy to‘lovlar va avtomatik Top Up yetkazish yopiq. Sozlama mavjudligi xizmat ishlayotganini tasdiqlamaydi.','Это отчёт о подготовке. Реальные платежи и автоматическое пополнение закрыты. Наличие настроек не подтверждает работу сервиса.','This is a preparation report. Live payments and automatic Top Up delivery are closed. Configuration presence does not verify an operational service.')}</p>
+        bind(dialog.querySelector("form"), async (data) => {
+          const result = await api("/security/mfa/enable", {
+            method: "POST",
+            body: JSON.stringify({ otp: data.otp }),
+          });
+          if (!dialog.isConnected) return;
+          dialog.querySelector("form").outerHTML =
+            `<div class="ops-recovery"><p>${t("Bu kodlar faqat bir marta ko‘rsatiladi. Har biri bir marta ishlaydi. Ishonchli joyga saqlang.", "Эти коды показываются один раз. Каждый действует однократно. Сохраните их в безопасном месте.", "These codes are shown only once. Each works once. Store them somewhere safe.")}</p><pre>${result.recovery_codes.map(s).join("\n")}</pre><p class="help">${t("Ilovadagi joriy kod qayta ishlamaydi; keyingi yangi kodni kuting.", "Текущий код приложения повторно не сработает; дождитесь следующего.", "The current app code cannot be reused; wait for the next code.")}</p><button type="button" class="button-primary" id="ops-done">${t("Saqladim", "Сохранил", "I saved my codes")}</button></div>`;
+          dialog.querySelector("#ops-done").onclick = () => {
+            dialog.close();
+            account();
+          };
+        });
+      });
+    };
+    app.querySelectorAll("[data-revoke]").forEach(
+      (b) =>
+        (b.onclick = async () => {
+          b.disabled = true;
+          try {
+            const r = await api("/security/sessions/" + b.dataset.revoke, {
+              method: "DELETE",
+            });
+            if (r.signed_out) {
+              me = null;
+              csrf = "";
+              location.hash = "login";
+            } else await account();
+          } catch (error) {
+            toast(error.message, "error");
+            b.disabled = false;
+          }
+        }),
+    );
+    app.querySelectorAll("[data-unblock]").forEach(
+      (b) =>
+        (b.onclick = async () => {
+          try {
+            await api("/blocks/" + e(b.dataset.unblock), { method: "DELETE" });
+            await account();
+          } catch (error) {
+            toast(error.message, "error");
+          }
+        }),
+    );
+  }
+  async function unlock() {
+    if (!me) {
+      location.hash = "login";
+      return;
+    }
+    app.innerHTML = `<section class="page"><div class="form-card ops-unlock">${pageTitle(t("Kirishni tasdiqlang", "Подтвердите вход", "Verify your sign-in"))}<p class="help">${t("Authenticator yoki bir martalik tiklash kodini kiriting.", "Введите код Authenticator или одноразовый код восстановления.", "Enter an Authenticator code or a single-use recovery code.")}</p><form id="ops-unlock-form">${field("otp", t("Xavfsizlik kodi", "Код безопасности", "Security code"), 'autocomplete="one-time-code" maxlength="50" required')}<button class="button-primary">${t("Tasdiqlash", "Подтвердить", "Verify")}</button></form><button class="ux-text-button" data-action="logout">${t("Chiqish", "Выйти", "Sign out")}</button></div></section>`;
+    bind($("#ops-unlock-form"), async (d) => {
+      await api("/security/unlock", {
+        method: "POST",
+        body: JSON.stringify(d),
+      });
+      location.hash = "home";
+    });
+  }
+  async function confirmEmail(token) {
+    if (!me) {
+      app.innerHTML = `<section class="page">${pageTitle(t("Emailni tasdiqlash", "Подтверждение email", "Confirm email change"))}<p>${t("Avval hisobingizga kiring, keyin xatdagi havolani yana oching.", "Войдите в аккаунт, затем снова откройте ссылку из письма.", "Sign in to your account, then reopen the link from your email.")}</p><a class="button-primary" href="/#login">${t("Kirish", "Войти", "Sign in")}</a></section>`;
+      return;
+    }
+    app.innerHTML = `<section class="page"><div class="form-card">${pageTitle(t("Yangi emailni tasdiqlash", "Подтвердить новый email", "Confirm your new email"))}<form id="ops-confirm-email"><button class="button-primary">${t("Emailni yangilash", "Обновить email", "Confirm email change")}</button></form></div></section>`;
+    bind($("#ops-confirm-email"), async () => {
+      const r = await api("/security/email/confirm", {
+        method: "POST",
+        body: JSON.stringify({ token }),
+      });
+      me = r.user;
+      location.hash = "account";
+    });
+  }
+  async function tickets(queue = false) {
+    if (!me) {
+      location.hash = "login";
+      return;
+    }
+    const rows = await api("/support/tickets" + (queue ? "?queue=1" : ""));
+    app.innerHTML = `<section class="page ops-support">${pageTitle(queue ? t("Yordam navbati", "Очередь поддержки", "Support queue") : t("Yordam murojaatlarim", "Мои обращения", "My support requests"), t("Murojaat raqami va javoblar shu yerda saqlanadi.", "Номер обращения и ответы сохраняются здесь.", "Track your request and every reply in one place."))}${me.is_admin ? `<div class="actions"><a href="/#admin-support">${t("Barcha murojaatlar", "Все обращения", "All requests")}</a><a href="/#catalog-readiness">${t("Katalog sifati", "Качество каталога", "Catalogue readiness")}</a></div>` : ""}<div class="ops-support-layout"><div class="panel">${rows.map((r) => `<a class="ops-ticket-row" href="/#support-ticket/${e(r.id)}"><div><b>${s(r.subject)}</b><small>#${s(r.id)} · ${parseServerDate(r.updated_at).toLocaleString(localeTag())}</small></div><span class="ux-chip">${stateLabel(r.status)}</span></a>`).join("") || empty(t("Murojaatlar hali yo‘q", "Обращений пока нет", "No support requests yet"))}</div><div class="panel"><h2>${t("Yangi murojaat", "Новое обращение", "New request")}</h2><form id="ops-ticket-create">${field("subject", t("Mavzu", "Тема", "Subject"), 'minlength="5" maxlength="120" required')}<div class="field"><label>${t("Bo‘lim", "Раздел", "Category")}</label><select name="category">${[
+      ["general", t("Umumiy savol", "Общий вопрос", "General question")],
+      ["delivery", t("Yetkazish", "Доставка", "Delivery")],
+      ["account", t("Hisob", "Аккаунт", "Account")],
+      ["listing", t("E’lon", "Объявление", "Listing")],
+      ["dispute", t("Nizo", "Спор", "Dispute")],
+    ]
+      .map(([v, l]) => `<option value="${v}">${l}</option>`)
+      .join(
+        "",
+      )}</select></div>${field("order_id", t("Buyurtma ID · ixtiyoriy", "ID заказа · необязательно", "Order ID · optional"), 'maxlength="100"')}<div class="field"><label>${t("Muammo tafsilotlari", "Описание проблемы", "Describe the issue")}</label><textarea name="body" minlength="10" maxlength="5000" rows="5" required></textarea></div><p class="help">${t("Parol yoki tiklash kodini yubormang.", "Не отправляйте пароль или коды восстановления.", "Do not include passwords or recovery codes.")}</p><button class="button-primary">${t("Murojaat yuborish", "Отправить обращение", "Submit request")}</button></form></div></div></section>`;
+    bind($("#ops-ticket-create"), async (d) => {
+      const r = await api("/support/tickets", {
+        method: "POST",
+        body: JSON.stringify(d),
+      });
+      location.hash = "support-ticket/" + e(r.id);
+    });
+  }
+  function stateLabel(v) {
+    return (
+      {
+        open: t("Javob kutilmoqda", "Ожидается ответ", "Awaiting support"),
+        waiting_customer: t(
+          "Sizning javobingiz kerak",
+          "Нужен ваш ответ",
+          "Your reply needed",
+        ),
+        resolved: t("Yakunlangan", "Решено", "Resolved"),
+        reviewing: t("Ko‘rib chiqilmoqda", "Рассматривается", "Under review"),
+        disputed: t("Nizo ochilgan", "Открыт спор", "Dispute open"),
+      }[v] || v
+    );
+  }
+  async function ticket(id) {
+    if (!me) {
+      location.hash = "login";
+      return;
+    }
+    const r = await api("/support/tickets/" + e(id)),
+      v = r.ticket;
+    app.innerHTML = `<section class="page ops-case">${pageTitle(s(v.subject), "#" + s(v.id), `<span class="ux-chip">${stateLabel(v.status)}</span>`)}${v.order_id ? `<a class="button-secondary" href="/#order/${e(v.order_id)}">${t("Buyurtmani ochish", "Открыть заказ", "Open order")}</a>` : ""}<div class="panel ops-case-thread">${r.entries.map((m) => `<article><header><b>${m.is_support ? t("Yordam jamoasi", "Поддержка", "Support team") : t("Foydalanuvchi", "Пользователь", "Customer")}</b><time>${parseServerDate(m.created_at).toLocaleString(localeTag())}</time></header><p data-user-content>${s(m.body)}</p></article>`).join("")}<form id="ops-ticket-reply"><div class="field"><label>${t("Javob", "Ответ", "Reply")}</label><textarea name="body" minlength="2" maxlength="5000" required></textarea></div><div class="field"><label>${t("Holat", "Статус", "Status")}</label><select name="status"><option value="${r.can_manage ? "waiting_customer" : "open"}">${r.can_manage ? t("Foydalanuvchi javobini kutish", "Ожидать ответа пользователя", "Await customer reply") : t("Javob so‘rash / qayta ochish", "Запросить ответ / открыть снова", "Request a reply / reopen")}</option>${r.can_manage ? `<option value="open">${t("Ko‘rib chiqishni davom ettirish", "Продолжить рассмотрение", "Keep open")}</option>` : ""}<option value="resolved">${t("Yakunlash", "Завершить", "Resolve")}</option></select></div><button class="button-primary">${t("Javob yuborish", "Отправить ответ", "Send reply")}</button></form></div></section>`;
+    bind($("#ops-ticket-reply"), async (d) => {
+      await api("/support/tickets/" + e(id), {
+        method: "POST",
+        body: JSON.stringify(d),
+      });
+      await ticket(id);
+    });
+  }
+  async function dispute(oid) {
+    if (!me) {
+      location.hash = "login";
+      return;
+    }
+    const route = location.href,
+      r = await api("/disputes/" + e(oid));
+    if (location.href !== route) return;
+    app.innerHTML = `<section class="page ops-case ops-dispute-page${!r.report ? " ops-dispute-opening" : ""}">${pageTitle(t("Buyurtma bo‘yicha nizo", "Спор по заказу", "Order dispute") + " · " + s(r.order.reference), "", `<span class="ux-chip">${r.report ? stateLabel(r.report.status) : window.OrderFlow?.statusLabel(r.order.status) || stateLabel(r.order.status)}</span>`)}${r.report ? `<div class="panel"><h2>${t("Murojaat sababi", "Причина обращения", "Reason for the dispute")}</h2><p class="detail-desc" data-user-content>${s(r.report.details)}</p><p class="help">${r.report.response_due_at ? t("Dalil va izoh uchun maqsadli muddat", "Целевой срок для пояснений", "Target time for evidence and replies") + ": " + parseServerDate(r.report.response_due_at).toLocaleString(localeTag()) : ""}</p>${r.report.resolution ? `<div class="notice"><b>${t("Moderator izohi / qarori", "Примечание / решение модератора", "Moderator note / decision")}</b><p data-user-content>${s(r.report.resolution)}</p></div>` : ""}</div>` : r.can_open ? `<div class="panel"><p>${t("Muammoni batafsil yozing. Nizo ochilganda moderator va sotuvchi xabardor qilinadi.", "Опишите проблему. Продавец и модератор получат уведомление.", "Describe the issue. Opening a dispute notifies the seller and moderator.")}</p><form id="ops-open-dispute"><div class="field"><label>${t("Sabab va tafsilotlar", "Причина и подробности", "Reason and details")}</label><textarea name="details" minlength="10" maxlength="3000" required></textarea></div><button class="button-danger">${t("Nizo ochish", "Открыть спор", "Open dispute")}</button></form></div>` : `<section class="panel ops-dispute-unavailable"><h2>${t("Bu holatda nizo ochilmaydi", "Спор недоступен в этом статусе", "A dispute cannot be opened at this stage")}</h2><p>${t("Nizo to‘langan va yetkazilayotgan buyurtma bo‘yicha xaridor tomonidan ochiladi. Buyurtma sahifasida mavjud amallarni ko‘ring.", "Спор открывает покупатель по оплаченному заказу в процессе доставки. Доступные действия указаны на странице заказа.", "The buyer can open a dispute on a paid order during delivery. Your order page shows the actions currently available.")}</p><a class="button-secondary" href="/#order/${e(oid)}">${t("Buyurtmani ochish", "Открыть заказ", "Open order")}</a></section>`}<div class="panel ops-case-thread">${!r.entries.length ? `<h2>${t("Nizo jarayoni", "Рассмотрение спора", "Dispute process")}</h2><p class="help">${r.can_open ? t("Muammoni yozing, so‘ng dalillarni biriktiring. Yangiliklar shu sahifada ko‘rinadi.", "Опишите проблему, затем приложите доказательства. Обновления появятся здесь.", "Describe the issue, then attach supporting evidence. Updates will appear on this page.") : t("Buyurtma holati va mavjud amallarni buyurtma sahifasida tekshiring. Yordam kerak bo‘lsa support bilan bog‘laning.", "Проверьте статус и доступные действия на странице заказа. При необходимости обратитесь в поддержку.", "Check the order page for its status and available actions. Contact support if you need help.")}</p><a class="text-link" href="/#support-tickets">${t("Yordamga murojaat qilish", "Обратиться в поддержку", "Contact support")} →</a>` : ""}${r.entries.map((m) => `<article><header><b>${s(m.sender_name)}</b><time>${parseServerDate(m.created_at).toLocaleString(localeTag())}</time></header><p data-user-content>${s(m.body)}</p>${m.image_url && m.media_type === "video" ? `<video class="ops-evidence" controls preload="metadata" src="${s(m.image_url)}"></video>` : m.image_url ? `<a href="${s(m.image_url)}" target="_blank" rel="noopener noreferrer"><img class="ops-evidence" src="${s(m.image_url)}" alt="${t("Nizo dalili", "Доказательство", "Dispute evidence")}"></a>` : ""}${m.image_private ? `<p class="help">${t("Dalil rasmi moderatorga yuborilgan.", "Фото доказательства отправлено модератору.", "Evidence photo submitted to the moderator.")}</p>` : ""}${m.image_unavailable ? `<p class="help">${t("Rasm vaqtincha ochilmadi", "Фото временно недоступно", "Image temporarily unavailable")}</p>` : ""}</article>`).join("")}${r.can_reply ? `<form id="ops-dispute-reply"><div class="field"><label>${t("Izoh", "Комментарий", "Comment")}</label><textarea name="body" minlength="2" maxlength="5000" required></textarea></div><button class="button-primary">${t("Izoh yuborish", "Отправить комментарий", "Post comment")}</button></form><form id="ops-dispute-photo"><div class="field"><label>${t("Dalil rasmi · maxfiy · 5 MB gacha", "Фото доказательства · приватно · до 5 МБ", "Evidence photo · private · up to 5 MB")}</label><input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required></div><p class="help">${t("Rasm faqat siz va moderatorga ko‘rinadi. Parol, OTP va shaxsiy ma’lumotlarni yoping.", "Фото видно только вам и модератору. Закройте пароль, OTP и личные данные.", "Only you and moderators can view the photo. Redact passwords, OTPs, and personal information.")}</p><button class="button-secondary">${t("Rasm yuborish", "Отправить фото", "Upload evidence")}</button></form>` : ""}${
+      r.can_manage && r.can_reply
+        ? `<div class="actions">${[
+            [
+              "request_info",
+              t(
+                "Qo‘shimcha dalil so‘rash",
+                "Запросить доказательства",
+                "Request more information",
+              ),
+            ],
+            [
+              "release_seller",
+              t(
+                "Sotuvchi foydasiga yakunlash",
+                "Решить в пользу продавца",
+                "Resolve for seller",
+              ),
+            ],
+            [
+              "refund_buyer",
+              t(
+                "Xaridor foydasiga yakunlash",
+                "Решить в пользу покупателя",
+                "Resolve for buyer",
+              ),
+            ],
+          ]
+            .map(
+              ([v, l]) =>
+                `<button class="button-secondary" data-decision="${v}">${l}</button>`,
+            )
+            .join("")}</div>`
+        : ""
+    }</div></section>`;
+    bind($("#ops-open-dispute"), async (d) => {
+      await api("/orders/" + e(oid) + "/dispute", {
+        method: "POST",
+        body: JSON.stringify(d),
+      });
+      await dispute(oid);
+    });
+    bind($("#ops-dispute-reply"), async (d) => {
+      await api("/disputes/" + e(oid), {
+        method: "POST",
+        body: JSON.stringify(d),
+      });
+      await dispute(oid);
+    });
+    bind($("#ops-dispute-photo"), async (_, form) => {
+      const file = form.elements.photo.files[0];
+      if (!file || file.size > 5 * 1024 * 1024)
+        throw Error(
+          t(
+            "Rasm 5 MB dan kichik bo‘lsin",
+            "Фото должно быть меньше 5 МБ",
+            "Photo must be under 5 MB",
+          ),
+        );
+      const response = await fetch("/api/disputes/" + e(oid) + "/photos", {
+        method: "POST",
+        headers: { "Content-Type": file.type, "X-CSRF-Token": csrf },
+        body: file,
+      });
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error);
+      await dispute(oid);
+    });
+    app.querySelectorAll("[data-decision]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          const action = b.dataset.decision,
+            dialog = modal(
+              t("Moderator qarori", "Решение модератора", "Moderator decision"),
+              `<p class="help">${t("Bu amal haqiqiy pul o‘tkazmaydi.", "Расчёты пока в sandbox. Действие не переводит реальные деньги.", "This does not transfer real money.")}</p><form><div class="field"><label>${t("Qaror asoslari", "Основания решения", "Reason for the decision")}</label><textarea name="note" minlength="5" maxlength="2000" required></textarea></div><button class="button-primary">${t("Qarorni saqlash", "Сохранить решение", "Save decision")}</button></form>`,
+            );
+          bind(dialog.querySelector("form"), async (d) => {
+            await api("/admin/disputes/" + e(oid), {
+              method: "POST",
+              body: JSON.stringify({ ...d, action }),
+            });
+            dialog.close();
+            await dispute(oid);
+          });
+        }),
+    );
+  }
+  function readinessOverview(r) {
+    if (!r) return "";
+    const p = r.payments,
+      b = r.business,
+      u = r.topup;
+    const paymentLabels = {
+      local_sandbox: t(
+        "Mahalliy sinov rejimi",
+        "Локальный тестовый режим",
+        "Local sandbox",
+      ),
+      test_configuration_present: t(
+        "Test sozlamalari bor; tekshiruv kerak",
+        "Тестовые настройки есть; нужна проверка",
+        "Test configuration present; verification needed",
+      ),
+      needs_test_configuration: t(
+        "Stripe test sozlamalari kerak",
+        "Настройте Stripe в тестовом режиме",
+        "Stripe test configuration needed",
+      ),
+      closed: t("To‘lovlar yopiq", "Платежи закрыты", "Payments closed"),
+    };
+    const card = (title, state, description, href, action) =>
+      `<article class="ops-launch-card"><h3>${title}</h3><strong>${state}</strong><p class="help">${description}</p><a class="text-link" href="${href}">${action} →</a></article>`;
+    return `<section class="panel ops-launch-overview" aria-labelledby="launch-overview-title">
+   <h2 id="launch-overview-title">${t("Savdoga tayyorgarlik", "Готовность к продажам", "Launch readiness")}</h2>
+   <p class="help">${t("Bu tayyorgarlik hisoboti. Haqiqiy to‘lovlar va avtomatik Top Up yetkazish yopiq. Sozlama mavjudligi xizmat ishlayotganini tasdiqlamaydi.", "Это отчёт о подготовке. Реальные платежи и автоматическое пополнение закрыты. Наличие настроек не подтверждает работу сервиса.", "This is a preparation report. Live payments and automatic Top Up delivery are closed. Configuration presence does not verify an operational service.")}</p>
    <div class="ops-launch-grid">
-    ${card(t('To‘lovlar','Платежи','Payments'),paymentLabels[p.state]||paymentLabels.closed,t('Sandbox’da checkout, imzolangan webhook, refund va seller transfer tekshiruvini bajaring.','Проверьте checkout, подписанный webhook, возврат и перевод продавцу в sandbox.','Verify sandbox checkout, signed webhooks, refunds and seller transfers.'),'#launch-settings',t('Biznes sozlamalari','Настройки бизнеса','Business settings'))}
-    ${card(t('Biznes va yordam','Бизнес и поддержка','Business & support'),b.published?t('Ma’lumotlar e’lon qilingan','Данные опубликованы','Details published'):t('Haqiqiy ma’lumotlar kerak','Нужны реальные данные','Real details needed'),t('Yuridik nom, ommaviy manzil, support ish vaqti, javob muddati va himoya shartlarini tasdiqlang.','Подтвердите юридическое название, адрес, часы поддержки, срок ответа и условия защиты.','Confirm legal identity, public address, support hours, response target and protection terms.'),'#launch-settings',t('Ma’lumotlarni to‘ldirish','Заполнить данные','Complete details'))}
-    ${card('Top Up',t('Supplier va yetkazish tekshiruvi kerak','Нужны поставщик и проверка доставки','Supplier & delivery verification needed'),`${s(u.unpriced)} / ${s(u.total)} ${t('paket narxsiz','пакетов без цены','packages unpriced')} · ${s(u.unmapped)} ${t('supplier xaritasisiz','без привязки к поставщику','without supplier mapping')}. ${t('Narx va xarita tayyor bo‘lsa ham real yetkazish yoqilmaydi.','Цена и привязка сами по себе не включают реальную доставку.','Prices and mappings alone do not enable real delivery.')}`,'#top-up-admin',t('Paketlarni boshqarish','Управлять пакетами','Manage packages'))}
-    ${card(t('Katalog','Каталог','Catalogue'),t('Haqiqiy takliflar kerak','Нужны реальные предложения','Authentic offers needed'),t('Avval 3–5 ta asosiy o‘yinga e’tibor qarating. Har bir taklifning nomi, rasmi, narxi, qoldig‘i va hududi mos bo‘lsin.','Начните с 3–5 основных игр. Название, фото, цена, остаток и регион каждого предложения должны совпадать.','Start with 3–5 core games. Match each offer’s title, photos, price, stock and region.'),'#seller',t('Taklif qo‘shish','Добавить предложение','Add an offer'))}
+    ${card(t("To‘lovlar", "Платежи", "Payments"), paymentLabels[p.state] || paymentLabels.closed, t("Sandbox’da checkout, imzolangan webhook, refund va seller transfer tekshiruvini bajaring.", "Проверьте checkout, подписанный webhook, возврат и перевод продавцу в sandbox.", "Verify sandbox checkout, signed webhooks, refunds and seller transfers."), "#launch-settings", t("Biznes sozlamalari", "Настройки бизнеса", "Business settings"))}
+    ${card(t("Biznes va yordam", "Бизнес и поддержка", "Business & support"), b.published ? t("Ma’lumotlar e’lon qilingan", "Данные опубликованы", "Details published") : t("Haqiqiy ma’lumotlar kerak", "Нужны реальные данные", "Real details needed"), t("Yuridik nom, ommaviy manzil, support ish vaqti, javob muddati va himoya shartlarini tasdiqlang.", "Подтвердите юридическое название, адрес, часы поддержки, срок ответа и условия защиты.", "Confirm legal identity, public address, support hours, response target and protection terms."), "#launch-settings", t("Ma’lumotlarni to‘ldirish", "Заполнить данные", "Complete details"))}
+    ${card("Top Up", t("Supplier va yetkazish tekshiruvi kerak", "Нужны поставщик и проверка доставки", "Supplier & delivery verification needed"), `${s(u.unpriced)} / ${s(u.total)} ${t("paket narxsiz", "пакетов без цены", "packages unpriced")} · ${s(u.unmapped)} ${t("supplier xaritasisiz", "без привязки к поставщику", "without supplier mapping")}. ${t("Narx va xarita tayyor bo‘lsa ham real yetkazish yoqilmaydi.", "Цена и привязка сами по себе не включают реальную доставку.", "Prices and mappings alone do not enable real delivery.")}`, "#top-up-admin", t("Paketlarni boshqarish", "Управлять пакетами", "Manage packages"))}
+    ${card(t("Katalog", "Каталог", "Catalogue"), t("Haqiqiy takliflar kerak", "Нужны реальные предложения", "Authentic offers needed"), t("Avval 3–5 ta asosiy o‘yinga e’tibor qarating. Har bir taklifning nomi, rasmi, narxi, qoldig‘i va hududi mos bo‘lsin.", "Начните с 3–5 основных игр. Название, фото, цена, остаток и регион каждого предложения должны совпадать.", "Start with 3–5 core games. Match each offer’s title, photos, price, stock and region."), "#seller", t("Taklif qo‘shish", "Добавить предложение", "Add an offer"))}
    </div>
   </section>`;
- }
- function catalogueGuide(){return `<details class="panel ops-catalogue-guide"><summary>${t('Katalog uchun nimalar kerak?','Что нужно для каталога?','What does the catalogue need?')}</summary>
-  <p>${t('Katalog — xaridor sotib oladigan haqiqiy takliflar ro‘yxati. O‘yin rasmi yoki kategoriya o‘zi sotiladigan mahsulot emas.','Каталог — список реальных предложений для покупки. Картинка игры или категория сами по себе не являются товаром.','The catalogue is the list of real offers buyers can purchase. A game image or category alone is not a product.')}</p>
+  }
+  function catalogueGuide() {
+    return `<details class="panel ops-catalogue-guide"><summary>${t("Katalog uchun nimalar kerak?", "Что нужно для каталога?", "What does the catalogue need?")}</summary>
+  <p>${t("Katalog — xaridor sotib oladigan haqiqiy takliflar ro‘yxati. O‘yin rasmi yoki kategoriya o‘zi sotiladigan mahsulot emas.", "Каталог — список реальных предложений для покупки. Картинка игры или категория сами по себе не являются товаром.", "The catalogue is the list of real offers buyers can purchase. A game image or category alone is not a product.")}</p>
   <ol>
-   <li>${t('Mahsulotning haqiqiy nomi va xususiyatlari. Sarlavha, tavsif va rasmdagi daraja yoki miqdor bir xil bo‘lsin.','Реальное название и характеристики. Уровень и количество в названии, описании и фото должны совпадать.','Use the real product name and attributes. Match levels and quantities across the title, description and photos.')}</li>
-   <li>${t('Sotuv narxi, valyuta va mavjud qoldiq. Faqat o‘zingiz yetkazib bera oladigan miqdorni kiriting.','Цена, валюта и доступный остаток. Указывайте только то количество, которое можете поставить.','Set the selling price, currency and available stock. Enter only quantities you can actually deliver.')}</li>
-   <li>${t('Platforma, region, yetkazish vaqti, xaridor talablari va sotishga vakolat.','Платформа, регион, срок доставки, требования к покупателю и право продажи.','Specify platform, region, delivery time, buyer requirements and authorization to sell.')}</li>
-   <li>${t('O‘zingizga tegishli mahsulot rasmi. Parol, shaxsiy hujjat yoki maxfiy ma’lumot qo‘ymang.','Собственное фото товара. Не размещайте пароли, документы и секретные данные.','Use an authentic product photo. Keep passwords, personal documents and private data out of public images.')}</li>
+   <li>${t("Mahsulotning haqiqiy nomi va xususiyatlari. Sarlavha, tavsif va rasmdagi daraja yoki miqdor bir xil bo‘lsin.", "Реальное название и характеристики. Уровень и количество в названии, описании и фото должны совпадать.", "Use the real product name and attributes. Match levels and quantities across the title, description and photos.")}</li>
+   <li>${t("Sotuv narxi, valyuta va mavjud qoldiq. Faqat o‘zingiz yetkazib bera oladigan miqdorni kiriting.", "Цена, валюта и доступный остаток. Указывайте только то количество, которое можете поставить.", "Set the selling price, currency and available stock. Enter only quantities you can actually deliver.")}</li>
+   <li>${t("Platforma, region, yetkazish vaqti, xaridor talablari va sotishga vakolat.", "Платформа, регион, срок доставки, требования к покупателю и право продажи.", "Specify platform, region, delivery time, buyer requirements and authorization to sell.")}</li>
+   <li>${t("O‘zingizga tegishli mahsulot rasmi. Parol, shaxsiy hujjat yoki maxfiy ma’lumot qo‘ymang.", "Собственное фото товара. Не размещайте пароли, документы и секретные данные.", "Use an authentic product photo. Keep passwords, personal documents and private data out of public images.")}</li>
   </ol>
-  <p class="help">${t('Seller sahifasida bitta taklif yarating yoki mavjud CSV namunasini yuklab, haqiqiy ma’lumotlar bilan draft import qiling. Import nashr etmaydi; moderatsiya va o‘yin qoidalari saqlanadi.','Создайте предложение в кабинете продавца или скачайте CSV-шаблон и импортируйте реальные данные в черновики. Импорт не публикует: модерация и правила игр сохраняются.','Create an offer in the seller dashboard, or download the existing CSV template and import real data as drafts. Import does not publish; moderation and game rules still apply.')}</p>
- </details>`}
- async function readiness(){
-  if(!me?.is_admin){location.hash='account';return}
-  const r=await api('/catalog/readiness');
-  app.innerHTML=`<section class="page ops-readiness-page">${pageTitle(t('Katalogni ishga tayyorlash','Подготовка каталога','Catalogue readiness'),t('Faqat haqiqiy mahsulot va sotuvchilar. Soxta sharh yoki savdo yaratilmaydi.','Только реальные товары и продавцы. Без вымышленных отзывов и продаж.','Use real products and sellers. No fabricated reviews or sales.'))}
+  <p class="help">${t("Seller sahifasida bitta taklif yarating yoki mavjud CSV namunasini yuklab, haqiqiy ma’lumotlar bilan draft import qiling. Import nashr etmaydi; moderatsiya va o‘yin qoidalari saqlanadi.", "Создайте предложение в кабинете продавца или скачайте CSV-шаблон и импортируйте реальные данные в черновики. Импорт не публикует: модерация и правила игр сохраняются.", "Create an offer in the seller dashboard, or download the existing CSV template and import real data as drafts. Import does not publish; moderation and game rules still apply.")}</p>
+ </details>`;
+  }
+  async function readiness() {
+    if (!me?.is_admin) {
+      location.hash = "account";
+      return;
+    }
+    const r = await api("/catalog/readiness");
+    app.innerHTML = `<section class="page ops-readiness-page">${pageTitle(t("Katalogni ishga tayyorlash", "Подготовка каталога", "Catalogue readiness"), t("Faqat haqiqiy mahsulot va sotuvchilar. Soxta sharh yoki savdo yaratilmaydi.", "Только реальные товары и продавцы. Без вымышленных отзывов и продаж.", "Use real products and sellers. No fabricated reviews or sales."))}
    ${readinessOverview(r.launch)}${catalogueGuide()}
-   <section class="panel"><h2>${t('O‘yinlar bo‘yicha qamrov','Предложения по играм','Offers by game')}</h2><p class="help">${t('E’lon qilingan takliflar soni; bu haqiqiy savdo yoki sotishga ruxsatni anglatmaydi.','Число опубликованных предложений, не продаж и не разрешений на торговлю.','Published offer counts, including internal test offers; these are not sales or authorization to sell.')}</p><div class="ops-game-counts">${r.games.map(g=>`<span>${s(g.name)} <b>${s(g.listings)}</b></span>`).join('')}</div></section>
-   <section class="panel ops-readiness-list"><h2>${t('Mahsulotlarni tekshirish','Проверка товаров','Review offers')}</h2>${r.items.length?r.items.map(v=>`<article><div><b>${s(v.title)}</b><small>${s(v.game_name)} · ${s(v.status)}</small></div>${v.issues.length?`<ul>${v.issues.map(i=>`<li>${s(i)}</li>`).join('')}</ul>`:`<span class="ux-chip">${t('Asosiy maydonlar to‘liq','Основные поля заполнены','Core details complete')}</span>`}<a class="text-link" href="/#listing-review/${e(v.id)}">${t('Tekshirish','Проверить','Review')} →</a></article>`).join(''):`<p>${t('Takliflar hali yo‘q. Yuqoridagi qo‘llanma orqali haqiqiy mahsulot qo‘shing.','Предложений пока нет. Добавьте реальный товар по инструкции выше.','No offers yet. Use the guide above to add an authentic product.')}</p>`}</section>
+   <section class="panel"><h2>${t("O‘yinlar bo‘yicha qamrov", "Предложения по играм", "Offers by game")}</h2><p class="help">${t("E’lon qilingan takliflar soni; bu haqiqiy savdo yoki sotishga ruxsatni anglatmaydi.", "Число опубликованных предложений, не продаж и не разрешений на торговлю.", "Published offer counts, including internal test offers; these are not sales or authorization to sell.")}</p><div class="ops-game-counts">${r.games.map((g) => `<span>${s(g.name)} <b>${s(g.listings)}</b></span>`).join("")}</div></section>
+   <section class="panel ops-readiness-list"><h2>${t("Mahsulotlarni tekshirish", "Проверка товаров", "Review offers")}</h2>${r.items.length ? r.items.map((v) => `<article><div><b>${s(v.title)}</b><small>${s(v.game_name)} · ${s(v.status)}</small></div>${v.issues.length ? `<ul>${v.issues.map((i) => `<li>${s(i)}</li>`).join("")}</ul>` : `<span class="ux-chip">${t("Asosiy maydonlar to‘liq", "Основные поля заполнены", "Core details complete")}</span>`}<a class="text-link" href="/#listing-review/${e(v.id)}">${t("Tekshirish", "Проверить", "Review")} →</a></article>`).join("") : `<p>${t("Takliflar hali yo‘q. Yuqoridagi qo‘llanma orqali haqiqiy mahsulot qo‘shing.", "Предложений пока нет. Добавьте реальный товар по инструкции выше.", "No offers yet. Use the guide above to add an authentic product.")}</p>`}</section>
   </section>`;
- }
+  }
 
- async function seller(own){const root=$('#my-listings');if(!root||root.dataset.operationsEnhanced)return;root.dataset.operationsEnhanced='1';const panel=root.closest('.seller-listings-panel');const settings=await api('/seller/availability');if(!root.isConnected)return;const wrap=document.createElement('section');wrap.className='panel ops-availability';wrap.innerHTML=`<h2>${t('Do‘kon ish vaqti','Часы работы магазина','Store availability')}</h2><form id="ops-hours"><div class="field"><label>${t('Vaqt mintaqasi','Часовой пояс','Time zone')}</label><input name="timezone" value="${s(settings.timezone)}" list="ops-timezones" required><datalist id="ops-timezones">${['Asia/Tashkent','Asia/Kuala_Lumpur','Asia/Almaty','Asia/Dubai','Asia/Singapore','Europe/Istanbul','UTC'].map(z=>`<option value="${z}"></option>`).join('')}</datalist></div><label class="ops-checkbox"><input name="vacation" type="checkbox" ${settings.vacation?'checked':''}> ${t('Yangi buyurtmalarni vaqtincha to‘xtatish','Временно не принимать новые заказы','Pause new orders')}</label><p class="help">${t('Belgilangan kunlar ish vaqti hisoblanadi. Hech bir kun tanlanmasa 24/7. Faol buyurtmalaringiz qoladi.','Выбранные дни задают часы работы. Если дни не выбраны — 24/7. Текущие заказы остаются.','Selected days define working hours. No days selected means 24/7. Existing orders remain active.')}</p><div class="ops-hours-grid">${[t('Dushanba','Понедельник','Monday'),t('Seshanba','Вторник','Tuesday'),t('Chorshanba','Среда','Wednesday'),t('Payshanba','Четверг','Thursday'),t('Juma','Пятница','Friday'),t('Shanba','Суббота','Saturday'),t('Yakshanba','Воскресенье','Sunday')].map((day,i)=>{const v=settings.hours.find(h=>h.day===i);return `<div><label><input type="checkbox" name="day_${i}" ${v?'checked':''}>${day}</label><input type="time" name="start_${i}" value="${v?.start||'09:00'}" aria-label="${day} ${t('boshlanish','начало','start')}"><input type="time" name="end_${i}" value="${v?.end||'18:00'}" aria-label="${day} ${t('tugash','конец','end')}"></div>`}).join('')}</div><button class="button-secondary">${t('Jadvalni saqlash','Сохранить расписание','Save schedule')}</button></form>`;const disclosure=document.createElement('details');disclosure.className='trade-section panel';disclosure.innerHTML=`<summary>${t('Do‘kon ish vaqti va ta’til','Часы работы и отпуск','Store hours & vacation')}<small class="trade-store-status">${settings.vacation?t('Ta’til rejimi','Режим отпуска','Vacation mode'):t('Buyurtmalar qabul qilinadi','Принимаются заказы','Accepting orders')}${settings.active_count?' · '+settings.active_count+' '+t('faol buyurtma','текущих заказов','active orders'):''}</small><span aria-hidden="true">+</span></summary><div class="trade-section-body"></div>`;wrap.classList.remove('panel');disclosure.querySelector('div').append(wrap);const createPanel=root.closest('.seller-dashboard')?.querySelector('.seller-create-panel');if(createPanel)createPanel.after(disclosure);else panel.before(disclosure);wrap.insertAdjacentHTML('afterbegin',`<p class="help">${settings.vacation?t('Yangi buyurtmalar to‘xtatilgan. Faol buyurtmalarni yetkazishda davom eting.','Новые заказы приостановлены. Продолжайте доставку текущих.','New orders are paused. Continue fulfilling existing orders.'):t('Yangi buyurtmalar qabul qilinadi.','Новые заказы принимаются.','Accepting new orders.')} <a class="text-link" href="/#orders">${t('Faol buyurtmalarni ko‘rish','Посмотреть текущие заказы','View existing orders')} →</a></p>${settings.active_orders?.length?`<section class="trade-active-orders"><h3>${t('Yetkazilishi kerak bo‘lgan buyurtmalar','Заказы, ожидающие выполнения','Orders still to fulfil')}</h3>${settings.active_orders.map(o=>`<a class="trade-case-link" href="/#order/${e(o.id)}"><b>${s(o.reference)}</b><span>${s(localized(o.status))} →</span></a>`).join('')}</section>`:''}`);bind(wrap.querySelector('form'),async(d,f)=>{const hours=[];for(let i=0;i<7;i++)if(d['day_'+i])hours.push({day:i,start:d['start_'+i],end:d['end_'+i]});await api('/seller/availability',{method:'POST',body:JSON.stringify({timezone:d.timezone,vacation:f.elements.vacation.checked,hours})});toast(t('Ish vaqti saqlandi','Расписание сохранено','Availability saved'))});
-  const tools=app.querySelector('.ux-bulk-tools');if(!tools)return;const button=document.createElement('button');button.type='button';button.className='button-secondary';button.textContent=t('Ommaviy tahrir','Массовое редактирование','Bulk edit');tools.append(button);button.onclick=()=>{const ids=[...root.querySelectorAll('[data-bulk-id]:checked')].map(v=>v.dataset.bulkId);if(!ids.length){toast(t('E’lonlarni tanlang','Выберите объявления','Select listings first'));return}const dialog=modal(t('Tanlangan e’lonlarni tahrirlash','Редактировать выбранные объявления','Edit selected listings'),`<p class="help">${ids.length} ${t('ta e’lon. Bo‘sh maydonlar o‘zgarmaydi. Faol e’lonlar qayta moderatsiyaga yuboriladi.','объявлений. Пустые поля не меняются. Активные объявления проходят повторную проверку.','listings. Empty fields stay unchanged. Active listings return to moderation.')}</p><form>${field('price_minor',t('Narx · UZS','Цена · UZS','Price · UZS'),'type="number" min="1" step="1"')}${field('stock',t('Qoldiq','Остаток','Stock'),'type="number" min="0" max="10000" step="1"')}${field('delivery_eta',t('Yetkazish muddati','Срок доставки','Delivery time'),'maxlength="60" placeholder="24 hours"')}${field('platform',t('Platforma','Платформа','Platform'),'maxlength="60"')}${field('region',t('Hudud','Регион','Region'),'maxlength="60"')}<button class="button-primary">${t('O‘zgarishlarni saqlash','Сохранить изменения','Save changes')}</button></form>`);bind(dialog.querySelector('form'),async d=>{const fields=Object.fromEntries(Object.entries(d).filter(([,v])=>v!==''));for(const k of ['stock','price_minor'])if(k in fields)fields[k]=Number(fields[k]);if(!Object.keys(fields).length)throw Error(t('Kamida bir maydonni kiriting','Заполните хотя бы одно поле','Enter at least one field'));await api('/seller/listings/bulk-update',{method:'POST',body:JSON.stringify({ids,fields})});dialog.close();await renderSeller()})}
- }
- async function chat(convo,cid){const header=$('.ux-chat-header');if(!header||!me)return;const other=convo.conversation.buyer_id===me.id?convo.conversation.seller_id:convo.conversation.buyer_id,blocks=await api('/blocks');if(!header.isConnected)return;const mine=blocks.some(b=>b.id===other);const controls=document.createElement('div');controls.className='ops-chat-controls';controls.innerHTML=`<button type="button" class="ux-text-button" data-block>${mine?t('Blokdan chiqarish','Разблокировать','Unblock'):t('Bloklash','Заблокировать','Block')}</button><a class="ux-text-button" href="/#support-tickets">${t('Shikoyat / yordam','Жалоба / помощь','Report / support')}</a>`;(header.querySelector('[data-chat-actions-panel]')||header).append(controls);controls.querySelector('button').onclick=async()=>{const dialog=modal(mine?t('Blokdan chiqarish','Разблокировать','Unblock user'):t('Foydalanuvchini bloklash','Заблокировать пользователя','Block user'),`<p>${t('Yangi suhbat va savdolar to‘xtaydi. Faol buyurtma bo‘yicha zarur yozishmalar davom etishi mumkin; tarix o‘chmaydi.','Новые чаты и покупки будут заблокированы. Общение по текущим заказам может продолжиться; история сохраняется.','Blocks new conversations and purchases. Necessary communication on active orders may continue; history is preserved.')}</p><button class="button-primary" type="button" data-confirm>${t('Tasdiqlash','Подтвердить','Confirm')}</button>`);dialog.querySelector('[data-confirm]').onclick=async e=>{e.currentTarget.disabled=true;try{await api('/blocks/'+encodeURIComponent(other),{method:mine?'DELETE':'POST',body:'{}'});dialog.close();await renderMessages(cid)}catch(error){toast(error.message,'error');e.currentTarget.disabled=false}}};if(convo.can_message===false){const form=$('#ux-message-form');if(form){form.querySelectorAll('input,textarea,button').forEach(i=>i.disabled=true);const note=document.createElement('p');note.className='notice';note.textContent=t('Bu suhbatda yangi xabarlar bloklangan.','Новые сообщения в этом чате заблокированы.','New messages are blocked in this conversation.');form.before(note)}}}
- let healthPromise;
- function enhance(){
-  const listingForm=$('#listing-form');if(listingForm&&!listingForm.hasAttribute('data-offer-wizard')&&!$('#ops-quality-help')){const note=document.createElement('p');note.id='ops-quality-help';note.className='notice';note.textContent=t('Sifat talablari: kamida 3 so‘zli aniq nom, 60 belgidan kam bo‘lmagan tavsif, haqiqiy rasm, platforma, hudud va yetkazish shartlari. Buyum uchun aniq nomni ham kiriting.','Требования: точное название от 3 слов, описание от 60 символов, настоящее фото, платформа, регион и условия доставки. Укажите точное название предмета.','Quality checklist: a specific title of at least 3 words, description of at least 60 characters, a real photo, platform, region, and delivery terms. Include the exact item name.');listingForm.before(note)}
-  app.querySelectorAll('.ops-mode-notice').forEach(note=>note.remove());
+  async function seller(own) {
+    const root = $("#my-listings");
+    if (!root || root.dataset.operationsEnhanced) return;
+    root.dataset.operationsEnhanced = "1";
+    const panel = root.closest(".seller-listings-panel");
+    const settings = await api("/seller/availability");
+    if (!root.isConnected) return;
+    const wrap = document.createElement("section");
+    wrap.className = "panel ops-availability";
+    wrap.innerHTML = `<h2>${t("Do‘kon ish vaqti", "Часы работы магазина", "Store availability")}</h2><form id="ops-hours"><div class="field"><label>${t("Vaqt mintaqasi", "Часовой пояс", "Time zone")}</label><input name="timezone" value="${s(settings.timezone)}" list="ops-timezones" required><datalist id="ops-timezones">${["Asia/Tashkent", "Asia/Kuala_Lumpur", "Asia/Almaty", "Asia/Dubai", "Asia/Singapore", "Europe/Istanbul", "UTC"].map((z) => `<option value="${z}"></option>`).join("")}</datalist></div><label class="ops-checkbox"><input name="vacation" type="checkbox" ${settings.vacation ? "checked" : ""}> ${t("Yangi buyurtmalarni vaqtincha to‘xtatish", "Временно не принимать новые заказы", "Pause new orders")}</label><p class="help">${t("Belgilangan kunlar ish vaqti hisoblanadi. Hech bir kun tanlanmasa 24/7. Faol buyurtmalaringiz qoladi.", "Выбранные дни задают часы работы. Если дни не выбраны — 24/7. Текущие заказы остаются.", "Selected days define working hours. No days selected means 24/7. Existing orders remain active.")}</p><div class="ops-hours-grid">${[
+      t("Dushanba", "Понедельник", "Monday"),
+      t("Seshanba", "Вторник", "Tuesday"),
+      t("Chorshanba", "Среда", "Wednesday"),
+      t("Payshanba", "Четверг", "Thursday"),
+      t("Juma", "Пятница", "Friday"),
+      t("Shanba", "Суббота", "Saturday"),
+      t("Yakshanba", "Воскресенье", "Sunday"),
+    ]
+      .map((day, i) => {
+        const v = settings.hours.find((h) => h.day === i);
+        return `<div><label><input type="checkbox" name="day_${i}" ${v ? "checked" : ""}>${day}</label><input type="time" name="start_${i}" value="${v?.start || "09:00"}" aria-label="${day} ${t("boshlanish", "начало", "start")}"><input type="time" name="end_${i}" value="${v?.end || "18:00"}" aria-label="${day} ${t("tugash", "конец", "end")}"></div>`;
+      })
+      .join(
+        "",
+      )}</div><button class="button-secondary">${t("Jadvalni saqlash", "Сохранить расписание", "Save schedule")}</button></form>`;
+    const disclosure = document.createElement("details");
+    disclosure.className = "trade-section panel";
+    disclosure.innerHTML = `<summary>${t("Do‘kon ish vaqti va ta’til", "Часы работы и отпуск", "Store hours & vacation")}<small class="trade-store-status">${settings.vacation ? t("Ta’til rejimi", "Режим отпуска", "Vacation mode") : t("Buyurtmalar qabul qilinadi", "Принимаются заказы", "Accepting orders")}${settings.active_count ? " · " + settings.active_count + " " + t("faol buyurtma", "текущих заказов", "active orders") : ""}</small><span aria-hidden="true">+</span></summary><div class="trade-section-body"></div>`;
+    wrap.classList.remove("panel");
+    disclosure.querySelector("div").append(wrap);
+    const createPanel = root
+      .closest(".seller-dashboard")
+      ?.querySelector(".seller-create-panel");
+    if (createPanel) createPanel.after(disclosure);
+    else panel.before(disclosure);
+    wrap.insertAdjacentHTML(
+      "afterbegin",
+      `<p class="help">${settings.vacation ? t("Yangi buyurtmalar to‘xtatilgan. Faol buyurtmalarni yetkazishda davom eting.", "Новые заказы приостановлены. Продолжайте доставку текущих.", "New orders are paused. Continue fulfilling existing orders.") : t("Yangi buyurtmalar qabul qilinadi.", "Новые заказы принимаются.", "Accepting new orders.")} <a class="text-link" href="/#orders">${t("Faol buyurtmalarni ko‘rish", "Посмотреть текущие заказы", "View existing orders")} →</a></p>${settings.active_orders?.length ? `<section class="trade-active-orders"><h3>${t("Yetkazilishi kerak bo‘lgan buyurtmalar", "Заказы, ожидающие выполнения", "Orders still to fulfil")}</h3>${settings.active_orders.map((o) => `<a class="trade-case-link" href="/#order/${e(o.id)}"><b>${s(o.reference)}</b><span>${s(localized(o.status))} →</span></a>`).join("")}</section>` : ""}`,
+    );
+    bind(wrap.querySelector("form"), async (d, f) => {
+      const hours = [];
+      for (let i = 0; i < 7; i++)
+        if (d["day_" + i])
+          hours.push({ day: i, start: d["start_" + i], end: d["end_" + i] });
+      await api("/seller/availability", {
+        method: "POST",
+        body: JSON.stringify({
+          timezone: d.timezone,
+          vacation: f.elements.vacation.checked,
+          hours,
+        }),
+      });
+      toast(
+        t("Ish vaqti saqlandi", "Расписание сохранено", "Availability saved"),
+      );
+    });
+    const tools = app.querySelector(".ux-bulk-tools");
+    if (!tools) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button-secondary";
+    button.textContent = t(
+      "Ommaviy tahrir",
+      "Массовое редактирование",
+      "Bulk edit",
+    );
+    tools.append(button);
+    button.onclick = () => {
+      const ids = [...root.querySelectorAll("[data-bulk-id]:checked")].map(
+        (v) => v.dataset.bulkId,
+      );
+      if (!ids.length) {
+        toast(
+          t(
+            "E’lonlarni tanlang",
+            "Выберите объявления",
+            "Select listings first",
+          ),
+        );
+        return;
+      }
+      const dialog = modal(
+        t(
+          "Tanlangan e’lonlarni tahrirlash",
+          "Редактировать выбранные объявления",
+          "Edit selected listings",
+        ),
+        `<p class="help">${ids.length} ${t("ta e’lon. Bo‘sh maydonlar o‘zgarmaydi. Faol e’lonlar qayta moderatsiyaga yuboriladi.", "объявлений. Пустые поля не меняются. Активные объявления проходят повторную проверку.", "listings. Empty fields stay unchanged. Active listings return to moderation.")}</p><form>${field("price_minor", t("Narx · UZS", "Цена · UZS", "Price · UZS"), 'type="number" min="1" step="1"')}${field("stock", t("Qoldiq", "Остаток", "Stock"), 'type="number" min="0" max="10000" step="1"')}${field("delivery_eta", t("Yetkazish muddati", "Срок доставки", "Delivery time"), 'maxlength="60" placeholder="24 hours"')}${field("platform", t("Platforma", "Платформа", "Platform"), 'maxlength="60"')}${field("region", t("Hudud", "Регион", "Region"), 'maxlength="60"')}<button class="button-primary">${t("O‘zgarishlarni saqlash", "Сохранить изменения", "Save changes")}</button></form>`,
+      );
+      bind(dialog.querySelector("form"), async (d) => {
+        const fields = Object.fromEntries(
+          Object.entries(d).filter(([, v]) => v !== ""),
+        );
+        for (const k of ["stock", "price_minor"])
+          if (k in fields) fields[k] = Number(fields[k]);
+        if (!Object.keys(fields).length)
+          throw Error(
+            t(
+              "Kamida bir maydonni kiriting",
+              "Заполните хотя бы одно поле",
+              "Enter at least one field",
+            ),
+          );
+        await api("/seller/listings/bulk-update", {
+          method: "POST",
+          body: JSON.stringify({ ids, fields }),
+        });
+        dialog.close();
+        await renderSeller();
+      });
+    };
+  }
+  async function chat(convo, cid) {
+    const header = $(".ux-chat-header");
+    if (!header || !me) return;
+    const other =
+        convo.conversation.buyer_id === me.id
+          ? convo.conversation.seller_id
+          : convo.conversation.buyer_id,
+      blocks = await api("/blocks");
+    if (!header.isConnected) return;
+    const mine = blocks.some((b) => b.id === other);
+    const controls = document.createElement("div");
+    controls.className = "ops-chat-controls";
+    controls.innerHTML = `<button type="button" class="ux-text-button" data-block>${mine ? t("Blokdan chiqarish", "Разблокировать", "Unblock") : t("Bloklash", "Заблокировать", "Block")}</button><a class="ux-text-button" href="/#support-tickets">${t("Shikoyat / yordam", "Жалоба / помощь", "Report / support")}</a>`;
+    (header.querySelector("[data-chat-actions-panel]") || header).append(
+      controls,
+    );
+    controls.querySelector("button").onclick = async () => {
+      const dialog = modal(
+        mine
+          ? t("Blokdan chiqarish", "Разблокировать", "Unblock user")
+          : t(
+              "Foydalanuvchini bloklash",
+              "Заблокировать пользователя",
+              "Block user",
+            ),
+        `<p>${t("Yangi suhbat va savdolar to‘xtaydi. Faol buyurtma bo‘yicha zarur yozishmalar davom etishi mumkin; tarix o‘chmaydi.", "Новые чаты и покупки будут заблокированы. Общение по текущим заказам может продолжиться; история сохраняется.", "Blocks new conversations and purchases. Necessary communication on active orders may continue; history is preserved.")}</p><button class="button-primary" type="button" data-confirm>${t("Tasdiqlash", "Подтвердить", "Confirm")}</button>`,
+      );
+      dialog.querySelector("[data-confirm]").onclick = async (e) => {
+        e.currentTarget.disabled = true;
+        try {
+          await api("/blocks/" + encodeURIComponent(other), {
+            method: mine ? "DELETE" : "POST",
+            body: "{}",
+          });
+          dialog.close();
+          await renderMessages(cid);
+        } catch (error) {
+          toast(error.message, "error");
+          e.currentTarget.disabled = false;
+        }
+      };
+    };
+    if (convo.can_message === false) {
+      const form = $("#ux-message-form");
+      if (form) {
+        form
+          .querySelectorAll("input,textarea,button")
+          .forEach((i) => (i.disabled = true));
+        const note = document.createElement("p");
+        note.className = "notice";
+        note.textContent = t(
+          "Bu suhbatda yangi xabarlar bloklangan.",
+          "Новые сообщения в этом чате заблокированы.",
+          "New messages are blocked in this conversation.",
+        );
+        form.before(note);
+      }
+    }
+  }
+  let healthPromise;
+  function enhance() {
+    const listingForm = $("#listing-form");
+    if (
+      listingForm &&
+      !listingForm.hasAttribute("data-offer-wizard") &&
+      !$("#ops-quality-help")
+    ) {
+      const note = document.createElement("p");
+      note.id = "ops-quality-help";
+      note.className = "notice";
+      note.textContent = t(
+        "Sifat talablari: kamida 3 so‘zli aniq nom, 60 belgidan kam bo‘lmagan tavsif, haqiqiy rasm, platforma, hudud va yetkazish shartlari. Buyum uchun aniq nomni ham kiriting.",
+        "Требования: точное название от 3 слов, описание от 60 символов, настоящее фото, платформа, регион и условия доставки. Укажите точное название предмета.",
+        "Quality checklist: a specific title of at least 3 words, description of at least 60 characters, a real photo, platform, region, and delivery terms. Include the exact item name.",
+      );
+      listingForm.before(note);
+    }
+    app.querySelectorAll(".ops-mode-notice").forEach((note) => note.remove());
 
-  if(me?.is_admin&&app.querySelector('.admin-portal')&&!$('#ops-admin-links')){const box=document.createElement('div');box.className='actions';box.id='ops-admin-links';box.innerHTML=`<a class="button-secondary" href="/#admin-support">${t('Yordam navbati','Очередь поддержки','Support queue')}</a><a class="button-secondary" href="/#catalog-readiness">${t('Katalog sifati','Качество каталога','Catalogue readiness')}</a>`;app.querySelector('.admin-topbar')?.after(box)}
-  const order=app.querySelector('.ux-order-guide');if(order&&!order.querySelector('.ops-order-actions')){const oid=location.hash.startsWith('#order/')?decodeURIComponent(location.hash.slice(7)):'';if(oid){const row=document.createElement('div');row.className='actions ops-order-actions';row.innerHTML=`<a class="button-secondary" href="/#dispute/${e(oid)}">${t('Nizo va dalillar','Спор и доказательства','Dispute & evidence')}</a><a class="button-secondary" href="/#support-tickets">${t('Yordam so‘rash','Запросить помощь','Get support')}</a>`;order.append(row)}}
-  if((location.pathname==='/support'||location.hash==='#support')&&!$('#ops-support-link')){const link=document.createElement('a');link.id='ops-support-link';link.className='button-primary';link.href='/#support-tickets';link.textContent=t('Murojaatlarim / yordam so‘rash','Мои обращения / запросить помощь','My requests / contact support');app.querySelector('.page')?.prepend(link)}
- }
- return {account,unlock,confirmEmail,tickets,ticket,dispute,readiness,seller,chat,enhance};
+    if (
+      me?.is_admin &&
+      app.querySelector(".admin-portal") &&
+      !$("#ops-admin-links")
+    ) {
+      const box = document.createElement("div");
+      box.className = "actions";
+      box.id = "ops-admin-links";
+      box.innerHTML = `<a class="button-secondary" href="/#admin-support">${t("Yordam navbati", "Очередь поддержки", "Support queue")}</a><a class="button-secondary" href="/#catalog-readiness">${t("Katalog sifati", "Качество каталога", "Catalogue readiness")}</a>`;
+      app.querySelector(".admin-topbar")?.after(box);
+    }
+    const order = app.querySelector(".ux-order-guide");
+    if (order && !order.querySelector(".ops-order-actions")) {
+      const oid = location.hash.startsWith("#order/")
+        ? decodeURIComponent(location.hash.slice(7))
+        : "";
+      if (oid) {
+        const row = document.createElement("div");
+        row.className = "actions ops-order-actions";
+        row.innerHTML = `<a class="button-secondary" href="/#dispute/${e(oid)}">${t("Nizo va dalillar", "Спор и доказательства", "Dispute & evidence")}</a><a class="button-secondary" href="/#support-tickets">${t("Yordam so‘rash", "Запросить помощь", "Get support")}</a>`;
+        order.append(row);
+      }
+    }
+    if (
+      (location.pathname === "/support" || location.hash === "#support") &&
+      !$("#ops-support-link")
+    ) {
+      const link = document.createElement("a");
+      link.id = "ops-support-link";
+      link.className = "button-primary";
+      link.href = "/#support-tickets";
+      link.textContent = t(
+        "Murojaatlarim / yordam so‘rash",
+        "Мои обращения / запросить помощь",
+        "My requests / contact support",
+      );
+      app.querySelector(".page")?.prepend(link);
+    }
+  }
+  return {
+    account,
+    unlock,
+    confirmEmail,
+    tickets,
+    ticket,
+    dispute,
+    readiness,
+    seller,
+    chat,
+    enhance,
+  };
 })();
 
 /* Fulfilment tools share the current session, escaping and CSRF helpers. */
-window.TradeUX=(()=>{
- const t=(uz,ru,en)=>adminText(uz,ru,en),s=v=>esc(v),e=encodeURIComponent;
- const label=k=>({player_id:t('O‘yinchi ID / personaj nomi','ID игрока / имя персонажа','Player ID / character name'),server:t('Server / zona','Сервер / зона','Server / zone'),platform:t('Platforma','Платформа','Platform'),meeting:t('Uchrashuv / yetkazish usuli','Способ встречи / доставки','Meeting / delivery method')})[k]||k;
- const state=k=>({pending:t('Sotuvchi javobi kutilmoqda','Ожидается ответ продавца','Awaiting seller'),escalated:t('Moderator javobi kutilmoqda','Ожидается модератор','Awaiting moderator'),accepted:t('Bekor qilindi','Отменён','Cancellation accepted'),rejected:t('So‘rov rad etildi','Запрос отклонён','Request declined'),withdrawn:t('So‘rov qaytarib olindi','Запрос отозван','Request withdrawn'),open:t('Javob kutilmoqda','Ожидается ответ','Awaiting reply'),reviewing:t('Ko‘rib chiqilmoqda','На рассмотрении','Under review'),followup:t('Keyingi choralar bajarilmoqda','Выполняются дальнейшие действия','Follow-up in progress'),resolved:t('Qaror chiqarildi','Решение вынесено','Decision recorded')})[k]||k;
- const reason=k=>({changed_mind:t('Fikrim o‘zgardi','Передумал','Changed my mind'),wrong_details:t('Noto‘g‘ri ma’lumot kiritdim','Неверные данные','Incorrect delivery details'),seller_unavailable:t('Sotuvchi ishlamayapti','Продавец недоступен','Seller unavailable'),late_delivery:t('Yetkazish kechikdi','Доставка задерживается','Delivery is late'),other:t('Boshqa sabab','Другая причина','Other reason'),account_reclaimed:t('Akkaunt qaytarib olindi','Аккаунт восстановлен продавцом','Account reclaimed'),not_as_described:t('Tavsifga mos emas','Не соответствует описанию','Not as described'),invalid_code:t('Kod ishlamayapti','Код не работает','Invalid code'),missing_items:t('Mahsulot / valyuta yetishmayapti','Не хватает предметов / валюты','Missing items / currency'),service_issue:t('Xizmat bajarilmagan','Услуга не выполнена','Service not completed'),new_evidence:t('Yangi dalil paydo bo‘ldi','Появились новые доказательства','New evidence available')})[k]||k;
- const when=v=>v?parseServerDate(v).toLocaleString(localeTag()):'—';
- const inputs=(fields,values={},prefix='')=>fields.map(f=>`<label class="field"><span>${label(f.key)}${f.required?' *':''}</span><input name="${prefix+f.key}" value="${s(values[f.key]||'')}" maxlength="120" ${f.required?'required':''} autocomplete="off"></label>`).join('');
- const select=(name,keys)=>`<label class="field"><span>${t('Sabab','Причина','Reason')}</span><select name="${name}" required>${keys.map(k=>`<option value="${k}">${reason(k)}</option>`).join('')}</select></label>`;
- const textarea=(name='body',title=t('Izoh va dalillar','Комментарий и доказательства','Comment and evidence'),min=5)=>`<label class="field"><span>${title}</span><textarea name="${name}" minlength="${min}" maxlength="5000" rows="3" required></textarea></label>`;
- const submit=(text,cls='button-secondary')=>`<button type="submit" class="${cls}">${text}</button>`;
- function bind(form,fn){if(!form)return;form.addEventListener('submit',async event=>{event.preventDefault();const b=event.submitter||form.querySelector('button');if(b)b.disabled=true;form.querySelector('.trade-error')?.remove();try{await fn(Object.fromEntries(new FormData(form)),form,event.submitter)}catch(error){const p=document.createElement('p');p.className='notice error trade-error';p.setAttribute('role','alert');p.textContent=error.message;form.append(p)}finally{if(b?.isConnected)b.disabled=false}})}
- function panel(title,body,open=false){return `<details class="panel trade-section" ${open?'open':''}><summary>${title}<span aria-hidden="true">+</span></summary><div class="trade-section-body">${body}</div></details>`}
- function policyMarkup(p){return `<p class="help">${p?.days?`${t('Yetkazilgan mahsulot tavsifga mos kelmasa','Если товар не соответствует описанию','If the delivered item does not match its description')}: ${p.days} ${t('kun ichida murojaat qiling','дней для обращения','days to report an issue')}. ${t('Akkauntlarda sotuvchi sababli kirish yo‘qolishi ham ko‘rib chiqiladi. Xaridor xatosi yoki sotuvchiga aloqasiz noshir qarori kirmaydi. Bu avtomatik qaytarim yoki moliyaviy kafolat emas.','Для аккаунтов рассматривается потеря доступа по вине продавца. Ошибки покупателя и независимые действия издателя не включены. Это не автоматический возврат или финансовая гарантия.','Accounts also cover review of access lost due to the seller. Buyer-caused problems and unrelated publisher actions are excluded. This is a reporting process, with no automatic refund or financial guarantee.')}`:t('Eski buyurtmada sotuvdan keyingi muddat belgilanmagan. Yordam xizmatiga yozing.','Для старого заказа срок не установлен. Обратитесь в поддержку.','No after-sale period was recorded for this legacy order. Contact support.')}</p>`}
- function listing(it){const root=app.querySelector('[data-listing-delivery]')||app.querySelector('.listing-purchase-panel')||app.querySelector('.listing-info-panel')||app.querySelector('.listing-summary');if(!root)return;const v=it.availability,block=document.createElement('div');block.className='trade-listing-availability';block.innerHTML=`${it.status==='sold_out'?'':v?.vacation?`<p class="notice">${t('Sotuvchi ta’tilda · yangi buyurtmalar to‘xtatilgan','Магазин в отпуске · новые заказы приостановлены','Seller away · new orders paused')}</p>`:`<p class="help">${t('Taxminiy yetkazish','Ожидаемая доставка','Estimated delivery')}: ${it.estimated_delivery_at?when(it.estimated_delivery_at):s(it.delivery_eta||'—')}</p>`}${v?.hours?.length?`<details><summary>${t('Sotuvchi ish jadvali','Расписание продавца','Seller working hours')} · ${s(v.timezone)}</summary><div class="trade-schedule">${v.hours.map(h=>`<span>${[t('Du','Пн','Mon'),t('Se','Вт','Tue'),t('Ch','Ср','Wed'),t('Pa','Чт','Thu'),t('Ju','Пт','Fri'),t('Sh','Сб','Sat'),t('Ya','Вс','Sun')][h.day]} <b>${s(h.start)}–${s(h.end)}</b></span>`).join('')}</div></details>`:`<p class="help">${t('Sotuvchi ish jadvalini ko‘rsatmagan.','Продавец не указал график работы.','The seller has not provided a working schedule.')}</p>`}<details><summary>${t('Sotuvdan keyingi murojaat','Обращение после покупки','After-sale support')} · ${it.after_sale_policy?.days||0} ${t('kun','дней','days')}</summary>${policyMarkup(it.after_sale_policy)}</details>`;root.append(block);if(v?.vacation)app.querySelectorAll('[data-action="buy-now"],[data-action="add-cart"]').forEach(b=>b.disabled=true)}
- async function checkout(items){if(!items.length)return;const anchor=app.querySelector('#checkout-terms')?.closest('label');if(!anchor)return;const full=items;if(!anchor.isConnected)return;const box=document.createElement('div');box.className='trade-checkout';box.id='trade-checkout';box.innerHTML=full.map(it=>`<section data-checkout-item="${s(it.id)}"><h3>${s(it.title)}</h3>${it.availability?.vacation?`<p class="notice">${t('Sotuvchi ta’tilda','Продавец в отпуске','Seller is away')}</p>`:''}${it.buyer_fields.length?`<div class="form-grid">${inputs(it.buyer_fields)}</div>`:''}${policyMarkup(it.after_sale_policy)}</section>`).join('');anchor.before(box)}
- function checkoutDetails(){const details={};for(const section of app.querySelectorAll('[data-checkout-item]')){details[section.dataset.checkoutItem]={};for(const input of section.querySelectorAll('input')){if(!input.reportValidity())throw Error(t('Yetkazish uchun majburiy maydonlarni to‘ldiring.','Заполните обязательные данные доставки.','Complete the required delivery details.'));details[section.dataset.checkoutItem][input.name]=input.value.trim()}}return details}
- const artifactMarkup=rows=>rows.map(a=>`<article class="trade-evidence"><header><b>${s(a.owner_name)}</b><time>${when(a.created_at)}</time></header><p data-user-content>${s(a.body)}</p>${a.image_url?`<a href="${s(a.image_url)}" target="_blank" rel="noopener noreferrer"><img src="${s(a.image_url)}" alt="${t('Buyurtma dalili','Доказательство заказа','Order evidence')}"></a>`:''}${a.image_unavailable?`<p class="help">${t('Dalil rasmi hozir ochilmadi','Фото временно недоступно','Evidence photo temporarily unavailable')}</p>`:''}</article>`).join('');
- function evidenceForm(oid,items=[],caseId=''){return `<form class="trade-evidence-form" data-oid="${s(oid)}" data-case="${s(caseId)}">${!caseId?`<label class="field"><span>${t('Mahsulot','Товар','Item')}</span><select name="item_id">${items.map(i=>`<option value="${s(i.id)}">${s(i.title)}</option>`).join('')}</select></label>`:''}${textarea('body',t('Bajarilgan natija yoki dalil tafsilotlari','Результат или подробности доказательства','Delivered result or evidence details'))}<label class="field"><span>${t('Dalil rasmi · ixtiyoriy · 5 MB','Фото · необязательно · 5 МБ','Evidence photo · optional · 5 MB')}</span><input name="photo" type="file" accept="image/jpeg,image/png,image/webp"></label><p class="help">${t('Parol va OTP yubormang. Dalillar buyurtma ishtirokchilari va moderatorga ko‘rinadi.','Не отправляйте пароли и OTP. Доказательства доступны участникам заказа и модераторам.','Do not include passwords or OTPs. Evidence is visible to order participants and moderators.')}</p>${submit(t('Dalil qo‘shish','Добавить доказательство','Add evidence'))}</form>`}
- function bindEvidence(root,refresh){root.querySelectorAll('.trade-evidence-form').forEach(form=>bind(form,async(d,f)=>{const file=f.elements.photo.files[0],payload={body:d.body,item_id:d.item_id,case_id:f.dataset.case||undefined};if(file&&(file.size>5*1024*1024||!['image/jpeg','image/png','image/webp'].includes(file.type)))throw Error(t('Rasm 5 MB dan kichik JPG, PNG yoki WebP bo‘lsin','Фото: JPG, PNG или WebP до 5 МБ','Use a JPG, PNG or WebP under 5 MB'));await api('/orders/'+e(f.dataset.oid)+'/evidence',{method:'POST',body:JSON.stringify(payload)});if(file){const query=new URLSearchParams(f.dataset.case?{case_id:f.dataset.case}:{item_id:d.item_id});const r=await fetch('/api/orders/'+e(f.dataset.oid)+'/evidence?'+query,{method:'POST',headers:{'Content-Type':file.type,'X-CSRF-Token':csrf},body:file});const data=await r.json();if(!r.ok)throw Error(data.error)}await refresh()}))}
- async function order(o,workflow=null){const anchor=app.querySelector('.ux-order-guide');if(!anchor)return;const w=workflow||await api('/orders/'+e(o.id)+'/workflow');if(!anchor.isConnected)return;const orderDetails=app.querySelector('#order-detail-steps');if(orderDetails&&!orderDetails.closest('.ux-order-extra')){const extra=document.createElement('details');extra.className='panel ux-order-extra';extra.innerHTML=`<summary>${t('Mahsulot va buyurtma tafsilotlari','Детали товара и заказа','Order and item details')}<span aria-hidden="true">+</span></summary>`;orderDetails.before(extra);extra.append(orderDetails)}if(o.status==='cancelled')return;const buyer=w.order.buyer,admin=w.order.admin,appealable=(w.appeal_decisions||[]).filter(d=>parseServerDate(d.deadline_at)>new Date()&&!w.cases.some(c=>c.kind==='appeal'&&c.source_id===d.id&&c.requester_id===me.id)),active=w.cancellations.find(c=>['pending','escalated'].includes(c.status)),root=document.createElement('section');root.className='trade-order';root.id='trade-order';const canSend=['paid','awaiting_delivery'].includes(o.status)&&!w.is_paused;
-  root.innerHTML=`${w.is_paused?`<p class="notice">${t('Bekor qilish so‘rovi ko‘rilmoqda. Yetkazish va yakunlash vaqtincha to‘xtatilgan.','Рассматривается отмена. Доставка и завершение приостановлены.','Cancellation is being reviewed. Delivery and completion are paused.')}</p>`:''}<div class="trade-progress-list">${w.items.map(i=>`<article><div><b>${s(i.title)}</b><span>${i.delivered_quantity}/${i.quantity} ${t('yetkazildi','доставлено','delivered')}</span></div><progress value="${i.delivered_quantity}" max="${i.quantity}" aria-label="${s(i.title)}"></progress></article>`).join('')}</div>${w.items.map(i=>panel(s(i.title),`${i.buyer_fields.length?`<h3>${t('Xaridor ma’lumotlari','Данные покупателя','Buyer details')}</h3>${buyer&&!i.delivered_quantity&&['pending_payment','paid','awaiting_delivery'].includes(o.status)&&!w.is_paused?`<form class="trade-buyer-details" data-item="${s(i.id)}"><div class="form-grid">${inputs(i.buyer_fields,i.buyer_details)}</div>${submit(t('Ma’lumotlarni saqlash','Сохранить данные','Save details'))}</form>`:`<dl class="trade-data">${i.buyer_fields.map(f=>`<div><dt>${label(f.key)}</dt><dd>${s(i.buyer_details[f.key]||'—')}</dd></div>`).join('')}</dl>`}`:''}${i.batches.length?`<h3>${t('Yetkazish tarixi','История доставки','Delivery history')}</h3>${i.batches.map(b=>`<article class="trade-batch"><header><b>+${b.quantity} ${t('ta','шт.','items')}</b><time>${when(b.created_at)}</time></header><p data-user-content>${s(b.body)}</p></article>`).join('')}`:''}${!buyer&&i.seller_id===me.id&&canSend&&i.delivered_quantity<i.quantity?`<form class="trade-delivery" data-item="${s(i.id)}"><label class="field"><span>${t('Hozir yuboriladigan son','Количество в этой доставке','Quantity delivered now')}</span><input name="quantity" type="number" min="1" max="${i.quantity-i.delivered_quantity}" value="${i.quantity-i.delivered_quantity}" required></label>${textarea('delivery',t('Yetkazish ma’lumoti / bajarilgan natija','Данные доставки / результат','Delivery details / completed result'),2)}${submit(t('Yetkazishni qayd etish','Записать доставку','Record delivery'),'button-primary')}</form>`:''}`,canSend)) .join('')}${panel(t('Yetkazish dalillari','Доказательства доставки','Delivery evidence'),artifactMarkup(w.artifacts.filter(a=>!a.case_id))+(!['cancelled','refunded'].includes(o.status)?evidenceForm(o.id,w.items):''))}${panel(t('Buyurtmani bekor qilish','Отмена заказа','Order cancellation'),`${w.cancellations.map(c=>`<article class="trade-cancel"><header><b>${state(c.status)}</b><time>${when(c.created_at)}</time></header><p><b>${reason(c.reason)}</b> · ${s(c.details)}</p><p class="help">${t('Javob muddati','Срок ответа','Reply deadline')}: ${when(c.response_due_at)}</p>${c.replies.map(r=>`<p><b>${s(r.seller_name)}</b> · ${r.decision==='accept'?t('Rozi','Согласен','Agrees'):t('Rozi emas','Не согласен','Disagrees')}: ${s(r.note)}</p>`).join('')}${c.resolution?`<p data-user-content>${s(c.resolution)}</p>`:''}</article>`).join('')}${active?`<form id="trade-cancel-response">${textarea('note',t('Javob / izoh','Ответ / комментарий','Reply / explanation'))}<div class="actions">${buyer?`<button class="button-secondary" name="action" value="withdraw">${t('So‘rovni qaytarib olish','Отозвать запрос','Withdraw request')}</button>`:!admin&&active.status==='pending'?`<button class="button-secondary" name="action" value="accept">${t('Roziman','Согласен','Accept cancellation')}</button><button class="button-secondary" name="action" value="reject">${t('Rozi emasman','Не согласен','Decline cancellation')}</button>`:''}${!admin?`<button class="button-secondary" name="action" value="escalate">${t('Moderatorga yuborish','Передать модератору','Escalate to moderator')}</button>`:`<button class="button-secondary" name="action" value="approve">${t('Bekor qilishni tasdiqlash','Подтвердить отмену','Approve cancellation')}</button><button class="button-secondary" name="action" value="decline">${t('So‘rovni rad etish','Отклонить запрос','Decline request')}</button>`}</div></form>`:buyer&&['pending_payment','paid','awaiting_delivery','delivered'].includes(o.status)?`<form id="trade-cancel-request">${select('reason',['changed_mind','wrong_details','seller_unavailable','late_delivery','other'])}${textarea('details',t('Tafsilotlar','Подробности','Details'))}${submit(t('Bekor qilishni so‘rash','Запросить отмену','Request cancellation'))}</form>`:''}`,!!active)}${panel(t('Sotuvdan keyingi murojaat','Обращение после покупки','After-sale support'),`${w.order.protection_until?`<p><b>${t('Murojaat muddati','Обратиться до','Report issues by')}: ${when(w.order.protection_until)}</b></p>`:''}${w.items.map(i=>`<h3>${s(i.title)}</h3>${policyMarkup(i.policy)}`).join('')}${w.cases.map(c=>`<a class="trade-case-link" href="/#order-case/${e(c.id)}">${c.kind==='appeal'?t('Apellyatsiya','Апелляция','Appeal'):t('Sotuvdan keyingi murojaat','Обращение после покупки','After-sale case')} <span>${state(c.status)} →</span></a>`).join('')}${buyer&&o.status==='completed'&&w.order.protection_until&&parseServerDate(w.order.protection_until)>new Date()&&!w.cases.some(c=>c.kind==='after_sale')?`<form id="trade-after-sale">${select('reason',[...new Set(w.items.flatMap(i=>i.policy.issues||[]))])}${textarea('details',t('Muammo va dalillar','Проблема и доказательства','Issue and supporting evidence'),20)}${submit(t('Murojaat ochish','Открыть обращение','Open after-sale case'))}</form>`:''}${appealable.length&&!admin?`<form id="trade-appeal"><label class="field"><span>${t('Qayta ko‘riladigan qaror','Решение для пересмотра','Decision to review')}</span><select name="source_id">${appealable.map(d=>`<option value="${s(d.id)}">${d.kind==='dispute'?t('Nizo qarori','Решение по спору','Dispute decision'):d.kind==='account_review'?t('Akkaunt tekshiruvi','Проверка аккаунта','Account review'):t('Sotuvdan keyingi qaror','Решение после покупки','After-sale decision')} · ${when(d.decided_at)}</option>`).join('')}</select></label><h3>${t('Qarorga qayta murojaat','Пересмотр решения','Request a decision review')}</h3><p class="help">${t('Yakuniy qarordan keyin 7 kun. Avval taqdim etilmagan yangi dalilni yozing.','В течение 7 дней после решения. Укажите новые доказательства.','Within 7 days of the final decision. Explain evidence not previously considered.')}</p>${textarea('details',t('Yangi dalil va izoh','Новые доказательства и пояснение','New evidence and explanation'),20)}${submit(t('Apellyatsiya yuborish','Подать апелляцию','Submit appeal'))}</form>`:''}`)}`;
-  anchor.after(root);app.querySelectorAll('[data-form="deliver"]').forEach(f=>f.remove());
-  let gatedStages=[];
-  if(o.status==='pending_payment'&&buyer){const payment=app.querySelector('.test-payment-panel');if(payment)gatedStages=[payment]}
-  else if(!buyer&&['paid','awaiting_delivery'].includes(o.status)&&!w.is_paused&&w.items.some(item=>item.seller_id===me.id))gatedStages=[root];
-  else if(o.status==='delivered'&&buyer){const evidence=app.querySelector('.account-review-upload'),details=app.querySelector('#order-detail-steps');gatedStages=[evidence,details].filter(Boolean)}
-  if(app.querySelector('.order-process'))gatedStages=[];
-  gatedStages.forEach(stage=>{stage.hidden=true;stage.classList.add('ux-order-step-gated')});
-  if(!gatedStages.length)root.querySelector('[data-order-continue]')?.remove();
-  if(w.is_paused){const title=anchor.querySelector('h2');if(title)title.textContent=t('Bekor qilish ko‘rib chiqilmoqda','Рассматривается отмена','Cancellation under review');const next=anchor.querySelector('p');if(next)next.textContent=active?.status==='escalated'?t('Moderator javobini kuting. Tafsilotlar quyidagi bekor qilish bo‘limida.','Ожидайте модератора. Подробности в разделе отмены ниже.','Wait for the moderator. Details appear in the cancellation section below.'):t('Sotuvchi javobini kuting. So‘rovni pastdagi bo‘limdan qaytarib olish mumkin.','Ожидайте продавца. Запрос можно отозвать в разделе ниже.','Wait for the seller. You can withdraw the request in the section below.')}if(w.is_paused||w.items.some(i=>i.delivered_quantity<i.quantity))app.querySelector('[data-action="complete-order"]')?.setAttribute('disabled','');
-  const refresh=()=>renderOrder(o.id);root.querySelectorAll('.trade-buyer-details').forEach(f=>bind(f,async d=>{await api('/orders/'+e(o.id)+'/buyer-details',{method:'POST',body:JSON.stringify({item_id:f.dataset.item,details:d})});await refresh()}));
-  root.querySelectorAll('.trade-delivery').forEach(f=>{const requestKey=crypto.randomUUID();bind(f,async d=>{await api('/orders/'+e(o.id)+'/deliver',{method:'POST',body:JSON.stringify({...d,item_id:f.dataset.item,quantity:Number(d.quantity),request_key:requestKey})});await refresh()})});
-  bind(root.querySelector('#trade-cancel-request'),async d=>{await api('/orders/'+e(o.id)+'/cancellation',{method:'POST',body:JSON.stringify(d)});await refresh()});
-  const response=root.querySelector('#trade-cancel-response');if(response){response.querySelectorAll('button').forEach(b=>b.type='submit');bind(response,async(d,f,button)=>{await api('/orders/'+e(o.id)+'/cancellation',{method:'POST',body:JSON.stringify({...d,action:button.value})});await refresh()})}
-  for(const [id,path] of [['trade-after-sale','after-sale'],['trade-appeal','appeal']])bind(root.querySelector('#'+id),async d=>{const r=await api('/orders/'+e(o.id)+'/'+path,{method:'POST',body:JSON.stringify({...d,reason:path==='appeal'?'new_evidence':d.reason})});location.hash='order-case/'+e(r.id)});bindEvidence(root,refresh)
- }
- async function casePage(id){if(!me){location.hash='login';return}const r=await api('/order-cases/'+e(id)),c=r.case,open=['open','reviewing','followup'].includes(c.status);app.innerHTML=`<section class="page trade-case-page">${pageTitle((c.kind==='appeal'?t('Qarorni qayta ko‘rib chiqish','Пересмотр решения','Decision review'):t('Sotuvdan keyingi murojaat','Обращение после покупки','After-sale case'))+' · '+s(r.order.reference))}<div class="trade-case-heading"><span class="ux-chip">${state(c.status)}</span><span class="help">${t('Javob muddati','Срок ответа','Reply deadline')}: ${when(c.response_due_at)}</span></div><section class="panel"><h2>${reason(c.reason)}</h2><p data-user-content>${s(c.details)}</p>${c.resolution?`<div class="notice"><b>${t('Moderator qarori','Решение модератора','Moderator decision')}</b><p data-user-content>${s(c.resolution)}</p>${c.remedy==='manual_followup_required'?`<p>${t('Qaror qayta ko‘rildi. Keyingi choralar yordam xizmati orqali bajariladi; avtomatik pul qaytarilmadi.','Решение пересмотрено. Дальнейшие действия через поддержку; автоматического возврата нет.','Decision revised. Support will handle the next steps here; no automatic refund was made.')}</p>`:''}</div>`:''}</section><section class="panel trade-case-thread">${r.entries.map(m=>`<article><header><b>${s(m.sender_name)}</b><time>${when(m.created_at)}</time></header><p data-user-content>${s(m.body)}</p></article>`).join('')}${artifactMarkup(r.artifacts)}${open?`<form id="trade-case-reply">${textarea()}${r.can_manage?`<label class="field"><span>${t('Moderator amali','Действие модератора','Moderator action')}</span><select name="action"><option value="reply">${t('Izoh qo‘shish','Комментарий','Add comment')}</option><option value="request_info">${t('Dalil so‘rash','Запросить доказательства','Request evidence')}</option><option value="uphold">${t('Avvalgi holatni saqlash','Сохранить решение','Uphold current decision')}</option><option value="revise">${t('Qayta ko‘rib chiqildi · keyingi chora kerak','Пересмотрено · нужны дальнейшие действия','Revise decision · follow-up required')}</option>${c.status==='followup'?`<option value="close_followup">${t('Keyingi chora bajarildi','Дальнейшие действия выполнены','Follow-up completed')}</option>`:''}</select></label>`:''}${submit(t('Yuborish','Отправить','Submit'),'button-primary')}</form>${panel(t('Dalil biriktirish','Приложить доказательство','Attach evidence'),evidenceForm(r.order.id,[],id))}`:''}</section></section>`;bind($('#trade-case-reply'),async d=>{await api('/order-cases/'+e(id),{method:'POST',body:JSON.stringify(d)});await casePage(id)});bindEvidence(app,()=>casePage(id))}
- async function queue(){if(!me?.is_admin){location.hash='home';return}const r=await api('/order-cases');app.innerHTML=`<section class="page trade-case-page">${pageTitle(t('Murojaatlar va bekor qilishlar','Обращения и отмены','Cases and cancellations'))}<div class="panel">${r.cancellations.map(c=>`<a class="trade-case-link" href="/#order/${e(c.order_id)}"><b>${s(c.reference)} · ${t('Bekor qilish','Отмена','Cancellation')}</b><span>${state(c.status)} →</span></a>`).join('')}${r.cases.map(c=>`<a class="trade-case-link" href="/#order-case/${e(c.id)}"><b>${s(c.reference)} · ${c.kind==='appeal'?t('Apellyatsiya','Апелляция','Appeal'):t('Sotuvdan keyin','После покупки','After-sale')}</b><span>${state(c.status)} →</span></a>`).join('')||(!r.cancellations.length?empty(t('Murojaatlar yo‘q','Нет обращений','No cases yet')):'')}</div></section>`}
- async function saved(){if(!me){location.hash='login';return}const rows=await api('/saved-searches');app.innerHTML=`<section class="page trade-saved-page">${pageTitle(t('Saqlangan qidiruvlar','Сохранённые поиски','Saved searches'),t('Mos yangi e’lon chiqqanda sayt bildirishnomasi keladi.','Уведомим на сайте о новых подходящих объявлениях.','Get an on-site notification when a new matching listing is published.'))}<div class="panel">${rows.map(r=>`<article class="trade-saved-row"><a href="${s(r.href)}"><b>${s(r.name)}</b><small>${Object.entries(r.filters).map(([k,v])=>`${s(k)}: ${s(v)}`).join(' · ')}</small></a><div class="actions"><button class="ux-text-button" data-search-toggle="${s(r.id)}" data-enabled="${r.enabled?'1':'0'}" aria-pressed="${r.enabled?'true':'false'}">${r.enabled?t('Bildirishnoma yoqilgan','Уведомления включены','Alerts on'):t('Bildirishnoma o‘chiq','Уведомления выключены','Alerts off')}</button><button class="ux-text-button" data-search-delete="${s(r.id)}">${t('O‘chirish','Удалить','Delete')}</button></div></article>`).join('')||empty(t('Qidiruvda filtrlarni tanlab, “Qidiruvni saqlash” tugmasini bosing.','Задайте фильтры и нажмите «Сохранить поиск».','Choose catalogue filters, then select “Save search”.'))}</div></section>`;app.querySelectorAll('[data-search-toggle]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await api('/saved-searches/'+e(b.dataset.searchToggle),{method:'PATCH',body:JSON.stringify({enabled:b.dataset.enabled!=='1'})});await saved()}catch(error){toast(error.message,'error');b.disabled=false}});app.querySelectorAll('[data-search-delete]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await api('/saved-searches/'+e(b.dataset.searchDelete),{method:'DELETE'});await saved()}catch(error){toast(error.message,'error');b.disabled=false}})}
- function browse(filters){const root=$('#ux-browse-filters');if(!root)return;const controls=document.createElement('div');controls.className='trade-search-actions';controls.innerHTML=`<button class="ux-text-button" id="trade-save-search">${t('Qidiruvni saqlash','Сохранить поиск','Save search')}</button><a class="text-link" href="/#saved-searches">${t('Saqlangan qidiruvlar','Сохранённые поиски','Saved searches')}</a>`;root.append(controls);controls.querySelector('button').onclick=()=>{if(!me){location.hash='login';return}const d=document.createElement('dialog');d.className='ux-preview-dialog ops-modal';d.innerHTML=`<header><h2>${t('Qidiruvni saqlash','Сохранить поиск','Save search')}</h2><button type="button" class="button-secondary" data-close>×</button></header><form><label class="field"><span>${t('Qidiruv nomi','Название поиска','Search name')}</span><input name="name" minlength="2" maxlength="80" required value="${s(filters.q||marketGameLinks.find(g=>g[0]===filters.game)?.[1]||'')}"></label><p class="help">${t('Mos yangi e’lonlar haqida sayt ichida xabar beramiz.','Сообщим на сайте о новых подходящих объявлениях.','We will notify you on the site about new matching listings.')}</p>${submit(t('Saqlash','Сохранить','Save'),'button-primary')}</form>`;document.body.append(d);d.querySelector('[data-close]').onclick=()=>d.close();d.addEventListener('close',()=>d.remove());d.showModal();bind(d.querySelector('form'),async v=>{const clean={...filters};delete clean.sort;delete clean.page;await api('/saved-searches',{method:'POST',body:JSON.stringify({...v,filters:clean})});d.close();toast(t('Qidiruv saqlandi','Поиск сохранён','Search saved'))})}}
- function enhance(){const admin=$('#ops-admin-links');if(admin&&!admin.querySelector('[data-trade-queue]'))admin.insertAdjacentHTML('beforeend',`<a class="button-secondary" data-trade-queue href="/#order-cases">${t('Murojaat va bekor qilishlar','Обращения и отмены','Cases and cancellations')}</a>`);const account=app.querySelector('.ops-account');if(account&&!$('#trade-saved-link'))(account.querySelector('.ops-account-shortcuts')||account).insertAdjacentHTML('beforeend',`<a id="trade-saved-link" class="text-link" href="/#saved-searches">${t('Saqlangan qidiruvlar','Сохранённые поиски','Saved searches')} →</a>`)}
- return {listing,checkout,checkoutDetails,order,casePage,queue,saved,browse,enhance};
+window.TradeUX = (() => {
+  const t = (uz, ru, en) => adminText(uz, ru, en),
+    s = (v) => esc(v),
+    e = encodeURIComponent;
+  const label = (k) =>
+    ({
+      player_id: t(
+        "O‘yinchi ID / personaj nomi",
+        "ID игрока / имя персонажа",
+        "Player ID / character name",
+      ),
+      server: t("Server / zona", "Сервер / зона", "Server / zone"),
+      platform: t("Platforma", "Платформа", "Platform"),
+      meeting: t(
+        "Uchrashuv / yetkazish usuli",
+        "Способ встречи / доставки",
+        "Meeting / delivery method",
+      ),
+    })[k] || k;
+  const state = (k) =>
+    ({
+      pending: t(
+        "Sotuvchi javobi kutilmoqda",
+        "Ожидается ответ продавца",
+        "Awaiting seller",
+      ),
+      escalated: t(
+        "Moderator javobi kutilmoqda",
+        "Ожидается модератор",
+        "Awaiting moderator",
+      ),
+      accepted: t("Bekor qilindi", "Отменён", "Cancellation accepted"),
+      rejected: t("So‘rov rad etildi", "Запрос отклонён", "Request declined"),
+      withdrawn: t(
+        "So‘rov qaytarib olindi",
+        "Запрос отозван",
+        "Request withdrawn",
+      ),
+      open: t("Javob kutilmoqda", "Ожидается ответ", "Awaiting reply"),
+      reviewing: t("Ko‘rib chiqilmoqda", "На рассмотрении", "Under review"),
+      followup: t(
+        "Keyingi choralar bajarilmoqda",
+        "Выполняются дальнейшие действия",
+        "Follow-up in progress",
+      ),
+      resolved: t("Qaror chiqarildi", "Решение вынесено", "Decision recorded"),
+    })[k] || k;
+  const reason = (k) =>
+    ({
+      changed_mind: t("Fikrim o‘zgardi", "Передумал", "Changed my mind"),
+      wrong_details: t(
+        "Noto‘g‘ri ma’lumot kiritdim",
+        "Неверные данные",
+        "Incorrect delivery details",
+      ),
+      seller_unavailable: t(
+        "Sotuvchi ishlamayapti",
+        "Продавец недоступен",
+        "Seller unavailable",
+      ),
+      late_delivery: t(
+        "Yetkazish kechikdi",
+        "Доставка задерживается",
+        "Delivery is late",
+      ),
+      other: t("Boshqa sabab", "Другая причина", "Other reason"),
+      account_reclaimed: t(
+        "Akkaunt qaytarib olindi",
+        "Аккаунт восстановлен продавцом",
+        "Account reclaimed",
+      ),
+      not_as_described: t(
+        "Tavsifga mos emas",
+        "Не соответствует описанию",
+        "Not as described",
+      ),
+      invalid_code: t("Kod ishlamayapti", "Код не работает", "Invalid code"),
+      missing_items: t(
+        "Mahsulot / valyuta yetishmayapti",
+        "Не хватает предметов / валюты",
+        "Missing items / currency",
+      ),
+      service_issue: t(
+        "Xizmat bajarilmagan",
+        "Услуга не выполнена",
+        "Service not completed",
+      ),
+      new_evidence: t(
+        "Yangi dalil paydo bo‘ldi",
+        "Появились новые доказательства",
+        "New evidence available",
+      ),
+    })[k] || k;
+  const when = (v) =>
+    v ? parseServerDate(v).toLocaleString(localeTag()) : "—";
+  const inputs = (fields, values = {}, prefix = "") =>
+    fields
+      .map(
+        (f) =>
+          `<label class="field"><span>${label(f.key)}${f.required ? " *" : ""}</span><input name="${prefix + f.key}" value="${s(values[f.key] || "")}" maxlength="120" ${f.required ? "required" : ""} autocomplete="off"></label>`,
+      )
+      .join("");
+  const select = (name, keys) =>
+    `<label class="field"><span>${t("Sabab", "Причина", "Reason")}</span><select name="${name}" required>${keys.map((k) => `<option value="${k}">${reason(k)}</option>`).join("")}</select></label>`;
+  const textarea = (
+    name = "body",
+    title = t(
+      "Izoh va dalillar",
+      "Комментарий и доказательства",
+      "Comment and evidence",
+    ),
+    min = 5,
+  ) =>
+    `<label class="field"><span>${title}</span><textarea name="${name}" minlength="${min}" maxlength="5000" rows="3" required></textarea></label>`;
+  const submit = (text, cls = "button-secondary") =>
+    `<button type="submit" class="${cls}">${text}</button>`;
+  function bind(form, fn) {
+    if (!form) return;
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const b = event.submitter || form.querySelector("button");
+      if (b) b.disabled = true;
+      form.querySelector(".trade-error")?.remove();
+      try {
+        await fn(Object.fromEntries(new FormData(form)), form, event.submitter);
+      } catch (error) {
+        const p = document.createElement("p");
+        p.className = "notice error trade-error";
+        p.setAttribute("role", "alert");
+        p.textContent = error.message;
+        form.append(p);
+      } finally {
+        if (b?.isConnected) b.disabled = false;
+      }
+    });
+  }
+  function panel(title, body, open = false) {
+    return `<details class="panel trade-section" ${open ? "open" : ""}><summary>${title}<span aria-hidden="true">+</span></summary><div class="trade-section-body">${body}</div></details>`;
+  }
+  function policyMarkup(p) {
+    return `<p class="help">${p?.days ? `${t("Yetkazilgan mahsulot tavsifga mos kelmasa", "Если товар не соответствует описанию", "If the delivered item does not match its description")}: ${p.days} ${t("kun ichida murojaat qiling", "дней для обращения", "days to report an issue")}. ${t("Akkauntlarda sotuvchi sababli kirish yo‘qolishi ham ko‘rib chiqiladi. Xaridor xatosi yoki sotuvchiga aloqasiz noshir qarori kirmaydi. Bu avtomatik qaytarim yoki moliyaviy kafolat emas.", "Для аккаунтов рассматривается потеря доступа по вине продавца. Ошибки покупателя и независимые действия издателя не включены. Это не автоматический возврат или финансовая гарантия.", "Accounts also cover review of access lost due to the seller. Buyer-caused problems and unrelated publisher actions are excluded. This is a reporting process, with no automatic refund or financial guarantee.")}` : t("Eski buyurtmada sotuvdan keyingi muddat belgilanmagan. Yordam xizmatiga yozing.", "Для старого заказа срок не установлен. Обратитесь в поддержку.", "No after-sale period was recorded for this legacy order. Contact support.")}</p>`;
+  }
+  function listing(it) {
+    const root =
+      app.querySelector("[data-listing-delivery]") ||
+      app.querySelector(".listing-purchase-panel") ||
+      app.querySelector(".listing-info-panel") ||
+      app.querySelector(".listing-summary");
+    if (!root) return;
+    const v = it.availability,
+      block = document.createElement("div");
+    block.className = "trade-listing-availability";
+    block.innerHTML = `${it.status === "sold_out" ? "" : v?.vacation ? `<p class="notice">${t("Sotuvchi ta’tilda · yangi buyurtmalar to‘xtatilgan", "Магазин в отпуске · новые заказы приостановлены", "Seller away · new orders paused")}</p>` : `<p class="help">${t("Taxminiy yetkazish", "Ожидаемая доставка", "Estimated delivery")}: ${it.estimated_delivery_at ? when(it.estimated_delivery_at) : s(it.delivery_eta || "—")}</p>`}${v?.hours?.length ? `<details><summary>${t("Sotuvchi ish jadvali", "Расписание продавца", "Seller working hours")} · ${s(v.timezone)}</summary><div class="trade-schedule">${v.hours.map((h) => `<span>${[t("Du", "Пн", "Mon"), t("Se", "Вт", "Tue"), t("Ch", "Ср", "Wed"), t("Pa", "Чт", "Thu"), t("Ju", "Пт", "Fri"), t("Sh", "Сб", "Sat"), t("Ya", "Вс", "Sun")][h.day]} <b>${s(h.start)}–${s(h.end)}</b></span>`).join("")}</div></details>` : `<p class="help">${t("Sotuvchi ish jadvalini ko‘rsatmagan.", "Продавец не указал график работы.", "The seller has not provided a working schedule.")}</p>`}<details><summary>${t("Sotuvdan keyingi murojaat", "Обращение после покупки", "After-sale support")} · ${it.after_sale_policy?.days || 0} ${t("kun", "дней", "days")}</summary>${policyMarkup(it.after_sale_policy)}</details>`;
+    root.append(block);
+    if (v?.vacation)
+      app
+        .querySelectorAll('[data-action="buy-now"],[data-action="add-cart"]')
+        .forEach((b) => (b.disabled = true));
+  }
+  async function checkout(items) {
+    if (!items.length) return;
+    const anchor = app.querySelector("#checkout-terms")?.closest("label");
+    if (!anchor) return;
+    const full = items;
+    if (!anchor.isConnected) return;
+    const box = document.createElement("div");
+    box.className = "trade-checkout";
+    box.id = "trade-checkout";
+    box.innerHTML = full
+      .map(
+        (it) =>
+          `<section data-checkout-item="${s(it.id)}"><h3>${s(it.title)}</h3>${it.availability?.vacation ? `<p class="notice">${t("Sotuvchi ta’tilda", "Продавец в отпуске", "Seller is away")}</p>` : ""}${it.buyer_fields.length ? `<div class="form-grid">${inputs(it.buyer_fields)}</div>` : ""}${policyMarkup(it.after_sale_policy)}</section>`,
+      )
+      .join("");
+    anchor.before(box);
+  }
+  function checkoutDetails() {
+    const details = {};
+    for (const section of app.querySelectorAll("[data-checkout-item]")) {
+      details[section.dataset.checkoutItem] = {};
+      for (const input of section.querySelectorAll("input")) {
+        if (!input.reportValidity())
+          throw Error(
+            t(
+              "Yetkazish uchun majburiy maydonlarni to‘ldiring.",
+              "Заполните обязательные данные доставки.",
+              "Complete the required delivery details.",
+            ),
+          );
+        details[section.dataset.checkoutItem][input.name] = input.value.trim();
+      }
+    }
+    return details;
+  }
+  const artifactMarkup = (rows) =>
+    rows
+      .map(
+        (a) =>
+          `<article class="trade-evidence"><header><b>${s(a.owner_name)}</b><time>${when(a.created_at)}</time></header><p data-user-content>${s(a.body)}</p>${a.image_url ? `<a href="${s(a.image_url)}" target="_blank" rel="noopener noreferrer"><img src="${s(a.image_url)}" alt="${t("Buyurtma dalili", "Доказательство заказа", "Order evidence")}"></a>` : ""}${a.image_unavailable ? `<p class="help">${t("Dalil rasmi hozir ochilmadi", "Фото временно недоступно", "Evidence photo temporarily unavailable")}</p>` : ""}</article>`,
+      )
+      .join("");
+  function evidenceForm(oid, items = [], caseId = "") {
+    return `<form class="trade-evidence-form" data-oid="${s(oid)}" data-case="${s(caseId)}">${!caseId ? `<label class="field"><span>${t("Mahsulot", "Товар", "Item")}</span><select name="item_id">${items.map((i) => `<option value="${s(i.id)}">${s(i.title)}</option>`).join("")}</select></label>` : ""}${textarea("body", t("Bajarilgan natija yoki dalil tafsilotlari", "Результат или подробности доказательства", "Delivered result or evidence details"))}<label class="field"><span>${t("Dalil rasmi · ixtiyoriy · 5 MB", "Фото · необязательно · 5 МБ", "Evidence photo · optional · 5 MB")}</span><input name="photo" type="file" accept="image/jpeg,image/png,image/webp"></label><p class="help">${t("Parol va OTP yubormang. Dalillar buyurtma ishtirokchilari va moderatorga ko‘rinadi.", "Не отправляйте пароли и OTP. Доказательства доступны участникам заказа и модераторам.", "Do not include passwords or OTPs. Evidence is visible to order participants and moderators.")}</p>${submit(t("Dalil qo‘shish", "Добавить доказательство", "Add evidence"))}</form>`;
+  }
+  function bindEvidence(root, refresh) {
+    root.querySelectorAll(".trade-evidence-form").forEach((form) =>
+      bind(form, async (d, f) => {
+        const file = f.elements.photo.files[0],
+          payload = {
+            body: d.body,
+            item_id: d.item_id,
+            case_id: f.dataset.case || undefined,
+          };
+        if (
+          file &&
+          (file.size > 5 * 1024 * 1024 ||
+            !["image/jpeg", "image/png", "image/webp"].includes(file.type))
+        )
+          throw Error(
+            t(
+              "Rasm 5 MB dan kichik JPG, PNG yoki WebP bo‘lsin",
+              "Фото: JPG, PNG или WebP до 5 МБ",
+              "Use a JPG, PNG or WebP under 5 MB",
+            ),
+          );
+        await api("/orders/" + e(f.dataset.oid) + "/evidence", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        if (file) {
+          const query = new URLSearchParams(
+            f.dataset.case
+              ? { case_id: f.dataset.case }
+              : { item_id: d.item_id },
+          );
+          const r = await fetch(
+            "/api/orders/" + e(f.dataset.oid) + "/evidence?" + query,
+            {
+              method: "POST",
+              headers: { "Content-Type": file.type, "X-CSRF-Token": csrf },
+              body: file,
+            },
+          );
+          const data = await r.json();
+          if (!r.ok) throw Error(data.error);
+        }
+        await refresh();
+      }),
+    );
+  }
+  async function order(o, workflow = null) {
+    const anchor = app.querySelector(".ux-order-guide");
+    if (!anchor) return;
+    const w = workflow || (await api("/orders/" + e(o.id) + "/workflow"));
+    if (!anchor.isConnected) return;
+    const orderDetails = app.querySelector("#order-detail-steps");
+    if (orderDetails && !orderDetails.closest(".ux-order-extra")) {
+      const extra = document.createElement("details");
+      extra.className = "panel ux-order-extra";
+      extra.innerHTML = `<summary>${t("Mahsulot va buyurtma tafsilotlari", "Детали товара и заказа", "Order and item details")}<span aria-hidden="true">+</span></summary>`;
+      orderDetails.before(extra);
+      extra.append(orderDetails);
+    }
+    if (o.status === "cancelled") return;
+    const buyer = w.order.buyer,
+      admin = w.order.admin,
+      appealable = (w.appeal_decisions || []).filter(
+        (d) =>
+          parseServerDate(d.deadline_at) > new Date() &&
+          !w.cases.some(
+            (c) =>
+              c.kind === "appeal" &&
+              c.source_id === d.id &&
+              c.requester_id === me.id,
+          ),
+      ),
+      active = w.cancellations.find((c) =>
+        ["pending", "escalated"].includes(c.status),
+      ),
+      root = document.createElement("section");
+    root.className = "trade-order";
+    root.id = "trade-order";
+    const canSend =
+      ["paid", "awaiting_delivery"].includes(o.status) && !w.is_paused;
+    root.innerHTML = `${w.is_paused ? `<p class="notice">${t("Bekor qilish so‘rovi ko‘rilmoqda. Yetkazish va yakunlash vaqtincha to‘xtatilgan.", "Рассматривается отмена. Доставка и завершение приостановлены.", "Cancellation is being reviewed. Delivery and completion are paused.")}</p>` : ""}<div class="trade-progress-list">${w.items.map((i) => `<article><div><b>${s(i.title)}</b><span>${i.delivered_quantity}/${i.quantity} ${t("yetkazildi", "доставлено", "delivered")}</span></div><progress value="${i.delivered_quantity}" max="${i.quantity}" aria-label="${s(i.title)}"></progress></article>`).join("")}</div>${w.items.map((i) => panel(s(i.title), `${i.buyer_fields.length ? `<h3>${t("Xaridor ma’lumotlari", "Данные покупателя", "Buyer details")}</h3>${buyer && !i.delivered_quantity && ["pending_payment", "paid", "awaiting_delivery"].includes(o.status) && !w.is_paused ? `<form class="trade-buyer-details" data-item="${s(i.id)}"><div class="form-grid">${inputs(i.buyer_fields, i.buyer_details)}</div>${submit(t("Ma’lumotlarni saqlash", "Сохранить данные", "Save details"))}</form>` : `<dl class="trade-data">${i.buyer_fields.map((f) => `<div><dt>${label(f.key)}</dt><dd>${s(i.buyer_details[f.key] || "—")}</dd></div>`).join("")}</dl>`}` : ""}${i.batches.length ? `<h3>${t("Yetkazish tarixi", "История доставки", "Delivery history")}</h3>${i.batches.map((b) => `<article class="trade-batch"><header><b>+${b.quantity} ${t("ta", "шт.", "items")}</b><time>${when(b.created_at)}</time></header><p data-user-content>${s(b.body)}</p></article>`).join("")}` : ""}${!buyer && i.seller_id === me.id && canSend && i.delivered_quantity < i.quantity ? `<form class="trade-delivery" data-item="${s(i.id)}"><label class="field"><span>${t("Hozir yuboriladigan son", "Количество в этой доставке", "Quantity delivered now")}</span><input name="quantity" type="number" min="1" max="${i.quantity - i.delivered_quantity}" value="${i.quantity - i.delivered_quantity}" required></label>${textarea("delivery", t("Yetkazish ma’lumoti / bajarilgan natija", "Данные доставки / результат", "Delivery details / completed result"), 2)}${submit(t("Yetkazishni qayd etish", "Записать доставку", "Record delivery"), "button-primary")}</form>` : ""}`, canSend)).join("")}${panel(t("Yetkazish dalillari", "Доказательства доставки", "Delivery evidence"), artifactMarkup(w.artifacts.filter((a) => !a.case_id)) + (!["cancelled", "refunded"].includes(o.status) ? evidenceForm(o.id, w.items) : ""))}${panel(t("Buyurtmani bekor qilish", "Отмена заказа", "Order cancellation"), `${w.cancellations.map((c) => `<article class="trade-cancel"><header><b>${state(c.status)}</b><time>${when(c.created_at)}</time></header><p><b>${reason(c.reason)}</b> · ${s(c.details)}</p><p class="help">${t("Javob muddati", "Срок ответа", "Reply deadline")}: ${when(c.response_due_at)}</p>${c.replies.map((r) => `<p><b>${s(r.seller_name)}</b> · ${r.decision === "accept" ? t("Rozi", "Согласен", "Agrees") : t("Rozi emas", "Не согласен", "Disagrees")}: ${s(r.note)}</p>`).join("")}${c.resolution ? `<p data-user-content>${s(c.resolution)}</p>` : ""}</article>`).join("")}${active ? `<form id="trade-cancel-response">${textarea("note", t("Javob / izoh", "Ответ / комментарий", "Reply / explanation"))}<div class="actions">${buyer ? `<button class="button-secondary" name="action" value="withdraw">${t("So‘rovni qaytarib olish", "Отозвать запрос", "Withdraw request")}</button>` : !admin && active.status === "pending" ? `<button class="button-secondary" name="action" value="accept">${t("Roziman", "Согласен", "Accept cancellation")}</button><button class="button-secondary" name="action" value="reject">${t("Rozi emasman", "Не согласен", "Decline cancellation")}</button>` : ""}${!admin ? `<button class="button-secondary" name="action" value="escalate">${t("Moderatorga yuborish", "Передать модератору", "Escalate to moderator")}</button>` : `<button class="button-secondary" name="action" value="approve">${t("Bekor qilishni tasdiqlash", "Подтвердить отмену", "Approve cancellation")}</button><button class="button-secondary" name="action" value="decline">${t("So‘rovni rad etish", "Отклонить запрос", "Decline request")}</button>`}</div></form>` : buyer && ["pending_payment", "paid", "awaiting_delivery", "delivered"].includes(o.status) ? `<form id="trade-cancel-request">${select("reason", ["changed_mind", "wrong_details", "seller_unavailable", "late_delivery", "other"])}${textarea("details", t("Tafsilotlar", "Подробности", "Details"))}${submit(t("Bekor qilishni so‘rash", "Запросить отмену", "Request cancellation"))}</form>` : ""}`, !!active)}${panel(t("Sotuvdan keyingi murojaat", "Обращение после покупки", "After-sale support"), `${w.order.protection_until ? `<p><b>${t("Murojaat muddati", "Обратиться до", "Report issues by")}: ${when(w.order.protection_until)}</b></p>` : ""}${w.items.map((i) => `<h3>${s(i.title)}</h3>${policyMarkup(i.policy)}`).join("")}${w.cases.map((c) => `<a class="trade-case-link" href="/#order-case/${e(c.id)}">${c.kind === "appeal" ? t("Apellyatsiya", "Апелляция", "Appeal") : t("Sotuvdan keyingi murojaat", "Обращение после покупки", "After-sale case")} <span>${state(c.status)} →</span></a>`).join("")}${buyer && o.status === "completed" && w.order.protection_until && parseServerDate(w.order.protection_until) > new Date() && !w.cases.some((c) => c.kind === "after_sale") ? `<form id="trade-after-sale">${select("reason", [...new Set(w.items.flatMap((i) => i.policy.issues || []))])}${textarea("details", t("Muammo va dalillar", "Проблема и доказательства", "Issue and supporting evidence"), 20)}${submit(t("Murojaat ochish", "Открыть обращение", "Open after-sale case"))}</form>` : ""}${appealable.length && !admin ? `<form id="trade-appeal"><label class="field"><span>${t("Qayta ko‘riladigan qaror", "Решение для пересмотра", "Decision to review")}</span><select name="source_id">${appealable.map((d) => `<option value="${s(d.id)}">${d.kind === "dispute" ? t("Nizo qarori", "Решение по спору", "Dispute decision") : d.kind === "account_review" ? t("Akkaunt tekshiruvi", "Проверка аккаунта", "Account review") : t("Sotuvdan keyingi qaror", "Решение после покупки", "After-sale decision")} · ${when(d.decided_at)}</option>`).join("")}</select></label><h3>${t("Qarorga qayta murojaat", "Пересмотр решения", "Request a decision review")}</h3><p class="help">${t("Yakuniy qarordan keyin 7 kun. Avval taqdim etilmagan yangi dalilni yozing.", "В течение 7 дней после решения. Укажите новые доказательства.", "Within 7 days of the final decision. Explain evidence not previously considered.")}</p>${textarea("details", t("Yangi dalil va izoh", "Новые доказательства и пояснение", "New evidence and explanation"), 20)}${submit(t("Apellyatsiya yuborish", "Подать апелляцию", "Submit appeal"))}</form>` : ""}`)}`;
+    anchor.after(root);
+    app.querySelectorAll('[data-form="deliver"]').forEach((f) => f.remove());
+    let gatedStages = [];
+    if (o.status === "pending_payment" && buyer) {
+      const payment = app.querySelector(".test-payment-panel");
+      if (payment) gatedStages = [payment];
+    } else if (
+      !buyer &&
+      ["paid", "awaiting_delivery"].includes(o.status) &&
+      !w.is_paused &&
+      w.items.some((item) => item.seller_id === me.id)
+    )
+      gatedStages = [root];
+    else if (o.status === "delivered" && buyer) {
+      const evidence = app.querySelector(".account-review-upload"),
+        details = app.querySelector("#order-detail-steps");
+      gatedStages = [evidence, details].filter(Boolean);
+    }
+    if (app.querySelector(".order-process")) gatedStages = [];
+    gatedStages.forEach((stage) => {
+      stage.hidden = true;
+      stage.classList.add("ux-order-step-gated");
+    });
+    if (!gatedStages.length)
+      root.querySelector("[data-order-continue]")?.remove();
+    if (w.is_paused) {
+      const title = anchor.querySelector("h2");
+      if (title)
+        title.textContent = t(
+          "Bekor qilish ko‘rib chiqilmoqda",
+          "Рассматривается отмена",
+          "Cancellation under review",
+        );
+      const next = anchor.querySelector("p");
+      if (next)
+        next.textContent =
+          active?.status === "escalated"
+            ? t(
+                "Moderator javobini kuting. Tafsilotlar quyidagi bekor qilish bo‘limida.",
+                "Ожидайте модератора. Подробности в разделе отмены ниже.",
+                "Wait for the moderator. Details appear in the cancellation section below.",
+              )
+            : t(
+                "Sotuvchi javobini kuting. So‘rovni pastdagi bo‘limdan qaytarib olish mumkin.",
+                "Ожидайте продавца. Запрос можно отозвать в разделе ниже.",
+                "Wait for the seller. You can withdraw the request in the section below.",
+              );
+    }
+    if (w.is_paused || w.items.some((i) => i.delivered_quantity < i.quantity))
+      app
+        .querySelector('[data-action="complete-order"]')
+        ?.setAttribute("disabled", "");
+    const refresh = () => renderOrder(o.id);
+    root.querySelectorAll(".trade-buyer-details").forEach((f) =>
+      bind(f, async (d) => {
+        await api("/orders/" + e(o.id) + "/buyer-details", {
+          method: "POST",
+          body: JSON.stringify({ item_id: f.dataset.item, details: d }),
+        });
+        await refresh();
+      }),
+    );
+    root.querySelectorAll(".trade-delivery").forEach((f) => {
+      const requestKey = crypto.randomUUID();
+      bind(f, async (d) => {
+        await api("/orders/" + e(o.id) + "/deliver", {
+          method: "POST",
+          body: JSON.stringify({
+            ...d,
+            item_id: f.dataset.item,
+            quantity: Number(d.quantity),
+            request_key: requestKey,
+          }),
+        });
+        await refresh();
+      });
+    });
+    bind(root.querySelector("#trade-cancel-request"), async (d) => {
+      await api("/orders/" + e(o.id) + "/cancellation", {
+        method: "POST",
+        body: JSON.stringify(d),
+      });
+      await refresh();
+    });
+    const response = root.querySelector("#trade-cancel-response");
+    if (response) {
+      response.querySelectorAll("button").forEach((b) => (b.type = "submit"));
+      bind(response, async (d, f, button) => {
+        await api("/orders/" + e(o.id) + "/cancellation", {
+          method: "POST",
+          body: JSON.stringify({ ...d, action: button.value }),
+        });
+        await refresh();
+      });
+    }
+    for (const [id, path] of [
+      ["trade-after-sale", "after-sale"],
+      ["trade-appeal", "appeal"],
+    ])
+      bind(root.querySelector("#" + id), async (d) => {
+        const r = await api("/orders/" + e(o.id) + "/" + path, {
+          method: "POST",
+          body: JSON.stringify({
+            ...d,
+            reason: path === "appeal" ? "new_evidence" : d.reason,
+          }),
+        });
+        location.hash = "order-case/" + e(r.id);
+      });
+    bindEvidence(root, refresh);
+  }
+  async function casePage(id) {
+    if (!me) {
+      location.hash = "login";
+      return;
+    }
+    const r = await api("/order-cases/" + e(id)),
+      c = r.case,
+      open = ["open", "reviewing", "followup"].includes(c.status);
+    app.innerHTML = `<section class="page trade-case-page">${pageTitle((c.kind === "appeal" ? t("Qarorni qayta ko‘rib chiqish", "Пересмотр решения", "Decision review") : t("Sotuvdan keyingi murojaat", "Обращение после покупки", "After-sale case")) + " · " + s(r.order.reference))}<div class="trade-case-heading"><span class="ux-chip">${state(c.status)}</span><span class="help">${t("Javob muddati", "Срок ответа", "Reply deadline")}: ${when(c.response_due_at)}</span></div><section class="panel"><h2>${reason(c.reason)}</h2><p data-user-content>${s(c.details)}</p>${c.resolution ? `<div class="notice"><b>${t("Moderator qarori", "Решение модератора", "Moderator decision")}</b><p data-user-content>${s(c.resolution)}</p>${c.remedy === "manual_followup_required" ? `<p>${t("Qaror qayta ko‘rildi. Keyingi choralar yordam xizmati orqali bajariladi; avtomatik pul qaytarilmadi.", "Решение пересмотрено. Дальнейшие действия через поддержку; автоматического возврата нет.", "Decision revised. Support will handle the next steps here; no automatic refund was made.")}</p>` : ""}</div>` : ""}</section><section class="panel trade-case-thread">${r.entries.map((m) => `<article><header><b>${s(m.sender_name)}</b><time>${when(m.created_at)}</time></header><p data-user-content>${s(m.body)}</p></article>`).join("")}${artifactMarkup(r.artifacts)}${open ? `<form id="trade-case-reply">${textarea()}${r.can_manage ? `<label class="field"><span>${t("Moderator amali", "Действие модератора", "Moderator action")}</span><select name="action"><option value="reply">${t("Izoh qo‘shish", "Комментарий", "Add comment")}</option><option value="request_info">${t("Dalil so‘rash", "Запросить доказательства", "Request evidence")}</option><option value="uphold">${t("Avvalgi holatni saqlash", "Сохранить решение", "Uphold current decision")}</option><option value="revise">${t("Qayta ko‘rib chiqildi · keyingi chora kerak", "Пересмотрено · нужны дальнейшие действия", "Revise decision · follow-up required")}</option>${c.status === "followup" ? `<option value="close_followup">${t("Keyingi chora bajarildi", "Дальнейшие действия выполнены", "Follow-up completed")}</option>` : ""}</select></label>` : ""}${submit(t("Yuborish", "Отправить", "Submit"), "button-primary")}</form>${panel(t("Dalil biriktirish", "Приложить доказательство", "Attach evidence"), evidenceForm(r.order.id, [], id))}` : ""}</section></section>`;
+    bind($("#trade-case-reply"), async (d) => {
+      await api("/order-cases/" + e(id), {
+        method: "POST",
+        body: JSON.stringify(d),
+      });
+      await casePage(id);
+    });
+    bindEvidence(app, () => casePage(id));
+  }
+  async function queue() {
+    if (!me?.is_admin) {
+      location.hash = "home";
+      return;
+    }
+    const r = await api("/order-cases");
+    app.innerHTML = `<section class="page trade-case-page">${pageTitle(t("Murojaatlar va bekor qilishlar", "Обращения и отмены", "Cases and cancellations"))}<div class="panel">${r.cancellations.map((c) => `<a class="trade-case-link" href="/#order/${e(c.order_id)}"><b>${s(c.reference)} · ${t("Bekor qilish", "Отмена", "Cancellation")}</b><span>${state(c.status)} →</span></a>`).join("")}${r.cases.map((c) => `<a class="trade-case-link" href="/#order-case/${e(c.id)}"><b>${s(c.reference)} · ${c.kind === "appeal" ? t("Apellyatsiya", "Апелляция", "Appeal") : t("Sotuvdan keyin", "После покупки", "After-sale")}</b><span>${state(c.status)} →</span></a>`).join("") || (!r.cancellations.length ? empty(t("Murojaatlar yo‘q", "Нет обращений", "No cases yet")) : "")}</div></section>`;
+  }
+  async function saved() {
+    if (!me) {
+      location.hash = "login";
+      return;
+    }
+    const rows = await api("/saved-searches");
+    app.innerHTML = `<section class="page trade-saved-page">${pageTitle(t("Saqlangan qidiruvlar", "Сохранённые поиски", "Saved searches"), t("Mos yangi e’lon chiqqanda sayt bildirishnomasi keladi.", "Уведомим на сайте о новых подходящих объявлениях.", "Get an on-site notification when a new matching listing is published."))}<div class="panel">${
+      rows
+        .map(
+          (r) =>
+            `<article class="trade-saved-row"><a href="${s(r.href)}"><b>${s(r.name)}</b><small>${Object.entries(
+              r.filters,
+            )
+              .map(([k, v]) => `${s(k)}: ${s(v)}`)
+              .join(
+                " · ",
+              )}</small></a><div class="actions"><button class="ux-text-button" data-search-toggle="${s(r.id)}" data-enabled="${r.enabled ? "1" : "0"}" aria-pressed="${r.enabled ? "true" : "false"}">${r.enabled ? t("Bildirishnoma yoqilgan", "Уведомления включены", "Alerts on") : t("Bildirishnoma o‘chiq", "Уведомления выключены", "Alerts off")}</button><button class="ux-text-button" data-search-delete="${s(r.id)}">${t("O‘chirish", "Удалить", "Delete")}</button></div></article>`,
+        )
+        .join("") ||
+      empty(
+        t(
+          "Qidiruvda filtrlarni tanlab, “Qidiruvni saqlash” tugmasini bosing.",
+          "Задайте фильтры и нажмите «Сохранить поиск».",
+          "Choose catalogue filters, then select “Save search”.",
+        ),
+      )
+    }</div></section>`;
+    app.querySelectorAll("[data-search-toggle]").forEach(
+      (b) =>
+        (b.onclick = async () => {
+          b.disabled = true;
+          try {
+            await api("/saved-searches/" + e(b.dataset.searchToggle), {
+              method: "PATCH",
+              body: JSON.stringify({ enabled: b.dataset.enabled !== "1" }),
+            });
+            await saved();
+          } catch (error) {
+            toast(error.message, "error");
+            b.disabled = false;
+          }
+        }),
+    );
+    app.querySelectorAll("[data-search-delete]").forEach(
+      (b) =>
+        (b.onclick = async () => {
+          b.disabled = true;
+          try {
+            await api("/saved-searches/" + e(b.dataset.searchDelete), {
+              method: "DELETE",
+            });
+            await saved();
+          } catch (error) {
+            toast(error.message, "error");
+            b.disabled = false;
+          }
+        }),
+    );
+  }
+  function browse(filters) {
+    const root = $("#ux-browse-filters");
+    if (!root) return;
+    const controls = document.createElement("div");
+    controls.className = "trade-search-actions";
+    controls.innerHTML = `<button class="ux-text-button" id="trade-save-search">${t("Qidiruvni saqlash", "Сохранить поиск", "Save search")}</button><a class="text-link" href="/#saved-searches">${t("Saqlangan qidiruvlar", "Сохранённые поиски", "Saved searches")}</a>`;
+    root.append(controls);
+    controls.querySelector("button").onclick = () => {
+      if (!me) {
+        location.hash = "login";
+        return;
+      }
+      const d = document.createElement("dialog");
+      d.className = "ux-preview-dialog ops-modal";
+      d.innerHTML = `<header><h2>${t("Qidiruvni saqlash", "Сохранить поиск", "Save search")}</h2><button type="button" class="button-secondary" data-close>×</button></header><form><label class="field"><span>${t("Qidiruv nomi", "Название поиска", "Search name")}</span><input name="name" minlength="2" maxlength="80" required value="${s(filters.q || marketGameLinks.find((g) => g[0] === filters.game)?.[1] || "")}"></label><p class="help">${t("Mos yangi e’lonlar haqida sayt ichida xabar beramiz.", "Сообщим на сайте о новых подходящих объявлениях.", "We will notify you on the site about new matching listings.")}</p>${submit(t("Saqlash", "Сохранить", "Save"), "button-primary")}</form>`;
+      document.body.append(d);
+      d.querySelector("[data-close]").onclick = () => d.close();
+      d.addEventListener("close", () => d.remove());
+      d.showModal();
+      bind(d.querySelector("form"), async (v) => {
+        const clean = { ...filters };
+        delete clean.sort;
+        delete clean.page;
+        await api("/saved-searches", {
+          method: "POST",
+          body: JSON.stringify({ ...v, filters: clean }),
+        });
+        d.close();
+        toast(t("Qidiruv saqlandi", "Поиск сохранён", "Search saved"));
+      });
+    };
+  }
+  function enhance() {
+    const admin = $("#ops-admin-links");
+    if (admin && !admin.querySelector("[data-trade-queue]"))
+      admin.insertAdjacentHTML(
+        "beforeend",
+        `<a class="button-secondary" data-trade-queue href="/#order-cases">${t("Murojaat va bekor qilishlar", "Обращения и отмены", "Cases and cancellations")}</a>`,
+      );
+    const account = app.querySelector(".ops-account");
+    if (account && !$("#trade-saved-link"))
+      (
+        account.querySelector(".ops-account-shortcuts") || account
+      ).insertAdjacentHTML(
+        "beforeend",
+        `<a id="trade-saved-link" class="text-link" href="/#saved-searches">${t("Saqlangan qidiruvlar", "Сохранённые поиски", "Saved searches")} →</a>`,
+      );
+  }
+  return {
+    listing,
+    checkout,
+    checkoutDetails,
+    order,
+    casePage,
+    queue,
+    saved,
+    browse,
+    enhance,
+  };
 })();

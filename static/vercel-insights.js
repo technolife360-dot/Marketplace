@@ -1,32 +1,35 @@
 /* Load analytics only after an explicit, server-recorded opt-in. */
 (() => {
- let loaded=false;
- function sync(){
-  if(loaded||!window.CookieConsent?.allows('analytics'))return;
-  loaded=true;
-window.va = window.va || function (...args) {
-  (window.vaq = window.vaq || []).push(args);
-};
+  let loaded = false;
+  function sync() {
+    if (loaded || !window.CookieConsent?.allows("analytics")) return;
+    loaded = true;
+    window.va =
+      window.va ||
+      function (...args) {
+        (window.vaq = window.vaq || []).push(args);
+      };
 
-const analyticsScript = document.createElement("script");
-analyticsScript.defer = true;
-analyticsScript.src = "/_vercel/insights/script.js";
-analyticsScript.dataset.sdkn = "@vercel/analytics";
-analyticsScript.dataset.sdkv = "2.0.1";
-document.head.append(analyticsScript);
+    const analyticsScript = document.createElement("script");
+    analyticsScript.defer = true;
+    analyticsScript.src = "/_vercel/insights/script.js";
+    analyticsScript.dataset.sdkn = "@vercel/analytics";
+    analyticsScript.dataset.sdkv = "2.0.1";
+    document.head.append(analyticsScript);
 
-window.si = window.si || function (...args) {
-  (window.siq = window.siq || []).push(args);
-};
+    window.si =
+      window.si ||
+      function (...args) {
+        (window.siq = window.siq || []).push(args);
+      };
 
-const speedInsightsScript = document.createElement("script");
-speedInsightsScript.defer = true;
-speedInsightsScript.src = "/_vercel/speed-insights/script.js";
-speedInsightsScript.dataset.sdkn = "@vercel/speed-insights";
-speedInsightsScript.dataset.sdkv = "2.0.0";
-document.head.append(speedInsightsScript);
-
- }
- window.addEventListener('sentryloot:consent',sync);
- sync();
+    const speedInsightsScript = document.createElement("script");
+    speedInsightsScript.defer = true;
+    speedInsightsScript.src = "/_vercel/speed-insights/script.js";
+    speedInsightsScript.dataset.sdkn = "@vercel/speed-insights";
+    speedInsightsScript.dataset.sdkv = "2.0.0";
+    document.head.append(speedInsightsScript);
+  }
+  window.addEventListener("sentryloot:consent", sync);
+  sync();
 })();

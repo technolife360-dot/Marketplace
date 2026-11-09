@@ -1,119 +1,603 @@
 /* Live ordering stays disabled; explicit Stripe sandbox checkout uses test funds. */
 function topupQuantity(value) {
-  const quantity=Number(value);
-  return Number.isInteger(quantity)&&quantity>=1&&quantity<=99?quantity:null;
+  const quantity = Number(value);
+  return Number.isInteger(quantity) && quantity >= 1 && quantity <= 99
+    ? quantity
+    : null;
 }
-function topupDetailPrice(pack, quantity=1) {
-  return Number(pack.price_minor)>0?fmt(Number(pack.price_minor)*quantity,'UZS'):adminText('Narx belgilanmagan','Цена не указана','Price not set');
+function topupDetailPrice(pack, quantity = 1) {
+  return Number(pack.price_minor) > 0
+    ? fmt(Number(pack.price_minor) * quantity, "UZS")
+    : adminText("Narx belgilanmagan", "Цена не указана", "Price not set");
 }
 function renderTopUpDetail(game, initialPackage) {
-  const t=adminText, packages=[...game.packages].sort((a,b)=>{const rank=p=>p.product_kind==='pass'?1:p.product_kind==='weekly'?2:0;return rank(a)-rank(b)||((a.sort_order??a.amount)-(b.sort_order??b.amount));});
-  let selected=initialPackage||packages[0];
-  if(!selected){app.innerHTML='<section class="page topup-page"><p>'+t('Hozircha paket yo‘q.','Пакетов пока нет.','No packages available yet.')+'</p></section>';return;}
-  const art=game.slug==='pubg-mobile'?'https://images.gamestorehub.com/site-assets/topup-pubg-banner.jpg':TOPUP_OFFICIAL_GAME_ART[game.slug]||'https://images.gamestorehub.com/site-assets/topup-'+game.slug+'.svg';
-  const fallback='https://images.gamestorehub.com/site-assets/topup-'+game.slug+'.svg';
-  const packLabel=pack=>pack.product_name||Number(pack.amount).toLocaleString(localeTag())+' '+pack.currency;
-  const packageIcon=(pack,variant)=>{
-    if(pack.image_url)return '<img class="topup-currency-image topup-currency-image-'+variant+'" src="'+esc(pack.image_url)+'" alt="'+esc(packLabel(pack))+'" decoding="async">';
-    const weeklyArt={
-      'weekly-mythic-emblem-value-pack':'https://images.gamestorehub.com/site-assets/topup-weekly-mythic.png',
-      'weekly-deal-pack-2':'https://images.gamestorehub.com/site-assets/topup-weekly-deal-2.png',
-      'weekly-deal-pack-1':'https://images.gamestorehub.com/site-assets/topup-weekly-deal-1.png'
+  const t = adminText,
+    packages = [...game.packages].sort((a, b) => {
+      const rank = (p) =>
+        p.product_kind === "pass" ? 1 : p.product_kind === "weekly" ? 2 : 0;
+      return (
+        rank(a) - rank(b) ||
+        (a.sort_order ?? a.amount) - (b.sort_order ?? b.amount)
+      );
+    });
+  let selected = initialPackage || packages[0];
+  if (!selected) {
+    app.innerHTML =
+      '<section class="page topup-page"><p>' +
+      t(
+        "Hozircha paket yo‘q.",
+        "Пакетов пока нет.",
+        "No packages available yet.",
+      ) +
+      "</p></section>";
+    return;
+  }
+  const art =
+    game.slug === "pubg-mobile"
+      ? "https://images.gamestorehub.com/site-assets/topup-pubg-banner.jpg"
+      : TOPUP_OFFICIAL_GAME_ART[game.slug] ||
+        "https://images.gamestorehub.com/site-assets/topup-" +
+          game.slug +
+          ".svg";
+  const fallback =
+    "https://images.gamestorehub.com/site-assets/topup-" + game.slug + ".svg";
+  const packLabel = (pack) =>
+    pack.product_name ||
+    Number(pack.amount).toLocaleString(localeTag()) + " " + pack.currency;
+  const packageIcon = (pack, variant) => {
+    if (pack.image_url)
+      return (
+        '<img class="topup-currency-image topup-currency-image-' +
+        variant +
+        '" src="' +
+        esc(pack.image_url) +
+        '" alt="' +
+        esc(packLabel(pack)) +
+        '" decoding="async">'
+      );
+    const weeklyArt = {
+      "weekly-mythic-emblem-value-pack":
+        "https://images.gamestorehub.com/site-assets/topup-weekly-mythic.png",
+      "weekly-deal-pack-2":
+        "https://images.gamestorehub.com/site-assets/topup-weekly-deal-2.png",
+      "weekly-deal-pack-1":
+        "https://images.gamestorehub.com/site-assets/topup-weekly-deal-1.png",
     };
-    const source=game.slug==='pubg-mobile'?weeklyArt[pack.url_slug]:null;
-    if(source||pack.product_kind==='pass')return '<img class="tu-product-icon tu-product-icon-'+variant+'" src="'+(source||'https://images.gamestorehub.com/site-assets/topup-elite-pass.png')+'" alt="'+esc(source?pack.product_name:'Elite Pass')+'" decoding="async">';
-    return pack.product_kind==='weekly'?icon('box'):topupCurrencyImage(game,variant);
+    const source =
+      game.slug === "pubg-mobile" ? weeklyArt[pack.url_slug] : null;
+    if (source || pack.product_kind === "pass")
+      return (
+        '<img class="tu-product-icon tu-product-icon-' +
+        variant +
+        '" src="' +
+        (source ||
+          "https://images.gamestorehub.com/site-assets/topup-elite-pass.png") +
+        '" alt="' +
+        esc(source ? pack.product_name : "Elite Pass") +
+        '" decoding="async">'
+      );
+    return pack.product_kind === "weekly"
+      ? icon("box")
+      : topupCurrencyImage(game, variant);
   };
-  const packageContents=pack=>Array.isArray(pack.contents)?pack.contents:[];
-  const info=(iconName,label,value)=>'<div>'+icon(iconName)+'<span><small>'+label+'</small><b>'+value+'</b></span></div>';
-  const packageButtonLabel=pack=>{
-    const split=game.slug==='pubg-mobile'&&(!pack.product_kind||pack.product_kind==='currency')?{325:[300,25],660:[600,60],1800:[1500,300],3850:[3000,850],8100:[6000,2100]}[Number(pack.amount)]:null;
-    return split?`<span class="tu-uc-split">${split[0]} <span class="tu-uc-bonus">+ ${split[1]}</span></span>`:game.slug==='pubg-mobile'&&(!pack.product_kind||pack.product_kind==='currency')?esc(String(pack.amount)):esc(packLabel(pack));
+  const packageContents = (pack) =>
+    Array.isArray(pack.contents) ? pack.contents : [];
+  const info = (iconName, label, value) =>
+    "<div>" +
+    icon(iconName) +
+    "<span><small>" +
+    label +
+    "</small><b>" +
+    value +
+    "</b></span></div>";
+  const packageButtonLabel = (pack) => {
+    const split =
+      game.slug === "pubg-mobile" &&
+      (!pack.product_kind || pack.product_kind === "currency")
+        ? {
+            325: [300, 25],
+            660: [600, 60],
+            1800: [1500, 300],
+            3850: [3000, 850],
+            8100: [6000, 2100],
+          }[Number(pack.amount)]
+        : null;
+    return split
+      ? `<span class="tu-uc-split">${split[0]} <span class="tu-uc-bonus">+ ${split[1]}</span></span>`
+      : game.slug === "pubg-mobile" &&
+          (!pack.product_kind || pack.product_kind === "currency")
+        ? esc(String(pack.amount))
+        : esc(packLabel(pack));
   };
-  const packButton=pack=>`<button type="button" data-tu-package="${esc(pack.url_slug)}" aria-pressed="false">${packageIcon(pack,'pack')}<span><b>${packageButtonLabel(pack)}</b>${packageContents(pack).length?`<small class="tu-pack-includes">${packageContents(pack).map(([name,count])=>`${count} ${name}`).join(' · ')}</small>`:''}<small>${topupDetailPrice(pack)}</small></span></button>`;
-  const packageGroups=[['currency',t('Paketni tanlang','Выберите пакет','Select package')],['pass','Elite Pass'],['weekly',t('Haftalik paketlar','Еженедельные наборы','Weekly packs')]].map(([kind,label])=>{const items=packages.filter(p=>(p.product_kind||'currency')===kind);return items.length?`<h2 class="tu-select-label">${label}</h2><div class="tu-packages ${kind!=='currency'?'tu-named-packages':''}">${items.map(packButton).join('')}</div>`:'';}).join('');
-  const pubgDescription=game.slug==='pubg-mobile'?`
-    <h3>${t('PUBG MOBILE UC haqida','О PUBG MOBILE UC','About PUBG MOBILE UC')}</h3>
-    <p>${t('UC — PUBG MOBILE o‘yinidagi premium valyuta. Uni kiyimlar, qurol va transport skinlari, emotsiyalar, Royale Pass va mavsumiy kosmetik buyumlar uchun ishlatish mumkin. Kerakli paket va miqdorni tanlab, shu tanlov uchun narxni ko‘ring.','UC — премиальная валюта PUBG MOBILE для костюмов, обликов оружия и транспорта, эмоций, Royale Pass и сезонных косметических предметов. Выберите пакет и количество, чтобы увидеть стоимость выбранного варианта.','UC is PUBG MOBILE’s premium currency. Use it for outfits, weapon and vehicle skins, emotes, Royale Pass, and seasonal cosmetic content. Select a package and quantity to review the price for your selection.')}</p>
-    <h3>${t('Qanday ma’lumot kerak?','Какие данные нужны?','What information do you need?')}</h3>
-    <p>${t('PUBG MOBILE UID raqamingiz, tanlangan UC paketi va miqdori kerak. Akkaunt paroli, bir martalik kod yoki tiklash kodini yubormang.','Нужны ваш PUBG MOBILE UID, выбранный пакет UC и количество. Не передавайте пароль аккаунта, одноразовые коды или коды восстановления.','You need your PUBG MOBILE UID, the selected UC package, and quantity. Do not share your account password, one-time codes, or recovery codes.')}</p>
-    <h3>${t('PUBG MOBILE UID raqamini qanday topish mumkin?','Как найти PUBG MOBILE UID?','How to find your PUBG MOBILE UID')}</h3>
-    <ol class="tu-uid-steps"><li>${t('PUBG MOBILE o‘yiniga kiring.','Войдите в PUBG MOBILE.','Log in to PUBG MOBILE.')}</li><li>${t('Profil avataringizni bosib, profil sahifasini oching.','Нажмите на аватар, чтобы открыть профиль.','Tap your profile avatar to open your player profile.')}</li><li>${t('Player ID / UID yonidagi nusxalash belgisini bosing.','Нажмите значок копирования рядом с Player ID / UID.','Tap the copy icon beside your Player ID / UID.')}</li><li>${t('Nusxalangan UID aynan kerakli akkauntga tegishli ekanini tekshiring.','Убедитесь, что скопированный UID принадлежит нужному аккаунту.','Check that the copied UID belongs to the account you want to top up.')}</li></ol>
-    <figure class="tu-uid-guide"><img src="https://images.gamestorehub.com/site-assets/audit-e3a484dd847a412d/pubg-uid-guide.png" width="1230" height="595" alt="${t('PUBG MOBILE profilida Player ID va nusxalash belgisi ko‘rsatilgan namuna','Пример профиля PUBG MOBILE с Player ID и значком копирования','Example PUBG MOBILE profile showing the Player ID and copy icon')}" loading="lazy"><figcaption>${t('Rasm namuna uchun. Undagi UID o‘rniga o‘z akkauntingiz UID raqamini kiriting.','Изображение приведено для примера. Используйте UID своего аккаунта, а не номер на картинке.','Example only. Enter your own account’s UID, not the ID shown in this image.')}</figcaption></figure>
-    <p class="tu-description-note">${t('Muhim: UID raqamini diqqat bilan tekshiring. Noto‘g‘ri ma’lumot yetkazishni kechiktirishi, uni amalga oshirib bo‘lmasligi yoki UC boshqa akkauntga tushishiga sabab bo‘lishi mumkin.','Важно: внимательно проверьте UID. Ошибка может задержать доставку, сделать её невозможной или привести к зачислению UC на другой аккаунт.','Important: double-check your UID. Incorrect details may delay or prevent delivery, or credit UC to another account.')}</p>
-    <p>${t('Hozircha haqiqiy xarid va yetkazish yoqilmagan. Paketlarni ko‘rishingiz va ma’lumotlarni oldindan tekshirishingiz mumkin.','Покупки и доставка пока не запущены. Вы можете посмотреть пакеты и заранее проверить данные.','Live purchases and delivery are not enabled yet. You can browse packages and review your details in advance.')}</p>`:'';
-  const noCheckout=t('Xaridlar hozircha yopiq. To‘lov va Top Up xizmati hali ishga tushmagan.','Покупки пока закрыты. Оплата и сервис Top Up ещё не запущены.','Purchases are not open yet. Payments and the top-up service are not connected.');
-  let launchAlerts=[],prefsReady=!me,prefsBusy=false;
-  const playerFields='<div class="field"><label for="topup-player-id">'+t('O‘yinchi ID raqami','Игровой ID','Player ID')+'</label><input id="topup-player-id" name="player_id" inputmode="numeric" pattern="[0-9]{3,40}" minlength="3" maxlength="40" autocomplete="off" required aria-describedby="tu-player-help" placeholder="'+t('O‘yin profilingizdagi ID','ID из игрового профиля','ID from your game profile')+'"><small id="tu-player-help">'+t('Profil sahifangizdan raqamli ID ni nusxalang. Parol kerak emas.','Скопируйте числовой ID из профиля. Пароль не нужен.','Copy the numeric ID from your in-game profile. No password needed.')+'</small></div>'+(game.slug==='mobile-legends'?'<div class="field"><label for="topup-server-id">Server / Zone ID</label><input id="topup-server-id" name="server_id" inputmode="numeric" pattern="[0-9]{1,10}" maxlength="10" required autocomplete="off"><small>'+t('Profilingizdagi qavs ichidagi raqam.','Номер в скобках в профиле.','The number in brackets in your profile.')+'</small></div>':'');
-  app.innerHTML=`<section class="page topup-page topup-product-page">
+  const packButton = (pack) =>
+    `<button type="button" data-tu-package="${esc(pack.url_slug)}" aria-pressed="false">${packageIcon(pack, "pack")}<span><b>${packageButtonLabel(pack)}</b>${
+      packageContents(pack).length
+        ? `<small class="tu-pack-includes">${packageContents(pack)
+            .map(([name, count]) => `${count} ${name}`)
+            .join(" · ")}</small>`
+        : ""
+    }<small>${topupDetailPrice(pack)}</small></span></button>`;
+  const packageGroups = [
+    ["currency", t("Paketni tanlang", "Выберите пакет", "Select package")],
+    ["pass", "Elite Pass"],
+    ["weekly", t("Haftalik paketlar", "Еженедельные наборы", "Weekly packs")],
+  ]
+    .map(([kind, label]) => {
+      const items = packages.filter(
+        (p) => (p.product_kind || "currency") === kind,
+      );
+      return items.length
+        ? `<h2 class="tu-select-label">${label}</h2><div class="tu-packages ${kind !== "currency" ? "tu-named-packages" : ""}">${items.map(packButton).join("")}</div>`
+        : "";
+    })
+    .join("");
+  const pubgDescription =
+    game.slug === "pubg-mobile"
+      ? `
+    <h3>${t("PUBG MOBILE UC haqida", "О PUBG MOBILE UC", "About PUBG MOBILE UC")}</h3>
+    <p>${t("UC — PUBG MOBILE o‘yinidagi premium valyuta. Uni kiyimlar, qurol va transport skinlari, emotsiyalar, Royale Pass va mavsumiy kosmetik buyumlar uchun ishlatish mumkin. Kerakli paket va miqdorni tanlab, shu tanlov uchun narxni ko‘ring.", "UC — премиальная валюта PUBG MOBILE для костюмов, обликов оружия и транспорта, эмоций, Royale Pass и сезонных косметических предметов. Выберите пакет и количество, чтобы увидеть стоимость выбранного варианта.", "UC is PUBG MOBILE’s premium currency. Use it for outfits, weapon and vehicle skins, emotes, Royale Pass, and seasonal cosmetic content. Select a package and quantity to review the price for your selection.")}</p>
+    <h3>${t("Qanday ma’lumot kerak?", "Какие данные нужны?", "What information do you need?")}</h3>
+    <p>${t("PUBG MOBILE UID raqamingiz, tanlangan UC paketi va miqdori kerak. Akkaunt paroli, bir martalik kod yoki tiklash kodini yubormang.", "Нужны ваш PUBG MOBILE UID, выбранный пакет UC и количество. Не передавайте пароль аккаунта, одноразовые коды или коды восстановления.", "You need your PUBG MOBILE UID, the selected UC package, and quantity. Do not share your account password, one-time codes, or recovery codes.")}</p>
+    <h3>${t("PUBG MOBILE UID raqamini qanday topish mumkin?", "Как найти PUBG MOBILE UID?", "How to find your PUBG MOBILE UID")}</h3>
+    <ol class="tu-uid-steps"><li>${t("PUBG MOBILE o‘yiniga kiring.", "Войдите в PUBG MOBILE.", "Log in to PUBG MOBILE.")}</li><li>${t("Profil avataringizni bosib, profil sahifasini oching.", "Нажмите на аватар, чтобы открыть профиль.", "Tap your profile avatar to open your player profile.")}</li><li>${t("Player ID / UID yonidagi nusxalash belgisini bosing.", "Нажмите значок копирования рядом с Player ID / UID.", "Tap the copy icon beside your Player ID / UID.")}</li><li>${t("Nusxalangan UID aynan kerakli akkauntga tegishli ekanini tekshiring.", "Убедитесь, что скопированный UID принадлежит нужному аккаунту.", "Check that the copied UID belongs to the account you want to top up.")}</li></ol>
+    <figure class="tu-uid-guide"><img src="https://images.gamestorehub.com/site-assets/audit-e3a484dd847a412d/pubg-uid-guide.png" width="1230" height="595" alt="${t("PUBG MOBILE profilida Player ID va nusxalash belgisi ko‘rsatilgan namuna", "Пример профиля PUBG MOBILE с Player ID и значком копирования", "Example PUBG MOBILE profile showing the Player ID and copy icon")}" loading="lazy"><figcaption>${t("Rasm namuna uchun. Undagi UID o‘rniga o‘z akkauntingiz UID raqamini kiriting.", "Изображение приведено для примера. Используйте UID своего аккаунта, а не номер на картинке.", "Example only. Enter your own account’s UID, not the ID shown in this image.")}</figcaption></figure>
+    <p class="tu-description-note">${t("Muhim: UID raqamini diqqat bilan tekshiring. Noto‘g‘ri ma’lumot yetkazishni kechiktirishi, uni amalga oshirib bo‘lmasligi yoki UC boshqa akkauntga tushishiga sabab bo‘lishi mumkin.", "Важно: внимательно проверьте UID. Ошибка может задержать доставку, сделать её невозможной или привести к зачислению UC на другой аккаунт.", "Important: double-check your UID. Incorrect details may delay or prevent delivery, or credit UC to another account.")}</p>
+    <p>${t("Hozircha haqiqiy xarid va yetkazish yoqilmagan. Paketlarni ko‘rishingiz va ma’lumotlarni oldindan tekshirishingiz mumkin.", "Покупки и доставка пока не запущены. Вы можете посмотреть пакеты и заранее проверить данные.", "Live purchases and delivery are not enabled yet. You can browse packages and review your details in advance.")}</p>`
+      : "";
+  const noCheckout = t(
+    "Xaridlar hozircha yopiq. To‘lov va Top Up xizmati hali ishga tushmagan.",
+    "Покупки пока закрыты. Оплата и сервис Top Up ещё не запущены.",
+    "Purchases are not open yet. Payments and the top-up service are not connected.",
+  );
+  let launchAlerts = [],
+    prefsReady = !me,
+    prefsBusy = false;
+  const playerFields =
+    '<div class="field"><label for="topup-player-id">' +
+    t("O‘yinchi ID raqami", "Игровой ID", "Player ID") +
+    '</label><input id="topup-player-id" name="player_id" inputmode="numeric" pattern="[0-9]{3,40}" minlength="3" maxlength="40" autocomplete="off" required aria-describedby="tu-player-help" placeholder="' +
+    t(
+      "O‘yin profilingizdagi ID",
+      "ID из игрового профиля",
+      "ID from your game profile",
+    ) +
+    '"><small id="tu-player-help">' +
+    t(
+      "Profil sahifangizdan raqamli ID ni nusxalang. Parol kerak emas.",
+      "Скопируйте числовой ID из профиля. Пароль не нужен.",
+      "Copy the numeric ID from your in-game profile. No password needed.",
+    ) +
+    "</small></div>" +
+    (game.slug === "mobile-legends"
+      ? '<div class="field"><label for="topup-server-id">Server / Zone ID</label><input id="topup-server-id" name="server_id" inputmode="numeric" pattern="[0-9]{1,10}" maxlength="10" required autocomplete="off"><small>' +
+        t(
+          "Profilingizdagi qavs ichidagi raqam.",
+          "Номер в скобках в профиле.",
+          "The number in brackets in your profile.",
+        ) +
+        "</small></div>"
+      : "");
+  app.innerHTML = `<section class="page topup-page topup-product-page">
     <nav class="tu-breadcrumb" aria-label="Breadcrumb"><span aria-hidden="true">›</span><a href="/top-up/${encodeURIComponent(game.slug)}">${esc(game.name)}</a><span aria-hidden="true">›</span><span>${esc(game.currency)} Top Up</span></nav>
     <div class="tu-layout"><div class="tu-left">
-      <section class="tu-gallery" aria-label="${t('Mahsulot galereyasi','Галерея товара','Product gallery')}"><div class="tu-gallery-stage"><div id="tu-gallery-content" class="tu-gallery-content"></div></div></section>
-      <section class="tu-information"><div class="tu-tabs"><h2 id="tu-tab-description">${t('Tavsif','Описание','Description')}</h2></div>
-      <div class="tu-tab-panel" role="region" id="tu-panel-description" aria-labelledby="tu-tab-description" tabindex="0"><div class="tu-description-grid"><div>${pubgDescription||`<p>${esc(game.name)} ${esc(game.currency)} ${t('paketlarini bir joyda ko‘ring va o‘zingizga mos miqdorni tanlang. Paket narxi va jami miqdor tanlovingizga qarab yangilanadi.','— сравнивайте пакеты и выбирайте нужный объём. Стоимость и итог обновляются при выборе.','packages in one place. Choose your package and quantity to see the updated total.')}</p><ul class="tu-checklist"><li>${t('Katalogdagi haqiqiy paketlar','Актуальные пакеты каталога','Packages from the live catalogue')}</li><li>${t('O‘yin paroli so‘ralmaydi','Без пароля от игры','No game password required')}</li><li>${t('Narx xariddan oldin ko‘rinadi','Цена видна до покупки','Review pricing before purchase')}</li><li>${t('O‘yinchi ma’lumotini oldindan tekshiring','Проверьте данные игрока заранее','Review your player details first')}</li></ul>`}</div></div></div>
+      <section class="tu-gallery" aria-label="${t("Mahsulot galereyasi", "Галерея товара", "Product gallery")}"><div class="tu-gallery-stage"><div id="tu-gallery-content" class="tu-gallery-content"></div></div></section>
+      <section class="tu-information"><div class="tu-tabs"><h2 id="tu-tab-description">${t("Tavsif", "Описание", "Description")}</h2></div>
+      <div class="tu-tab-panel" role="region" id="tu-panel-description" aria-labelledby="tu-tab-description" tabindex="0"><div class="tu-description-grid"><div>${pubgDescription || `<p>${esc(game.name)} ${esc(game.currency)} ${t("paketlarini bir joyda ko‘ring va o‘zingizga mos miqdorni tanlang. Paket narxi va jami miqdor tanlovingizga qarab yangilanadi.", "— сравнивайте пакеты и выбирайте нужный объём. Стоимость и итог обновляются при выборе.", "packages in one place. Choose your package and quantity to see the updated total.")}</p><ul class="tu-checklist"><li>${t("Katalogdagi haqiqiy paketlar", "Актуальные пакеты каталога", "Packages from the live catalogue")}</li><li>${t("O‘yin paroli so‘ralmaydi", "Без пароля от игры", "No game password required")}</li><li>${t("Narx xariddan oldin ko‘rinadi", "Цена видна до покупки", "Review pricing before purchase")}</li><li>${t("O‘yinchi ma’lumotini oldindan tekshiring", "Проверьте данные игрока заранее", "Review your player details first")}</li></ul>`}</div></div></div>
 
       </section>
-    </div><div class="tu-right"><section class="tu-purchase"><div class="tu-purchase-top"><span class="tu-category">${t('O‘yin valyutasi','Игровая валюта','Game currency')}</span></div><h1>${esc(game.name)}${game.slug==='pubg-mobile'?'':' '+esc(game.currency)+' Top Up'}</h1><p class="tu-subtitle">${t('O‘yiningiz uchun mos paketni tanlang.','Выберите подходящий пакет для вашей игры.','Choose the right currency package for your game.')}</p><a class="tu-review-link" href="#purchase-reviews-topup-${esc(game.slug)}" data-topup-review-summary>${icon('star')} ${t('Hozircha sharh yo‘q','Отзывов пока нет','No reviews yet')}</a><div class="tu-price-row"><div><strong data-tu-price></strong><small data-tu-price-caption></small></div><span class="tu-availability">${icon('clock')}<span>${t('Tez orada','Скоро','Coming soon')}</span></span></div>${packageGroups}<div class="tu-order-line"><label for="tu-quantity">${t('Miqdor','Количество','Quantity')}<span class="tu-quantity"><button type="button" data-tu-quantity="-1" aria-label="${t('Kamaytirish','Уменьшить количество','Decrease quantity')}"><svg class="tu-quantity-icon" viewBox="0 0 20 20" width="18" height="18" fill="none" aria-hidden="true"><path d="M4 10h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button><input id="tu-quantity" type="number" min="1" max="99" step="1" value="1" inputmode="numeric" aria-describedby="tu-quantity-error"><button type="button" data-tu-quantity="1" aria-label="${t('Ko‘paytirish','Увеличить количество','Increase quantity')}"><svg class="tu-quantity-icon" viewBox="0 0 20 20" width="18" height="18" fill="none" aria-hidden="true"><path d="M4 10h12M10 4v12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button></span></label><div class="tu-total"><small>${t('Jami narx','Итого','Total price')}</small><strong data-tu-total aria-live="polite"></strong></div></div><p id="tu-quantity-error" class="tu-field-error" role="alert" hidden></p><form id="topup-checkout-form" class="tu-inline-player-form" novalidate><div class="tu-player-fields">${playerFields}</div><p class="tu-field-error" id="tu-player-error" role="alert" hidden></p><button type="submit" class="button-primary tu-review-button">${t('Ma’lumotni ko‘rib chiqish','Просмотреть данные','Review details')}</button></form><div id="topup-details-preview" class="tu-details-preview" role="status" hidden></div><div class="tu-purchase-actions"><button class="button-primary" type="button" disabled aria-describedby="tu-checkout-state">${icon('cart')} ${t('Savatchaga qo‘shish','В корзину','Add to cart')}</button><button class="button-secondary" type="button" disabled aria-describedby="tu-checkout-state">${icon('arrow-up-right')} ${t('Xarid qilish','Купить сейчас','Buy now')}</button></div><p class="tu-checkout-state" id="tu-checkout-state">${icon('clock')}<span>${noCheckout}</span></p><div class="tu-benefits">${info('shield',t('Xavfsiz hisob','Безопасный аккаунт','Account safety'),t('Parol kerak emas','Без пароля','No password'))}${info('box',t('Aniq paketlar','Точные пакеты','Clear packages'),t('Miqdor oldindan aniq','Объём известен заранее','Know the amount'))}${info('message',t('Yordam markazi','Центр помощи','Help center'),'<a href="/help/payments">'+t('Yordam olish','Получить помощь','Get help')+'</a>')}</div></section>
-      <section class="tu-seller"><div class="tu-seller-heading"><img src="https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-512.png?v=1" alt=""><div><h2>SentryLoot <span>${t('Platforma','Платформа','Platform')}</span></h2><p>${t('Top Up yordami','Помощь с Top Up','Top-up support')}</p></div></div><div class="tu-seller-actions"><a class="button-secondary" href="/help/payments">${icon('message')} ${t('Bog‘lanish','Связаться','Contact support')}</a><a class="button-secondary" href="/top-up">${icon('gamepad')} ${t('Barcha o‘yinlar','Все игры','All games')}</a></div><details><summary>${t('Xizmat haqida','О сервисе','Service information')} <span aria-hidden="true">›</span></summary><p>${noCheckout} ${t('Hozircha buyurtma ochilmaydi va pul yechilmaydi.','Заказы пока не создаются, деньги не списываются.','No orders are created and no money is charged.')}</p><a href="/terms">${t('Foydalanish shartlari','Условия использования','Terms of service')}</a></details></section>
+    </div><div class="tu-right"><section class="tu-purchase"><div class="tu-purchase-top"><span class="tu-category">${t("O‘yin valyutasi", "Игровая валюта", "Game currency")}</span></div><h1>${esc(game.name)}${game.slug === "pubg-mobile" ? "" : " " + esc(game.currency) + " Top Up"}</h1><p class="tu-subtitle">${t("O‘yiningiz uchun mos paketni tanlang.", "Выберите подходящий пакет для вашей игры.", "Choose the right currency package for your game.")}</p><a class="tu-review-link" href="#purchase-reviews-topup-${esc(game.slug)}" data-topup-review-summary>${icon("star")} ${t("Hozircha sharh yo‘q", "Отзывов пока нет", "No reviews yet")}</a><div class="tu-price-row"><div><strong data-tu-price></strong><small data-tu-price-caption></small></div><span class="tu-availability">${icon("clock")}<span>${t("Tez orada", "Скоро", "Coming soon")}</span></span></div>${packageGroups}<div class="tu-order-line"><label for="tu-quantity">${t("Miqdor", "Количество", "Quantity")}<span class="tu-quantity"><button type="button" data-tu-quantity="-1" aria-label="${t("Kamaytirish", "Уменьшить количество", "Decrease quantity")}"><svg class="tu-quantity-icon" viewBox="0 0 20 20" width="18" height="18" fill="none" aria-hidden="true"><path d="M4 10h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button><input id="tu-quantity" type="number" min="1" max="99" step="1" value="1" inputmode="numeric" aria-describedby="tu-quantity-error"><button type="button" data-tu-quantity="1" aria-label="${t("Ko‘paytirish", "Увеличить количество", "Increase quantity")}"><svg class="tu-quantity-icon" viewBox="0 0 20 20" width="18" height="18" fill="none" aria-hidden="true"><path d="M4 10h12M10 4v12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button></span></label><div class="tu-total"><small>${t("Jami narx", "Итого", "Total price")}</small><strong data-tu-total aria-live="polite"></strong></div></div><p id="tu-quantity-error" class="tu-field-error" role="alert" hidden></p><form id="topup-checkout-form" class="tu-inline-player-form" novalidate><div class="tu-player-fields">${playerFields}</div><p class="tu-field-error" id="tu-player-error" role="alert" hidden></p><button type="submit" class="button-primary tu-review-button">${t("Ma’lumotni ko‘rib chiqish", "Просмотреть данные", "Review details")}</button></form><div id="topup-details-preview" class="tu-details-preview" role="status" hidden></div><div class="tu-purchase-actions"><button class="button-primary" type="button" disabled aria-describedby="tu-checkout-state">${icon("cart")} ${t("Savatchaga qo‘shish", "В корзину", "Add to cart")}</button><button class="button-secondary" type="button" disabled aria-describedby="tu-checkout-state">${icon("arrow-up-right")} ${t("Xarid qilish", "Купить сейчас", "Buy now")}</button></div><p class="tu-checkout-state" id="tu-checkout-state">${icon("clock")}<span>${noCheckout}</span></p><div class="tu-benefits">${info("shield", t("Xavfsiz hisob", "Безопасный аккаунт", "Account safety"), t("Parol kerak emas", "Без пароля", "No password"))}${info("box", t("Aniq paketlar", "Точные пакеты", "Clear packages"), t("Miqdor oldindan aniq", "Объём известен заранее", "Know the amount"))}${info("message", t("Yordam markazi", "Центр помощи", "Help center"), '<a href="/help/payments">' + t("Yordam olish", "Получить помощь", "Get help") + "</a>")}</div></section>
+      <section class="tu-seller"><div class="tu-seller-heading"><img src="https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-512.png?v=1" alt=""><div><h2>SentryLoot <span>${t("Platforma", "Платформа", "Platform")}</span></h2><p>${t("Top Up yordami", "Помощь с Top Up", "Top-up support")}</p></div></div><div class="tu-seller-actions"><a class="button-secondary" href="/help/payments">${icon("message")} ${t("Bog‘lanish", "Связаться", "Contact support")}</a><a class="button-secondary" href="/top-up">${icon("gamepad")} ${t("Barcha o‘yinlar", "Все игры", "All games")}</a></div><details><summary>${t("Xizmat haqida", "О сервисе", "Service information")} <span aria-hidden="true">›</span></summary><p>${noCheckout} ${t("Hozircha buyurtma ochilmaydi va pul yechilmaydi.", "Заказы пока не создаются, деньги не списываются.", "No orders are created and no money is charged.")}</p><a href="/terms">${t("Foydalanish shartlari", "Условия использования", "Terms of service")}</a></details></section>
     </div></div></section>`;
-  const root=app.querySelector('.topup-product-page'), q=selector=>root.querySelector(selector), all=selector=>Array.from(root.querySelectorAll(selector));
-  root.dataset.gameCurrency=game.currency||'';
-  root.addEventListener('error',event=>{const image=event.target;if(image.dataset?.tuFallback&&image.getAttribute('src')!==image.dataset.tuFallback)image.src=image.dataset.tuFallback;},true);
-  const quantity=q('#tu-quantity');let testRequestKey=crypto.randomUUID();
-  q('#topup-checkout-form').insertAdjacentHTML('beforebegin','<div data-tu-rewards></div>');
-  const rewards=me&&window.RewardsUI?window.RewardsUI.mountQuote(q('[data-tu-rewards]'),{auto:true,context:()=>{const count=topupQuantity(quantity.value);return count===null?null:{kind:'topup',package_id:selected.id,quantity:count}},onChange:quote=>{q('[data-tu-total]').textContent=quote?fmt(quote.total_minor,quote.currency):(topupQuantity(quantity.value)===null?'—':topupDetailPrice(selected,topupQuantity(quantity.value)))}}):null;
-  if(!me)q('[data-tu-rewards]').innerHTML='<a class="rw-entry" href="/#login">'+t('Bonus va platforma kuponi uchun kiring','Войдите для бонусов и купонов платформы','Sign in to use rewards and platform coupons')+'</a>';
-  function invalidatePreview(){q('#topup-details-preview').hidden=true;}
-  function updateTotal(){rewards?.invalidate();testRequestKey=crypto.randomUUID();const value=topupQuantity(quantity.value);q('#tu-quantity-error').hidden=value!==null;q('#tu-quantity-error').textContent=t('1 dan 99 gacha butun son kiriting.','Введите целое число от 1 до 99.','Enter a whole number from 1 to 99.');quantity.setAttribute('aria-invalid',String(value===null));q('[data-tu-total]').textContent=value===null?'—':topupDetailPrice(selected,value);all('[data-tu-quantity]').forEach(button=>button.disabled=value===null||(Number(button.dataset.tuQuantity)<0?value<=1:value>=99));invalidatePreview();}
-  function showGallery(){q('#tu-gallery-content').innerHTML=`<img src="${esc(art)}" data-tu-fallback="${esc(fallback)}" alt="${esc(game.name)} ${esc(game.currency)} Top Up" fetchpriority="high">`;}
-  function choosePackage(pack,updateUrl=true){selected=pack;updateLaunchAlert();all('[data-tu-package]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.tuPackage===pack.url_slug)));q('[data-tu-price]').textContent=topupDetailPrice(pack);q('[data-tu-price-caption]').textContent=t('Paket: ','Пакет: ','For ')+packLabel(pack);updateTotal();if(updateUrl){const path='/top-up/'+encodeURIComponent(game.slug)+'/'+encodeURIComponent(pack.url_slug);if(location.pathname!==path)history.pushState(history.state,'',path);document.title=packLabel(pack)+' '+game.name+' Top Up | SentryLoot';const canonical=document.querySelector('link[rel="canonical"]');if(canonical)canonical.href=location.origin+path;const desc=document.querySelector('meta[name="description"]');if(desc)desc.content=game.name+' '+packLabel(pack)+' top-up package. '+noCheckout;}}
-  function openTab(id,focus=false){const panel=q('#tu-panel-'+id);if(!panel)return;all('.tu-tab-panel').forEach(item=>item.hidden=item.id!=='tu-panel-description'&&item!==panel);if(focus)panel.focus();}
-  all('[data-tu-package]').forEach(button=>button.addEventListener('click',()=>{const pack=packages.find(p=>p.url_slug===button.dataset.tuPackage);choosePackage(pack);}));
-  all('[data-tu-open]').forEach(button=>button.addEventListener('click',event=>{event.preventDefault();openTab(button.dataset.tuOpen,true);q('#tu-panel-'+button.dataset.tuOpen).scrollIntoView({block:'nearest',behavior:'smooth'});}));
-  quantity.addEventListener('input',updateTotal);all('[data-tu-quantity]').forEach(button=>button.addEventListener('click',()=>{quantity.value=String(Math.max(1,Math.min(99,(topupQuantity(quantity.value)||1)+Number(button.dataset.tuQuantity))));updateTotal();}));
-  function updateLaunchAlert(){const launch=q('[data-tu-launch-alert]');if(launch){launch.disabled=!prefsReady||prefsBusy;launch.textContent=launchAlerts.includes(selected.id)?t('Ishga tushish xabari yoqilgan · bekor qilish','Уведомление о запуске включено · отменить','Launch alert enabled · unsubscribe'):t('Ishga tushganda xabar berish','Уведомить о запуске','Notify me when available');}}
-  q('.tu-checkout-state').insertAdjacentHTML('afterend','<button class="button-secondary tu-launch-alert" type="button" data-tu-launch-alert></button>');
-  q('[data-tu-launch-alert]').onclick=async()=>{const b=q('[data-tu-launch-alert]');prefsBusy=true;updateLaunchAlert();try{const r=await LaunchUX.topupChange(selected.id,'launch_alert',!launchAlerts.includes(selected.id));if(r){launchAlerts=r.launch_alert;}}catch(error){toast(error.message,'error')}finally{prefsBusy=false;updateLaunchAlert()}};
-  if(me)LaunchUX.topupState().then(r=>{launchAlerts=r.launch_alert;prefsReady=true;updateLaunchAlert()}).catch(error=>{prefsReady=true;updateLaunchAlert();toast(error.message,'error')});
-  const form=q('#topup-checkout-form');form.addEventListener('input',()=>{invalidatePreview();q('#tu-player-error').hidden=true;all('#topup-checkout-form input').forEach(input=>input.removeAttribute('aria-invalid'));});
-  form.addEventListener('submit',event=>{event.preventDefault();const invalid=Array.from(form.elements).find(field=>field.willValidate&&!field.validity.valid);if(invalid){q('#tu-player-error').hidden=false;q('#tu-player-error').textContent=t('ID faqat raqamlardan iborat bo‘lishi kerak. O‘yinchi ID: 3–40 ta raqam; server: 1–10 ta raqam.','ID должен содержать только цифры. ID игрока: 3–40 цифр; сервер: 1–10 цифр.','Use numbers only. Player ID: 3–40 digits; server: 1–10 digits.');invalid.setAttribute('aria-invalid','true');invalid.focus();return;}const count=topupQuantity(quantity.value);if(count===null){quantity.focus();return;}const player=form.elements.namedItem('player_id').value,server=form.elements.namedItem('server_id')?.value;const preview=q('#topup-details-preview');preview.hidden=false;preview.innerHTML='<b>'+t('Kiritilgan ma’lumotlar','Введённые данные','Your entered details')+'</b><p>'+esc(game.name)+' · '+esc(packLabel(selected))+' × '+count+' · '+topupDetailPrice(selected,count)+'</p><p>ID: '+esc(player)+(server?' · Server: '+esc(server):'')+'</p><small>'+t('Bu buyurtma emas. Ma’lumotlar yuborilmadi, hisob API orqali tekshirilmadi va pul yechilmadi.','Это не заказ. Данные не отправлены, аккаунт не проверен через API, деньги не списаны.','This is not an order. Nothing was submitted, your account was not verified through an API, and no payment was taken.')+'</small>';preview.scrollIntoView({block:'nearest',behavior:'smooth'});});
-  const testBuy=q('.tu-purchase-actions .button-secondary');
-  const testTerms=document.createElement('label');testTerms.className='field';testTerms.hidden=true;
-  testTerms.innerHTML='<span><input type="checkbox" data-tu-test-consent> '+t('Player ID’ni tekshirdim va to‘lov shartlarini qabul qilaman.','Я проверил ID игрока и принимаю условия оплаты.','I have checked the Player ID and accept the checkout terms.')+' '+t('Stripe sinov buyurtmasi. Haqiqiy pul yechilmaydi va UC yetkazilmaydi.','Тестовый заказ Stripe. Реальные деньги не списываются, UC не зачисляются.','Stripe test order. No real money is charged and no real UC is delivered.')+'</span>';
-  q('.tu-purchase-actions').before(testTerms);
-  function updateTestCheckout(){
-    const ready=selected.payment_ready&&selected.payment_mode==='stripe_test';
-    root.dataset.checkoutReady=String(Boolean(ready));
-    testBuy.disabled=!ready||topupQuantity(quantity.value)===null;testTerms.hidden=!ready;
-    if(!ready){testBuy.textContent=t('Xarid qilish','Купить сейчас','Buy now');q('.tu-checkout-state span').textContent=noCheckout;}
-    if(ready){testBuy.textContent=t('Stripe sinov to‘lovi','Тестовая оплата Stripe','Stripe test checkout');q('.tu-checkout-state span').textContent=t('Davom etishdan oldin Player ID ni tekshiring.','Проверьте Player ID перед продолжением.','Check your Player ID before continuing.');}
+  const root = app.querySelector(".topup-product-page"),
+    q = (selector) => root.querySelector(selector),
+    all = (selector) => Array.from(root.querySelectorAll(selector));
+  root.dataset.gameCurrency = game.currency || "";
+  root.addEventListener(
+    "error",
+    (event) => {
+      const image = event.target;
+      if (
+        image.dataset?.tuFallback &&
+        image.getAttribute("src") !== image.dataset.tuFallback
+      )
+        image.src = image.dataset.tuFallback;
+    },
+    true,
+  );
+  const quantity = q("#tu-quantity");
+  let testRequestKey = crypto.randomUUID();
+  q("#topup-checkout-form").insertAdjacentHTML(
+    "beforebegin",
+    "<div data-tu-rewards></div>",
+  );
+  const rewards =
+    me && window.RewardsUI
+      ? window.RewardsUI.mountQuote(q("[data-tu-rewards]"), {
+          auto: true,
+          context: () => {
+            const count = topupQuantity(quantity.value);
+            return count === null
+              ? null
+              : { kind: "topup", package_id: selected.id, quantity: count };
+          },
+          onChange: (quote) => {
+            q("[data-tu-total]").textContent = quote
+              ? fmt(quote.total_minor, quote.currency)
+              : topupQuantity(quantity.value) === null
+                ? "—"
+                : topupDetailPrice(selected, topupQuantity(quantity.value));
+          },
+        })
+      : null;
+  if (!me)
+    q("[data-tu-rewards]").innerHTML =
+      '<a class="rw-entry" href="/#login">' +
+      t(
+        "Bonus va platforma kuponi uchun kiring",
+        "Войдите для бонусов и купонов платформы",
+        "Sign in to use rewards and platform coupons",
+      ) +
+      "</a>";
+  function invalidatePreview() {
+    q("#topup-details-preview").hidden = true;
   }
-  testBuy.addEventListener('click',async()=>{
-    if(!me){location.hash='login';return;}
-    if(!form.reportValidity())return;
-    if(!q('[data-tu-test-consent]').checked){toast(t('Sinov xaridi shartlarini tasdiqlang.','Подтвердите условия тестовой покупки.','Confirm the checkout terms.'),'error');return;}
-    testBuy.disabled=true;
-    try{
-      const promotion=rewards?.checkout();
-      const order=await api('/top-up/test-checkout',{method:'POST',body:JSON.stringify({package_id:selected.id,quantity:topupQuantity(quantity.value),player_id:form.elements.namedItem('player_id').value,server_id:form.elements.namedItem('server_id')?.value||'',request_key:testRequestKey,accept_terms:true,...(promotion?{rewards_quote_id:promotion.id,expected_total_minor:promotion.total_minor}:{})})});
-      const payment=await api('/top-up/test-orders/'+encodeURIComponent(order.id)+'/checkout',{method:'POST',body:'{}'});
-      location.assign(payment.checkout_url);
-    }catch(error){toast(error.message,'error')}finally{updateTestCheckout();}
+  function updateTotal() {
+    rewards?.invalidate();
+    testRequestKey = crypto.randomUUID();
+    const value = topupQuantity(quantity.value);
+    q("#tu-quantity-error").hidden = value !== null;
+    q("#tu-quantity-error").textContent = t(
+      "1 dan 99 gacha butun son kiriting.",
+      "Введите целое число от 1 до 99.",
+      "Enter a whole number from 1 to 99.",
+    );
+    quantity.setAttribute("aria-invalid", String(value === null));
+    q("[data-tu-total]").textContent =
+      value === null ? "—" : topupDetailPrice(selected, value);
+    all("[data-tu-quantity]").forEach(
+      (button) =>
+        (button.disabled =
+          value === null ||
+          (Number(button.dataset.tuQuantity) < 0 ? value <= 1 : value >= 99)),
+    );
+    invalidatePreview();
+  }
+  function showGallery() {
+    q("#tu-gallery-content").innerHTML =
+      `<img src="${esc(art)}" data-tu-fallback="${esc(fallback)}" alt="${esc(game.name)} ${esc(game.currency)} Top Up" fetchpriority="high">`;
+  }
+  function choosePackage(pack, updateUrl = true) {
+    selected = pack;
+    updateLaunchAlert();
+    all("[data-tu-package]").forEach((button) =>
+      button.setAttribute(
+        "aria-pressed",
+        String(button.dataset.tuPackage === pack.url_slug),
+      ),
+    );
+    q("[data-tu-price]").textContent = topupDetailPrice(pack);
+    q("[data-tu-price-caption]").textContent =
+      t("Paket: ", "Пакет: ", "For ") + packLabel(pack);
+    updateTotal();
+    if (updateUrl) {
+      const path =
+        "/top-up/" +
+        encodeURIComponent(game.slug) +
+        "/" +
+        encodeURIComponent(pack.url_slug);
+      if (location.pathname !== path)
+        history.pushState(history.state, "", path);
+      document.title =
+        packLabel(pack) + " " + game.name + " Top Up | SentryLoot";
+      const canonical = document.querySelector('link[rel="canonical"]');
+      if (canonical) canonical.href = location.origin + path;
+      const desc = document.querySelector('meta[name="description"]');
+      if (desc)
+        desc.content =
+          game.name + " " + packLabel(pack) + " top-up package. " + noCheckout;
+    }
+  }
+  function openTab(id, focus = false) {
+    const panel = q("#tu-panel-" + id);
+    if (!panel) return;
+    all(".tu-tab-panel").forEach(
+      (item) =>
+        (item.hidden = item.id !== "tu-panel-description" && item !== panel),
+    );
+    if (focus) panel.focus();
+  }
+  all("[data-tu-package]").forEach((button) =>
+    button.addEventListener("click", () => {
+      const pack = packages.find(
+        (p) => p.url_slug === button.dataset.tuPackage,
+      );
+      choosePackage(pack);
+    }),
+  );
+  all("[data-tu-open]").forEach((button) =>
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      openTab(button.dataset.tuOpen, true);
+      q("#tu-panel-" + button.dataset.tuOpen).scrollIntoView({
+        block: "nearest",
+        behavior: "smooth",
+      });
+    }),
+  );
+  quantity.addEventListener("input", updateTotal);
+  all("[data-tu-quantity]").forEach((button) =>
+    button.addEventListener("click", () => {
+      quantity.value = String(
+        Math.max(
+          1,
+          Math.min(
+            99,
+            (topupQuantity(quantity.value) || 1) +
+              Number(button.dataset.tuQuantity),
+          ),
+        ),
+      );
+      updateTotal();
+    }),
+  );
+  function updateLaunchAlert() {
+    const launch = q("[data-tu-launch-alert]");
+    if (launch) {
+      launch.disabled = !prefsReady || prefsBusy;
+      launch.textContent = launchAlerts.includes(selected.id)
+        ? t(
+            "Ishga tushish xabari yoqilgan · bekor qilish",
+            "Уведомление о запуске включено · отменить",
+            "Launch alert enabled · unsubscribe",
+          )
+        : t(
+            "Ishga tushganda xabar berish",
+            "Уведомить о запуске",
+            "Notify me when available",
+          );
+    }
+  }
+  q(".tu-checkout-state").insertAdjacentHTML(
+    "afterend",
+    '<button class="button-secondary tu-launch-alert" type="button" data-tu-launch-alert></button>',
+  );
+  q("[data-tu-launch-alert]").onclick = async () => {
+    const b = q("[data-tu-launch-alert]");
+    prefsBusy = true;
+    updateLaunchAlert();
+    try {
+      const r = await LaunchUX.topupChange(
+        selected.id,
+        "launch_alert",
+        !launchAlerts.includes(selected.id),
+      );
+      if (r) {
+        launchAlerts = r.launch_alert;
+      }
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      prefsBusy = false;
+      updateLaunchAlert();
+    }
+  };
+  if (me)
+    LaunchUX.topupState()
+      .then((r) => {
+        launchAlerts = r.launch_alert;
+        prefsReady = true;
+        updateLaunchAlert();
+      })
+      .catch((error) => {
+        prefsReady = true;
+        updateLaunchAlert();
+        toast(error.message, "error");
+      });
+  const form = q("#topup-checkout-form");
+  form.addEventListener("input", () => {
+    invalidatePreview();
+    q("#tu-player-error").hidden = true;
+    all("#topup-checkout-form input").forEach((input) =>
+      input.removeAttribute("aria-invalid"),
+    );
   });
-  quantity.addEventListener('input',updateTestCheckout);
-  form.addEventListener('input',()=>{testRequestKey=crypto.randomUUID()});
-  all('[data-tu-package]').forEach(button=>button.addEventListener('click',()=>{testRequestKey=crypto.randomUUID();updateTestCheckout()}));
-  choosePackage(selected,false);showGallery();updateLaunchAlert();updateTestCheckout();
-  window.ReviewHub?.mount(q('.tu-left'),'topup',game.slug);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const invalid = Array.from(form.elements).find(
+      (field) => field.willValidate && !field.validity.valid,
+    );
+    if (invalid) {
+      q("#tu-player-error").hidden = false;
+      q("#tu-player-error").textContent = t(
+        "ID faqat raqamlardan iborat bo‘lishi kerak. O‘yinchi ID: 3–40 ta raqam; server: 1–10 ta raqam.",
+        "ID должен содержать только цифры. ID игрока: 3–40 цифр; сервер: 1–10 цифр.",
+        "Use numbers only. Player ID: 3–40 digits; server: 1–10 digits.",
+      );
+      invalid.setAttribute("aria-invalid", "true");
+      invalid.focus();
+      return;
+    }
+    const count = topupQuantity(quantity.value);
+    if (count === null) {
+      quantity.focus();
+      return;
+    }
+    const player = form.elements.namedItem("player_id").value,
+      server = form.elements.namedItem("server_id")?.value;
+    const preview = q("#topup-details-preview");
+    preview.hidden = false;
+    preview.innerHTML =
+      "<b>" +
+      t("Kiritilgan ma’lumotlar", "Введённые данные", "Your entered details") +
+      "</b><p>" +
+      esc(game.name) +
+      " · " +
+      esc(packLabel(selected)) +
+      " × " +
+      count +
+      " · " +
+      topupDetailPrice(selected, count) +
+      "</p><p>ID: " +
+      esc(player) +
+      (server ? " · Server: " + esc(server) : "") +
+      "</p><small>" +
+      t(
+        "Bu buyurtma emas. Ma’lumotlar yuborilmadi, hisob API orqali tekshirilmadi va pul yechilmadi.",
+        "Это не заказ. Данные не отправлены, аккаунт не проверен через API, деньги не списаны.",
+        "This is not an order. Nothing was submitted, your account was not verified through an API, and no payment was taken.",
+      ) +
+      "</small>";
+    preview.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  });
+  const testBuy = q(".tu-purchase-actions .button-secondary");
+  const testTerms = document.createElement("label");
+  testTerms.className = "field";
+  testTerms.hidden = true;
+  testTerms.innerHTML =
+    '<span><input type="checkbox" data-tu-test-consent> ' +
+    t(
+      "Player ID’ni tekshirdim va to‘lov shartlarini qabul qilaman.",
+      "Я проверил ID игрока и принимаю условия оплаты.",
+      "I have checked the Player ID and accept the checkout terms.",
+    ) +
+    " " +
+    t(
+      "Stripe sinov buyurtmasi. Haqiqiy pul yechilmaydi va UC yetkazilmaydi.",
+      "Тестовый заказ Stripe. Реальные деньги не списываются, UC не зачисляются.",
+      "Stripe test order. No real money is charged and no real UC is delivered.",
+    ) +
+    "</span>";
+  q(".tu-purchase-actions").before(testTerms);
+  function updateTestCheckout() {
+    const ready =
+      selected.payment_ready && selected.payment_mode === "stripe_test";
+    root.dataset.checkoutReady = String(Boolean(ready));
+    testBuy.disabled = !ready || topupQuantity(quantity.value) === null;
+    testTerms.hidden = !ready;
+    if (!ready) {
+      testBuy.textContent = t("Xarid qilish", "Купить сейчас", "Buy now");
+      q(".tu-checkout-state span").textContent = noCheckout;
+    }
+    if (ready) {
+      testBuy.textContent = t(
+        "Stripe sinov to‘lovi",
+        "Тестовая оплата Stripe",
+        "Stripe test checkout",
+      );
+      q(".tu-checkout-state span").textContent = t(
+        "Davom etishdan oldin Player ID ni tekshiring.",
+        "Проверьте Player ID перед продолжением.",
+        "Check your Player ID before continuing.",
+      );
+    }
+  }
+  testBuy.addEventListener("click", async () => {
+    if (!me) {
+      location.hash = "login";
+      return;
+    }
+    if (!form.reportValidity()) return;
+    if (!q("[data-tu-test-consent]").checked) {
+      toast(
+        t(
+          "Sinov xaridi shartlarini tasdiqlang.",
+          "Подтвердите условия тестовой покупки.",
+          "Confirm the checkout terms.",
+        ),
+        "error",
+      );
+      return;
+    }
+    testBuy.disabled = true;
+    try {
+      const promotion = rewards?.checkout();
+      const order = await api("/top-up/test-checkout", {
+        method: "POST",
+        body: JSON.stringify({
+          package_id: selected.id,
+          quantity: topupQuantity(quantity.value),
+          player_id: form.elements.namedItem("player_id").value,
+          server_id: form.elements.namedItem("server_id")?.value || "",
+          request_key: testRequestKey,
+          accept_terms: true,
+          ...(promotion
+            ? {
+                rewards_quote_id: promotion.id,
+                expected_total_minor: promotion.total_minor,
+              }
+            : {}),
+        }),
+      });
+      const payment = await api(
+        "/top-up/test-orders/" + encodeURIComponent(order.id) + "/checkout",
+        { method: "POST", body: "{}" },
+      );
+      location.assign(payment.checkout_url);
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      updateTestCheckout();
+    }
+  });
+  quantity.addEventListener("input", updateTestCheckout);
+  form.addEventListener("input", () => {
+    testRequestKey = crypto.randomUUID();
+  });
+  all("[data-tu-package]").forEach((button) =>
+    button.addEventListener("click", () => {
+      testRequestKey = crypto.randomUUID();
+      updateTestCheckout();
+    }),
+  );
+  choosePackage(selected, false);
+  showGallery();
+  updateLaunchAlert();
+  updateTestCheckout();
+  window.ReviewHub?.mount(q(".tu-left"), "topup", game.slug);
 }
 
-async function renderStripeTopupOrder(id){
-  if(!me){location.hash='login';return;}
-  let order=await api('/top-up/test-orders/'+encodeURIComponent(id));
-  if(order.supplier_sku && order.status==='awaiting_payment') {
-    order=await api('/top-up/test-orders/'+encodeURIComponent(id)+'/refresh',{method:'POST',body:'{}'});
-    if(order.status==='awaiting_payment') {location.replace('/top-up/pubg-mobile');return;}
+async function renderStripeTopupOrder(id) {
+  if (!me) {
+    location.hash = "login";
+    return;
   }
-  app.innerHTML=`<section class="page topup-page">${pageTitle(esc(order.reference),'Stripe test · '+esc(order.game_name),status(order.status))}<div class="notice warn">${adminText('buyurtmasi. Haqiqiy pul olinmaydi va UC yetkazilmaydi.','заказ. Реальные деньги не списываются, UC не доставляется.','Stripe test order. No real money is charged and no real UC is delivered.')}</div><section class="panel"><h2>${esc(order.game_name)} · ${order.amount} × ${order.quantity}</h2><p>Player ID: ${esc(order.player_id)}${order.server_id?' · Server: '+esc(order.server_id):''}</p><p>${order.currency==='USD'?esc(topupSupplierPrice({selling_currency:'USD',selling_price_cents:order.total_minor})):fmt(order.total_minor,order.currency)}</p><div class="actions">${order.status==='awaiting_payment'?'<button class="button-primary" data-test-topup-action="checkout">'+adminText('Stripe to‘lovi','Stripe test оплата','Stripe checkout')+'</button>':''}${order.status==='delivered_test'?'<button class="button-primary" data-test-topup-action="confirm">'+adminText('yetkazishni tasdiqlash','Подтвердить доставку','Accept simulated delivery')+'</button>':''}${['awaiting_payment','paid_test','delivered_test','completed'].includes(order.status)?'<button class="button-secondary" data-test-topup-action="cancel">'+adminText('Bekor qilish / qaytarim','Отмена / возврат','Cancel / refund')+'</button>':''}<button class="button-secondary" data-test-topup-action="refresh">${adminText('Yangilash','Обновить','Refresh')}</button></div></section></section>`;
-  app.querySelectorAll('[data-test-topup-action]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{const action=button.dataset.testTopupAction;if(action==='refresh'){await api('/top-up/test-orders/'+encodeURIComponent(id)+'/refresh',{method:'POST',body:'{}'});await renderStripeTopupOrder(id);return;}const result=await api('/top-up/test-orders/'+encodeURIComponent(id)+'/'+action,{method:'POST',body:'{}'});if(result.checkout_url)location.assign(result.checkout_url);else await renderStripeTopupOrder(id);}catch(error){toast(error.message,'error')}finally{button.disabled=false;}});
+  let order = await api("/top-up/test-orders/" + encodeURIComponent(id));
+  if (order.supplier_sku && order.status === "awaiting_payment") {
+    order = await api(
+      "/top-up/test-orders/" + encodeURIComponent(id) + "/refresh",
+      { method: "POST", body: "{}" },
+    );
+    if (order.status === "awaiting_payment") {
+      location.replace("/top-up/pubg-mobile");
+      return;
+    }
+  }
+  app.innerHTML = `<section class="page topup-page">${pageTitle(esc(order.reference), "Stripe test · " + esc(order.game_name), status(order.status))}<div class="notice warn">${adminText("buyurtmasi. Haqiqiy pul olinmaydi va UC yetkazilmaydi.", "заказ. Реальные деньги не списываются, UC не доставляется.", "Stripe test order. No real money is charged and no real UC is delivered.")}</div><section class="panel"><h2>${esc(order.game_name)} · ${order.amount} × ${order.quantity}</h2><p>Player ID: ${esc(order.player_id)}${order.server_id ? " · Server: " + esc(order.server_id) : ""}</p><p>${order.currency === "USD" ? esc(topupSupplierPrice({ selling_currency: "USD", selling_price_cents: order.total_minor })) : fmt(order.total_minor, order.currency)}</p><div class="actions">${order.status === "awaiting_payment" ? '<button class="button-primary" data-test-topup-action="checkout">' + adminText("Stripe to‘lovi", "Stripe test оплата", "Stripe checkout") + "</button>" : ""}${order.status === "delivered_test" ? '<button class="button-primary" data-test-topup-action="confirm">' + adminText("yetkazishni tasdiqlash", "Подтвердить доставку", "Accept simulated delivery") + "</button>" : ""}${["awaiting_payment", "paid_test", "delivered_test", "completed"].includes(order.status) ? '<button class="button-secondary" data-test-topup-action="cancel">' + adminText("Bekor qilish / qaytarim", "Отмена / возврат", "Cancel / refund") + "</button>" : ""}<button class="button-secondary" data-test-topup-action="refresh">${adminText("Yangilash", "Обновить", "Refresh")}</button></div></section></section>`;
+  app.querySelectorAll("[data-test-topup-action]").forEach(
+    (button) =>
+      (button.onclick = async () => {
+        button.disabled = true;
+        try {
+          const action = button.dataset.testTopupAction;
+          if (action === "refresh") {
+            await api(
+              "/top-up/test-orders/" + encodeURIComponent(id) + "/refresh",
+              { method: "POST", body: "{}" },
+            );
+            await renderStripeTopupOrder(id);
+            return;
+          }
+          const result = await api(
+            "/top-up/test-orders/" + encodeURIComponent(id) + "/" + action,
+            { method: "POST", body: "{}" },
+          );
+          if (result.checkout_url) location.assign(result.checkout_url);
+          else await renderStripeTopupOrder(id);
+        } catch (error) {
+          toast(error.message, "error");
+        } finally {
+          button.disabled = false;
+        }
+      }),
+  );
 }

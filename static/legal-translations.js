@@ -1,11 +1,11 @@
 // Translations of the public privacy and deletion notices. The English text in
 // app.js remains the source of record; keep these versions aligned when it changes.
-window.SENTRYLOOT_LEGAL_TRANSLATIONS={
-  privacy:{
-    uz:{
-      title:'Maxfiylik siyosati',
-      lead:'SentryLoot hisob ma’lumotlarini qanday yig‘ishi va ishlatishi haqida.',
-      body:`<p><strong>Amal qilish sanasi: 2026-yil 8-oktabr.</strong></p>
+window.SENTRYLOOT_LEGAL_TRANSLATIONS = {
+  privacy: {
+    uz: {
+      title: "Maxfiylik siyosati",
+      lead: "SentryLoot hisob ma’lumotlarini qanday yig‘ishi va ishlatishi haqida.",
+      body: `<p><strong>Amal qilish sanasi: 2026-yil 8-oktabr.</strong></p>
 <p>SentryLoot faoliyatini Asliddinov Shukhratjon yuritadi. Maxfiylikka oid savol yoki so‘rov uchun <a href="mailto:sentryloot@gamestorehub.com">sentryloot@gamestorehub.com</a> manziliga yozing.</p>
 <h2>Qanday ma’lumotlarni yig‘amiz</h2>
 <p>Facebook orqali kirsangiz, Meta siz ruxsat bergan ism, profil rasmi, asosiy email manzili va Facebook hisob identifikatorini taqdim etadi. Facebook parolingiz bizga kelmaydi. Bu ma’lumotlar hisob yaratish, tizimga kirish, hisob xavfsizligi va takroriy yoki firibgar hisoblarning oldini olish uchun ishlatiladi.</p>
@@ -21,12 +21,12 @@ window.SENTRYLOOT_LEGAL_TRANSLATIONS={
 <p>SentryLoot tizimda qolish va hisob amallarini himoyalash uchun sessiya cookie faylidan foydalanadi. Parollar xesh ko‘rinishida saqlanadi. Facebook kirish tokenlari faqat serverda tasdiqlangan profilni olish uchun ishlatiladi; ular hisobga kirish ma’lumoti sifatida saqlanmaydi.</p>
 <h2>Sizning tanlovingiz</h2>
 <p>Profil ma’lumotlarini hisob sahifasida o‘zgartirishingiz, u yerdan hisobni o‘chirishni so‘rashingiz yoki Facebook sozlamalarida SentryLoot ruxsatini bekor qilishingiz mumkin. SentryLoot hisobini o‘chirish Facebook hisobini o‘chirmaydi.</p>
-<p>Ushbu xabarnoma hozirgi xizmatni tasvirlaydi. Maxfiylik savollari uchun <a href="mailto:sentryloot@gamestorehub.com">sentryloot@gamestorehub.com</a> manziliga yozing.</p>`
+<p>Ushbu xabarnoma hozirgi xizmatni tasvirlaydi. Maxfiylik savollari uchun <a href="mailto:sentryloot@gamestorehub.com">sentryloot@gamestorehub.com</a> manziliga yozing.</p>`,
     },
-    ru:{
-      title:'Политика конфиденциальности',
-      lead:'Как SentryLoot собирает и использует данные аккаунта.',
-      body:`<p><strong>Дата вступления в силу: 8 октября 2026 года.</strong></p>
+    ru: {
+      title: "Политика конфиденциальности",
+      lead: "Как SentryLoot собирает и использует данные аккаунта.",
+      body: `<p><strong>Дата вступления в силу: 8 октября 2026 года.</strong></p>
 <p>Деятельность SentryLoot ведёт Asliddinov Shukhratjon. По вопросам конфиденциальности и запросам пишите на <a href="mailto:sentryloot@gamestorehub.com">sentryloot@gamestorehub.com</a>.</p>
 <h2>Какие данные мы собираем</h2>
 <p>При входе через Facebook Meta передаёт одобренные вами имя, фото профиля, основной адрес электронной почты и идентификатор аккаунта Facebook. Мы не получаем ваш пароль Facebook. Эти данные нужны для создания и защиты аккаунта, входа и предотвращения дублирующих или мошеннических аккаунтов.</p>
@@ -42,27 +42,27 @@ window.SENTRYLOOT_LEGAL_TRANSLATIONS={
 <p>SentryLoot использует сеансовый cookie для входа и защиты действий с аккаунтом. Пароли хранятся в виде хешей. Токены доступа Facebook используются на сервере для получения одобренного профиля и не хранятся как учётные данные аккаунта.</p>
 <h2>Ваш выбор</h2>
 <p>Вы можете изменить профиль, запросить удаление аккаунта на его странице или отозвать доступ SentryLoot в настройках Facebook. Удаление аккаунта SentryLoot не удаляет ваш аккаунт Facebook.</p>
-<p>Это уведомление описывает текущую работу сервиса. Вопросы о конфиденциальности направляйте на <a href="mailto:sentryloot@gamestorehub.com">sentryloot@gamestorehub.com</a>.</p>`
-    }
+<p>Это уведомление описывает текущую работу сервиса. Вопросы о конфиденциальности направляйте на <a href="mailto:sentryloot@gamestorehub.com">sentryloot@gamestorehub.com</a>.</p>`,
+    },
   },
-  deletion:{
-    uz:{
-      title:'Ma’lumotlarni o‘chirish tartibi',
-      lead:'SentryLoot hisobi va Facebook Login ma’lumotlarini o‘chirishni qanday so‘rash mumkin.',
-      body:`<p>SentryLoot faoliyatini Asliddinov Shukhratjon yuritadi. Facebook Login ishlatgan bo‘lsangiz, SentryLoot sizning Facebook hisob identifikatoringiz, ismingiz, profil rasmingiz va asosiy email manzilingizni saqlashi mumkin.</p>
+  deletion: {
+    uz: {
+      title: "Ma’lumotlarni o‘chirish tartibi",
+      lead: "SentryLoot hisobi va Facebook Login ma’lumotlarini o‘chirishni qanday so‘rash mumkin.",
+      body: `<p>SentryLoot faoliyatini Asliddinov Shukhratjon yuritadi. Facebook Login ishlatgan bo‘lsangiz, SentryLoot sizning Facebook hisob identifikatoringiz, ismingiz, profil rasmingiz va asosiy email manzilingizni saqlashi mumkin.</p>
 <h2>Hisobingizga kira olsangiz</h2><ol><li>SentryLoot hisobingizga kiring va Hisob sahifasini oching.</li><li><strong>Hisobni o‘chirishni so‘rash</strong> amalini tanlang.</li><li>So‘rovni tekshiramiz. Har kuni ishlaydigan avtomatik jarayon bevosita hisob identifikatorlari, Facebook Login bog‘lanishi, shaxsni tasdiqlash ma’lumotlari va foydalanuvchi yaratgan bozor kontentini so‘rovdan keyin 30 kun ichida o‘chiradi.</li></ol>
 <p>Administrator tasdiqlangan so‘rovni oldinroq yakunlasa, shu o‘chirish darhol bajariladi: hisob o‘chiriladi, Facebook identifikatori va bevosita profil ma’lumotlari o‘chiriladi, akkaunt xaridiga oid yopiq skrinshotlar o‘chiriladi, foydalanuvchi yaratgan kontent o‘chiriladi yoki anonimlashtiriladi. Yakunlangan buyurtma va hisob-kitob yozuvlari buxgalteriya, xavfsizlik yoki nizolar uchun zarur bo‘lsa, faqat anonim shaklda qolishi mumkin. Mamlakatlarga xos majburiy saqlash muddatlari hali yuristlar tomonidan tasdiqlanmagan; ko‘rik tugamaguncha haqiqiy pullik savdo yopiq. Boshqa holatda ko‘rib chiqilgan xarid skrinshotlari 30 kundan keyin o‘chiriladi.</p>
 <h2>Hisobingizga kira olmasangiz</h2><p>Hisobingizga bog‘langan email manzilidan <a href="mailto:sentryloot@gamestorehub.com">sentryloot@gamestorehub.com</a> ga yozib, SentryLoot hisobi va Facebook ma’lumotlarini o‘chirishni so‘rang. Facebook parolingizni yubormang. Email orqali yuborilgan so‘rovlar shaxs tekshirilgandan keyin 30 kun ichida bajariladi.</p>
-<p>SentryLoot ma’lumotlarini o‘chirish Facebook hisobingizni o‘chirmaydi. Facebook hisobingizga ulangan ilovalar ro‘yxatidan SentryLoot ruxsatini ham olib tashlashingiz mumkin.</p><p>To‘liq <a href="/privacy-policy">maxfiylik siyosatini</a> o‘qing.</p>`
+<p>SentryLoot ma’lumotlarini o‘chirish Facebook hisobingizni o‘chirmaydi. Facebook hisobingizga ulangan ilovalar ro‘yxatidan SentryLoot ruxsatini ham olib tashlashingiz mumkin.</p><p>To‘liq <a href="/privacy-policy">maxfiylik siyosatini</a> o‘qing.</p>`,
     },
-    ru:{
-      title:'Удаление данных',
-      lead:'Как запросить удаление аккаунта SentryLoot и данных Facebook Login.',
-      body:`<p>Деятельность SentryLoot ведёт Asliddinov Shukhratjon. Если вы использовали Facebook Login, SentryLoot может хранить идентификатор вашего аккаунта Facebook, имя, фото профиля и основной адрес электронной почты.</p>
+    ru: {
+      title: "Удаление данных",
+      lead: "Как запросить удаление аккаунта SentryLoot и данных Facebook Login.",
+      body: `<p>Деятельность SentryLoot ведёт Asliddinov Shukhratjon. Если вы использовали Facebook Login, SentryLoot может хранить идентификатор вашего аккаунта Facebook, имя, фото профиля и основной адрес электронной почты.</p>
 <h2>Если у вас есть доступ к аккаунту</h2><ol><li>Войдите в SentryLoot и откройте страницу аккаунта.</li><li>Выберите <strong>Запросить удаление аккаунта</strong>.</li><li>Мы проверим запрос. Ежедневный автоматический процесс в течение 30 дней после запроса удалит прямые идентификаторы аккаунта, связь Facebook Login, данные проверки личности и созданный пользователем контент площадки.</li></ol>
 <p>Если администратор закрывает подтверждённый запрос раньше, то же удаление выполняется немедленно: аккаунт отключается, его идентификатор Facebook и прямые данные профиля удаляются, закрытые скриншоты покупки аккаунта удаляются, а пользовательский контент удаляется или обезличивается. Завершённые заказы и бухгалтерские записи могут сохраняться только в обезличенном виде, если это нужно для учёта, безопасности или разрешения споров. Обязательные сроки хранения для отдельных стран ещё не утверждены юристами; до окончания проверки реальные платные продажи отключены. В остальных случаях проверенные скриншоты покупки удаляются через 30 дней.</p>
 <h2>Если вы не можете войти</h2><p>Напишите с адреса, связанного с вашим аккаунтом, на <a href="mailto:sentryloot@gamestorehub.com">sentryloot@gamestorehub.com</a> и попросите удалить аккаунт SentryLoot и данные Facebook. Не отправляйте пароль Facebook. Запросы по email проверяются на принадлежность аккаунта и выполняются в течение 30 дней после проверки.</p>
-<p>Удаление данных SentryLoot не удаляет аккаунт Facebook. Вы также можете удалить SentryLoot из списка приложений и сайтов, подключённых к вашему аккаунту Facebook.</p><p>Прочитайте полную <a href="/privacy-policy">политику конфиденциальности</a>.</p>`
-    }
-  }
+<p>Удаление данных SentryLoot не удаляет аккаунт Facebook. Вы также можете удалить SentryLoot из списка приложений и сайтов, подключённых к вашему аккаунту Facebook.</p><p>Прочитайте полную <a href="/privacy-policy">политику конфиденциальности</a>.</p>`,
+    },
+  },
 };

@@ -1,200 +1,882 @@
 /* Four-stage purchase flow. Server order/payment state is always authoritative. */
 window.OrderFlow = (() => {
-  const t=(uz,ru,en)=>adminText(uz,ru,en), s=v=>esc(v), enc=encodeURIComponent;
-  const tr=(en,uz=en,ru=en)=>t(uz,ru,en);
-  const money=(n,c)=>s(fmt(Number(n)||0,c));
-  const chargeMoney=(n,c)=>s(fmt(Number(n)||0,c,true));
-  function paymentAmount(o){return `<p class="of-payment-amount" data-original-currency><span>${tr('Payment amount','To‘lov summasi','Сумма платежа')} · ${s(o.currency)}</span><strong>${chargeMoney(o.total_minor,o.currency)}</strong></p><p class="of-muted">${tr('Converted prices are estimates. Orders are paid in their original currency.','Konvertatsiya qilingan narxlar taxminiy. Buyurtmalar asl valyutada to‘lanadi.','Пересчитанные цены приблизительны. Заказы оплачиваются в исходной валюте.')}</p>`;}
-  const url=id=>'/orders/'+enc(id);
-  const post=(path,data={})=>api(path,{method:'POST',body:JSON.stringify(data)});
-  const when=v=>v?s(parseServerDate(v).toLocaleString(localeTag())):'—';
-  const button=(label,attrs='',primary=false)=>`<button type="button" class="${primary?'of-primary':'of-secondary'}" ${attrs}>${label}</button>`;
-  const notice=(text,kind='')=>`<div class="of-notice ${kind}" role="status">${text}</div>`;
-  const input=(name,label,extra='',value='')=>`<label class="of-field"><span>${s(label)}</span><input name="${s(name)}" value="${s(value)}" ${extra}></label>`;
-  const check=(name,label)=>`<label class="of-check"><input type="checkbox" name="${name}" required><span>${label}</span></label>`;
-  const testBadge=()=>'';
-  const emptyState=message=>`<div class="of-empty">${icon('box')}<p>${message}</p><a class="of-primary" href="/browse">${tr('Browse listings','E’lonlarni ko‘rish','Посмотреть предложения')} →</a></div>`;
-  let reviewGate=null,reviewGateUser=null,reviewGateChecked=false,reviewGateRequest=null;
-  function reviewReady(form){const rating=Number(form.elements.rating.value),body=form.elements.body.value.trim();return Number.isInteger(rating)&&rating>=1&&rating<=5&&body.length>=5&&body.length<=1500}
-  function requireReview(id){reviewGate=id;reviewGateUser=me.id;reviewGateChecked=true}
-  function reviewRequired(){return !!me&&reviewGateUser===me.id&&!!reviewGate}
-  function focusReview(){const form=app.querySelector('#of-test-review');form?.scrollIntoView({block:'center',behavior:'smooth'});(form?.querySelector('.site-select-trigger')||form?.querySelector('[name=rating]'))?.focus();toast(tr('Select a rating and write your review before leaving.','Chiqishdan oldin baho tanlang va sharhingizni yozing.','Перед выходом выберите оценку и напишите отзыв.'))}
-  async function guardNavigation(){
-    if(!me){reviewGate=null;reviewGateUser=null;reviewGateChecked=false;reviewGateRequest=null;return false}
-    if(reviewGateUser!==me.id){reviewGate=null;reviewGateUser=me.id;reviewGateChecked=false;reviewGateRequest=null}
-    if(!reviewGateChecked){
-      const uid=me.id;
-      if(!reviewGateRequest)reviewGateRequest=api('/orders/review-required');
-      try{const pending=await reviewGateRequest;if(me?.id!==uid)return false;reviewGate=pending.order_id;reviewGateChecked=true}catch{return false}finally{reviewGateRequest=null}
+  const t = (uz, ru, en) => adminText(uz, ru, en),
+    s = (v) => esc(v),
+    enc = encodeURIComponent;
+  const tr = (en, uz = en, ru = en) => t(uz, ru, en);
+  const money = (n, c) => s(fmt(Number(n) || 0, c));
+  const chargeMoney = (n, c) => s(fmt(Number(n) || 0, c, true));
+  function paymentAmount(o) {
+    return `<p class="of-payment-amount" data-original-currency><span>${tr("Payment amount", "To‘lov summasi", "Сумма платежа")} · ${s(o.currency)}</span><strong>${chargeMoney(o.total_minor, o.currency)}</strong></p><p class="of-muted">${tr("Converted prices are estimates. Orders are paid in their original currency.", "Konvertatsiya qilingan narxlar taxminiy. Buyurtmalar asl valyutada to‘lanadi.", "Пересчитанные цены приблизительны. Заказы оплачиваются в исходной валюте.")}</p>`;
+  }
+  const url = (id) => "/orders/" + enc(id);
+  const post = (path, data = {}) =>
+    api(path, { method: "POST", body: JSON.stringify(data) });
+  const when = (v) =>
+    v ? s(parseServerDate(v).toLocaleString(localeTag())) : "—";
+  const button = (label, attrs = "", primary = false) =>
+    `<button type="button" class="${primary ? "of-primary" : "of-secondary"}" ${attrs}>${label}</button>`;
+  const notice = (text, kind = "") =>
+    `<div class="of-notice ${kind}" role="status">${text}</div>`;
+  const input = (name, label, extra = "", value = "") =>
+    `<label class="of-field"><span>${s(label)}</span><input name="${s(name)}" value="${s(value)}" ${extra}></label>`;
+  const check = (name, label) =>
+    `<label class="of-check"><input type="checkbox" name="${name}" required><span>${label}</span></label>`;
+  const testBadge = () => "";
+  const emptyState = (message) =>
+    `<div class="of-empty">${icon("box")}<p>${message}</p><a class="of-primary" href="/browse">${tr("Browse listings", "E’lonlarni ko‘rish", "Посмотреть предложения")} →</a></div>`;
+  let reviewGate = null,
+    reviewGateUser = null,
+    reviewGateChecked = false,
+    reviewGateRequest = null;
+  function reviewReady(form) {
+    const rating = Number(form.elements.rating.value),
+      body = form.elements.body.value.trim();
+    return (
+      Number.isInteger(rating) &&
+      rating >= 1 &&
+      rating <= 5 &&
+      body.length >= 5 &&
+      body.length <= 1500
+    );
+  }
+  function requireReview(id) {
+    reviewGate = id;
+    reviewGateUser = me.id;
+    reviewGateChecked = true;
+  }
+  function reviewRequired() {
+    return !!me && reviewGateUser === me.id && !!reviewGate;
+  }
+  function focusReview() {
+    const form = app.querySelector("#of-test-review");
+    form?.scrollIntoView({ block: "center", behavior: "smooth" });
+    (
+      form?.querySelector(".site-select-trigger") ||
+      form?.querySelector("[name=rating]")
+    )?.focus();
+    toast(
+      tr(
+        "Select a rating and write your review before leaving.",
+        "Chiqishdan oldin baho tanlang va sharhingizni yozing.",
+        "Перед выходом выберите оценку и напишите отзыв.",
+      ),
+    );
+  }
+  async function guardNavigation() {
+    if (!me) {
+      reviewGate = null;
+      reviewGateUser = null;
+      reviewGateChecked = false;
+      reviewGateRequest = null;
+      return false;
     }
-    if(!reviewRequired())return false;
-    const target='/#order/'+enc(reviewGate);
-    if(location.pathname+location.hash===target)return false;
-    history.replaceState(history.state,'',target);
-    if(app.querySelector('[data-of-order]')?.dataset.ofOrder===reviewGate&&app.querySelector('#of-test-review')){focusReview();return true}
+    if (reviewGateUser !== me.id) {
+      reviewGate = null;
+      reviewGateUser = me.id;
+      reviewGateChecked = false;
+      reviewGateRequest = null;
+    }
+    if (!reviewGateChecked) {
+      const uid = me.id;
+      if (!reviewGateRequest)
+        reviewGateRequest = api("/orders/review-required");
+      try {
+        const pending = await reviewGateRequest;
+        if (me?.id !== uid) return false;
+        reviewGate = pending.order_id;
+        reviewGateChecked = true;
+      } catch {
+        return false;
+      } finally {
+        reviewGateRequest = null;
+      }
+    }
+    if (!reviewRequired()) return false;
+    const target = "/#order/" + enc(reviewGate);
+    if (location.pathname + location.hash === target) return false;
+    history.replaceState(history.state, "", target);
+    if (
+      app.querySelector("[data-of-order]")?.dataset.ofOrder === reviewGate &&
+      app.querySelector("#of-test-review")
+    ) {
+      focusReview();
+      return true;
+    }
     return false;
   }
-  document.addEventListener('click',event=>{
-    if(!reviewRequired())return;
-    const link=event.target.closest('a[href]');if(!link)return;
-    const destination=new URL(link.href,location.href);
-    if(destination.origin!==location.origin||destination.pathname+destination.hash==='/#order/'+enc(reviewGate))return;
-    event.preventDefault();event.stopImmediatePropagation();focusReview();
-  },true);
-  function phase(o,buyer){
-    if(['cancelled','refunded','refund_pending','disputed'].includes(o.status))return -1;
-    if(o.status==='completed')return 3;
-    if(buyer)return o.status==='pending_payment'?1:2;
-    return o.status==='pending_payment'||o.status==='paid'?0:o.status==='awaiting_delivery'?1:2;
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (!reviewRequired()) return;
+      const link = event.target.closest("a[href]");
+      if (!link) return;
+      const destination = new URL(link.href, location.href);
+      if (
+        destination.origin !== location.origin ||
+        destination.pathname + destination.hash === "/#order/" + enc(reviewGate)
+      )
+        return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      focusReview();
+    },
+    true,
+  );
+  function phase(o, buyer) {
+    if (
+      ["cancelled", "refunded", "refund_pending", "disputed"].includes(o.status)
+    )
+      return -1;
+    if (o.status === "completed") return 3;
+    if (buyer) return o.status === "pending_payment" ? 1 : 2;
+    return o.status === "pending_payment" || o.status === "paid"
+      ? 0
+      : o.status === "awaiting_delivery"
+        ? 1
+        : 2;
   }
-  function steps(current,buyer=true){
-    const labels=buyer?[tr('Review','Tekshirish','Проверка'),tr('Payment','To‘lov','Оплата'),tr('Delivery','Yetkazish','Доставка'),tr('Complete','Yakunlash','Завершение')]:[tr('New order','Yangi buyurtma','Новый заказ'),tr('Prepare','Tayyorlash','Подготовка'),tr('Deliver','Yetkazish','Передача'),tr('Completed','Yakunlandi','Завершено')];
-    return `<ol class="of-steps" aria-label="${tr('Order progress','Buyurtma jarayoni','Этапы заказа')}">${labels.map((label,i)=>`<li class="${current>i?'done':current===i?'current':''}" ${current===i?'aria-current="step"':''}><span>${current>i?'✓':i+1}</span><b>${label}</b></li>`).join('')}</ol>`;
+  function steps(current, buyer = true) {
+    const labels = buyer
+      ? [
+          tr("Review", "Tekshirish", "Проверка"),
+          tr("Payment", "To‘lov", "Оплата"),
+          tr("Delivery", "Yetkazish", "Доставка"),
+          tr("Complete", "Yakunlash", "Завершение"),
+        ]
+      : [
+          tr("New order", "Yangi buyurtma", "Новый заказ"),
+          tr("Prepare", "Tayyorlash", "Подготовка"),
+          tr("Deliver", "Yetkazish", "Передача"),
+          tr("Completed", "Yakunlandi", "Завершено"),
+        ];
+    return `<ol class="of-steps" aria-label="${tr("Order progress", "Buyurtma jarayoni", "Этапы заказа")}">${labels.map((label, i) => `<li class="${current > i ? "done" : current === i ? "current" : ""}" ${current === i ? 'aria-current="step"' : ""}><span>${current > i ? "✓" : i + 1}</span><b>${label}</b></li>`).join("")}</ol>`;
   }
-  function product(i,currency,showQuantity=true){
-    const snap=i.snapshot||i,img=snap.image_url||i.image_url;
-    return `<article class="of-product">${img?`<img src="${s(img)}" alt="" width="72" height="72">`:`<span class="of-product-icon">${icon('gamepad')}</span>`}<div><h3>${s(i.title)}</h3><p>${s(snap.game_name||i.game_name||snap.platform||i.platform||'')} ${snap.region||i.region?' · '+s(snap.region||i.region):''}</p><small>${s(i.seller_name||'')}${showQuantity?' · '+tr('Quantity','Miqdor','Количество')+': '+Number(i.quantity):''}</small></div><b>${money((i.unit_price_minor??i.price_minor)*i.quantity,currency)}</b></article>`;
+  function product(i, currency, showQuantity = true) {
+    const snap = i.snapshot || i,
+      img = snap.image_url || i.image_url;
+    return `<article class="of-product">${img ? `<img src="${s(img)}" alt="" width="72" height="72">` : `<span class="of-product-icon">${icon("gamepad")}</span>`}<div><h3>${s(i.title)}</h3><p>${s(snap.game_name || i.game_name || snap.platform || i.platform || "")} ${snap.region || i.region ? " · " + s(snap.region || i.region) : ""}</p><small>${s(i.seller_name || "")}${showQuantity ? " · " + tr("Quantity", "Miqdor", "Количество") + ": " + Number(i.quantity) : ""}</small></div><b>${money((i.unit_price_minor ?? i.price_minor) * i.quantity, currency)}</b></article>`;
   }
-  function totals(o,buyer=true){
-    return `<dl class="of-totals"><div><dt>${tr('Item total','Mahsulotlar jami','Товары')}</dt><dd>${money(o.subtotal_minor+(o.discount_minor||0),o.currency)}</dd></div>${o.discount_minor?`<div><dt>${tr('Coupon discount','Kupon chegirmasi','Скидка по купону')}</dt><dd>−${money(o.discount_minor,o.currency)}</dd></div>`:''}<div><dt>${buyer?tr('Checkout fee','Xarid komissiyasi','Комиссия покупки'):tr('Seller fee','Sotuvchi komissiyasi','Комиссия продавца')}</dt><dd>${money(buyer?o.commission_minor:o.funds?.seller_fee_minor,o.currency)}</dd></div><div class="of-total"><dt>${buyer?(o.status&&o.status!=='pending_payment'?tr('Order total','Buyurtma jami','Сумма заказа'):tr('Total to pay','To‘lanadigan jami','Итого к оплате')):tr('Your net earnings','Sizning sof daromadingiz','Ваш доход')}</dt><dd>${money(buyer?o.total_minor:o.funds?.seller_net_minor,o.currency)}</dd></div></dl>${buyer?paymentAmount(o):''}`;
+  function totals(o, buyer = true) {
+    return `<dl class="of-totals"><div><dt>${tr("Item total", "Mahsulotlar jami", "Товары")}</dt><dd>${money(o.subtotal_minor + (o.discount_minor || 0), o.currency)}</dd></div>${o.discount_minor ? `<div><dt>${tr("Coupon discount", "Kupon chegirmasi", "Скидка по купону")}</dt><dd>−${money(o.discount_minor, o.currency)}</dd></div>` : ""}<div><dt>${buyer ? tr("Checkout fee", "Xarid komissiyasi", "Комиссия покупки") : tr("Seller fee", "Sotuvchi komissiyasi", "Комиссия продавца")}</dt><dd>${money(buyer ? o.commission_minor : o.funds?.seller_fee_minor, o.currency)}</dd></div><div class="of-total"><dt>${buyer ? (o.status && o.status !== "pending_payment" ? tr("Order total", "Buyurtma jami", "Сумма заказа") : tr("Total to pay", "To‘lanadigan jami", "Итого к оплате")) : tr("Your net earnings", "Sizning sof daromadingiz", "Ваш доход")}</dt><dd>${money(buyer ? o.total_minor : o.funds?.seller_net_minor, o.currency)}</dd></div></dl>${buyer ? paymentAmount(o) : ""}`;
   }
-  function compatibility(i){
-    return `<details class="of-compatibility" ${i.product_type==='code'?'open':''}><summary>${tr('Platform & region compatibility','Platforma va hudud mosligi','Совместимость платформы и региона')}</summary><section data-compat-item="${s(i.id)}" data-kind="${s(i.product_type)}" data-platform="${s(i.platform||'')}" data-region="${s(i.attributes?.redemption_region||i.region||'')}"><p class="of-muted">${s(i.platform||'—')} · ${s(i.attributes?.redemption_region||i.region||'—')}</p><div class="of-fields">${input('buyer_platform',tr('My platform','Mening platformam','Моя платформа'),`maxlength="60" ${i.product_type==='code'?'required':''}`)}${input('buyer_region',tr('My activation region','Faollashtirish hududim','Мой регион активации'),`maxlength="60" ${i.product_type==='code'?'required':''}`)}</div><p class="ex-compat-warning of-error" role="status" hidden></p></section></details>`;
+  function compatibility(i) {
+    return `<details class="of-compatibility" ${i.product_type === "code" ? "open" : ""}><summary>${tr("Platform & region compatibility", "Platforma va hudud mosligi", "Совместимость платформы и региона")}</summary><section data-compat-item="${s(i.id)}" data-kind="${s(i.product_type)}" data-platform="${s(i.platform || "")}" data-region="${s(i.attributes?.redemption_region || i.region || "")}"><p class="of-muted">${s(i.platform || "—")} · ${s(i.attributes?.redemption_region || i.region || "—")}</p><div class="of-fields">${input("buyer_platform", tr("My platform", "Mening platformam", "Моя платформа"), `maxlength="60" ${i.product_type === "code" ? "required" : ""}`)}${input("buyer_region", tr("My activation region", "Faollashtirish hududim", "Мой регион активации"), `maxlength="60" ${i.product_type === "code" ? "required" : ""}`)}</div><p class="ex-compat-warning of-error" role="status" hidden></p></section></details>`;
   }
-  function funds(o,buyer){
-    if(!o.payment||['pending','expired','failed'].includes(o.payment.status))return '';
-    const state=o.funds?.state||'pending',refunded=state==='refunded',refundPending=o.status==='refund_pending',available=state==='available';
-    const title=buyer?refunded?tr('Payment refunded','To‘lov qaytarildi','Платёж возвращён'):refundPending?tr('Refund processing','Qaytarim bajarilmoqda','Возврат обрабатывается'):tr('Payment received','To‘lov qabul qilindi','Платёж получен'):refunded?tr('Earnings reversed','Daromad bekor qilindi','Доход отменён'):refundPending?tr('Refund processing','Qaytarim bajarilmoqda','Возврат обрабатывается'):available?tr('Order earnings released','Buyurtma daromadi ochildi','Доход по заказу разблокирован'):tr('Pending order earnings','Buyurtma daromadi kutilmoqda','Ожидаемый доход по заказу');
-    const amount=buyer?(o.payment.amount_minor??o.total_minor):o.funds?.seller_net_minor;
-    const note=refunded?buyer?tr('The refund was confirmed by the payment provider. Your bank determines when it appears.','Qaytarim to‘lov provayderi tomonidan tasdiqlandi. Hisobga tushish vaqti bankingizga bog‘liq.','Возврат подтверждён платёжным провайдером. Срок зачисления зависит от банка.'):tr('This order no longer contributes to your earnings.','Bu buyurtma endi daromadingizga qo‘shilmaydi.','Этот заказ больше не учитывается в вашем доходе.'):refundPending?tr('The refund is being processed. This amount is not available for payout.','Qaytarim bajarilmoqda. Bu summani chiqarib bo‘lmaydi.','Возврат обрабатывается. Эта сумма недоступна для выплаты.'):buyer?o.status==='completed'?tr('Delivery is complete. Your receipt and order history remain available here.','Yetkazish yakunlandi. To‘lov va buyurtma tarixi shu yerda saqlanadi.','Доставка завершена. Квитанция и история заказа доступны здесь.'):tr('Check delivery before confirming receipt. Use the order page to report a problem.','Qabul qilishni tasdiqlashdan oldin tekshiring. Muammo bo‘lsa buyurtma sahifasida xabar bering.','Проверьте доставку перед подтверждением. Сообщайте о проблемах на странице заказа.'):available?tr('Earnings released for this order. Your wallet shows the current balance after payouts and adjustments.','Shu buyurtma daromadi ochildi. Chiqarish va tuzatishlardan keyingi joriy balans hamyonda.','Доход по этому заказу разблокирован. Текущий баланс после выплат и корректировок — в кошельке.'):tr('Unavailable while delivery, review, or a dispute is pending.','Yetkazish, tekshiruv yoki nizo tugamaguncha chiqarib bo‘lmaydi.','Недоступно до завершения доставки, проверки или спора.');
-    return `<div class="of-funds ${available&&!buyer?'is-available':''}"><span class="of-funds-icon">${icon(refunded?'refresh':available?'wallet':'clock')}</span><div><span>${title}</span><strong>${money(amount,o.currency)}</strong><small>${note}</small></div>${!buyer?`<a href="/#wallet">${tr('Wallet','Hamyon','Кошелёк')} ↗</a>`:''}</div>`;
+  function funds(o, buyer) {
+    if (
+      !o.payment ||
+      ["pending", "expired", "failed"].includes(o.payment.status)
+    )
+      return "";
+    const state = o.funds?.state || "pending",
+      refunded = state === "refunded",
+      refundPending = o.status === "refund_pending",
+      available = state === "available";
+    const title = buyer
+      ? refunded
+        ? tr("Payment refunded", "To‘lov qaytarildi", "Платёж возвращён")
+        : refundPending
+          ? tr(
+              "Refund processing",
+              "Qaytarim bajarilmoqda",
+              "Возврат обрабатывается",
+            )
+          : tr("Payment received", "To‘lov qabul qilindi", "Платёж получен")
+      : refunded
+        ? tr("Earnings reversed", "Daromad bekor qilindi", "Доход отменён")
+        : refundPending
+          ? tr(
+              "Refund processing",
+              "Qaytarim bajarilmoqda",
+              "Возврат обрабатывается",
+            )
+          : available
+            ? tr(
+                "Order earnings released",
+                "Buyurtma daromadi ochildi",
+                "Доход по заказу разблокирован",
+              )
+            : tr(
+                "Pending order earnings",
+                "Buyurtma daromadi kutilmoqda",
+                "Ожидаемый доход по заказу",
+              );
+    const amount = buyer
+      ? (o.payment.amount_minor ?? o.total_minor)
+      : o.funds?.seller_net_minor;
+    const note = refunded
+      ? buyer
+        ? tr(
+            "The refund was confirmed by the payment provider. Your bank determines when it appears.",
+            "Qaytarim to‘lov provayderi tomonidan tasdiqlandi. Hisobga tushish vaqti bankingizga bog‘liq.",
+            "Возврат подтверждён платёжным провайдером. Срок зачисления зависит от банка.",
+          )
+        : tr(
+            "This order no longer contributes to your earnings.",
+            "Bu buyurtma endi daromadingizga qo‘shilmaydi.",
+            "Этот заказ больше не учитывается в вашем доходе.",
+          )
+      : refundPending
+        ? tr(
+            "The refund is being processed. This amount is not available for payout.",
+            "Qaytarim bajarilmoqda. Bu summani chiqarib bo‘lmaydi.",
+            "Возврат обрабатывается. Эта сумма недоступна для выплаты.",
+          )
+        : buyer
+          ? o.status === "completed"
+            ? tr(
+                "Delivery is complete. Your receipt and order history remain available here.",
+                "Yetkazish yakunlandi. To‘lov va buyurtma tarixi shu yerda saqlanadi.",
+                "Доставка завершена. Квитанция и история заказа доступны здесь.",
+              )
+            : tr(
+                "Check delivery before confirming receipt. Use the order page to report a problem.",
+                "Qabul qilishni tasdiqlashdan oldin tekshiring. Muammo bo‘lsa buyurtma sahifasida xabar bering.",
+                "Проверьте доставку перед подтверждением. Сообщайте о проблемах на странице заказа.",
+              )
+          : available
+            ? tr(
+                "Earnings released for this order. Your wallet shows the current balance after payouts and adjustments.",
+                "Shu buyurtma daromadi ochildi. Chiqarish va tuzatishlardan keyingi joriy balans hamyonda.",
+                "Доход по этому заказу разблокирован. Текущий баланс после выплат и корректировок — в кошельке.",
+              )
+            : tr(
+                "Unavailable while delivery, review, or a dispute is pending.",
+                "Yetkazish, tekshiruv yoki nizo tugamaguncha chiqarib bo‘lmaydi.",
+                "Недоступно до завершения доставки, проверки или спора.",
+              );
+    return `<div class="of-funds ${available && !buyer ? "is-available" : ""}"><span class="of-funds-icon">${icon(refunded ? "refresh" : available ? "wallet" : "clock")}</span><div><span>${title}</span><strong>${money(amount, o.currency)}</strong><small>${note}</small></div>${!buyer ? `<a href="/#wallet">${tr("Wallet", "Hamyon", "Кошелёк")} ↗</a>` : ""}</div>`;
   }
-  async function action(button,fn){
-    if(button?.disabled)return;
-    if(button)button.disabled=true;
-    const root=button?.form||button?.closest('form, .of-card, .of-stage')||app;
-    root.querySelector('.of-action-error')?.remove();
-    try{await fn()}catch(err){const p=document.createElement('p');p.className='of-error of-action-error';p.setAttribute('role','alert');p.textContent=err.message;root.append(p)}finally{if(button?.isConnected)button.disabled=button.form?.id==='of-test-review'?!reviewReady(button.form):false}
+  async function action(button, fn) {
+    if (button?.disabled) return;
+    if (button) button.disabled = true;
+    const root =
+      button?.form || button?.closest("form, .of-card, .of-stage") || app;
+    root.querySelector(".of-action-error")?.remove();
+    try {
+      await fn();
+    } catch (err) {
+      const p = document.createElement("p");
+      p.className = "of-error of-action-error";
+      p.setAttribute("role", "alert");
+      p.textContent = err.message;
+      root.append(p);
+    } finally {
+      if (button?.isConnected)
+        button.disabled =
+          button.form?.id === "of-test-review"
+            ? !reviewReady(button.form)
+            : false;
+    }
   }
-  function bind(form,fn){if(!form)return;form.addEventListener('submit',event=>{event.preventDefault();if(!form.reportValidity())return;action(event.submitter,()=>fn(Object.fromEntries(new FormData(form)),form))})}
-  function click(selector,fn){app.querySelectorAll(selector).forEach(b=>b.onclick=()=>action(b,()=>fn(b)))}
-  function requestKey(signature){
-    const key='sentryloot-checkout:v2:'+me.id;
-    try{const prev=JSON.parse(sessionStorage.getItem(key)||'null');if(prev?.signature===signature)return prev.key;const id=crypto.randomUUID();sessionStorage.setItem(key,JSON.stringify({signature,key:id}));return id}catch{return crypto.randomUUID()}
+  function bind(form, fn) {
+    if (!form) return;
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      action(event.submitter, () =>
+        fn(Object.fromEntries(new FormData(form)), form),
+      );
+    });
   }
-  function cartQuantity(i){
-    const quantity=Number(i.quantity),minimum=Number(i.min_quantity||1),maximum=Number(i.available??quantity);
-    return `<div class="of-cart-quantity"><span>${tr('Quantity','Miqdor','Количество')}</span><div><button type="button" class="of-text" data-of-quantity="${s(i.id)}" data-delta="-1" aria-label="${tr('Decrease quantity','Miqdorni kamaytirish','Уменьшить количество')}" ${quantity<=minimum?'disabled':''}>−</button><output aria-live="polite">${quantity}</output><button type="button" class="of-text" data-of-quantity="${s(i.id)}" data-delta="1" aria-label="${tr('Increase quantity','Miqdorni ko‘paytirish','Увеличить количество')}" ${quantity>=maximum?'disabled':''}>+</button></div></div>`;
+  function click(selector, fn) {
+    app
+      .querySelectorAll(selector)
+      .forEach((b) => (b.onclick = () => action(b, () => fn(b))));
   }
-  function cartDraft(){
-    const fields=[...app.querySelectorAll('#of-checkout input')].map(input=>({name:input.name,value:input.value,checked:input.checked}));
-    return {fields,coupon:app.querySelector('#of-coupon input[name=code]')?.value||''};
+  function requestKey(signature) {
+    const key = "sentryloot-checkout:v2:" + me.id;
+    try {
+      const prev = JSON.parse(sessionStorage.getItem(key) || "null");
+      if (prev?.signature === signature) return prev.key;
+      const id = crypto.randomUUID();
+      sessionStorage.setItem(key, JSON.stringify({ signature, key: id }));
+      return id;
+    } catch {
+      return crypto.randomUUID();
+    }
   }
-  let cartVersion=0;
-  async function cart(draft=null){
-    if(!me){location.hash='login';return}
-    const route=location.href,version=++cartVersion,c=await api('/cart');if(location.href!==route||version!==cartVersion)return;
-    if(!c.items.length){app.innerHTML=`<section class="page order-process"><h1>${tr('Review your order','Buyurtmani tekshiring','Проверьте заказ')}</h1>${emptyState(tr('Your cart is empty.','Savatchangiz bo‘sh.','Ваша корзина пуста.'))}</section>`;return}
-    const currency=c.items[0].currency,o={...c,currency},account=c.items.some(i=>i.product_type==='account'),rewardsEligible=c.items.every(i=>i.product_type==='account');
-    app.innerHTML=`<section class="page order-process"><header class="of-page-heading"><div><h1>${tr('Review your order','Buyurtmani tekshiring','Проверьте заказ')}</h1></div>${testBadge()}</header>${steps(0)}<div class="of-layout"><section class="of-card of-stage"><h2>${tr('Check the details before continuing','Davom etishdan oldin tekshiring','Проверьте данные перед продолжением')}</h2><form id="of-checkout">${c.payment_mode!=='stripe_test'?notice(tr('Live payments are not enabled yet.','Haqiqiy to‘lovlar hali yoqilmagan.','Реальные платежи пока не включены.')):''}${c.items.map(i=>`<div class="of-cart-line">${product(i,currency,false)}<button type="button" class="of-text" data-of-remove="${s(i.id)}">${tr('Remove','Olib tashlash','Удалить')}</button>${cartQuantity(i)}${i.buyer_fields?.length?`<fieldset data-of-recipient="${s(i.id)}"><legend>${tr('Delivery details','Yetkazish ma’lumotlari','Данные доставки')}</legend><div class="of-fields">${i.buyer_fields.map(f=>input(f.key,f.label,`maxlength="120" autocomplete="off" ${f.required?'required':''}`)).join('')}</div></fieldset>`:''}<p class="of-muted">${icon('clock')} ${tr('Estimated delivery','Taxminiy yetkazish','Ожидаемая доставка')}: ${s(i.delivery_eta||'—')}</p></div>`).join('')}${account?check('account_risk',tr('I understand account-transfer risks and will check the publisher’s rules.','Akkaunt uzatish xavflarini tushundim va noshir qoidalarini tekshiraman.','Я понимаю риски передачи аккаунта и проверю правила издателя.')):''}${c.items.map(compatibility).join('')}${window.ListingDetail?.protectionMarkup?`<details class="of-protection"><summary>${tr('Order protection','Buyurtma himoyasi','Защита заказа')}</summary>${c.items.map(i=>window.ListingDetail.protectionMarkup(i)).join('')}</details>`:''}${check('terms',`${tr('I accept the','Men','Я принимаю')} <a href="/terms" target="_blank" rel="noopener">${tr('purchase and dispute terms','xarid va nizo shartlarini qabul qilaman','условия покупки и споров')}</a>.`)}<div class="of-bottom"><span class="of-muted">${tr('Step 1 of 4','4 bosqichdan 1','Шаг 1 из 4')}</span><button type="submit" class="of-primary" ${c.payment_mode==='stripe_test'?'':'disabled'}>${tr('Continue to payment','To‘lovga davom etish','Перейти к оплате')} ${icon('arrow-right')}</button></div></form></section><aside class="of-card of-summary"><h2>${tr('Order summary','Buyurtma hisobi','Сумма заказа')}</h2><div data-of-quote>${totals(o)}</div>${rewardsEligible?`<details class="of-benefits"><summary>${tr('Rewards & platform coupon','Bonus va platforma kuponi','Бонусы и купон платформы')}</summary><div data-of-rewards></div></details>`:''}<details class="of-coupon"><summary>${tr('Seller coupon','Sotuvchi kuponi','Купон продавца')}</summary><form id="of-coupon">${input('code',tr('Seller coupon code','Sotuvchi kupon kodi','Код купона продавца'),'maxlength="20" pattern="[A-Z0-9]{6,20}" required')}<button class="of-secondary" type="submit">${tr('Apply','Qo‘llash','Применить')}</button></form><button class="of-text" type="button" data-of-clear-coupon>${tr('Remove seller coupon','Sotuvchi kuponini olib tashlash','Удалить купон продавца')}</button></details><a class="of-text" href="/help/orders">${tr('How buying works','Xarid qanday ishlaydi','Как проходит покупка')} ↗</a></aside></div></section>`;
-    click('[data-of-remove]',async b=>{rewards?.invalidate();await api('/cart/'+enc(b.dataset.ofRemove),{method:'DELETE'});await refreshCart();await cart()});
-    const form=app.querySelector('#of-checkout');
-    let coupon='',sellerCouponPending=false;
-    const rewards=rewardsEligible&&window.RewardsUI?window.RewardsUI.mountQuote(app.querySelector('[data-of-rewards]'),{context:()=>({kind:'account'}),blocked:()=>!!coupon||sellerCouponPending,showTotals:false,auto:!draft?.coupon,onChange:quote=>{app.querySelector('[data-of-quote]').innerHTML=quote?window.RewardsUI.quoteTotals(quote)+paymentAmount(quote):totals({...c,currency})}}):null;
-    const applyCoupon=async code=>{if(rewards?.active)throw new Error(tr('Clear platform benefits before applying a seller coupon.','Sotuvchi kuponidan oldin platforma imtiyozlarini tozalang.','Сбросьте бонусы платформы перед применением купона продавца.'));sellerCouponPending=true;try{const quote=await post('/cart/coupon',{code});if(location.href!==route||version!==cartVersion)return;if(rewards?.active)throw new Error(tr('Clear platform benefits before applying a seller coupon.'));coupon=code;Object.assign(c,quote);app.querySelector('[data-of-quote]').innerHTML=totals({...c,currency});}finally{sellerCouponPending=false}};
-    bind(app.querySelector('#of-coupon'),d=>applyCoupon(d.code));click('[data-of-clear-coupon]',async()=>{coupon='';Object.assign(c,o);app.querySelector('#of-coupon input[name=code]').value='';rewards?.invalidate();app.querySelector('[data-of-quote]').innerHTML=totals(o)});
-    click('[data-of-quantity]',async b=>{if(form.dataset.cartUpdating)return;form.dataset.cartUpdating='1';rewards?.invalidate();const controls=[...form.querySelectorAll('button')].map(button=>[button,button.disabled]);controls.forEach(([button])=>button.disabled=true);try{const item=c.items.find(i=>i.id===b.dataset.ofQuantity),saved=cartDraft();await api('/cart',{method:'POST',body:JSON.stringify({listing_id:item.id,quantity:Number(item.quantity)+Number(b.dataset.delta),mode:'set'})});if(location.href!==route||version!==cartVersion)return;await refreshCart();await cart(saved);}finally{delete form.dataset.cartUpdating;controls.forEach(([button,disabled])=>{if(button.isConnected)button.disabled=disabled;});}});
+  function cartQuantity(i) {
+    const quantity = Number(i.quantity),
+      minimum = Number(i.min_quantity || 1),
+      maximum = Number(i.available ?? quantity);
+    return `<div class="of-cart-quantity"><span>${tr("Quantity", "Miqdor", "Количество")}</span><div><button type="button" class="of-text" data-of-quantity="${s(i.id)}" data-delta="-1" aria-label="${tr("Decrease quantity", "Miqdorni kamaytirish", "Уменьшить количество")}" ${quantity <= minimum ? "disabled" : ""}>−</button><output aria-live="polite">${quantity}</output><button type="button" class="of-text" data-of-quantity="${s(i.id)}" data-delta="1" aria-label="${tr("Increase quantity", "Miqdorni ko‘paytirish", "Увеличить количество")}" ${quantity >= maximum ? "disabled" : ""}>+</button></div></div>`;
+  }
+  function cartDraft() {
+    const fields = [...app.querySelectorAll("#of-checkout input")].map(
+      (input) => ({
+        name: input.name,
+        value: input.value,
+        checked: input.checked,
+      }),
+    );
+    return {
+      fields,
+      coupon: app.querySelector("#of-coupon input[name=code]")?.value || "",
+    };
+  }
+  let cartVersion = 0;
+  async function cart(draft = null) {
+    if (!me) {
+      location.hash = "login";
+      return;
+    }
+    const route = location.href,
+      version = ++cartVersion,
+      c = await api("/cart");
+    if (location.href !== route || version !== cartVersion) return;
+    if (!c.items.length) {
+      app.innerHTML = `<section class="page order-process"><h1>${tr("Review your order", "Buyurtmani tekshiring", "Проверьте заказ")}</h1>${emptyState(tr("Your cart is empty.", "Savatchangiz bo‘sh.", "Ваша корзина пуста."))}</section>`;
+      return;
+    }
+    const currency = c.items[0].currency,
+      o = { ...c, currency },
+      account = c.items.some((i) => i.product_type === "account"),
+      rewardsEligible = c.items.every((i) => i.product_type === "account");
+    app.innerHTML = `<section class="page order-process"><header class="of-page-heading"><div><h1>${tr("Review your order", "Buyurtmani tekshiring", "Проверьте заказ")}</h1></div>${testBadge()}</header>${steps(0)}<div class="of-layout"><section class="of-card of-stage"><h2>${tr("Check the details before continuing", "Davom etishdan oldin tekshiring", "Проверьте данные перед продолжением")}</h2><form id="of-checkout">${c.payment_mode !== "stripe_test" ? notice(tr("Live payments are not enabled yet.", "Haqiqiy to‘lovlar hali yoqilmagan.", "Реальные платежи пока не включены.")) : ""}${c.items.map((i) => `<div class="of-cart-line">${product(i, currency, false)}<button type="button" class="of-text" data-of-remove="${s(i.id)}">${tr("Remove", "Olib tashlash", "Удалить")}</button>${cartQuantity(i)}${i.buyer_fields?.length ? `<fieldset data-of-recipient="${s(i.id)}"><legend>${tr("Delivery details", "Yetkazish ma’lumotlari", "Данные доставки")}</legend><div class="of-fields">${i.buyer_fields.map((f) => input(f.key, f.label, `maxlength="120" autocomplete="off" ${f.required ? "required" : ""}`)).join("")}</div></fieldset>` : ""}<p class="of-muted">${icon("clock")} ${tr("Estimated delivery", "Taxminiy yetkazish", "Ожидаемая доставка")}: ${s(i.delivery_eta || "—")}</p></div>`).join("")}${account ? check("account_risk", tr("I understand account-transfer risks and will check the publisher’s rules.", "Akkaunt uzatish xavflarini tushundim va noshir qoidalarini tekshiraman.", "Я понимаю риски передачи аккаунта и проверю правила издателя.")) : ""}${c.items.map(compatibility).join("")}${window.ListingDetail?.protectionMarkup ? `<details class="of-protection"><summary>${tr("Order protection", "Buyurtma himoyasi", "Защита заказа")}</summary>${c.items.map((i) => window.ListingDetail.protectionMarkup(i)).join("")}</details>` : ""}${check("terms", `${tr("I accept the", "Men", "Я принимаю")} <a href="/terms" target="_blank" rel="noopener">${tr("purchase and dispute terms", "xarid va nizo shartlarini qabul qilaman", "условия покупки и споров")}</a>.`)}<div class="of-bottom"><span class="of-muted">${tr("Step 1 of 4", "4 bosqichdan 1", "Шаг 1 из 4")}</span><button type="submit" class="of-primary" ${c.payment_mode === "stripe_test" ? "" : "disabled"}>${tr("Continue to payment", "To‘lovga davom etish", "Перейти к оплате")} ${icon("arrow-right")}</button></div></form></section><aside class="of-card of-summary"><h2>${tr("Order summary", "Buyurtma hisobi", "Сумма заказа")}</h2><div data-of-quote>${totals(o)}</div>${rewardsEligible ? `<details class="of-benefits"><summary>${tr("Rewards & platform coupon", "Bonus va platforma kuponi", "Бонусы и купон платформы")}</summary><div data-of-rewards></div></details>` : ""}<details class="of-coupon"><summary>${tr("Seller coupon", "Sotuvchi kuponi", "Купон продавца")}</summary><form id="of-coupon">${input("code", tr("Seller coupon code", "Sotuvchi kupon kodi", "Код купона продавца"), 'maxlength="20" pattern="[A-Z0-9]{6,20}" required')}<button class="of-secondary" type="submit">${tr("Apply", "Qo‘llash", "Применить")}</button></form><button class="of-text" type="button" data-of-clear-coupon>${tr("Remove seller coupon", "Sotuvchi kuponini olib tashlash", "Удалить купон продавца")}</button></details><a class="of-text" href="/help/orders">${tr("How buying works", "Xarid qanday ishlaydi", "Как проходит покупка")} ↗</a></aside></div></section>`;
+    click("[data-of-remove]", async (b) => {
+      rewards?.invalidate();
+      await api("/cart/" + enc(b.dataset.ofRemove), { method: "DELETE" });
+      await refreshCart();
+      await cart();
+    });
+    const form = app.querySelector("#of-checkout");
+    let coupon = "",
+      sellerCouponPending = false;
+    const rewards =
+      rewardsEligible && window.RewardsUI
+        ? window.RewardsUI.mountQuote(app.querySelector("[data-of-rewards]"), {
+            context: () => ({ kind: "account" }),
+            blocked: () => !!coupon || sellerCouponPending,
+            showTotals: false,
+            auto: !draft?.coupon,
+            onChange: (quote) => {
+              app.querySelector("[data-of-quote]").innerHTML = quote
+                ? window.RewardsUI.quoteTotals(quote) + paymentAmount(quote)
+                : totals({ ...c, currency });
+            },
+          })
+        : null;
+    const applyCoupon = async (code) => {
+      if (rewards?.active)
+        throw new Error(
+          tr(
+            "Clear platform benefits before applying a seller coupon.",
+            "Sotuvchi kuponidan oldin platforma imtiyozlarini tozalang.",
+            "Сбросьте бонусы платформы перед применением купона продавца.",
+          ),
+        );
+      sellerCouponPending = true;
+      try {
+        const quote = await post("/cart/coupon", { code });
+        if (location.href !== route || version !== cartVersion) return;
+        if (rewards?.active)
+          throw new Error(
+            tr("Clear platform benefits before applying a seller coupon."),
+          );
+        coupon = code;
+        Object.assign(c, quote);
+        app.querySelector("[data-of-quote]").innerHTML = totals({
+          ...c,
+          currency,
+        });
+      } finally {
+        sellerCouponPending = false;
+      }
+    };
+    bind(app.querySelector("#of-coupon"), (d) => applyCoupon(d.code));
+    click("[data-of-clear-coupon]", async () => {
+      coupon = "";
+      Object.assign(c, o);
+      app.querySelector("#of-coupon input[name=code]").value = "";
+      rewards?.invalidate();
+      app.querySelector("[data-of-quote]").innerHTML = totals(o);
+    });
+    click("[data-of-quantity]", async (b) => {
+      if (form.dataset.cartUpdating) return;
+      form.dataset.cartUpdating = "1";
+      rewards?.invalidate();
+      const controls = [...form.querySelectorAll("button")].map((button) => [
+        button,
+        button.disabled,
+      ]);
+      controls.forEach(([button]) => (button.disabled = true));
+      try {
+        const item = c.items.find((i) => i.id === b.dataset.ofQuantity),
+          saved = cartDraft();
+        await api("/cart", {
+          method: "POST",
+          body: JSON.stringify({
+            listing_id: item.id,
+            quantity: Number(item.quantity) + Number(b.dataset.delta),
+            mode: "set",
+          }),
+        });
+        if (location.href !== route || version !== cartVersion) return;
+        await refreshCart();
+        await cart(saved);
+      } finally {
+        delete form.dataset.cartUpdating;
+        controls.forEach(([button, disabled]) => {
+          if (button.isConnected) button.disabled = disabled;
+        });
+      }
+    });
 
-    if(draft){const fields=[...app.querySelectorAll('#of-checkout input')];draft.fields.forEach((saved,index)=>{const input=fields[index];if(input?.name===saved.name){input.value=saved.value;input.checked=saved.checked;}});if(draft.coupon){app.querySelector('#of-coupon input[name=code]').value=draft.coupon;try{await applyCoupon(draft.coupon)}catch(error){toast(error.message,'error');}}}
+    if (draft) {
+      const fields = [...app.querySelectorAll("#of-checkout input")];
+      draft.fields.forEach((saved, index) => {
+        const input = fields[index];
+        if (input?.name === saved.name) {
+          input.value = saved.value;
+          input.checked = saved.checked;
+        }
+      });
+      if (draft.coupon) {
+        app.querySelector("#of-coupon input[name=code]").value = draft.coupon;
+        try {
+          await applyCoupon(draft.coupon);
+        } catch (error) {
+          toast(error.message, "error");
+        }
+      }
+    }
 
-    if(location.href!==route||version!==cartVersion)return;
-    form.addEventListener('input',()=>{try{ExperienceUX.checkoutContext(false)}catch{}});
-    bind(form,async d=>{
-      if(form.dataset.cartUpdating)return;
-      const details={};form.querySelectorAll('[data-of-recipient]').forEach(section=>{details[section.dataset.ofRecipient]=Object.fromEntries([...section.querySelectorAll('input')].map(i=>[i.name,i.value.trim()]))});
-      if(sellerCouponPending)throw new Error(tr('Wait for the seller coupon to finish updating.'));
-      const promotion=rewards?.checkout();
-      const payload={accept_terms:d.terms==='on',accept_account_risk:d.account_risk==='on',buyer_details:details,buyer_context:ExperienceUX.checkoutContext(),coupon_code:coupon,expected_total_minor:promotion?promotion.total_minor:c.total_minor,expected_currency:currency,stripe_test_only:true,...(promotion?{rewards_quote_id:promotion.id}:{})};
-      payload.request_key=requestKey(JSON.stringify({items:c.items.map(i=>[i.id,i.quantity,i.price_minor]),...payload}));
-      const result=await post('/checkout',payload);try{sessionStorage.removeItem('sentryloot-checkout:v2:'+me.id)}catch{}await refreshCart();location.hash='order/'+enc(result.id);
+    if (location.href !== route || version !== cartVersion) return;
+    form.addEventListener("input", () => {
+      try {
+        ExperienceUX.checkoutContext(false);
+      } catch {}
+    });
+    bind(form, async (d) => {
+      if (form.dataset.cartUpdating) return;
+      const details = {};
+      form.querySelectorAll("[data-of-recipient]").forEach((section) => {
+        details[section.dataset.ofRecipient] = Object.fromEntries(
+          [...section.querySelectorAll("input")].map((i) => [
+            i.name,
+            i.value.trim(),
+          ]),
+        );
+      });
+      if (sellerCouponPending)
+        throw new Error(tr("Wait for the seller coupon to finish updating."));
+      const promotion = rewards?.checkout();
+      const payload = {
+        accept_terms: d.terms === "on",
+        accept_account_risk: d.account_risk === "on",
+        buyer_details: details,
+        buyer_context: ExperienceUX.checkoutContext(),
+        coupon_code: coupon,
+        expected_total_minor: promotion ? promotion.total_minor : c.total_minor,
+        expected_currency: currency,
+        stripe_test_only: true,
+        ...(promotion ? { rewards_quote_id: promotion.id } : {}),
+      };
+      payload.request_key = requestKey(
+        JSON.stringify({
+          items: c.items.map((i) => [i.id, i.quantity, i.price_minor]),
+          ...payload,
+        }),
+      );
+      const result = await post("/checkout", payload);
+      try {
+        sessionStorage.removeItem("sentryloot-checkout:v2:" + me.id);
+      } catch {}
+      await refreshCart();
+      location.hash = "order/" + enc(result.id);
     });
     window.MobileSite?.cart?.(c);
   }
-  function reviewUpload(o){
-    const reviewed=o.account_review,ready=!reviewed||['collecting','needs_info'].includes(reviewed.status);
-    if(!ready)return notice(tr('Your access evidence is awaiting moderator review. The balance stays pending.','Kirish dalillari moderator tekshiruvini kutmoqda. mablag‘i Pending holatida qoladi.','Доказательства доступа проверяет модератор. средства остаются в ожидании.'));
-    return `<details class="of-account-review" open><summary>${tr('Confirm account access','Akkauntga kirishni tasdiqlash','Подтвердить доступ к аккаунту')}</summary><p>${tr('After checking access, upload the game profile and one page inside the account. Hide emails, passwords, OTPs and recovery details. A moderator must approve this account handover before release.','Kirishni tekshirib, o‘yin profili va akkaunt ichidagi bitta sahifa rasmini yuklang. Email, parol, OTP va tiklash ma’lumotlarini yoping. Mablag‘ ochilishidan oldin moderator tasdiqlaydi.','Проверьте доступ, загрузите профиль игры и одну страницу аккаунта. Скройте email, пароли, OTP и данные восстановления. Перед зачислением требуется одобрение модератора.')}</p>${reviewed?.review_note?notice(s(reviewed.review_note)):''}<form data-form="account-evidence" data-order="${s(o.id)}"><div class="of-fields">${input('evidence_1',tr('Game profile screenshot','O‘yin profili skrinshoti','Скриншот профиля игры'),'type="file" accept="image/jpeg,image/png,image/webp" required')}${input('evidence_2',tr('Account page screenshot','Akkaunt sahifasi skrinshoti','Скриншот страницы аккаунта'),'type="file" accept="image/jpeg,image/png,image/webp" required')}</div>${check('confirm_privacy',tr('The images contain no passwords, OTPs or private recovery details.','Rasmlarda parol, OTP yoki maxfiy tiklash ma’lumoti yo‘q.','Изображения не содержат паролей, OTP и секретных данных восстановления.'))}<button type="submit" class="of-primary">${tr('Confirm access & submit for review','Kirishni tasdiqlash va tekshiruvga yuborish','Подтвердить доступ и отправить на проверку')}</button></form></details>`;
+  function reviewUpload(o) {
+    const reviewed = o.account_review,
+      ready =
+        !reviewed || ["collecting", "needs_info"].includes(reviewed.status);
+    if (!ready)
+      return notice(
+        tr(
+          "Your access evidence is awaiting moderator review. The balance stays pending.",
+          "Kirish dalillari moderator tekshiruvini kutmoqda. mablag‘i Pending holatida qoladi.",
+          "Доказательства доступа проверяет модератор. средства остаются в ожидании.",
+        ),
+      );
+    return `<details class="of-account-review" open><summary>${tr("Confirm account access", "Akkauntga kirishni tasdiqlash", "Подтвердить доступ к аккаунту")}</summary><p>${tr("After checking access, upload the game profile and one page inside the account. Hide emails, passwords, OTPs and recovery details. A moderator must approve this account handover before release.", "Kirishni tekshirib, o‘yin profili va akkaunt ichidagi bitta sahifa rasmini yuklang. Email, parol, OTP va tiklash ma’lumotlarini yoping. Mablag‘ ochilishidan oldin moderator tasdiqlaydi.", "Проверьте доступ, загрузите профиль игры и одну страницу аккаунта. Скройте email, пароли, OTP и данные восстановления. Перед зачислением требуется одобрение модератора.")}</p>${reviewed?.review_note ? notice(s(reviewed.review_note)) : ""}<form data-form="account-evidence" data-order="${s(o.id)}"><div class="of-fields">${input("evidence_1", tr("Game profile screenshot", "O‘yin profili skrinshoti", "Скриншот профиля игры"), 'type="file" accept="image/jpeg,image/png,image/webp" required')}${input("evidence_2", tr("Account page screenshot", "Akkaunt sahifasi skrinshoti", "Скриншот страницы аккаунта"), 'type="file" accept="image/jpeg,image/png,image/webp" required')}</div>${check("confirm_privacy", tr("The images contain no passwords, OTPs or private recovery details.", "Rasmlarda parol, OTP yoki maxfiy tiklash ma’lumoti yo‘q.", "Изображения не содержат паролей, OTP и секретных данных восстановления."))}<button type="submit" class="of-primary">${tr("Confirm access & submit for review", "Kirishni tasdiqlash va tekshiruvga yuborish", "Подтвердить доступ и отправить на проверку")}</button></form></details>`;
   }
-  function stageMarkup(o,w,buyer,prepare=false){
-    const current=phase(o,buyer),canDeliver=['paid','awaiting_delivery'].includes(o.status)&&!w.is_paused;
-    if(w.is_paused)return `<h2>${tr('Cancellation under review','Bekor qilish ko‘rib chiqilmoqda','Отмена рассматривается')}</h2>${notice(tr('Delivery and completion are paused until this request is resolved.','So‘rov hal bo‘lguncha yetkazish va yakunlash to‘xtatilgan.','Доставка и завершение приостановлены до решения по запросу.'))}<p>${tr('Reply in the cancellation section below.','Pastdagi bekor qilish bo‘limida javob bering.','Ответьте в разделе отмены ниже.')}</p>`;
-    if(current<0){
-      const titles={cancelled:tr('Order cancelled','Buyurtma bekor qilindi','Заказ отменён'),disputed:tr('Problem under review','Muammo ko‘rib chiqilmoqda','Проблема рассматривается'),refund_pending:tr('Refund in progress','Qaytarim bajarilmoqda','Возврат обрабатывается'),refunded:tr('Payment refunded','To‘lov qaytarildi','Платёж возвращён')};
-      return `<h2>${titles[o.status]}</h2>${notice(o.status==='cancelled'?tr('No further payment is required. You can review the items in your cart.','Qo‘shimcha to‘lov talab qilinmaydi. Mahsulotlarni savatchada tekshirishingiz mumkin.','Дополнительная оплата не нужна. Проверьте товары в корзине.'):o.status==='refunded'?tr('The payment has been refunded. Seller earnings for this amount have been reversed.','to‘lovi qaytarildi. Shu summa bo‘yicha sotuvchi daromadi bekor qilindi.','платёж возвращён. Доход продавца по этой сумме отменён.'):tr('Funds are frozen while the payment or case is being reviewed. Updates appear here and in notifications.','To‘lov yoki murojaat tekshirilayotganda mablag‘ ushlab turiladi. Yangiliklar shu yerda va bildirishnomalarda chiqadi.','Средства заморожены на время проверки платежа или обращения. Обновления появятся здесь и в уведомлениях.'))}${funds(o,buyer)}${button(tr('Refresh status','Holatni yangilash','Обновить статус'),'data-of-refresh')}${o.status==='cancelled'?'<a class="of-text" href="/#cart">'+tr('Open cart','Savatchani ochish','Открыть корзину')+' →</a>':''}`;
+  function stageMarkup(o, w, buyer, prepare = false) {
+    const current = phase(o, buyer),
+      canDeliver =
+        ["paid", "awaiting_delivery"].includes(o.status) && !w.is_paused;
+    if (w.is_paused)
+      return `<h2>${tr("Cancellation under review", "Bekor qilish ko‘rib chiqilmoqda", "Отмена рассматривается")}</h2>${notice(tr("Delivery and completion are paused until this request is resolved.", "So‘rov hal bo‘lguncha yetkazish va yakunlash to‘xtatilgan.", "Доставка и завершение приостановлены до решения по запросу."))}<p>${tr("Reply in the cancellation section below.", "Pastdagi bekor qilish bo‘limida javob bering.", "Ответьте в разделе отмены ниже.")}</p>`;
+    if (current < 0) {
+      const titles = {
+        cancelled: tr(
+          "Order cancelled",
+          "Buyurtma bekor qilindi",
+          "Заказ отменён",
+        ),
+        disputed: tr(
+          "Problem under review",
+          "Muammo ko‘rib chiqilmoqda",
+          "Проблема рассматривается",
+        ),
+        refund_pending: tr(
+          "Refund in progress",
+          "Qaytarim bajarilmoqda",
+          "Возврат обрабатывается",
+        ),
+        refunded: tr(
+          "Payment refunded",
+          "To‘lov qaytarildi",
+          "Платёж возвращён",
+        ),
+      };
+      return `<h2>${titles[o.status]}</h2>${notice(o.status === "cancelled" ? tr("No further payment is required. You can review the items in your cart.", "Qo‘shimcha to‘lov talab qilinmaydi. Mahsulotlarni savatchada tekshirishingiz mumkin.", "Дополнительная оплата не нужна. Проверьте товары в корзине.") : o.status === "refunded" ? tr("The payment has been refunded. Seller earnings for this amount have been reversed.", "to‘lovi qaytarildi. Shu summa bo‘yicha sotuvchi daromadi bekor qilindi.", "платёж возвращён. Доход продавца по этой сумме отменён.") : tr("Funds are frozen while the payment or case is being reviewed. Updates appear here and in notifications.", "To‘lov yoki murojaat tekshirilayotganda mablag‘ ushlab turiladi. Yangiliklar shu yerda va bildirishnomalarda chiqadi.", "Средства заморожены на время проверки платежа или обращения. Обновления появятся здесь и в уведомлениях."))}${funds(o, buyer)}${button(tr("Refresh status", "Holatni yangilash", "Обновить статус"), "data-of-refresh")}${o.status === "cancelled" ? '<a class="of-text" href="/#cart">' + tr("Open cart", "Savatchani ochish", "Открыть корзину") + " →</a>" : ""}`;
     }
-    if(o.status==='pending_payment')return `<h2>${buyer?tr('Complete payment','To‘lovni bajaring','Завершите оплату'):tr('Waiting for payment','To‘lov kutilmoqda','Ожидается оплата')}</h2><p class="of-muted">${buyer?tr('Continue to Stripe checkout. Delivery starts only after the server confirms payment.','Stripe to‘loviga o‘ting. Server to‘lovni tasdiqlagandan keyin yetkazish boshlanadi.','Перейдите к оплате Stripe. Доставка начнётся после подтверждения платежа сервером.'):tr('Do not deliver until payment is confirmed.','To‘lov tasdiqlanmaguncha yetkazmang.','Не передавайте товар до подтверждения оплаты.')}</p><div class="of-payment-total" data-original-currency><span>${tr('Amount','Summa','Сумма')}</span><strong>${chargeMoney(o.total_minor,o.currency)}</strong></div>${buyer&&o.payment?.provider==='stripe_test'?button(tr('Pay','To‘lash','Оплатить')+' '+chargeMoney(o.total_minor,o.currency)+' '+icon('arrow-right'),'data-of-pay data-original-currency',true):buyer&&o.payment?.provider==='sandbox'?notice(tr('This older order used the local simulator. Start a new order to pay through Stripe checkout.','Bu eski buyurtma mahalliy simulyatorda yaratilgan. Stripe to‘lovi uchun yangi buyurtma boshlang.','Этот старый заказ создан в локальном симуляторе. Создайте новый заказ для оплаты Stripe.')):''}${button(tr('Check payment status','To‘lov holatini tekshirish','Проверить оплату'),'data-of-confirm-payment')}`;
-    if(!buyer&&o.status==='paid')return `<h2>${tr('New paid order','Yangi to‘langan buyurtma','Новый оплаченный заказ')}</h2>${notice(tr('Payment confirmed. You can prepare the order.','To‘lov tasdiqlandi. Buyurtmani tayyorlashingiz mumkin.','Оплата подтверждена. Можно готовить заказ.'),'success')}${o.items.map(i=>product(i,o.currency)).join('')}${funds(o,false)}${button(tr('Start preparing','Tayyorlashni boshlash','Начать подготовку')+' '+icon('arrow-right'),'data-of-prepare',true)}`;
-    if(!buyer&&canDeliver)return `<h2>${prepare?tr('Submit delivery','Yetkazishni yuborish','Передать заказ'):tr('Prepare your delivery','Yetkazishni tayyorlang','Подготовьте заказ')}</h2><p class="of-muted">${tr('Check the purchased item and recipient details. Use the protected delivery form for access information.','Xarid qilingan mahsulot va qabul qiluvchi ma’lumotlarini tekshiring. Kirish ma’lumotlarini himoyalangan yetkazish formasida yuboring.','Проверьте товар и данные получателя. Передавайте данные доступа через защищённую форму.')}</p><div data-of-seller-delivery></div>${funds(o,false)}`;
-    if(o.status==='completed')return `<div class="of-complete-symbol">✓</div><h2>${tr('Order completed','Buyurtma yakunlandi','Заказ завершён')}</h2><p class="of-muted">${tr('Delivery has been accepted and the order is complete.','Yetkazish qabul qilindi va buyurtma yakunlandi.','Товар принят, заказ завершён.')}</p>${funds(o,buyer)}${buyer?`<div data-of-review></div>`:`<a class="of-primary" href="/#wallet">${tr('Open wallet','Hamyonni ochish','Открыть кошелёк')} ${icon('arrow-right')}</a>`}`;
-    const allDelivered=w.items.every(i=>i.delivered_quantity>=i.quantity),account=o.items.some(i=>i.product_type==='account');
-    return `<h2>${o.status==='under_review'?tr('Access review in progress','Kirish tekshiruvi davom etmoqda','Проверка доступа'):buyer?allDelivered?tr('Check your delivery','Yetkazilgan mahsulotni tekshiring','Проверьте полученный товар'):tr('Your order is being prepared','Buyurtmangiz tayyorlanmoqda','Ваш заказ готовится'):tr('Waiting for buyer confirmation','Xaridor tasdig‘i kutilmoqda','Ожидается подтверждение покупателя')}</h2>${notice(tr('Payment confirmed','To‘lov tasdiqlandi','Оплата подтверждена'),'success')}<p class="of-muted">${allDelivered?tr('The seller submitted delivery. Check everything before confirming.','Sotuvchi yetkazishni yubordi. Tasdiqlashdan oldin hammasini tekshiring.','Продавец передал заказ. Проверьте всё перед подтверждением.'):tr('The seller will deliver through this protected order page.','Sotuvchi ushbu himoyalangan buyurtma sahifasi orqali yetkazadi.','Продавец передаст заказ через эту защищённую страницу.')}</p>${w.items.map(i=>`<article class="of-delivery-item"><h3>${s(i.title)}</h3><span class="of-muted">${i.delivered_quantity} / ${i.quantity} ${tr('delivered','yetkazildi','доставлено')}</span><progress value="${i.delivered_quantity}" max="${i.quantity}"></progress>${i.batches.map(batch=>`<details class="of-secure"><summary>${icon('shield')} ${tr('View secure delivery','Himoyalangan yetkazishni ochish','Открыть защищённую передачу')} · ${batch.quantity}</summary>${batch.body_private?`<p>${tr('Access details are private to the buyer and this seller.','Kirish ma’lumotlari faqat xaridor va shu sotuvchiga ochiladi.','Данные доступа видны только покупателю и этому продавцу.')}</p>`:`<pre data-user-content>${s(batch.body)}</pre>`}</details>`).join('')}${!i.batches.length&&o.items.find(line=>line.id===i.id)?.delivery?.protected_payload?`<details class="of-secure"><summary>${tr('View secure delivery','Himoyalangan yetkazishni ochish','Открыть защищённую передачу')}</summary><pre data-user-content>${s(o.items.find(line=>line.id===i.id).delivery.protected_payload)}</pre></details>`:''}</article>`).join('')}${buyer&&allDelivered?account?reviewUpload(o):check('received',tr('I checked the delivered items and confirm receipt.','Yetkazilgan mahsulotlarni tekshirdim va qabul qildim.','Я проверил товары и подтверждаю получение.'))+button(tr('Confirm received','Qabul qilishni tasdiqlash','Подтвердить получение'),'data-of-complete',true):''}${buyer&&['paid','awaiting_delivery','delivered'].includes(o.status)?`<a class="of-secondary" href="/#dispute/${enc(o.id)}">${tr('Report a problem','Muammo haqida xabar berish','Сообщить о проблеме')}</a>`:''}${funds(o,buyer)}`;
+    if (o.status === "pending_payment")
+      return `<h2>${buyer ? tr("Complete payment", "To‘lovni bajaring", "Завершите оплату") : tr("Waiting for payment", "To‘lov kutilmoqda", "Ожидается оплата")}</h2><p class="of-muted">${buyer ? tr("Continue to Stripe checkout. Delivery starts only after the server confirms payment.", "Stripe to‘loviga o‘ting. Server to‘lovni tasdiqlagandan keyin yetkazish boshlanadi.", "Перейдите к оплате Stripe. Доставка начнётся после подтверждения платежа сервером.") : tr("Do not deliver until payment is confirmed.", "To‘lov tasdiqlanmaguncha yetkazmang.", "Не передавайте товар до подтверждения оплаты.")}</p><div class="of-payment-total" data-original-currency><span>${tr("Amount", "Summa", "Сумма")}</span><strong>${chargeMoney(o.total_minor, o.currency)}</strong></div>${buyer && o.payment?.provider === "stripe_test" ? button(tr("Pay", "To‘lash", "Оплатить") + " " + chargeMoney(o.total_minor, o.currency) + " " + icon("arrow-right"), "data-of-pay data-original-currency", true) : buyer && o.payment?.provider === "sandbox" ? notice(tr("This older order used the local simulator. Start a new order to pay through Stripe checkout.", "Bu eski buyurtma mahalliy simulyatorda yaratilgan. Stripe to‘lovi uchun yangi buyurtma boshlang.", "Этот старый заказ создан в локальном симуляторе. Создайте новый заказ для оплаты Stripe.")) : ""}${button(tr("Check payment status", "To‘lov holatini tekshirish", "Проверить оплату"), "data-of-confirm-payment")}`;
+    if (!buyer && o.status === "paid")
+      return `<h2>${tr("New paid order", "Yangi to‘langan buyurtma", "Новый оплаченный заказ")}</h2>${notice(tr("Payment confirmed. You can prepare the order.", "To‘lov tasdiqlandi. Buyurtmani tayyorlashingiz mumkin.", "Оплата подтверждена. Можно готовить заказ."), "success")}${o.items.map((i) => product(i, o.currency)).join("")}${funds(o, false)}${button(tr("Start preparing", "Tayyorlashni boshlash", "Начать подготовку") + " " + icon("arrow-right"), "data-of-prepare", true)}`;
+    if (!buyer && canDeliver)
+      return `<h2>${prepare ? tr("Submit delivery", "Yetkazishni yuborish", "Передать заказ") : tr("Prepare your delivery", "Yetkazishni tayyorlang", "Подготовьте заказ")}</h2><p class="of-muted">${tr("Check the purchased item and recipient details. Use the protected delivery form for access information.", "Xarid qilingan mahsulot va qabul qiluvchi ma’lumotlarini tekshiring. Kirish ma’lumotlarini himoyalangan yetkazish formasida yuboring.", "Проверьте товар и данные получателя. Передавайте данные доступа через защищённую форму.")}</p><div data-of-seller-delivery></div>${funds(o, false)}`;
+    if (o.status === "completed")
+      return `<div class="of-complete-symbol">✓</div><h2>${tr("Order completed", "Buyurtma yakunlandi", "Заказ завершён")}</h2><p class="of-muted">${tr("Delivery has been accepted and the order is complete.", "Yetkazish qabul qilindi va buyurtma yakunlandi.", "Товар принят, заказ завершён.")}</p>${funds(o, buyer)}${buyer ? `<div data-of-review></div>` : `<a class="of-primary" href="/#wallet">${tr("Open wallet", "Hamyonni ochish", "Открыть кошелёк")} ${icon("arrow-right")}</a>`}`;
+    const allDelivered = w.items.every(
+        (i) => i.delivered_quantity >= i.quantity,
+      ),
+      account = o.items.some((i) => i.product_type === "account");
+    return `<h2>${o.status === "under_review" ? tr("Access review in progress", "Kirish tekshiruvi davom etmoqda", "Проверка доступа") : buyer ? (allDelivered ? tr("Check your delivery", "Yetkazilgan mahsulotni tekshiring", "Проверьте полученный товар") : tr("Your order is being prepared", "Buyurtmangiz tayyorlanmoqda", "Ваш заказ готовится")) : tr("Waiting for buyer confirmation", "Xaridor tasdig‘i kutilmoqda", "Ожидается подтверждение покупателя")}</h2>${notice(tr("Payment confirmed", "To‘lov tasdiqlandi", "Оплата подтверждена"), "success")}<p class="of-muted">${allDelivered ? tr("The seller submitted delivery. Check everything before confirming.", "Sotuvchi yetkazishni yubordi. Tasdiqlashdan oldin hammasini tekshiring.", "Продавец передал заказ. Проверьте всё перед подтверждением.") : tr("The seller will deliver through this protected order page.", "Sotuvchi ushbu himoyalangan buyurtma sahifasi orqali yetkazadi.", "Продавец передаст заказ через эту защищённую страницу.")}</p>${w.items.map((i) => `<article class="of-delivery-item"><h3>${s(i.title)}</h3><span class="of-muted">${i.delivered_quantity} / ${i.quantity} ${tr("delivered", "yetkazildi", "доставлено")}</span><progress value="${i.delivered_quantity}" max="${i.quantity}"></progress>${i.batches.map((batch) => `<details class="of-secure"><summary>${icon("shield")} ${tr("View secure delivery", "Himoyalangan yetkazishni ochish", "Открыть защищённую передачу")} · ${batch.quantity}</summary>${batch.body_private ? `<p>${tr("Access details are private to the buyer and this seller.", "Kirish ma’lumotlari faqat xaridor va shu sotuvchiga ochiladi.", "Данные доступа видны только покупателю и этому продавцу.")}</p>` : `<pre data-user-content>${s(batch.body)}</pre>`}</details>`).join("")}${!i.batches.length && o.items.find((line) => line.id === i.id)?.delivery?.protected_payload ? `<details class="of-secure"><summary>${tr("View secure delivery", "Himoyalangan yetkazishni ochish", "Открыть защищённую передачу")}</summary><pre data-user-content>${s(o.items.find((line) => line.id === i.id).delivery.protected_payload)}</pre></details>` : ""}</article>`).join("")}${buyer && allDelivered ? (account ? reviewUpload(o) : check("received", tr("I checked the delivered items and confirm receipt.", "Yetkazilgan mahsulotlarni tekshirdim va qabul qildim.", "Я проверил товары и подтверждаю получение.")) + button(tr("Confirm received", "Qabul qilishni tasdiqlash", "Подтвердить получение"), "data-of-complete", true)) : ""}${buyer && ["paid", "awaiting_delivery", "delivered"].includes(o.status) ? `<a class="of-secondary" href="/#dispute/${enc(o.id)}">${tr("Report a problem", "Muammo haqida xabar berish", "Сообщить о проблеме")}</a>` : ""}${funds(o, buyer)}`;
   }
-  async function order(id){
-    if(!me){location.hash='login';return}
-    const route=location.href,[o,w]=await Promise.all([api(url(id)),api(url(id)+'/workflow')]);if(location.href!==route)return;
-    const buyer=w.order.buyer,current=phase(o,buyer),observer=!buyer&&!w.items.some(i=>i.seller_id===me.id);
-    app.innerHTML=`<section class="page order-process" data-of-order="${s(id)}"><header class="of-page-heading"><div><h1>${tr('Order','Buyurtma','Заказ')} ${s(o.reference)}</h1><p class="of-muted">${when(o.created_at)} · ${money(o.total_minor,o.currency)}</p></div>${o.funds?.test_only?testBadge():''}</header>${o.payment?.provider==='sandbox'?notice(tr('This older order used the local simulator, not Stripe. Start a new purchase to use Stripe checkout.','Bu eski buyurtma Stripe orqali emas, mahalliy simulyatorda yaratilgan. Stripe to‘lovi uchun yangi xarid boshlang.','Этот старый заказ создан в локальном симуляторе, а не в Stripe. Для оплаты Stripe начните новую покупку.')):''}${steps(current,buyer)}<div class="of-layout"><main class="of-card of-stage" id="of-stage">${observer?notice(tr('Moderator view. Delivery credentials remain private.','Moderator ko‘rinishi. Kirish ma’lumotlari maxfiy qoladi.','Режим модератора. Данные доступа остаются приватными.')):''}${observer?`<h2>${tr('Order review','Buyurtma tekshiruvi','Проверка заказа')}</h2><p class="of-muted">${s(statusLabel(o.status))}</p>${funds(o,false)}<a class="of-secondary" href="/#admin">${tr('Open admin review','Admin tekshiruvini ochish','Открыть проверку администратора')}</a>`:stageMarkup(o,w,buyer)}</main><aside><section class="of-card of-summary"><h2>${tr('Order summary','Buyurtma hisobi','Сумма заказа')}</h2>${o.items.map(i=>product(i,o.currency)).join('')}${totals(o,buyer)}<div class="of-chat-actions">${(buyer?[...new Set(o.items.map(i=>i.store_id))]:observer?[]:[me.id]).map(seller=>button(icon('message')+' '+(buyer?tr('Message seller','Sotuvchiga yozish','Написать продавцу'):tr('Message buyer','Xaridorga yozish','Написать покупателю')),`data-of-chat="${s(seller)}"`)).join('')}</div>${button(icon('refresh')+' '+tr('Refresh status','Holatni yangilash','Обновить статус'),'data-of-refresh')}</section><details class="of-card of-history"><summary>${tr('Order history','Buyurtma tarixi','История заказа')}</summary>${o.events.map(event=>`<article><b>${s(statusLabel(event.to_status))}</b><time>${when(event.created_at)}</time><p>${s(event.note)}</p></article>`).join('')}</details></aside></div><details class="of-card of-tools" ${w.is_paused?'open':''}><summary>${tr('Evidence, cancellation & after-sale support','Dalillar, bekor qilish va sotuvdan keyingi yordam','Доказательства, отмена и поддержка после продажи')}</summary><div class="ux-order-guide" hidden></div></details><div data-launch-progress></div></section>`;
-    if(buyer&&o.status==='completed'&&o.payment?.provider==='stripe_test')requireReview(o.id);
+  async function order(id) {
+    if (!me) {
+      location.hash = "login";
+      return;
+    }
+    const route = location.href,
+      [o, w] = await Promise.all([api(url(id)), api(url(id) + "/workflow")]);
+    if (location.href !== route) return;
+    const buyer = w.order.buyer,
+      current = phase(o, buyer),
+      observer = !buyer && !w.items.some((i) => i.seller_id === me.id);
+    app.innerHTML = `<section class="page order-process" data-of-order="${s(id)}"><header class="of-page-heading"><div><h1>${tr("Order", "Buyurtma", "Заказ")} ${s(o.reference)}</h1><p class="of-muted">${when(o.created_at)} · ${money(o.total_minor, o.currency)}</p></div>${o.funds?.test_only ? testBadge() : ""}</header>${o.payment?.provider === "sandbox" ? notice(tr("This older order used the local simulator, not Stripe. Start a new purchase to use Stripe checkout.", "Bu eski buyurtma Stripe orqali emas, mahalliy simulyatorda yaratilgan. Stripe to‘lovi uchun yangi xarid boshlang.", "Этот старый заказ создан в локальном симуляторе, а не в Stripe. Для оплаты Stripe начните новую покупку.")) : ""}${steps(current, buyer)}<div class="of-layout"><main class="of-card of-stage" id="of-stage">${observer ? notice(tr("Moderator view. Delivery credentials remain private.", "Moderator ko‘rinishi. Kirish ma’lumotlari maxfiy qoladi.", "Режим модератора. Данные доступа остаются приватными.")) : ""}${observer ? `<h2>${tr("Order review", "Buyurtma tekshiruvi", "Проверка заказа")}</h2><p class="of-muted">${s(statusLabel(o.status))}</p>${funds(o, false)}<a class="of-secondary" href="/#admin">${tr("Open admin review", "Admin tekshiruvini ochish", "Открыть проверку администратора")}</a>` : stageMarkup(o, w, buyer)}</main><aside><section class="of-card of-summary"><h2>${tr("Order summary", "Buyurtma hisobi", "Сумма заказа")}</h2>${o.items.map((i) => product(i, o.currency)).join("")}${totals(o, buyer)}<div class="of-chat-actions">${(buyer ? [...new Set(o.items.map((i) => i.store_id))] : observer ? [] : [me.id]).map((seller) => button(icon("message") + " " + (buyer ? tr("Message seller", "Sotuvchiga yozish", "Написать продавцу") : tr("Message buyer", "Xaridorga yozish", "Написать покупателю")), `data-of-chat="${s(seller)}"`)).join("")}</div>${button(icon("refresh") + " " + tr("Refresh status", "Holatni yangilash", "Обновить статус"), "data-of-refresh")}</section><details class="of-card of-history"><summary>${tr("Order history", "Buyurtma tarixi", "История заказа")}</summary>${o.events.map((event) => `<article><b>${s(statusLabel(event.to_status))}</b><time>${when(event.created_at)}</time><p>${s(event.note)}</p></article>`).join("")}</details></aside></div><details class="of-card of-tools" ${w.is_paused ? "open" : ""}><summary>${tr("Evidence, cancellation & after-sale support", "Dalillar, bekor qilish va sotuvdan keyingi yordam", "Доказательства, отмена и поддержка после продажи")}</summary><div class="ux-order-guide" hidden></div></details><div data-launch-progress></div></section>`;
+    if (
+      buyer &&
+      o.status === "completed" &&
+      o.payment?.provider === "stripe_test"
+    )
+      requireReview(o.id);
     // Preserve existing evidence, cancellation, appeals and after-sale endpoints.
     // Their forms live in one secondary accordion, not over the current step.
-    await TradeUX.order(o,w);
-    const utilities=app.querySelector('#trade-order');
-    if(utilities){utilities.hidden=false;utilities.classList.remove('ux-order-step-gated');utilities.querySelector('.trade-progress-list')?.remove();
-      const destination=app.querySelector('[data-of-seller-delivery]');
-      if(destination){utilities.querySelectorAll('.trade-delivery').forEach(form=>{const item=w.items.find(i=>i.id===form.dataset.item),group=document.createElement('section');group.className='of-delivery-form';group.innerHTML=`<h3>${s(item.title)}</h3>${item.buyer_fields.length?`<dl class="of-totals">${item.buyer_fields.map(f=>`<div><dt>${s(f.label)}</dt><dd>${s(item.buyer_details[f.key]||'—')}</dd></div>`).join('')}</dl>`:''}`;destination.append(group);group.append(form);const submit=form.querySelector('button[type=submit]');submit.className='of-primary';submit.textContent=tr('Continue to delivery','Yetkazishga davom etish','Перейти к передаче');let confirmed=false;form.addEventListener('submit',event=>{if(confirmed)return;event.preventDefault();event.stopImmediatePropagation();if(!form.reportValidity())return;form.hidden=true;const stageTitle=app.querySelector('#of-stage>h2');if(stageTitle)stageTitle.textContent=tr('Submit delivery','Yetkazishni yuborish','Передать заказ');const preview=document.createElement('section');preview.className='of-delivery-confirm';preview.innerHTML=`<h3>${tr('Ready to deliver','Yetkazishga tayyor','Готово к передаче')}</h3><p>${s(item.title)} · ${Number(new FormData(form).get('quantity'))} ${tr('items','dona','шт.')}</p>${notice(tr('The delivery details will be shared privately with the buyer.','Yetkazish ma’lumotlari xaridorga maxfiy yuboriladi.','Данные передачи будут приватно отправлены покупателю.'))}<div class="of-actions">${button(tr('Edit','Tahrirlash','Изменить'),'data-of-edit-delivery')}${button(tr('Mark as delivered','Yetkazilgan deb yuborish','Отметить переданным'),'data-of-send-delivery',true)}</div>`;group.append(preview);app.querySelector('.of-steps').outerHTML=steps(2,false);preview.querySelector('[data-of-edit-delivery]').onclick=()=>{preview.remove();form.hidden=false;if(stageTitle)stageTitle.textContent=tr('Prepare your delivery','Yetkazishni tayyorlang','Подготовьте заказ');app.querySelector('.of-steps').outerHTML=steps(1,false)};preview.querySelector('[data-of-send-delivery]').onclick=()=>{confirmed=true;form.hidden=false;preview.remove();form.requestSubmit(submit)};},true);});}
-      utilities.querySelectorAll('.trade-buyer-details').forEach(f=>{if(buyer&&o.status!=='pending_payment')f.closest('details').open=false});
+    await TradeUX.order(o, w);
+    const utilities = app.querySelector("#trade-order");
+    if (utilities) {
+      utilities.hidden = false;
+      utilities.classList.remove("ux-order-step-gated");
+      utilities.querySelector(".trade-progress-list")?.remove();
+      const destination = app.querySelector("[data-of-seller-delivery]");
+      if (destination) {
+        utilities.querySelectorAll(".trade-delivery").forEach((form) => {
+          const item = w.items.find((i) => i.id === form.dataset.item),
+            group = document.createElement("section");
+          group.className = "of-delivery-form";
+          group.innerHTML = `<h3>${s(item.title)}</h3>${item.buyer_fields.length ? `<dl class="of-totals">${item.buyer_fields.map((f) => `<div><dt>${s(f.label)}</dt><dd>${s(item.buyer_details[f.key] || "—")}</dd></div>`).join("")}</dl>` : ""}`;
+          destination.append(group);
+          group.append(form);
+          const submit = form.querySelector("button[type=submit]");
+          submit.className = "of-primary";
+          submit.textContent = tr(
+            "Continue to delivery",
+            "Yetkazishga davom etish",
+            "Перейти к передаче",
+          );
+          let confirmed = false;
+          form.addEventListener(
+            "submit",
+            (event) => {
+              if (confirmed) return;
+              event.preventDefault();
+              event.stopImmediatePropagation();
+              if (!form.reportValidity()) return;
+              form.hidden = true;
+              const stageTitle = app.querySelector("#of-stage>h2");
+              if (stageTitle)
+                stageTitle.textContent = tr(
+                  "Submit delivery",
+                  "Yetkazishni yuborish",
+                  "Передать заказ",
+                );
+              const preview = document.createElement("section");
+              preview.className = "of-delivery-confirm";
+              preview.innerHTML = `<h3>${tr("Ready to deliver", "Yetkazishga tayyor", "Готово к передаче")}</h3><p>${s(item.title)} · ${Number(new FormData(form).get("quantity"))} ${tr("items", "dona", "шт.")}</p>${notice(tr("The delivery details will be shared privately with the buyer.", "Yetkazish ma’lumotlari xaridorga maxfiy yuboriladi.", "Данные передачи будут приватно отправлены покупателю."))}<div class="of-actions">${button(tr("Edit", "Tahrirlash", "Изменить"), "data-of-edit-delivery")}${button(tr("Mark as delivered", "Yetkazilgan deb yuborish", "Отметить переданным"), "data-of-send-delivery", true)}</div>`;
+              group.append(preview);
+              app.querySelector(".of-steps").outerHTML = steps(2, false);
+              preview.querySelector("[data-of-edit-delivery]").onclick = () => {
+                preview.remove();
+                form.hidden = false;
+                if (stageTitle)
+                  stageTitle.textContent = tr(
+                    "Prepare your delivery",
+                    "Yetkazishni tayyorlang",
+                    "Подготовьте заказ",
+                  );
+                app.querySelector(".of-steps").outerHTML = steps(1, false);
+              };
+              preview.querySelector("[data-of-send-delivery]").onclick = () => {
+                confirmed = true;
+                form.hidden = false;
+                preview.remove();
+                form.requestSubmit(submit);
+              };
+            },
+            true,
+          );
+        });
+      }
+      utilities.querySelectorAll(".trade-buyer-details").forEach((f) => {
+        if (buyer && o.status !== "pending_payment")
+          f.closest("details").open = false;
+      });
     }
-    click('[data-of-refresh]',()=>order(id));
-    click('[data-of-prepare]',async()=>{await post(url(id)+'/prepare');await order(id)});
-    click('[data-of-pay]',async()=>{const r=await post(url(id)+'/stripe-checkout');location.assign(r.checkout_url)});
-    click('[data-of-confirm-payment]',async()=>{if(buyer&&o.payment?.provider==='stripe_test')await post(url(id)+'/stripe-confirmation');await order(id)});
-    click('[data-of-complete]',async()=>{const checked=app.querySelector('[name=received]');if(!checked.reportValidity())return;await post(url(id)+'/complete');await order(id)});
-    click('[data-of-chat]',async b=>{const r=await post('/conversations',{order_id:id,seller_id:b.dataset.ofChat});location.hash='conversation/'+enc(r.id)});
-    if(buyer&&o.status==='completed')await reviews(o);
+    click("[data-of-refresh]", () => order(id));
+    click("[data-of-prepare]", async () => {
+      await post(url(id) + "/prepare");
+      await order(id);
+    });
+    click("[data-of-pay]", async () => {
+      const r = await post(url(id) + "/stripe-checkout");
+      location.assign(r.checkout_url);
+    });
+    click("[data-of-confirm-payment]", async () => {
+      if (buyer && o.payment?.provider === "stripe_test")
+        await post(url(id) + "/stripe-confirmation");
+      await order(id);
+    });
+    click("[data-of-complete]", async () => {
+      const checked = app.querySelector("[name=received]");
+      if (!checked.reportValidity()) return;
+      await post(url(id) + "/complete");
+      await order(id);
+    });
+    click("[data-of-chat]", async (b) => {
+      const r = await post("/conversations", {
+        order_id: id,
+        seller_id: b.dataset.ofChat,
+      });
+      location.hash = "conversation/" + enc(r.id);
+    });
+    if (buyer && o.status === "completed") await reviews(o);
     await milestones(id);
-    if(buyer&&o.status==='pending_payment'&&o.payment?.provider==='stripe_test')watchPayment(id);
+    if (
+      buyer &&
+      o.status === "pending_payment" &&
+      o.payment?.provider === "stripe_test"
+    )
+      watchPayment(id);
   }
-  const labels={pending_payment:['Awaiting payment','To‘lov kutilmoqda','Ожидается оплата'],paid:['Payment confirmed','To‘lov tasdiqlandi','Оплата подтверждена'],awaiting_delivery:['Preparing delivery','Yetkazish tayyorlanmoqda','Подготовка доставки'],delivered:['Delivery submitted','Yetkazish yuborildi','Заказ передан'],under_review:['Access under review','Kirish tekshirilmoqda','Проверка доступа'],completed:['Completed','Yakunlandi','Завершено'],cancelled:['Cancelled','Bekor qilindi','Отменено'],disputed:['Under review','Ko‘rib chiqilmoqda','На рассмотрении'],refund_pending:['Refund processing','Qaytarim bajarilmoqda','Возврат обрабатывается'],refunded:['Refunded','Qaytarildi','Возвращено']};
-  function statusLabel(status){return labels[status]?tr(...labels[status]):status.replaceAll('_',' ')}
-  function watchPayment(id){
-    const root=app.querySelector('[data-of-order]');let attempts=0;
-    const poll=async()=>{if(!root?.isConnected||document.hidden)return;try{const latest=await api(url(id));if(latest.status!=='pending_payment'){await order(id);return}if(attempts===0){const checked=await post(url(id)+'/stripe-confirmation');if(checked.status!=='pending_payment'){await order(id);return}}}catch{/* The explicit refresh button presents retry errors. */}attempts++;if(attempts<10&&root.isConnected)setTimeout(poll,4000)};
-    setTimeout(poll,1200);
+  const labels = {
+    pending_payment: [
+      "Awaiting payment",
+      "To‘lov kutilmoqda",
+      "Ожидается оплата",
+    ],
+    paid: ["Payment confirmed", "To‘lov tasdiqlandi", "Оплата подтверждена"],
+    awaiting_delivery: [
+      "Preparing delivery",
+      "Yetkazish tayyorlanmoqda",
+      "Подготовка доставки",
+    ],
+    delivered: ["Delivery submitted", "Yetkazish yuborildi", "Заказ передан"],
+    under_review: [
+      "Access under review",
+      "Kirish tekshirilmoqda",
+      "Проверка доступа",
+    ],
+    completed: ["Completed", "Yakunlandi", "Завершено"],
+    cancelled: ["Cancelled", "Bekor qilindi", "Отменено"],
+    disputed: ["Under review", "Ko‘rib chiqilmoqda", "На рассмотрении"],
+    refund_pending: [
+      "Refund processing",
+      "Qaytarim bajarilmoqda",
+      "Возврат обрабатывается",
+    ],
+    refunded: ["Refunded", "Qaytarildi", "Возвращено"],
+  };
+  function statusLabel(status) {
+    return labels[status] ? tr(...labels[status]) : status.replaceAll("_", " ");
   }
-  async function milestones(id){
-    const host=app.querySelector('[data-launch-progress]');if(!host)return;
-    const r=await api(url(id)+'/milestones');if(!host.isConnected)return;
-    const items=r.items.filter(i=>i.steps.length);if(!items.length)return;
-    host.className='of-card of-milestones';host.innerHTML=`<h2>${tr('Service milestones','Xizmat bosqichlari','Этапы услуги')}</h2>${items.map(i=>`<section><h3>${s(i.title)}</h3>${i.steps.map(step=>`<article><b>${step.index+1}. ${s(step.title)}</b><p>${s(step.note||'')}</p><small>${s(step.status)}</small>${step.status!=='accepted'&&(r.buyer&&step.status==='submitted'||i.seller)?`<form data-of-milestone="${step.index}" data-item="${s(i.id)}">${input('note',tr('Result or note','Natija yoki izoh','Результат или комментарий'),'maxlength="2000"')}<div class="of-actions">${r.buyer?`<button type="submit" name="action" value="accept" class="of-secondary">${tr('Accept','Qabul qilish','Принять')}</button><button type="submit" name="action" value="request_changes" class="of-secondary">${tr('Request changes','Tuzatishni so‘rash','Запросить исправления')}</button>`:`<button type="submit" name="action" value="submit" class="of-secondary">${tr('Submit result','Natijani yuborish','Передать результат')}</button>`}</div></form>`:''}</article>`).join('')}</section>`).join('')}`;
-    host.querySelectorAll('form').forEach(form=>form.onsubmit=event=>{event.preventDefault();action(event.submitter,async()=>{await post(url(id)+'/milestones/'+enc(form.dataset.item)+'/'+form.dataset.ofMilestone,{note:new FormData(form).get('note'),action:event.submitter.value});await order(id)})});
+  function watchPayment(id) {
+    const root = app.querySelector("[data-of-order]");
+    let attempts = 0;
+    const poll = async () => {
+      if (!root?.isConnected || document.hidden) return;
+      try {
+        const latest = await api(url(id));
+        if (latest.status !== "pending_payment") {
+          await order(id);
+          return;
+        }
+        if (attempts === 0) {
+          const checked = await post(url(id) + "/stripe-confirmation");
+          if (checked.status !== "pending_payment") {
+            await order(id);
+            return;
+          }
+        }
+      } catch {
+        /* The explicit refresh button presents retry errors. */
+      }
+      attempts++;
+      if (attempts < 10 && root.isConnected) setTimeout(poll, 4000);
+    };
+    setTimeout(poll, 1200);
   }
-  async function reviews(o){
-    const host=app.querySelector('[data-of-review]');if(!host)return;
-    if(o.payment?.provider==='stripe_test'){
-      const existing=await api(url(o.id)+'/test-review');if(!host.isConnected)return;
-      const hasReview=Number.isInteger(existing.rating)&&existing.rating>=1&&existing.rating<=5&&existing.body?.trim().length>=5;if(hasReview){if(reviewGate===o.id)reviewGate=null}else requireReview(o.id);
-      host.innerHTML=`<h3>${hasReview?tr('Your review','Sharhingiz','Ваш отзыв'):tr('Leave a review','Sharh qoldirish','Оставить отзыв')}</h3><p class="of-muted">${hasReview?tr('Your review is saved. You can update it below.','Sharhingiz saqlandi. Uni quyida yangilashingiz mumkin.','Ваш отзыв сохранён. Вы можете обновить его ниже.'):tr('Select a rating and write your review to finish.','Yakunlash uchun baho tanlang va sharhingizni yozing.','Для завершения выберите оценку и напишите отзыв.')}</p><form id="of-test-review"><label class="of-field"><span>${tr('Rating','Baho','Оценка')}</span><select name="rating" required><option value="">${tr('Choose a rating','Bahoni tanlang','Выберите оценку')}</option>${[5,4,3,2,1].map(n=>`<option value="${n}" ${existing.rating===n?'selected':''}>${'★'.repeat(n)}</option>`).join('')}</select></label><label class="of-field"><span>${tr('Your review','Sharhingiz','Ваш отзыв')}</span><textarea name="body" minlength="5" maxlength="1500" required>${s(existing.body||'')}</textarea></label>${existing.public_preview_allowed?`<label class="of-check"><input type="checkbox" name="public" ${existing.public===true?'checked':''}><span>${tr('Show this review on Home','Bu sharhni Home’da ko‘rsatish','Показать этот отзыв на главной с отметкой «отзыв»')}</span></label>`:''}<button class="of-primary" type="submit" disabled>${tr('Save review','sharhini saqlash','Сохранить отзыв')}</button></form>`;
-      const form=host.querySelector('form'),save=form.querySelector('[type=submit]');
-      const sync=()=>{save.disabled=!reviewReady(form)};form.addEventListener('input',sync);form.addEventListener('change',sync);sync();
-      bind(form,async d=>{if(!reviewReady(form))return;await post(url(o.id)+'/test-review',{rating:Number(d.rating),body:d.body.trim(),public:d.public==='on'});reviewGate=null;reviewGateChecked=false;toast(tr('review saved','sharhi saqlandi','отзыв сохранён'));location.replace('/#home')});
-    }else host.innerHTML=`<a class="of-primary" href="/#my-reviews">${tr('Leave a review','Sharh qoldirish','Оставить отзыв')} ${icon('star')}</a>`;
+  async function milestones(id) {
+    const host = app.querySelector("[data-launch-progress]");
+    if (!host) return;
+    const r = await api(url(id) + "/milestones");
+    if (!host.isConnected) return;
+    const items = r.items.filter((i) => i.steps.length);
+    if (!items.length) return;
+    host.className = "of-card of-milestones";
+    host.innerHTML = `<h2>${tr("Service milestones", "Xizmat bosqichlari", "Этапы услуги")}</h2>${items.map((i) => `<section><h3>${s(i.title)}</h3>${i.steps.map((step) => `<article><b>${step.index + 1}. ${s(step.title)}</b><p>${s(step.note || "")}</p><small>${s(step.status)}</small>${step.status !== "accepted" && ((r.buyer && step.status === "submitted") || i.seller) ? `<form data-of-milestone="${step.index}" data-item="${s(i.id)}">${input("note", tr("Result or note", "Natija yoki izoh", "Результат или комментарий"), 'maxlength="2000"')}<div class="of-actions">${r.buyer ? `<button type="submit" name="action" value="accept" class="of-secondary">${tr("Accept", "Qabul qilish", "Принять")}</button><button type="submit" name="action" value="request_changes" class="of-secondary">${tr("Request changes", "Tuzatishni so‘rash", "Запросить исправления")}</button>` : `<button type="submit" name="action" value="submit" class="of-secondary">${tr("Submit result", "Natijani yuborish", "Передать результат")}</button>`}</div></form>` : ""}</article>`).join("")}</section>`).join("")}`;
+    host.querySelectorAll("form").forEach(
+      (form) =>
+        (form.onsubmit = (event) => {
+          event.preventDefault();
+          action(event.submitter, async () => {
+            await post(
+              url(id) +
+                "/milestones/" +
+                enc(form.dataset.item) +
+                "/" +
+                form.dataset.ofMilestone,
+              {
+                note: new FormData(form).get("note"),
+                action: event.submitter.value,
+              },
+            );
+            await order(id);
+          });
+        }),
+    );
   }
-  async function walletPage(){
-    if(!me){location.hash='login';return}
-    const route=location.href,data=await api('/seller/test-wallet');if(location.href!==route)return;const eligible=!!me.seller?.selling_enabled;
-    app.innerHTML=`<section class="page order-process of-wallet"><header class="of-page-heading"><div><h1>${tr('Seller wallet','Sotuvchi hamyoni','Кошелёк продавца')}</h1><p class="of-muted">${tr('Stripe payments · simulated payouts','Stripe to‘lovlari · simulyatsiya qilingan chiqarish','платежи Stripe · симуляция выплат')}</p></div>${testBadge()}</header>${notice(tr('Your order balances are tracked separately for each currency.','Buyurtma mablag‘lari har bir valyuta bo‘yicha alohida hisoblanadi.','Это средства подтверждённых платежей Stripe. Они не имеют денежной стоимости. Каждая валюта учитывается отдельно.'))}${data.balances.map(b=>`<section class="of-wallet-currency"><h2>${s(b.currency)}</h2><div class="of-wallet-grid">${[['pending_minor',tr('Pending','Kutilmoqda','Ожидается'),'clock'],['available_minor',tr('Available','Mavjud','Доступно'),'wallet'],['payout_processing_minor',tr('Payout processing','Chiqarilmoqda','Выплата обрабатывается'),'refresh']].map(([key,label,glyph])=>`<article class="of-card ${key==='available_minor'?'is-available':''}">${icon(glyph)}<span>${label}</span><strong>${money(b[key],b.currency)}</strong><small>${key==='available_minor'?tr('credits only','Faqat mablag‘i','Только средства'):key==='pending_minor'?tr('Awaiting delivery or review','Yetkazish yoki tekshiruv kutilmoqda','Ожидается доставка или проверка'):tr('Simulated bank payout','Simulyatsiya qilingan bank o‘tkazmasi','Симуляция банковской выплаты')}</small></article>`).join('')}</div>${b.available_minor>0&&eligible?`<form class="of-card of-payout-form" data-of-payout="${s(b.currency)}">${input('amount',tr('payout amount','chiqarish summasi','Сумма выплаты'),`type="number" min="${b.currency==='UZS'?1:0.01}" step="${b.currency==='UZS'?1:0.01}" max="${b.available_minor/(b.currency==='UZS'?1:100)}" required`)}<button class="of-primary" type="submit">${tr('Request payout','chiqarishini so‘rash','Запросить выплату')} ${icon('arrow-right')}</button><small>${tr('Simulation only; no bank details or real transfer.','Faqat simulyatsiya; bank ma’lumoti va haqiqiy o‘tkazma yo‘q.','Только симуляция; без банковских данных и реального перевода.')}</small></form>`:''}</section>`).join('')}<section class="of-card"><h2>${tr('transactions','amaliyotlari','операции')}</h2>${data.orders.length?`<div class="of-table-wrap"><table><thead><tr><th>${tr('Order','Buyurtma','Заказ')}</th><th>${tr('Pending','Kutilmoqda','Ожидается')}</th><th>${tr('Available','Mavjud','Доступно')}</th><th>${tr('Status','Holat','Статус')}</th></tr></thead><tbody>${data.orders.map(o=>`<tr><td><a href="/#order/${enc(o.order_id)}">${s(o.reference)}</a><small>${when(o.created_at)}</small></td><td>${money(o.pending_minor,o.currency)}</td><td>${money(o.available_minor,o.currency)}</td><td>${s(statusLabel(o.status))}</td></tr>`).join('')}</tbody></table></div>`:`<p class="of-muted">${tr('Verified payments will appear here.','Tasdiqlangan to‘lovlari shu yerda chiqadi.','Здесь появятся подтверждённые платежи.')}</p>`}</section><section class="of-card"><h2>${tr('payout history','chiqarish tarixi','История выплат')}</h2>${data.payouts.map(p=>`<article class="of-payout-row"><div><strong>${money(p.amount_minor,p.currency)}</strong><span>${p.status==='processing'?tr('Processing','Bajarilmoqda','Обрабатывается'):p.status==='paid'?tr('Paid — simulated','To‘landi — simulyatsiya','Выплачено — симуляция'):tr('Failed — funds returned','Xato — mablag‘ qaytarildi','Ошибка — средства возвращены')}</span><small>${when(p.created_at)}</small></div>${p.status==='processing'?`<div class="of-actions">${button(tr('Simulate success','Muvaffaqiyatni sinash','Симулировать успех'),`data-of-payout-result="${s(p.id)}" data-outcome="paid"`)}${button(tr('Simulate failure','Xatoni sinash','Симулировать ошибку'),`data-of-payout-result="${s(p.id)}" data-outcome="failed"`)}</div>`:''}</article>`).join('')||`<p class="of-muted">${tr('No payouts yet.','Hozircha chiqarishi yo‘q.','выплат пока нет.')}</p>`}</section><a class="of-text" href="/#stripe-test-connect">${tr('Stripe Connect setup','Stripe Connect sozlamalari','Настройка Stripe Connect')} ↗</a></section>`;
-    app.querySelectorAll('[data-of-payout]').forEach(form=>{const key=crypto.randomUUID();bind(form,async d=>{await post('/seller/test-wallet/payouts',{amount_minor:Math.round(Number(d.amount)*(form.dataset.ofPayout==='UZS'?1:100)),currency:form.dataset.ofPayout,request_key:key,test_only:true});await walletPage()})});
-    click('[data-of-payout-result]',async b=>{await post('/seller/test-wallet/payouts/'+b.dataset.ofPayoutResult,{outcome:b.dataset.outcome,test_only:true});await walletPage()});
+  async function reviews(o) {
+    const host = app.querySelector("[data-of-review]");
+    if (!host) return;
+    if (o.payment?.provider === "stripe_test") {
+      const existing = await api(url(o.id) + "/test-review");
+      if (!host.isConnected) return;
+      const hasReview =
+        Number.isInteger(existing.rating) &&
+        existing.rating >= 1 &&
+        existing.rating <= 5 &&
+        existing.body?.trim().length >= 5;
+      if (hasReview) {
+        if (reviewGate === o.id) reviewGate = null;
+      } else requireReview(o.id);
+      host.innerHTML = `<h3>${hasReview ? tr("Your review", "Sharhingiz", "Ваш отзыв") : tr("Leave a review", "Sharh qoldirish", "Оставить отзыв")}</h3><p class="of-muted">${hasReview ? tr("Your review is saved. You can update it below.", "Sharhingiz saqlandi. Uni quyida yangilashingiz mumkin.", "Ваш отзыв сохранён. Вы можете обновить его ниже.") : tr("Select a rating and write your review to finish.", "Yakunlash uchun baho tanlang va sharhingizni yozing.", "Для завершения выберите оценку и напишите отзыв.")}</p><form id="of-test-review"><label class="of-field"><span>${tr("Rating", "Baho", "Оценка")}</span><select name="rating" required><option value="">${tr("Choose a rating", "Bahoni tanlang", "Выберите оценку")}</option>${[5, 4, 3, 2, 1].map((n) => `<option value="${n}" ${existing.rating === n ? "selected" : ""}>${"★".repeat(n)}</option>`).join("")}</select></label><label class="of-field"><span>${tr("Your review", "Sharhingiz", "Ваш отзыв")}</span><textarea name="body" minlength="5" maxlength="1500" required>${s(existing.body || "")}</textarea></label>${existing.public_preview_allowed ? `<label class="of-check"><input type="checkbox" name="public" ${existing.public === true ? "checked" : ""}><span>${tr("Show this review on Home", "Bu sharhni Home’da ko‘rsatish", "Показать этот отзыв на главной с отметкой «отзыв»")}</span></label>` : ""}<button class="of-primary" type="submit" disabled>${tr("Save review", "sharhini saqlash", "Сохранить отзыв")}</button></form>`;
+      const form = host.querySelector("form"),
+        save = form.querySelector("[type=submit]");
+      const sync = () => {
+        save.disabled = !reviewReady(form);
+      };
+      form.addEventListener("input", sync);
+      form.addEventListener("change", sync);
+      sync();
+      bind(form, async (d) => {
+        if (!reviewReady(form)) return;
+        await post(url(o.id) + "/test-review", {
+          rating: Number(d.rating),
+          body: d.body.trim(),
+          public: d.public === "on",
+        });
+        reviewGate = null;
+        reviewGateChecked = false;
+        toast(tr("review saved", "sharhi saqlandi", "отзыв сохранён"));
+        location.replace("/#home");
+      });
+    } else
+      host.innerHTML = `<a class="of-primary" href="/#my-reviews">${tr("Leave a review", "Sharh qoldirish", "Оставить отзыв")} ${icon("star")}</a>`;
   }
-  return {cart,order,wallet:walletPage,phase,steps,stageMarkup,totals,funds,cartQuantity,statusLabel,guardNavigation,reviewRequired};
+  async function walletPage() {
+    if (!me) {
+      location.hash = "login";
+      return;
+    }
+    const route = location.href,
+      data = await api("/seller/test-wallet");
+    if (location.href !== route) return;
+    const eligible = !!me.seller?.selling_enabled;
+    app.innerHTML = `<section class="page order-process of-wallet"><header class="of-page-heading"><div><h1>${tr("Seller wallet", "Sotuvchi hamyoni", "Кошелёк продавца")}</h1><p class="of-muted">${tr("Stripe payments · simulated payouts", "Stripe to‘lovlari · simulyatsiya qilingan chiqarish", "платежи Stripe · симуляция выплат")}</p></div>${testBadge()}</header>${notice(tr("Your order balances are tracked separately for each currency.", "Buyurtma mablag‘lari har bir valyuta bo‘yicha alohida hisoblanadi.", "Это средства подтверждённых платежей Stripe. Они не имеют денежной стоимости. Каждая валюта учитывается отдельно."))}${data.balances
+      .map(
+        (b) =>
+          `<section class="of-wallet-currency"><h2>${s(b.currency)}</h2><div class="of-wallet-grid">${[
+            [
+              "pending_minor",
+              tr("Pending", "Kutilmoqda", "Ожидается"),
+              "clock",
+            ],
+            [
+              "available_minor",
+              tr("Available", "Mavjud", "Доступно"),
+              "wallet",
+            ],
+            [
+              "payout_processing_minor",
+              tr(
+                "Payout processing",
+                "Chiqarilmoqda",
+                "Выплата обрабатывается",
+              ),
+              "refresh",
+            ],
+          ]
+            .map(
+              ([key, label, glyph]) =>
+                `<article class="of-card ${key === "available_minor" ? "is-available" : ""}">${icon(glyph)}<span>${label}</span><strong>${money(b[key], b.currency)}</strong><small>${key === "available_minor" ? tr("credits only", "Faqat mablag‘i", "Только средства") : key === "pending_minor" ? tr("Awaiting delivery or review", "Yetkazish yoki tekshiruv kutilmoqda", "Ожидается доставка или проверка") : tr("Simulated bank payout", "Simulyatsiya qilingan bank o‘tkazmasi", "Симуляция банковской выплаты")}</small></article>`,
+            )
+            .join(
+              "",
+            )}</div>${b.available_minor > 0 && eligible ? `<form class="of-card of-payout-form" data-of-payout="${s(b.currency)}">${input("amount", tr("payout amount", "chiqarish summasi", "Сумма выплаты"), `type="number" min="${b.currency === "UZS" ? 1 : 0.01}" step="${b.currency === "UZS" ? 1 : 0.01}" max="${b.available_minor / (b.currency === "UZS" ? 1 : 100)}" required`)}<button class="of-primary" type="submit">${tr("Request payout", "chiqarishini so‘rash", "Запросить выплату")} ${icon("arrow-right")}</button><small>${tr("Simulation only; no bank details or real transfer.", "Faqat simulyatsiya; bank ma’lumoti va haqiqiy o‘tkazma yo‘q.", "Только симуляция; без банковских данных и реального перевода.")}</small></form>` : ""}</section>`,
+      )
+      .join(
+        "",
+      )}<section class="of-card"><h2>${tr("transactions", "amaliyotlari", "операции")}</h2>${data.orders.length ? `<div class="of-table-wrap"><table><thead><tr><th>${tr("Order", "Buyurtma", "Заказ")}</th><th>${tr("Pending", "Kutilmoqda", "Ожидается")}</th><th>${tr("Available", "Mavjud", "Доступно")}</th><th>${tr("Status", "Holat", "Статус")}</th></tr></thead><tbody>${data.orders.map((o) => `<tr><td><a href="/#order/${enc(o.order_id)}">${s(o.reference)}</a><small>${when(o.created_at)}</small></td><td>${money(o.pending_minor, o.currency)}</td><td>${money(o.available_minor, o.currency)}</td><td>${s(statusLabel(o.status))}</td></tr>`).join("")}</tbody></table></div>` : `<p class="of-muted">${tr("Verified payments will appear here.", "Tasdiqlangan to‘lovlari shu yerda chiqadi.", "Здесь появятся подтверждённые платежи.")}</p>`}</section><section class="of-card"><h2>${tr("payout history", "chiqarish tarixi", "История выплат")}</h2>${data.payouts.map((p) => `<article class="of-payout-row"><div><strong>${money(p.amount_minor, p.currency)}</strong><span>${p.status === "processing" ? tr("Processing", "Bajarilmoqda", "Обрабатывается") : p.status === "paid" ? tr("Paid — simulated", "To‘landi — simulyatsiya", "Выплачено — симуляция") : tr("Failed — funds returned", "Xato — mablag‘ qaytarildi", "Ошибка — средства возвращены")}</span><small>${when(p.created_at)}</small></div>${p.status === "processing" ? `<div class="of-actions">${button(tr("Simulate success", "Muvaffaqiyatni sinash", "Симулировать успех"), `data-of-payout-result="${s(p.id)}" data-outcome="paid"`)}${button(tr("Simulate failure", "Xatoni sinash", "Симулировать ошибку"), `data-of-payout-result="${s(p.id)}" data-outcome="failed"`)}</div>` : ""}</article>`).join("") || `<p class="of-muted">${tr("No payouts yet.", "Hozircha chiqarishi yo‘q.", "выплат пока нет.")}</p>`}</section><a class="of-text" href="/#stripe-test-connect">${tr("Stripe Connect setup", "Stripe Connect sozlamalari", "Настройка Stripe Connect")} ↗</a></section>`;
+    app.querySelectorAll("[data-of-payout]").forEach((form) => {
+      const key = crypto.randomUUID();
+      bind(form, async (d) => {
+        await post("/seller/test-wallet/payouts", {
+          amount_minor: Math.round(
+            Number(d.amount) * (form.dataset.ofPayout === "UZS" ? 1 : 100),
+          ),
+          currency: form.dataset.ofPayout,
+          request_key: key,
+          test_only: true,
+        });
+        await walletPage();
+      });
+    });
+    click("[data-of-payout-result]", async (b) => {
+      await post("/seller/test-wallet/payouts/" + b.dataset.ofPayoutResult, {
+        outcome: b.dataset.outcome,
+        test_only: true,
+      });
+      await walletPage();
+    });
+  }
+  return {
+    cart,
+    order,
+    wallet: walletPage,
+    phase,
+    steps,
+    stageMarkup,
+    totals,
+    funds,
+    cartQuantity,
+    statusLabel,
+    guardNavigation,
+    reviewRequired,
+  };
 })();

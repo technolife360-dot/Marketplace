@@ -1,884 +1,5836 @@
-const app=document.querySelector('#app');let me=null,csrf='',queryState={},selectedConversation='',toastTimer,locale='en',adminActiveView='overview',walletFx={currency:'',rate:null,date:''};let comparisonIds=(()=>{try{return JSON.parse(localStorage.getItem('sentryloot_compare')||'[]').filter(x=>typeof x==='string').slice(0,3)}catch{return []}})();
-const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];let fieldLabelId=0;const labelObserver=new MutationObserver(()=>{$$('.field',app).forEach(box=>{const label=$('label',box),control=$('input,textarea,select',box);if(label&&control){if(!control.id)control.id='field-control-'+(++fieldLabelId);label.htmlFor=control.id;decorateFieldControl(label,control)}})});labelObserver.observe(app,{childList:true,subtree:true});
-const sortOptions=[['newest','Eng yangilari'],['price_asc','Arzonidan'],['price_desc','Qimmatidan'],['popular','Ommabop']];
-const tr={uz:{browse:'Bozor',wanted:'Izlanmoqda',safety:'Xavfsizlik',login:'Kirish',search:'O‘yin, buyum yoki xizmat qidiring…'},ru:{browse:'Маркет',wanted:'Ищут',safety:'Безопасность',login:'Войти',search:'Ищите игры, предметы или услуги…'},en:{browse:'Marketplace',wanted:'Requests',safety:'Safety',login:'Sign in',search:'Search games, items, or services…'}};
-let localeOptions=[['en','English','EN'],['uz','O‘zbekcha','UZ'],['ru','Русский','RU']];
-const supportedLocales=new Set(localeOptions.map(([code])=>code));
-function languageOptions(selected='en'){return localeOptions.map(([code,name])=>`<option value="${code}" ${code===selected?'selected':''}>${name}</option>`).join('')}
-function categoryLabel(value){const labels={
- 'Gaming accounts':['O‘yin akkauntlari','Игровые аккаунты','Gaming accounts'],
- 'Items & skins':['Buyumlar va skinlar','Предметы и скины','Items & skins'],
- 'In-game currency':['O‘yin valyutasi','Игровая валюта','In-game currency'],
- 'Coaching & services':['Murabbiylik va xizmatlar','Обучение и услуги','Coaching & services'],
- 'Gift cards & digital codes':['Sovg‘a kartalari va raqamli kodlar','Подарочные карты и цифровые коды','Gift cards & digital codes'],
- 'Other digital products':['Boshqa raqamli mahsulotlar','Другие цифровые товары','Other digital products'],
- account:['O‘yin akkaunti','Игровой аккаунт','Gaming account'],item:['Buyum yoki skin','Предмет или скин','Item or skin'],currency:['O‘yin valyutasi','Игровая валюта','In-game currency'],service:['Xizmat','Услуга','Service'],code:['Raqamli kod','Цифровой код','Digital code'],digital:['Boshqa raqamli mahsulot','Другой цифровой товар','Other digital product']};
- const entry=labels[String(value||'')];return entry?adminText(...entry):String(value||'')}
-const localeKey='bozor-language';let copyTextCache=new WeakMap(),copyAttrCache=new WeakMap();
-function translateSource(source,language=locale){if(language==='uz')return source;const entry=window.BOZOR_COPY?.[source],english=entry?.[1]||source;const translated=window.RegionPreferences?.translate(english,language);if(translated)return translated;const extra=window.BOZOR_EXTRA_COPY?.[language]?.[source];if(extra)return extra;if(entry)return entry[language==='ru'?0:1]||source;return undefined}
-function localized(value,language=locale){const source=String(value??'');if(language==='uz')return source;const trimmed=source.trim(),start=source.indexOf(trimmed),lead=start<0?'':source.slice(0,start),tail=start<0?'':source.slice(start+trimmed.length),exact=translateSource(source,language)??translateSource(trimmed,language);if(exact!==undefined)return source===trimmed?exact:lead+exact+tail;const english=language!=='ru';let validation=trimmed.match(/^(\d+)[–-](\d+) belgi kiriting\.$/);if(validation)return lead+(english?`Enter ${validation[1]}–${validation[2]} characters.`:`Введите ${validation[1]}–${validation[2]} символов.`)+tail;let paymentNotice=trimmed.match(/^To‘lov: (.+)\. Sandbox natijasi real pul o‘tkazmasi emas\.$/);if(paymentNotice)return lead+(english?'Payment: ':'Оплата: ')+paymentNotice[1]+(english?'. Sandbox does not transfer real money.':'. Тестовый режим не переводит реальные деньги.')+tail;if(trimmed.includes(' · ')){const parts=trimmed.split(/( · )/g),mapped=parts.map(part=>{const piece=part.trim(),translated=translateSource(piece,language);if(translated!==undefined)return part===piece?translated:part.replace(piece,translated);const listingDate=piece.match(/^E’lon (.+)$/);if(listingDate)return part.replace('E’lon ',english?'Listing ':'Объявление ');const prefix=piece.match(/^(Sotuvchi:|Xaridor:)\s*(.*)$/);if(prefix){const label=prefix[1]==='Sotuvchi:'?(english?'Seller:':'Продавец:'):(english?'Buyer:':'Покупатель:');return part.replace(prefix[1],label)}const tailStatus=piece.match(/^(.*?)(Holat: tasdiqlanmagan)$/);if(tailStatus)return part.replace(tailStatus[2],english?'Status: unverified':'Статус: не подтверждён');return part});const joined=parts.map((_,i)=>mapped[i]).join('');if(joined!==trimmed)return lead+joined+tail}let prefixMatch=trimmed.match(/^(Yetkazish usuli:|To‘lov:)\s*(.*)$/);if(prefixMatch){const prefix=prefixMatch[1]==='To‘lov:'?(english?'Payment:':'Оплата:'):(english?'Delivery method:':'Способ доставки:');return lead+prefix+' '+prefixMatch[2]+tail}let dynamic=trimmed.match(/^Salom, (.+)$/);if(dynamic)return lead+(english?'Hello, ':'Здравствуйте, ')+dynamic[1]+tail;dynamic=trimmed.match(/^Buyurtma (.+)$/);if(dynamic)return lead+(english?'Order ':'Заказ ')+dynamic[1]+tail;dynamic=trimmed.match(/^Hozirda (\d+) ta ko‘rinadigan e’lon\.$/);if(dynamic)return lead+(english?`${dynamic[1]} listings available.`:`Доступно объявлений: ${dynamic[1]}.`)+tail;dynamic=trimmed.match(/^(\d+) yangi$/);if(dynamic)return lead+(english?`${dynamic[1]} new`:`${dynamic[1]} новых`)+tail;dynamic=trimmed.match(/^Talablar: (.+)$/);if(dynamic)return lead+(english?'Requirements: ':'Требования: ')+dynamic[1]+tail;dynamic=trimmed.match(/^Hisob (.+) sanasida yaratilgan\.$/);if(dynamic)return lead+(english?`Account created on ${dynamic[1]}.`:`Аккаунт создан ${dynamic[1]}.`)+tail;dynamic=trimmed.match(/^(\d+) dona$/);if(dynamic)return lead+(english?`${dynamic[1]} items`:`${dynamic[1]} шт.`)+tail;return english?source:source}
-function adminText(uz,ru,en){return locale==='ru'?ru:locale==='uz'?uz:(window.RegionPreferences?.translate(en,locale)||window.BOZOR_EXTRA_COPY?.[locale]?.[uz]||en)}
-function renderSupportWidget(){
- if(new URLSearchParams(location.search).get('open_chat')==='1'&&window.SentryLootSupport){const url=new URL(location.href);url.searchParams.delete('open_chat');history.replaceState(null,'',url);window.SentryLootSupport.open()}
-
- window.$crisp=window.$crisp||[];
- if(window.__sentryLootCrispLocale!==locale){window.__sentryLootCrispLocale=locale;window.$crisp.push(['config','locale',[locale]])}
- if(!document.documentElement.dataset.crispSupportBound){
-  document.documentElement.dataset.crispSupportBound='true';
-  document.addEventListener('error',event=>{if(event.target?.matches?.('img[data-seller-avatar]'))event.target.remove()},true);
-document.addEventListener('click',e=>{
-   const trigger=e.target.closest('[data-open-support-chat]');
-   if(!trigger)return;
-   e.preventDefault();
-   window.$crisp=window.$crisp||[];
-   const supportMessage=trigger.dataset.supportMessage;
-   if(supportMessage)window.$crisp.push(['set','message:text',[localized(supportMessage)]]);
-   if(window.SentryLootSupport)window.SentryLootSupport.open();
-   else {window.$crisp.push(['do','chat:show']);window.$crisp.push(['do','chat:open']);if(window.__sentryLootCrispLoadFailed)window.open(CRISP_DIRECT_CHAT_URL,'_blank','noopener,noreferrer')}
+const app = document.querySelector("#app");
+let me = null,
+  csrf = "",
+  queryState = {},
+  selectedConversation = "",
+  toastTimer,
+  locale = "en",
+  adminActiveView = "overview",
+  walletFx = { currency: "", rate: null, date: "" };
+let comparisonIds = (() => {
+  try {
+    return JSON.parse(localStorage.getItem("sentryloot_compare") || "[]")
+      .filter((x) => typeof x === "string")
+      .slice(0, 3);
+  } catch {
+    return [];
+  }
+})();
+const $ = (s, r = document) => r.querySelector(s),
+  $$ = (s, r = document) => [...r.querySelectorAll(s)];
+let fieldLabelId = 0;
+const labelObserver = new MutationObserver(() => {
+  $$(".field", app).forEach((box) => {
+    const label = $("label", box),
+      control = $("input,textarea,select", box);
+    if (label && control) {
+      if (!control.id) control.id = "field-control-" + ++fieldLabelId;
+      label.htmlFor = control.id;
+      decorateFieldControl(label, control);
+    }
   });
- }
-}
-const CRISP_DIRECT_CHAT_URL='https://go.crisp.chat/chat/embed/?website_id=23d64f2d-3d3a-4e73-bca1-4e24795ba125';
-function localizeDOM(root=document.body){if(!root)return;const skip='.product-title,.detail-desc,.bubble,.conversation-item,.seller-mini,.product-cover strong,.product-game,[data-user-content],#language-menu,.region-preferences-dialog,.crisp-client,#qa-vitals';const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode()){if(!node.data.trim()||node.parentElement?.closest(skip))continue;let rec=copyTextCache.get(node);if(!rec)rec={source:node.data,last:node.data};else if(node.data!==rec.last)rec={source:node.data,last:node.data};const next=localized(rec.source);if(next!==node.data)node.data=next;rec.last=next;copyTextCache.set(node,rec)}for(const el of $$('[placeholder],[aria-label],[title],[alt]',root)){if(el.closest(skip))continue;let rec=copyAttrCache.get(el)||{};for(const attr of ['placeholder','aria-label','title','alt']){if(!el.hasAttribute(attr))continue;const value=el.getAttribute(attr);if(!rec[attr]||value!==rec[attr].last)rec[attr]={source:value,last:value};const next=localized(rec[attr].source);if(next!==value)el.setAttribute(attr,next);rec[attr].last=next}copyAttrCache.set(el,rec)}if(document.documentElement.lang!==locale)document.documentElement.lang=locale;const direction=locale==='ar'?'rtl':'ltr';if(document.documentElement.dir!==direction)document.documentElement.dir=direction;syncLanguageMenu();const skipLink=$('[data-skip-to-content]');if(skipLink){const label=adminText('Asosiy mazmunga o‘tish','Перейти к основному содержимому','Skip to main content');if(skipLink.textContent!==label)skipLink.textContent=label}}
-let localizeQueued=false;new MutationObserver(()=>{if(localizeQueued)return;localizeQueued=true;requestAnimationFrame(()=>{localizeQueued=false;localizeDOM()})}).observe(document.body,{childList:true,subtree:true});
-function esc(x=''){return String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function icon(name,extra=''){return `<svg class="icon ${extra}" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-${name}" x="3" y="3" width="18" height="18"></use></svg>`}
-function fieldIconName(control){const name=(control.name||'').toLowerCase(),type=(control.type||'').toLowerCase(),hint=`${name} ${control.id||''} ${control.autocomplete||''} ${control.placeholder||''}`.toLowerCase();if(type==='hidden'||['checkbox','radio','submit','button','file','email','password'].includes(type)||/email|mail|password|passcode|token|secret/.test(hint))return '';if(/game|platform/.test(hint))return 'gamepad';if(/category|genre|tag/.test(hint))return 'layers';if(/delivery_method/.test(name))return 'cart';if(/delivery_eta|date|time|eta/.test(hint))return 'clock';if(/title|slug|post|listing/.test(hint))return 'file-text';if(/description|message|comment|body|bio|requirement|resolution|delivery/.test(hint)||control.tagName==='TEXTAREA')return 'message';if(/price|amount|budget|commission|currency|wallet|payout/.test(hint))return 'wallet';if(/region|country|language|locale|server/.test(hint))return 'globe';if(/stock|quantity|count|item/.test(hint))return 'box';if(/rank|rating|review/.test(hint))return 'star';if(/photo|image|upload|file/.test(hint))return 'upload';if(/search|query|\bq\b/.test(hint)||type==='search')return 'search';if(/name|user|seller|buyer|account/.test(hint)||control.autocomplete==='name')return 'user';if(type==='number')return 'settings';if(control.tagName==='SELECT')return 'layers';return 'file-text'}
-function decorateFieldControl(label,control){
- // The approved mobile login owns its two leading icons.
- if(control.dataset?.mobileLoginControl&&window.MobileSite?.isMobile())return;
- label.querySelectorAll('.field-icon').forEach(node=>node.remove());
- const authForm=control.closest('#auth-form');
- const offerAttribute=control.closest('[data-offer-wizard]')&&control.name?.startsWith('game_attr_');
- const offerGlyph=/email/.test(control.name)?'':/rank|tier|mmr|rating/.test(control.name)?'star':/level|score/.test(control.name)?'user':/server|region/.test(control.name)?'globe':/amount|unit/.test(control.name)?'wallet':/item/.test(control.name)?'box':'layers';
- const name=control.closest('.phone-verification-page')||authForm&&!control.closest('.auth-page.is-register')?'':offerAttribute?offerGlyph:control.closest('[data-offer-wizard]')&&control.type==='search'?'search':fieldIconName(control);
- let wrap=control.parentElement?.classList.contains('field-control')?control.parentElement:null;
- if(!name){
-  if(wrap){wrap.querySelectorAll(':scope > .field-control-icon').forEach(node=>node.remove());wrap.classList.remove('has-icon');delete wrap.dataset.controlKind;if(!wrap.classList.contains('auth-password-control')){wrap.before(control);wrap.remove()}}
-  return;
- }
- // A select may be enhanced before the label observer runs. Move its picker
- // with the native control so its icon and trigger share the same geometry.
- const isPicker=node=>node?.classList.contains('site-select');
- const picker=control.classList.contains('site-select-native')?(isPicker(control.nextElementSibling)?control.nextElementSibling:isPicker(wrap?.nextElementSibling)?wrap.nextElementSibling:null):null;
- if(!wrap){wrap=document.createElement('div');wrap.className='field-control';control.before(wrap);wrap.append(control)}
- if(picker&&picker.parentElement!==wrap)wrap.append(picker);
- wrap.classList.add('has-icon');wrap.dataset.controlKind=control.tagName==='SELECT'?'select':control.tagName==='TEXTAREA'?'multiline':'input';
- const glyph=wrap.querySelector(':scope > .field-control-icon');
- if(!glyph)wrap.insertAdjacentHTML('afterbegin',icon(name,'field-control-icon'));
- else{const use=glyph.querySelector('use');if(use&&use.getAttribute('href')!=='#i-'+name)use.setAttribute('href','#i-'+name)}
-}
-
-const listingProviders=[['google','Google','G'],['facebook','Facebook','f'],['apple','Apple / iCloud','A'],['steam','Steam','S'],['playstation','PlayStation','PS'],['xbox','Xbox','X'],['other','Boshqa','+']];
-function providerFields(selected=[]){return `<fieldset class="listing-provider-field"><legend>${adminText('Hisob qaysi xizmatlarga ulangan?','К каким сервисам привязан аккаунт?','Which services are linked to the account?')}</legend><p class="field-hint">${adminText('Faqat ulangan xizmatlarni belgilang. Parol, email yoki tasdiqlash kodini bu yerga yozmang.','Отметьте только подключённые сервисы. Не вводите здесь пароль, email или код подтверждения.','Select connected services only. Never enter passwords, email addresses, or verification codes here.')}</p><div class="provider-choice-grid">${listingProviders.map(([key,label,mark])=>`<label class="provider-choice"><input type="checkbox" name="linked_accounts" value="${key}" ${selected.includes(key)?'checked':''}>${providerFieldsIcon(key)}<span>${(key==='other'?adminText('Boshqa','Другое','Other'):adminText(label,key==='apple'?'Apple / iCloud':label,label))}</span></label>`).join('')}</div></fieldset>`}
-const LISTING_TYPE_FIELDS={
- item:[['item_name','Buyum yoki skin nomi','Название предмета или скина','Item or skin name',true],['item_variant','Variant / sifat (ixtiyoriy)','Вариант / качество (необязательно)','Variant / condition (optional)',false],['transfer_method','Buyum qanday o‘tkaziladi?','Как передаётся предмет?','How is the item transferred?',true]],
- currency:[['amount','Bir to‘plamdagi miqdor','Количество в одном пакете','Amount per package',true],['unit','Valyuta nomi','Название валюты','Currency name',true],['transfer_method','Valyuta qanday yetkaziladi?','Как доставляется валюта?','How is the currency delivered?',true]],
- service:[['service_scope','Xizmat natijasi','Результат услуги','Service outcome',true],['service_duration','Bajarish muddati (ixtiyoriy)','Срок выполнения (необязательно)','Completion window (optional)',false]],
- code:[['code_kind','Kod yoki obuna turi','Тип кода или подписки','Code or subscription type',true],['redemption_region','Faollashtirish hududi','Регион активации','Redemption region',true],['expiry','Amal qilish muddati (ixtiyoriy)','Срок действия (необязательно)','Expiry (optional)',false]],
- digital:[['product_format','Mahsulot formati','Формат товара','Product format',true],['access_method','Xaridor nimani va qanday oladi?','Что и как получит покупатель?','What and how will the buyer receive?',true]]
-};
-LISTING_TYPE_FIELDS.item.push(['item_type','Buyum turi','Тип предмета','Item type'],['condition','Holati (FN, MW, FT…)','Состояние (FN, MW, FT…)','Condition (FN, MW, FT…)'],['float_value','Float (0–1)','Float (0–1)','Float (0–1)'],['rarity','Noyoblik','Редкость','Rarity'],['pattern','Pattern','Паттерн','Pattern']);
-function listingTypeFieldsMarkup(type,attributes={}){const fields=LISTING_TYPE_FIELDS[type]||[];if(!fields.length)return '';return `<div class="listing-type-fields" data-product-fields="${esc(type)}"><div class="form-grid">${fields.map(([key,uz,ru,en,required])=>`<div class="field"><label>${adminText(uz,ru,en)}${["rank","current_rank","competitive_rank","tier","rank_medal"].includes(key)?adminText(" (ixtiyoriy)"," (необязательно)"," (optional)"):""}</label><input name="game_attr_${key}" ${key==='float_value'?'type="number" min="0" max="1" step="any"':key==='amount'?'type="number" min="1" max="999999999999" step="1" inputmode="numeric"':`minlength="${required?2:0}" maxlength="160"`} value="${esc(attributes[key]||'')}" ${required?'required':''}></div>`).join('')}</div><small class="field-hint">${adminText('Narx va soni bitta to‘plam uchun. Maxfiy kod yoki kirish ma’lumotini e’londa yozmang.','Цена и количество указаны за один пакет. Не публикуйте секретный код или данные доступа.','Price and quantity are per package. Do not publish a secret code or access credentials.')}</small></div>`}
-function listingAttributeFacts(item){const attrs=item.attributes||{},definitions={item:[['item_name','Buyum','Предмет','Item'],['item_variant','Variant','Вариант','Variant'],['transfer_method','O‘tkazish','Передача','Transfer'],['item_type','Buyum turi','Тип предмета','Item type'],['pattern','Pattern','Паттерн','Pattern']],currency:[['amount','Miqdor','Количество','Amount'],['unit','Valyuta','Валюта','Currency'],['transfer_method','Yetkazish','Доставка','Delivery']],service:[['service_scope','Natija','Результат','Outcome'],['service_duration','Muddat','Срок','Window']],code:[['code_kind','Tur','Тип','Type'],['redemption_region','Faollashtirish hududi','Регион активации','Redemption region'],['expiry','Amal qilish muddati','Срок действия','Expiry']],digital:[['product_format','Format','Формат','Format'],['access_method','Yetkazish','Доставка','Delivery']]};return (definitions[item.product_type]||[]).filter(([key])=>attrs[key]).map(([key,uz,ru,en])=>[adminText(uz,ru,en),String(attrs[key])])}
-const GAME_ACCOUNT_FIELDS={
- valorant:[['account_level','Hisob darajasi','Уровень аккаунта','Account level'],['competitive_rank','Competitive rank','Ранг в рейтинге','Competitive rank'],['region','Shard / region','Регион / shard','Shard / region']],
- 'pubg-mobile':[['account_level','Hisob darajasi','Уровень аккаунта','Account level'],['tier','Joriy tier','Текущий уровень','Current tier'],['platform_binding','Bog‘langan platforma','Привязанная платформа','Linked platform']],
- 'dota-2':[['mmr','MMR','MMR','MMR'],['behavior_score','Behavior score','Порядочность','Behavior score'],['rank_medal','Rank medal','Медаль ранга','Rank medal']],
- 'counter-strike-2':[['premier_rating','Premier rating','Рейтинг Premier','Premier rating'],['prime_status','Prime holati','Статус Prime','Prime status'],['inventory_summary','Inventar tavsifi','Описание инвентаря','Inventory summary']],
- 'free-fire':[['account_level','Daraja','Уровень','Account level'],['current_rank','Rank','Ранг','Rank'],['inventory_summary','Inventar','Инвентарь','Inventory']],
- 'honor-of-kings':[['account_level','Daraja','Уровень','Account level'],['current_rank','Rank','Ранг','Rank'],['inventory_summary','Qahramon va skinlar','Герои и облики','Heroes and skins']],
- roblox:[['account_level','Hisob yoshi / daraja','Возраст / уровень','Account age / level'],['inventory_summary','Inventar va mahsulotlar','Инвентарь и предметы','Inventory and items']],
- 'genshin-impact':[['account_level','Adventure Rank','Ранг приключений','Adventure Rank'],['server_id','Server','Сервер','Server'],['inventory_summary','Qahramonlar va qurollar','Персонажи и оружие','Characters and weapons']],
- 'mobile-legends':[['account_level','Hisob darajasi','Уровень аккаунта','Account level'],['current_rank','Joriy rank','Текущий ранг','Current rank'],['server_id','Server ID','ID сервера','Server ID']]
-};
-function gameSpecificFieldsMarkup(gameName,attributes={}){const slug=String(gameName||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');const fields=GAME_ACCOUNT_FIELDS[slug]||[];if(!fields.length)return '';return `<div class="game-specific-fields"><h4>${adminText('Ushbu o‘yin uchun qo‘shimcha ma’lumotlar','Дополнительные сведения об этой игре','Game-specific details')}</h4><div class="form-grid">${fields.map(([key,uz,ru,en])=>`<div class="field"><label>${adminText(uz,ru,en)}${["rank","current_rank","competitive_rank","tier","rank_medal"].includes(key)?adminText(" (ixtiyoriy)"," (необязательно)"," (optional)"):""}</label><input name="game_attr_${key}" maxlength="120" autocomplete="off" value="${esc(attributes[key]||'')}"></div>`).join('')}</div><small class="field-hint">${adminText('Parol, email, telefon, OTP yoki maxfiy tiklash kodini kiritmang.','Не вводите пароль, email, телефон, одноразовый или секретный код восстановления.','Do not enter passwords, email, phone numbers, OTPs, or private recovery codes.')}</small></div>`}
-function listingImageFields(images=[],requireMain=true,uploadFiles=false){return `<div class="listing-image-fields">${images.length?`<div class="listing-current-photos"><b>${adminText('Joriy rasmlar','Текущие фотографии','Current photos')}</b><div class="listing-photo-preview-grid">${images.map((url,index)=>`<figure class="listing-photo-preview-card"><img src="${esc(url)}" alt="${adminText('E’lon rasmi','Фото объявления','Listing photo')} ${index+1}" loading="lazy" referrerpolicy="no-referrer"><figcaption>${index===0?adminText('Asosiy rasm','Главное фото','Main photo'):adminText('Rasm','Фото','Photo')+' '+(index+1)}</figcaption></figure>`).join('')}</div></div>`:''}<div class="listing-upload-grid">${Array.from({length:4},(_,index)=>`<label class="listing-upload-slot"><span class="listing-upload-title">${icon('upload')} ${index===0?adminText('1-rasm · asosiy','Фото 1 · главное','Photo 1 · main'):adminText(`${index+1}-rasm · ixtiyoriy`,`Фото ${index+1} · необязательно`,`Photo ${index+1} · optional`)}</span><input type="file" name="listing_photos" data-listing-photos accept="image/jpeg,image/png,image/webp" ${requireMain&&index===0?'required':''}><span class="listing-slot-preview" data-listing-photo-previews></span></label>`).join('')}</div><small class="field-hint">${uploadFiles?adminText('Har bir joyga bittadan rasm tanlang. JPG, PNG yoki WebP; har biri 15 MB gacha.','Выберите по одному фото для каждого места. JPG, PNG или WebP; до 15 МБ каждое.','Choose one photo per slot. JPG, PNG, or WebP; up to 15 MB each.'):adminText('Yangi rasmlar tanlansa, joriy rasmlar almashtiriladi. Bo‘sh qoldirsangiz, joriy rasmlar saqlanadi.','Новые фото заменят текущие. Оставьте пустыми, чтобы сохранить текущие.','New photos replace the current ones. Leave all slots empty to keep them.')}</small><p class="field-hint">${adminText('Parol, email, telefon yoki bir martalik kod ko‘ringan rasmlarni yuklamang.','Не загружайте изображения с паролем, email, телефоном или одноразовым кодом.','Do not upload images showing passwords, email addresses, phone numbers, or one-time codes.')}</p></div>`}
-function listingEditFormMarkup(item){const attrs=item.attributes||{},images=listingGalleryImages(item);return `<form data-form="edit-listing" data-id="${esc(item.id)}" class="edit-listing-form listing-form"><div class="field"><label>${adminText('O‘yin yoki platforma','Игра или платформа','Game or platform')}</label><input name="game_name" value="${esc(item.game_name)}" minlength="2" maxlength="80" required></div><div class="field"><label>${adminText('Sarlavha','Заголовок','Title')}</label><input name="title" minlength="5" maxlength="120" value="${esc(item.title)}" required></div><div class="field"><label>${adminText('Tavsif','Описание','Description')}</label><textarea name="description" minlength="20" maxlength="5000" required>${esc(item.description)}</textarea></div><div class="form-grid"><div class="field"><label>${adminText('Narx','Цена','Price')} (${esc(item.currency)} · ${adminText('kichik birlik','младшие единицы','minor units')})</label><input name="price_minor" type="number" min="1" value="${item.price_minor}" required></div><div class="field"><label>${adminText('Soni','Количество','Quantity')}</label><input name="stock" type="number" min="${item.reserved}" max="10000" value="${item.stock}" required></div></div><div class="form-grid"><div class="field"><label>${adminText('Platforma','Платформа','Platform')}</label><input name="platform" maxlength="60" value="${esc(item.platform)}"></div><div class="field"><label>${adminText('Hudud','Регион','Region')}</label><input name="region" maxlength="60" value="${esc(item.region)}"></div><div class="field"><label>${adminText('Server (ixtiyoriy)','Сервер (необязательно)','Server (optional)')}</label><input name="server" maxlength="60" value="${esc(attrs.server||attrs.server_id||'')}"></div></div><div class="form-grid"><div class="field" ${item.product_type==='account'?'':'hidden'}><label>${adminText('Rank (ixtiyoriy)','Ранг (необязательно)','Rank (optional)')}</label><input name="rank" maxlength="80" value="${esc(attrs.rank||'')}" ${item.product_type==='account'?'':'disabled'}></div><div class="field"><label>${adminText('Yetkazish muddati','Срок доставки','Delivery time')}</label><input name="delivery_eta" minlength="2" maxlength="60" value="${esc(item.delivery_eta)}"></div></div>${item.product_type==='account'?gameSpecificFieldsMarkup(item.game_name,attrs)+providerFields(attrs.linked_accounts||[]):listingTypeFieldsMarkup(item.product_type,attrs)}${listingImageFields(images,false)}<div class="field"><label>${adminText('Qo‘shimcha shartlar','Дополнительные условия','Additional terms')}</label><input name="requirements" maxlength="1000" value="${esc(item.requirements)}"></div><button class="button-secondary" type="submit">${adminText('E’lonni saqlash','Сохранить объявление','Save listing')}</button></form>`}
-function parseServerDate(value){if(value instanceof Date)return value;let source=String(value??'').trim().replace(' ','T');if(!source)return new Date(NaN);if(/^\d{4}-\d{2}-\d{2}$/.test(source))source+='T00:00:00';const hasZone=/(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(source);source=source.replace(/([+-]\d{2})$/,'$1:00');return new Date(hasZone?source:source+'Z')}
-function localeTag(){if(window.RegionPreferences)return window.RegionPreferences.numberLocale(locale);return ({uz:'uz-UZ',ru:'ru-RU',en:'en-US',zh:'zh-CN',ja:'ja-JP',ko:'ko-KR',id:'id-ID',ms:'ms-MY',th:'th-TH',vi:'vi-VN',hi:'hi-IN',ar:'ar',tr:'tr-TR',kk:'kk-KZ',bn:'bn-BD'})[locale]||'en-US'}
-let asiaMarkets=window.SENTRYLOOT_ASIA_MARKETS||[];
-async function loadAsiaMarkets(){if(window.SENTRYLOOT_MARKETS_READY)asiaMarkets=await window.SENTRYLOOT_MARKETS_READY;const languages=window.SENTRYLOOT_LANGUAGE_DATA?.languages;if(languages?.length){localeOptions=languages.map(item=>[item.code,item.name,item.code.toUpperCase()]);supportedLocales.clear();localeOptions.forEach(([code])=>supportedLocales.add(code))}return asiaMarkets}
-function countryLabel(code){try{return new Intl.DisplayNames([localeTag()],{type:'region'}).of(code)||code}catch{return code}}
-function currencyLabel(code){try{return `${new Intl.DisplayNames([localeTag()],{type:'currency'}).of(code)||code} (${code})`}catch{return code}}
-function countryOptions(selected='UZ'){return [...asiaMarkets].sort((a,b)=>countryLabel(a.country).localeCompare(countryLabel(b.country),localeTag())).map(row=>`<option value="${esc(row.country)}" ${row.country===selected?'selected':''}>${esc(countryLabel(row.country))}</option>`).join('')}
-function currencyOptions(selected='UZS'){return [...new Set(asiaMarkets.map(row=>row.currency))].sort().map(code=>`<option value="${esc(code)}" ${code===selected?'selected':''}>${esc(currencyLabel(code))}</option>`).join('')}
-function fmt(n,c='UZS'){const region=globalThis.RegionPreferences,digits=c==='MYR'||c==='USD'?2:0,major=region?.toMajor(n||0,c)??Number(n||0)/10**digits;let original;try{const number=new Intl.NumberFormat(localeTag(),{minimumFractionDigits:digits,maximumFractionDigits:digits}).format(major);original=c==='MYR'?'RM '+number:number+' '+c}catch{original=major+' '+c}return arguments[2]?original:region?.money(n,c,original)||original}
-
-async function loadWalletFx(){const currency=me?.currency||'UZS';walletFx={currency,rate:null,date:''};if(currency==='UZS')return walletFx;try{const snapshot=await window.RegionPreferences?.loadRates(),base=Number(snapshot?.rates?.UZS),target=Number(snapshot?.rates?.[currency]);if(base>0&&target>0)walletFx={currency,rate:target/base,date:snapshot.dates?.[currency]||''}}catch{}return walletFx}
-function walletAmount(n,c='UZS'){return esc(fmt(n,c))}
-function toast(message,kind='success'){
- const el=$('#toast');if(!el)return;
- kind=['success','error','info'].includes(kind)?kind:'info';
- clearTimeout(toastTimer);
- const duration=kind==='error'?8000:5000;
- el.className='toast show is-'+kind;el.hidden=false;el.setAttribute('role',kind==='error'?'alert':'status');el.setAttribute('aria-live',kind==='error'?'assertive':'polite');el.setAttribute('aria-atomic','true');el.style.setProperty('--toast-duration',duration+'ms');
- const symbol=document.createElement('span');symbol.className='toast-symbol';symbol.setAttribute('aria-hidden','true');symbol.innerHTML=`<svg class="toast-status-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.5"/>${kind==='success'?'<path d="m6 10 2.5 2.5L14 7"/>':kind==='error'?'<path d="M10 5.8v5.3M10 14h.01"/>':'<path d="M10 9v5M10 6h.01"/>'}</svg>`;
- const copy=document.createElement('div');copy.className='toast-copy';const text=document.createElement('span');text.className='toast-message';text.textContent=localized(String(message||''));
- const close=document.createElement('button');close.type='button';close.className='toast-close';close.setAttribute('aria-label',adminText('Yopish','Закрыть','Close'));close.innerHTML='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg>';
- const progress=document.createElement('span');progress.className='toast-progress';progress.setAttribute('aria-hidden','true');
- const dismiss=()=>{clearTimeout(toastTimer);el.classList.remove('show');el.hidden=true};
- copy.append(text);el.replaceChildren(symbol,copy,close,progress);close.onclick=dismiss;toastTimer=setTimeout(dismiss,duration);
-}
-function promptLocale(message,defaultValue=''){return window.prompt(localized(message),defaultValue)}
-function confirmLocale(message){return window.confirm(localized(message))}
-const referenceCache=new Map(),referencePending=new Map();let referenceGeneration=0;
-const referenceCopy=value=>JSON.parse(JSON.stringify(value));
-async function api(path,opt={}){
- const method=(opt.method||'GET').toUpperCase(),reference=method==='GET'&&['/games','/categories'].includes(path)&&!opt.signal;
- if(method!=='GET'){referenceGeneration++;referenceCache.clear();referencePending.clear();}
- if(!reference)return apiRequest(path,opt);
- const cached=referenceCache.get(path);if(cached&&cached.until>Date.now())return referenceCopy(cached.value);
- let pending=referencePending.get(path);
- if(!pending){const generation=referenceGeneration;pending=apiRequest(path,opt).then(value=>{if(generation===referenceGeneration)referenceCache.set(path,{value:referenceCopy(value),until:Date.now()+60000});return value;});referencePending.set(path,pending);pending.finally(()=>{if(referencePending.get(path)===pending)referencePending.delete(path);}).catch(()=>{});}
- return referenceCopy(await pending);
-}
-async function apiRequest(path,opt={}){
- const headers={'Content-Type':'application/json',...(opt.headers||{})};if(opt.method&&opt.method!=='GET'&&csrf)headers['X-CSRF-Token']=csrf;
- // A stalled read must stop loading. Writes retain their existing semantics:
- // aborting a payment or order submission could hide a successful server write.
- const controller=!opt.signal&&(opt.method||'GET').toUpperCase()==='GET'?new AbortController():null;
- const timer=controller?setTimeout(()=>controller.abort(),15000):null;
- let r,j;
- try{
-  r=await fetch('/api'+path,{...opt,headers,...(controller?{signal:controller.signal}:{})});
-  j=await r.json().catch(error=>{if(error.name==='AbortError')throw error;return {error:'Server javobi o‘qilmadi'};});
- }catch(error){
-  if(controller?.signal.aborted)throw Error(adminText('Server javobi kechikdi. Qayta urinib ko‘ring.','Сервер не ответил вовремя. Попробуйте ещё раз.','The server took too long to respond. Please try again.'));
-  throw error;
- }finally{if(timer!==null)clearTimeout(timer);}
- if(!r.ok){const error=Error(localized(j.error||`Xatolik ${r.status}`));error.status=r.status;error.fields=Object.fromEntries(Object.entries(j.fields||{}).map(([key,value])=>[key,localized(value)]));window.ExperienceUX?.errorFromApi(error);throw error}return j;
-}
-function btn(text,action,cls='button-secondary',attrs=''){return `<button class="${cls}" data-action="${action}" ${attrs}>${text}</button>`}
-function status(s){return `<span class="status ${esc(s)}">${esc(({pending_payment:'To‘lov kutilmoqda',paid:'To‘langan',awaiting_delivery:'Yetkazish kutilmoqda',delivered:'Yetkazildi',completed:'Yakunlandi',cancelled:'Bekor qilindi',disputed:'Nizoda',pending_review:'Tekshiruvda',approved_private:'Tasdiqlangan · yashirin',published:'Faol',rejected:'Rad etildi',draft:'Qoralama',paused:'To‘xtatilgan',not_public:'Bozorda ko‘rinmaydi',open:'Ochiq',pending:'Kutilmoqda',approved:'Tasdiqlandi',paid_out:'To‘landi'})[s]||s)}</span>`}
-function cover(it){const image=it.image_url?`<img src="${esc(it.image_url)}" alt="${esc(it.title)}" loading="lazy" referrerpolicy="no-referrer">`:`<span class="product-cover-placeholder" aria-hidden="true">${icon('gamepad')}</span>`;return `<div class="product-cover ${it.image_url?'':'product-cover-empty'}">${image}</div>`}
-function listingGalleryImages(it){const values=Array.isArray(it.attributes?.images)?it.attributes.images:[];return [...new Set([it.image_url,...values].filter(x=>typeof x==='string'&&x))].slice(0,8)}
-function listingDetailGallery(it){
- const images=listingGalleryImages(it),count=images.length,t=adminText;
- return `<div class="listing-gallery-shell"><div class="detail-cover detail-gallery ${count?'':'is-empty'}" role="group" aria-label="${t('E’lon rasmlari','Фотографии объявления','Listing photos')}" tabindex="0">${count?`<img class="detail-gallery-image" src="${esc(images[0])}" alt="${esc(it.title)} — 1 / ${count}" loading="eager" referrerpolicy="no-referrer">`:`<div class="detail-gallery-empty">${icon('box')}<span>${t('Rasm qo‘shilmagan','Фото не добавлено','No photo added')}</span></div>`}${count>1?`<button type="button" class="detail-gallery-arrow is-prev" data-gallery-prev aria-label="${t('Oldingi rasm','Предыдущее фото','Previous photo')}"><svg class="gallery-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 7 9.5 12 14.5 17"/></svg></button><button type="button" class="detail-gallery-arrow is-next" data-gallery-next aria-label="${t('Keyingi rasm','Следующее фото','Next photo')}"><svg class="gallery-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 7 14.5 12 9.5 17"/></svg></button>`:''}${count?`<button type="button" class="listing-gallery-expand" data-gallery-expand aria-label="${t('To‘liq ekran','Полный экран','Full screen')}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M3 3l6 6m12-6-6 6M3 21l6-6m12 6-6-6"/></svg></button>`:''}${count?`<span class="listing-gallery-count" data-gallery-count aria-live="polite">1 / ${count}</span>`:''}</div>${(count>1||(count&&window.MobileSite?.isMobile()))?`<div class="listing-gallery-thumbnails" aria-label="${t('Rasm tanlash','Выбор фото','Choose photo')}">${images.map((url,index)=>`<button type="button" data-gallery-index="${index}" aria-pressed="${index===0}" aria-label="${t('Rasm','Фото','Photo')} ${index+1}"><img src="${esc(url)}" alt="" width="160" height="90" loading="lazy" decoding="async" referrerpolicy="no-referrer"></button>`).join('')}</div>`:''}</div>`
-}
-function setupListingDetailGallery(root,it){
- const shell=$('.listing-gallery-shell',root),gallery=$('.detail-gallery',root),images=listingGalleryImages(it);if(!gallery||!images.length)return;
- const image=$('.detail-gallery-image',gallery);let current=0;
- const show=index=>{current=(index+images.length)%images.length;image.src=images[current];image.alt=`${it.title} — ${current+1} / ${images.length}`;const count=$('[data-gallery-count]',shell);if(count)count.textContent=`${current+1} / ${images.length}`;$$('[data-gallery-index]',shell).forEach(button=>button.setAttribute('aria-pressed',String(Number(button.dataset.galleryIndex)===current)))};
- $$('[data-gallery-index]',shell).forEach(button=>button.addEventListener('click',()=>show(Number(button.dataset.galleryIndex))));
- $('[data-gallery-prev]',gallery)?.addEventListener('click',()=>show(current-1));$('[data-gallery-next]',gallery)?.addEventListener('click',()=>show(current+1));
- const keyboard=event=>{if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();show(current+(event.key==='ArrowRight'?1:-1))}};shell.addEventListener('keydown',keyboard);
- let startX=0,startY=0;gallery.addEventListener('touchstart',event=>{startX=event.changedTouches[0].clientX;startY=event.changedTouches[0].clientY},{passive:true});gallery.addEventListener('touchend',event=>{const dx=event.changedTouches[0].clientX-startX,dy=event.changedTouches[0].clientY-startY;if(Math.abs(dx)>45&&Math.abs(dx)>Math.abs(dy))show(current+(dx<0?1:-1))},{passive:true});
- $('[data-gallery-expand]',shell)?.addEventListener('click',()=>{const dialog=document.createElement('dialog');dialog.className='listing-lightbox';dialog.innerHTML=`<button type="button" class="listing-lightbox-close" aria-label="${adminText('Yopish','Закрыть','Close')}">×</button><img src="${esc(images[current])}" alt="${esc(it.title)}" referrerpolicy="no-referrer">${images.length>1?'<button type="button" class="detail-gallery-arrow is-prev" aria-label="Previous photo"><svg class="gallery-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 7 9.5 12 14.5 17"/></svg></button><button type="button" class="detail-gallery-arrow is-next" aria-label="Next photo"><svg class="gallery-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 7 14.5 12 9.5 17"/></svg></button>':''}`;const update=step=>{show(current+step);$('img',dialog).src=images[current]};$('.is-prev',dialog)?.addEventListener('click',()=>update(-1));$('.is-next',dialog)?.addEventListener('click',()=>update(1));$('.listing-lightbox-close',dialog).onclick=()=>dialog.close();dialog.addEventListener('keydown',event=>{if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();update(event.key==='ArrowRight'?1:-1)}});dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close()});dialog.addEventListener('close',()=>{dialog.remove();$('[data-gallery-expand]',shell)?.focus()},{once:true});document.body.append(dialog);dialog.showModal()});
-}
-function setupListingTabs(root){
- const tabs=$$('[data-listing-tab]',root),panels=$$('[data-listing-panel]',root);
- const select=tab=>{tabs.forEach(button=>{const active=button===tab;button.setAttribute('aria-selected',String(active));button.tabIndex=active?0:-1});panels.forEach(panel=>panel.hidden=panel.dataset.listingPanel!==tab.dataset.listingTab)};
- tabs.forEach((tab,index)=>{tab.addEventListener('click',()=>select(tab));tab.addEventListener('keydown',event=>{let next;if(event.key==='ArrowRight')next=(index+1)%tabs.length;if(event.key==='ArrowLeft')next=(index+tabs.length-1)%tabs.length;if(event.key==='Home')next=0;if(event.key==='End')next=tabs.length-1;if(next!==undefined){event.preventDefault();select(tabs[next]);tabs[next].focus()}})});
- $('[data-seller-profile]',root)?.addEventListener('click',()=>{const profile=$('#listing-seller-profile',root);profile.hidden=!profile.hidden;$('[data-seller-profile]',root).setAttribute('aria-expanded',String(!profile.hidden))});
-}
-function setupListingDescription(root){const description=$('#listing-description',root),button=$('#listing-description-toggle',root);if(!description||!button)return;if(description.scrollHeight>description.clientHeight+2)button.hidden=false;button.addEventListener('click',()=>{const expanded=description.classList.toggle('is-expanded');button.setAttribute('aria-expanded',String(expanded));button.textContent=expanded?adminText('Qisqartirish','Свернуть','Show less'):adminText('To‘liq o‘qish','Читать полностью','Read full description')})}
-function setupListingFilePreviews(root){root.querySelectorAll('[data-listing-photos]').forEach(input=>{const preview=$('[data-listing-photo-previews]',input.closest('.listing-upload-slot'));let objectUrl='';input.addEventListener('change',()=>{if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl='';preview.replaceChildren();const file=input.files?.[0];input.setCustomValidity(file?.size>15*1024*1024?adminText('Har bir asl rasm 15 MB dan kichik bo‘lishi kerak.','Размер исходного изображения не должен превышать 15 МБ.','Each original photo must be 15 MB or smaller.'):file&&!['image/jpeg','image/png','image/webp'].includes(file.type)?adminText('Faqat JPG, PNG yoki WebP rasmlarni tanlang.','Выберите файлы JPG, PNG или WebP.','Choose JPG, PNG, or WebP images only.'): '');if(!file||!file.type.startsWith('image/'))return;objectUrl=URL.createObjectURL(file);const image=document.createElement('img');image.src=objectUrl;image.alt=file.name;const caption=document.createElement('span');caption.textContent=file.name;preview.append(image,caption)})})}
-async function prepareListingPhoto(file){if(file.size>15*1024*1024)throw Error(adminText('Asl rasm 15 MB dan kichik bo‘lishi kerak.','Исходное изображение должно быть не более 15 МБ.','Original photo must be 15 MB or smaller.'));if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw Error(adminText('Faqat JPG, PNG yoki WebP rasmlarni tanlang.','Выберите файлы JPG, PNG или WebP.','Choose JPG, PNG, or WebP images only.'));let image, width, height, release=()=>{};if('createImageBitmap' in window){const bitmap=await createImageBitmap(file);image=bitmap;width=bitmap.width;height=bitmap.height;release=()=>bitmap.close?.()}else{const url=URL.createObjectURL(file);try{image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error('decode'));img.src=url});width=image.naturalWidth;height=image.naturalHeight;release=()=>URL.revokeObjectURL(url)}catch(error){URL.revokeObjectURL(url);throw Error(adminText('Rasmni o‘qib bo‘lmadi. Boshqa rasm tanlang.','Не удалось прочитать изображение. Выберите другое.','Could not read the image. Choose another photo.'))}}try{if(!width||!height||width*height>25000000)throw Error(adminText('Rasm o‘lchami juda katta. Boshqa rasm tanlang.','Размер изображения слишком велик. Выберите другое.','Image dimensions are too large. Choose another photo.'));const maxBytes=4900*1024;for(const scale of [Math.min(1,1600/Math.max(width,height)),Math.min(1,1280/Math.max(width,height)),Math.min(1,1024/Math.max(width,height))]){const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(width*scale));canvas.height=Math.max(1,Math.round(height*scale));const context=canvas.getContext('2d');if(!context)throw Error(adminText('Rasmni tayyorlab bo‘lmadi.','Не удалось подготовить изображение.','Could not prepare the image.'));context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);for(const quality of [.84,.76,.68,.60,.52]){const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',quality));if(blob&&blob.size<=maxBytes)return new File([blob],`${file.name.replace(/\.[^.]+$/,'')||'listing-photo'}.webp`,{type:'image/webp',lastModified:Date.now()})}}throw Error(adminText('Rasmni siqib 5 MB dan kichik qilib bo‘lmadi. Kichikroq rasm tanlang.','Не удалось уменьшить фото до 5 МБ. Выберите изображение поменьше.','Could not compress the photo below 5 MB. Choose a smaller image.'))}finally{release()}}
-async function uploadListingPhoto(file,prepared=false){if(!prepared)file=await prepareListingPhoto(file);const headers={'Content-Type':file.type,'X-CSRF-Token':csrf};const response=await fetch('/api/listing-images',{method:'POST',headers,body:file});const result=await response.json().catch(()=>({error:adminText('Server javobi o‘qilmadi','Не удалось прочитать ответ сервера','Server response could not be read')}));if(!response.ok)throw Error(localized(result.error||`Xatolik ${response.status}`));return result.url}
-async function renderListingReview(id){return OfferWizard.review(id)}
-function linkedAccountMarkup(providers=[]){const labels=Object.fromEntries(listingProviders.map(([key,label])=>[key,label]));return providers.filter(x=>labels[x]).map(key=>`<span class="linked-account-badge">${providerFieldsIcon(key)}${adminText(labels[key],labels[key]==='Apple / iCloud'?'Apple / iCloud':labels[key],labels[key])}</span>`).join('')}
-function providerFieldsIcon(key){const entry=listingProviders.find(x=>x[0]===key);if(!entry)return '';const glyph=key==='apple'?'<svg viewBox="0 0 24 24"><path d="M16.4 12.5c0-2.3 1.9-3.4 2-3.5-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9s-2-.9-3.3-.9c-1.7 0-3.2 1-4.1 2.5-1.8 3.1-.5 7.6 1.3 10.1.9 1.2 1.9 2.5 3.2 2.4 1.3-.1 1.8-.8 3.4-.8s2 .8 3.4.8c1.4 0 2.3-1.2 3.1-2.4 1-1.4 1.4-2.8 1.5-2.9-.1 0-3.3-1.2-3.3-4.3zM14 5.4c.7-.9 1.2-2.1 1.1-3.3-1.1.1-2.4.7-3.1 1.5-.7.8-1.3 2-1.2 3.1 1.2.1 2.4-.5 3.2-1.3z"/></svg>':`<b>${entry[2]}</b>`;return `<span class="provider-mark provider-${key}" aria-hidden="true"><span class="provider-glyph">${glyph}</span></span>`}
-function card(it){return marketCard(it)}
-
-const marketGameLinks=[
- ['counter-strike-2','CS2','https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/cs2.png?v=original-1','cs2'],['pubg-mobile','PUBG Mobile','https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/pubg-mobile.png?v=original-1','pubg'],
- ['mobile-legends','Mobile Legends','https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/mobile-legends.png?v=original-1','ml'],['free-fire','Free Fire','https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/free-fire.png?v=original-1','ff'],
- ['honor-of-kings','Honor of Kings','https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/honor-of-kings.png?v=original-1','hok'],['roblox','Roblox','https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/roblox.png?v=original-1','roblox'],
- ['valorant','Valorant','https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/valorant.png?v=original-1','valorant'],['genshin-impact','Genshin Impact','https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/genshin-impact.png?v=original-1','genshin'],
- ['fortnite','Fortnite','https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/fortnite.png?v=original-1','fortnite'],['minecraft','Minecraft','https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/minecraft.png?v=original-1','minecraft'],
- ['gta-6','GTA 6','https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/gta-6.png?v=original-1','gta'],['league-of-legends','League of Legends','https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/league-of-legends.png?v=original-1','lol'],
- ['dota-2','Dota 2','https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/dota-2.png?v=original-1','dota'],['call-of-duty-mobile','Call of Duty Mobile','https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/call-of-duty-mobile-1280.webp','codm'],
- ['ea-sports-fc','EA Sports FC','https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/ea-sports-fc.png?v=original-1','fc']
+});
+labelObserver.observe(app, { childList: true, subtree: true });
+const sortOptions = [
+  ["newest", "Eng yangilari"],
+  ["price_asc", "Arzonidan"],
+  ["price_desc", "Qimmatidan"],
+  ["popular", "Ommabop"],
 ];
-function marketGameMark(game){const [,,mark,theme]=game;return `<span class="market-game-mark market-game-${theme}" aria-hidden="true"><img src="${mark}" alt="" width="640" height="360" loading="lazy" decoding="async"></span>`}
-function homeGameCarouselMarkup(){
- const t=adminText,order=['pubg-mobile','mobile-legends','valorant','counter-strike-2','free-fire','roblox','fortnite','minecraft','gta-5','league-of-legends','dota-2','genshin-impact','honor-of-kings','call-of-duty-mobile','ea-sports-fc'];
- const games=[...marketGameLinks].sort((a,b)=>{const rank=game=>order.includes(game[0])?order.indexOf(game[0]):order.length;return rank(a)-rank(b)});
- return `<section class="home-mobile-games" data-game-carousel aria-roledescription="${t('karusel','карусель','carousel')}" aria-labelledby="home-games-title"><div class="home-section-heading"><h2 id="home-games-title">Top games</h2><a href="/browse">${t('Barchasi','Все','View all')} →</a></div><nav class="game-carousel-stage" aria-label="${t('O‘yinlar','Игры','Games')}">${games.map(game=>`<a data-game-card data-game-name="${esc(game[1])}" href="/browse?game=${encodeURIComponent(game[0])}">${marketGameMark(game)}<span class="game-carousel-caption"><strong>${esc(game[1])}</strong><small>${t('Takliflarni ko‘rish','Смотреть предложения','Explore listings')} →</small></span></a>`).join('')}</nav><span class="sr-only" data-game-announcement aria-live="polite" aria-atomic="true"></span></section>`;
+const tr = {
+  uz: {
+    browse: "Bozor",
+    wanted: "Izlanmoqda",
+    safety: "Xavfsizlik",
+    login: "Kirish",
+    search: "O‘yin, buyum yoki xizmat qidiring…",
+  },
+  ru: {
+    browse: "Маркет",
+    wanted: "Ищут",
+    safety: "Безопасность",
+    login: "Войти",
+    search: "Ищите игры, предметы или услуги…",
+  },
+  en: {
+    browse: "Marketplace",
+    wanted: "Requests",
+    safety: "Safety",
+    login: "Sign in",
+    search: "Search games, items, or services…",
+  },
+};
+let localeOptions = [
+  ["en", "English", "EN"],
+  ["uz", "O‘zbekcha", "UZ"],
+  ["ru", "Русский", "RU"],
+];
+const supportedLocales = new Set(localeOptions.map(([code]) => code));
+function languageOptions(selected = "en") {
+  return localeOptions
+    .map(
+      ([code, name]) =>
+        `<option value="${code}" ${code === selected ? "selected" : ""}>${name}</option>`,
+    )
+    .join("");
 }
-function marketSellerIdentity(it){
- const name=String(it.seller_display_name||it.seller?.display_name||it.seller_name||adminText('Sotuvchi','Продавец','Seller')).trim();
- return {name,avatar:it.seller_avatar_url||it.seller?.avatar_url||'',id:it.store_id||it.seller_id||''};
+function categoryLabel(value) {
+  const labels = {
+    "Gaming accounts": [
+      "O‘yin akkauntlari",
+      "Игровые аккаунты",
+      "Gaming accounts",
+    ],
+    "Items & skins": [
+      "Buyumlar va skinlar",
+      "Предметы и скины",
+      "Items & skins",
+    ],
+    "In-game currency": [
+      "O‘yin valyutasi",
+      "Игровая валюта",
+      "In-game currency",
+    ],
+    "Coaching & services": [
+      "Murabbiylik va xizmatlar",
+      "Обучение и услуги",
+      "Coaching & services",
+    ],
+    "Gift cards & digital codes": [
+      "Sovg‘a kartalari va raqamli kodlar",
+      "Подарочные карты и цифровые коды",
+      "Gift cards & digital codes",
+    ],
+    "Other digital products": [
+      "Boshqa raqamli mahsulotlar",
+      "Другие цифровые товары",
+      "Other digital products",
+    ],
+    account: ["O‘yin akkaunti", "Игровой аккаунт", "Gaming account"],
+    item: ["Buyum yoki skin", "Предмет или скин", "Item or skin"],
+    currency: ["O‘yin valyutasi", "Игровая валюта", "In-game currency"],
+    service: ["Xizmat", "Услуга", "Service"],
+    code: ["Raqamli kod", "Цифровой код", "Digital code"],
+    digital: [
+      "Boshqa raqamli mahsulot",
+      "Другой цифровой товар",
+      "Other digital product",
+    ],
+  };
+  const entry = labels[String(value || "")];
+  return entry ? adminText(...entry) : String(value || "");
 }
-function marketAvatarMarkup(name,avatar='',className='market-seller-avatar',owner=''){
- return window.SentryLootAccount.avatar(name,avatar,className,owner);
+const localeKey = "bozor-language";
+let copyTextCache = new WeakMap(),
+  copyAttrCache = new WeakMap();
+function translateSource(source, language = locale) {
+  if (language === "uz") return source;
+  const entry = window.BOZOR_COPY?.[source],
+    english = entry?.[1] || source;
+  const translated = window.RegionPreferences?.translate(english, language);
+  if (translated) return translated;
+  const extra = window.BOZOR_EXTRA_COPY?.[language]?.[source];
+  if (extra) return extra;
+  if (entry) return entry[language === "ru" ? 0 : 1] || source;
+  return undefined;
 }
-function updateProfileAvatar(url){
- if(!me)return;me.avatar_url=url;
- document.querySelectorAll('.user-avatar[data-avatar-owner]').forEach(avatar=>{if(avatar.dataset.avatarOwner!==me.id)return;const classes=avatar.className.split(/\s+/).filter(c=>c!=='user-avatar').join(' ');avatar.outerHTML=marketAvatarMarkup(me.display_name||me.email,url,classes,me.id)});
- syncProfileTrigger();
-}
-function marketCardFacts(it){
- const a=it.attributes||{};
- const facts=it.product_type==='account'?[it.platform,a.original_email_included==='yes'?adminText('Email beriladi','Email включён','Email included'):it.region]:it.product_type==='item'?[it.platform,a.item_variant||a.condition||it.region]:it.product_type==='currency'?[it.region,a.amount&&a.unit?`${a.amount} ${a.unit}`:it.platform]:[it.platform,it.region];
- return [...new Set(facts.filter(value=>value&&String(value).trim()).map(String))].slice(0,2);
-}
-function marketCard(it){
- if(it.status==='sold_out'||it.available!=null&&Number(it.available)<=0)return '';
- const artwork=it.image_url;
- const art=artwork?`<img src="${esc(artwork)}" alt="${esc(it.title)}" width="640" height="400" loading="lazy" decoding="async" referrerpolicy="no-referrer">`:`<span class="market-card-art-empty" aria-hidden="true">${icon('gamepad')}</span>`;
- const owner=marketSellerIdentity(it),facts=marketCardFacts(it);
- const reviews=Math.max(0,Number(it.seller_card_review_count)||0),rating=Number(it.seller_card_rating);
- const ratingMarkup=`<span class="market-card-rating" title="${reviews?adminText('Sotuvchining tasdiqlangan xaridorlar reytingi','Рейтинг продавца от подтверждённых покупателей','Seller rating from verified purchases'):adminText('Hali baholanmagan','Нет оценок','Not rated yet')}">${icon('star')}<span>${reviews&&Number.isFinite(rating)&&rating>=1&&rating<=5?`${rating.toFixed(1)} <small>(${reviews})</small>`:'—'}</span></span>`;
- const sold=Math.max(0,Math.floor(Number(it.seller_sales_count)||0));
- const soldLabel=it.product_type==='account'?adminText('ta account sotilgan','аккаунтов продано',sold===1?'account sold':'accounts sold'):adminText('ta sotilgan','продано','sold');
- const salesMarkup=`<span class="market-card-sales">${sold.toLocaleString()} ${soldLabel}</span>`;
- const available=it.available!==undefined?Number(it.available):it.stock!==undefined?Number(it.stock)-Number(it.reserved||0):null;
- const soldOut=it.status==='sold_out'||available!==null&&available<=0;
- const verified=it.identity_verified||it.verification_status==='verified';
- const viewUrl=`/listing/${encodeURIComponent(it.id)}`;
- const sellerUrl=owner.id?`/store/${encodeURIComponent(owner.id)}`:viewUrl;
- const favorite=`<button type="button" class="favorite-card-button ${it.is_favorite?'saved':''}" data-action="favorite" data-id="${esc(it.id)}" data-saved="${it.is_favorite?'1':'0'}" aria-pressed="${it.is_favorite?'true':'false'}" aria-label="${it.is_favorite?adminText('Saqlanganlardan olib tashlash','Убрать из избранного','Remove from saved'):adminText('Saqlash','Сохранить','Save listing')}">${icon('heart')}</button>`;
- return `<article class="product-card market-product-card${soldOut?' is-sold-out':''}"><a class="product-cover market-card-cover${artwork?'':' product-cover-empty'}" href="${viewUrl}" aria-label="${adminText('E’lonni ko‘rish','Открыть объявление','View listing')}: ${esc(it.title)}">${art}${soldOut?`<span class="market-sold-out">${adminText('Sotilgan','Распродано','Sold out')}</span>`:''}</a>${favorite}<div class="product-card-body"><p class="market-card-category"><span>${esc(it.game_name||adminText('O‘yin','Игра','Game'))}</span><span aria-hidden="true">·</span><span>${esc(categoryLabel(it.category_name||it.product_type||'Digital'))}</span></p><h3 class="product-title"><a href="${viewUrl}">${esc(it.title)}</a></h3><div class="market-card-bottom"><strong class="price"><span>${esc(fmt(it.price_minor,it.currency))}</span></strong><a class="market-card-view" href="${viewUrl}" aria-label="${adminText('Taklifni ko‘rish','Смотреть предложение','View offer')}: ${esc(it.title)}"><span>${adminText('Taklifni ko‘rish','Смотреть','View offer')}</span><span aria-hidden="true">→</span></a></div><div class="market-card-meta"><p class="market-card-facts" title="${esc(facts.join(' · '))}">${facts.map(value=>`<span>${esc(value)}</span>`).join('<span aria-hidden="true">·</span>')}</p><div class="market-card-delivery">${icon('clock')}<span>${esc(it.delivery_eta||adminText('Sotuvchidan so‘rang','Уточните у продавца','Ask seller'))}</span></div></div><div class="market-card-footer"><a class="market-seller-link" href="${sellerUrl}" aria-label="${adminText('Sotuvchi','Продавец','Seller')}: ${esc(owner.name)}">${marketAvatarMarkup(owner.name,owner.avatar,'market-seller-avatar',owner.id)}<span class="market-seller-copy"><span class="market-seller-name-row"><span class="market-seller-name" title="${esc(owner.name)}">${esc(owner.name)}</span>${verified?`<span class="market-seller-verified" title="${adminText('Tasdiqlangan sotuvchi','Проверенный продавец','Verified seller')}">${icon('shield')}</span>`:''}</span>${salesMarkup}</span></a><div class="market-card-reputation">${ratingMarkup}<span class="market-mobile-sales">${sold.toLocaleString()} ${adminText('ta sotilgan','продаж','sales')}</span></div></div></div></article>`;
-}
-async function showMarketListingDetails(id){
- const dialog=document.createElement('dialog');dialog.className='market-details-dialog';dialog.setAttribute('aria-label',adminText('E’lon tafsilotlari','Детали объявления','Listing details'));dialog.innerHTML=`<div class="market-details-loading">${adminText('Tafsilotlar yuklanmoqda…','Загрузка деталей…','Loading details…')}</div>`;document.body.append(dialog);dialog.showModal();
- const close=()=>dialog.close();dialog.addEventListener('click',event=>{if(event.target===dialog)close()});dialog.addEventListener('close',()=>dialog.remove(),{once:true});
- try{
-  const item=await api('/listings/'+encodeURIComponent(id));const attrs=item.attributes||{},images=listingGalleryImages(item),facts=[[adminText('Yetkazish tezligi','Скорость доставки','Delivery speed'),item.delivery_eta],[adminText('Minimal miqdor','Минимальное количество','Minimum quantity'),`${Math.max(1,Number(item.min_quantity||1))} ${item.unit_label||''}`],[adminText('Mavjud','В наличии','Available'),String(Math.max(0,Number(item.available??(Number(item.stock||0)-Number(item.reserved||0)))))],[adminText('O‘yin','Игра','Game'),item.game_name],[adminText('Kategoriya','Категория','Category'),categoryLabel(item.category_name||item.product_type)],[adminText('Platforma','Платформа','Platform'),item.platform],[adminText('Hudud','Регион','Region'),item.region],...Object.entries(attrs).filter(([key,value])=>key!=='images'&&!key.startsWith('_')&&value!==''&&value!=null).map(([key,value])=>[esc(key.replaceAll('_',' ')),Array.isArray(value)?value.join(', '):typeof value==='object'?JSON.stringify(value):String(value)])].filter(([,value])=>value!==undefined&&value!==null&&String(value).trim()!=='');
-  dialog.innerHTML=`<header class="market-details-header"><h2>${adminText('Batafsil ma’lumot','Подробнее','More details')}</h2><button type="button" class="market-details-close" aria-label="${adminText('Yopish','Закрыть','Close')}">${icon('close')}</button></header><h3 class="market-details-title">${esc(item.title)}</h3><section class="market-details-facts">${facts.map(([label,value])=>`<div><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join('')}</section>${images.length?`<section class="market-details-media" aria-label="${adminText('Media','Медиа','Media')}">${images.map((url,index)=>`<figure><img src="${esc(url)}" alt="${adminText('E’lon rasmi','Фото объявления','Listing photo')} ${String(index+1).padStart(2,'0')}" loading="lazy" referrerpolicy="no-referrer"><figcaption>${adminText('Media','Медиа','Media')} - ${String(index+1).padStart(2,'0')}</figcaption></figure>`).join('')}</section>`:''}${item.description?`<section class="market-details-copy"><p>${esc(item.description)}</p><a class="market-details-more" href="/listing/${encodeURIComponent(item.id)}">${adminText('Batafsil ko‘rish','Читать подробнее','View more')}</a></section>`:''}${item.requirements?`<section class="market-details-copy"><h3>${adminText('Qo‘shimcha talablar','Дополнительные требования','Requirements')}</h3><p>${esc(item.requirements)}</p></section>`:''}<footer class="market-details-footer"><strong>${esc(fmt(item.price_minor,item.currency))}</strong><a class="market-card-view" href="/listing/${encodeURIComponent(item.id)}">${adminText('E’lon sahifasini ochish','Открыть объявление','View listing')}</a></footer>`;
-  dialog.querySelector('.market-details-close').addEventListener('click',close);
- }catch(error){dialog.innerHTML=`<header class="market-details-header"><h2>${adminText('Tafsilotlar yuklanmadi','Не удалось загрузить детали','Could not load details')}</h2><button type="button" class="market-details-close" aria-label="${adminText('Yopish','Закрыть','Close')}">${icon('close')}</button></header><p class="market-details-error">${esc(error.message||adminText('Server bilan bog‘lanib bo‘lmadi.','Не удалось связаться с сервером.','Could not reach the server.'))}</p>`;dialog.querySelector('.market-details-close').addEventListener('click',close)}
-}
-function setupMarketSidebarToggle(){
- const button=$('#market-sidebar-toggle');if(!button)return;
- const key='sentryloot_sidebar_collapsed';let collapsed=false,queued=false,previousSidebar=null,savedScroll=0,drag=null;
- try{collapsed=localStorage.getItem(key)==='1'}catch{}
- function sync(){
-  queued=false;const sidebar=$('#market-sidebar'),handle=$('#market-sidebar-handle');
-  document.documentElement.classList.toggle('market-sidebar-collapsed',collapsed);
-  button.hidden=!sidebar||!collapsed;
-  const label=adminText('Menyuni ochish','Открыть меню','Open sidebar');button.setAttribute('aria-expanded',String(!collapsed));button.setAttribute('aria-label',label);button.title=label;
-  if(!sidebar){if(drag)finishDrag(false);previousSidebar=null;return}
-  // Mobile navigation uses the shared links inside the modal menu.
-  if(window.matchMedia('(max-width:840px)').matches){button.hidden=true;sidebar.hidden=true;sidebar.inert=true;if(handle){handle.hidden=true;handle.inert=true}previousSidebar=sidebar;return}
-  const sameSidebar=previousSidebar===sidebar,changed=!sameSidebar||sidebar.hidden!==collapsed;
-  sidebar.hidden=collapsed;sidebar.inert=collapsed;
-  if(handle){handle.hidden=collapsed;handle.inert=collapsed}
-  if(collapsed){const style=getComputedStyle(sidebar),link=sidebar.querySelector('a'),bar=button.closest('.topbar').getBoundingClientRect(),left=parseFloat(style.left);button.style.left=((Number.isFinite(left)?left:sidebar.closest('.market-shell').getBoundingClientRect().left)+(parseFloat(style.paddingLeft)||0)+(link?parseFloat(getComputedStyle(link).paddingLeft)||0:0)-bar.left)+'px'}
-  if(!collapsed&&!drag){
-   const rect=sidebar.getBoundingClientRect(),frame=sidebar.querySelector('.market-nav-icon'),topbar=button.closest('.topbar').getBoundingClientRect();
-   if(!drag&&frame)button.style.left=(frame.getBoundingClientRect().left-topbar.left)+'px';
-   if(handle){handle.style.left=(rect.right-6)+'px';handle.style.top=Math.max(rect.top,topbar.bottom)+'px';handle.style.height=Math.max(0,Math.min(rect.bottom,window.innerHeight)-Math.max(rect.top,topbar.bottom))+'px'}
-   if(changed)requestAnimationFrame(()=>{if(sidebar.isConnected)sidebar.scrollTop=sameSidebar?savedScroll:0});
+function localized(value, language = locale) {
+  const source = String(value ?? "");
+  if (language === "uz") return source;
+  const trimmed = source.trim(),
+    start = source.indexOf(trimmed),
+    lead = start < 0 ? "" : source.slice(0, start),
+    tail = start < 0 ? "" : source.slice(start + trimmed.length),
+    exact =
+      translateSource(source, language) ?? translateSource(trimmed, language);
+  if (exact !== undefined)
+    return source === trimmed ? exact : lead + exact + tail;
+  const english = language !== "ru";
+  let validation = trimmed.match(/^(\d+)[–-](\d+) belgi kiriting\.$/);
+  if (validation)
+    return (
+      lead +
+      (english
+        ? `Enter ${validation[1]}–${validation[2]} characters.`
+        : `Введите ${validation[1]}–${validation[2]} символов.`) +
+      tail
+    );
+  let paymentNotice = trimmed.match(
+    /^To‘lov: (.+)\. Sandbox natijasi real pul o‘tkazmasi emas\.$/,
+  );
+  if (paymentNotice)
+    return (
+      lead +
+      (english ? "Payment: " : "Оплата: ") +
+      paymentNotice[1] +
+      (english
+        ? ". Sandbox does not transfer real money."
+        : ". Тестовый режим не переводит реальные деньги.") +
+      tail
+    );
+  if (trimmed.includes(" · ")) {
+    const parts = trimmed.split(/( · )/g),
+      mapped = parts.map((part) => {
+        const piece = part.trim(),
+          translated = translateSource(piece, language);
+        if (translated !== undefined)
+          return part === piece ? translated : part.replace(piece, translated);
+        const listingDate = piece.match(/^E’lon (.+)$/);
+        if (listingDate)
+          return part.replace("E’lon ", english ? "Listing " : "Объявление ");
+        const prefix = piece.match(/^(Sotuvchi:|Xaridor:)\s*(.*)$/);
+        if (prefix) {
+          const label =
+            prefix[1] === "Sotuvchi:"
+              ? english
+                ? "Seller:"
+                : "Продавец:"
+              : english
+                ? "Buyer:"
+                : "Покупатель:";
+          return part.replace(prefix[1], label);
+        }
+        const tailStatus = piece.match(/^(.*?)(Holat: tasdiqlanmagan)$/);
+        if (tailStatus)
+          return part.replace(
+            tailStatus[2],
+            english ? "Status: unverified" : "Статус: не подтверждён",
+          );
+        return part;
+      });
+    const joined = parts.map((_, i) => mapped[i]).join("");
+    if (joined !== trimmed) return lead + joined + tail;
   }
-  previousSidebar=sidebar;
- }
- function setCollapsed(value){const sidebar=$('#market-sidebar');if(!sidebar)return;if(value&&!collapsed)savedScroll=sidebar.scrollTop;collapsed=value;try{localStorage.setItem(key,collapsed?'1':'0')}catch{}sync()}
- function finishDrag(commit){
-  if(!drag)return;const current=drag;drag=null;
-  document.documentElement.classList.remove('market-sidebar-dragging');document.documentElement.style.removeProperty('--market-sidebar-drag-x');
-  try{current.handle.releasePointerCapture(current.pointerId)}catch{}
-  if(commit&&current.delta<=-Math.min(56,current.width*.25))setCollapsed(true);
- }
- button.addEventListener('click',event=>{if(!collapsed)return;setCollapsed(false);if(event.detail===0)requestAnimationFrame(()=>$('#market-sidebar a')?.focus({preventScroll:true}))});
- app.addEventListener('pointerdown',event=>{
-  const handle=event.target.closest('#market-sidebar-handle'),sidebar=$('#market-sidebar');if(!handle||!sidebar||collapsed||event.button!==0)return;
-  drag={handle,pointerId:event.pointerId,startX:event.clientX,width:sidebar.getBoundingClientRect().width,delta:0};
-  document.documentElement.classList.add('market-sidebar-dragging');handle.setPointerCapture(event.pointerId);event.preventDefault();
- });
- document.addEventListener('pointermove',event=>{if(!drag||drag.pointerId!==event.pointerId)return;drag.delta=Math.max(-drag.width,Math.min(0,event.clientX-drag.startX));document.documentElement.style.setProperty('--market-sidebar-drag-x',drag.delta+'px');event.preventDefault()},{passive:false});
- document.addEventListener('pointerup',event=>{if(drag?.pointerId===event.pointerId)finishDrag(true)});
- document.addEventListener('pointercancel',event=>{if(drag?.pointerId===event.pointerId)finishDrag(false)});
- app.addEventListener('keydown',event=>{if(event.target.id!=='market-sidebar-handle'||!['ArrowLeft','Enter',' '].includes(event.key))return;event.preventDefault();setCollapsed(true);button.focus({preventScroll:true})});
- document.addEventListener('keydown',event=>{if(event.key==='Escape'&&drag){event.preventDefault();finishDrag(false)}});
- new MutationObserver(()=>{if(!queued){queued=true;requestAnimationFrame(sync)}}).observe(app,{childList:true,subtree:true});
- window.addEventListener('resize',()=>{if(drag)finishDrag(false);sync()});
- window.addEventListener('storage',event=>{if(event.key!==key)return;collapsed=event.newValue==='1';sync()});
- sync();
+  let prefixMatch = trimmed.match(/^(Yetkazish usuli:|To‘lov:)\s*(.*)$/);
+  if (prefixMatch) {
+    const prefix =
+      prefixMatch[1] === "To‘lov:"
+        ? english
+          ? "Payment:"
+          : "Оплата:"
+        : english
+          ? "Delivery method:"
+          : "Способ доставки:";
+    return lead + prefix + " " + prefixMatch[2] + tail;
+  }
+  let dynamic = trimmed.match(/^Salom, (.+)$/);
+  if (dynamic)
+    return lead + (english ? "Hello, " : "Здравствуйте, ") + dynamic[1] + tail;
+  dynamic = trimmed.match(/^Buyurtma (.+)$/);
+  if (dynamic)
+    return lead + (english ? "Order " : "Заказ ") + dynamic[1] + tail;
+  dynamic = trimmed.match(/^Hozirda (\d+) ta ko‘rinadigan e’lon\.$/);
+  if (dynamic)
+    return (
+      lead +
+      (english
+        ? `${dynamic[1]} listings available.`
+        : `Доступно объявлений: ${dynamic[1]}.`) +
+      tail
+    );
+  dynamic = trimmed.match(/^(\d+) yangi$/);
+  if (dynamic)
+    return (
+      lead + (english ? `${dynamic[1]} new` : `${dynamic[1]} новых`) + tail
+    );
+  dynamic = trimmed.match(/^Talablar: (.+)$/);
+  if (dynamic)
+    return (
+      lead + (english ? "Requirements: " : "Требования: ") + dynamic[1] + tail
+    );
+  dynamic = trimmed.match(/^Hisob (.+) sanasida yaratilgan\.$/);
+  if (dynamic)
+    return (
+      lead +
+      (english
+        ? `Account created on ${dynamic[1]}.`
+        : `Аккаунт создан ${dynamic[1]}.`) +
+      tail
+    );
+  dynamic = trimmed.match(/^(\d+) dona$/);
+  if (dynamic)
+    return (
+      lead + (english ? `${dynamic[1]} items` : `${dynamic[1]} шт.`) + tail
+    );
+  return english ? source : source;
 }
-function marketSidebarMarkup(filters={}, {mobile=false}={}){
- const t=(uz,ru,en)=>adminText(uz,ru,en);
- const entries=[...(mobile?[['/#home','home',t('Bosh sahifa','Главная','Home'),location.pathname==='/'&&(!location.hash||location.hash==='#home')]]:[]),['/browse','gamepad',t('Bozor','Маркет','Marketplace'),(!mobile||location.pathname==='/browse')&&!filters.category&&!filters.game&&filters.sort!=='price_asc'],['/top-up','wallet','Top Up',false],['/community','users',t('Hamjamiyat','Сообщество','Community'),false],['/browse?category=accounts','user',t('Akkauntlar','Аккаунты','Accounts'),filters.category==='accounts'],['/browse?category=currency','layers',t('O‘yin valyutasi','Игровая валюта','Game Currency'),filters.category==='currency'],['/browse?category=services','settings',t('O‘yin xizmatlari','Игровые услуги','Game Services'),filters.category==='services'],['/browse?sort=price_asc','ticket',t('Eng arzon','Самые дешёвые','Lowest prices'),filters.sort==='price_asc'&&!filters.category&&!filters.game]];
- const row=([href,glyph,label,active])=>`<a href="${href}" ${active?'aria-current="page"':''}><span class="market-nav-icon" aria-hidden="true">${icon(glyph)}</span><span>${label}</span></a>`;
- const personal=me?[
-  ['/#messages','message',t('Xabarlar','Сообщения','Messages')],
-  ['/#orders','cart',t('Xaridlarim','Мои покупки','My purchases')],
-  ['/#favorites','heart',t('Saqlanganlar','Избранное','Favourites')],
-  ['/#my-reviews','star',t('Sharhlarim','Мои отзывы','My reviews')],
-  ['/#requests','search',t('Mahsulot so‘rovlari','Запросы товаров','Product requests')]
- ]:[['/#login','user',t('Hisobga kirish','Войти в аккаунт','Sign in')]];
- return `<aside id="${mobile?'mobile-market-sidebar':'market-sidebar'}" class="market-sidebar" aria-label="${t('Bozor navigatsiyasi','Навигация маркета','Marketplace navigation')}"><nav class="market-sidebar-main" aria-label="${t('Bozor bo‘limlari','Разделы маркета','Marketplace sections')}">${entries.map(row).join('')}</nav><section class="market-sidebar-account"><h2>${me?t('Mening bo‘limlarim','Мои разделы','Your space'):t('Sizning hisobingiz','Ваш аккаунт','Your account')}</h2><nav class="market-sidebar-main market-sidebar-personal" aria-label="${t('Shaxsiy bo‘limlar','Личные разделы','Your account sections')}">${personal.map(row).join('')}${row(['/blog','file-text',t('Blog va qo‘llanmalar','Блог и руководства','Blog & guides')])}</nav></section></aside>${mobile?'':`<div id="market-sidebar-handle" class="market-sidebar-drag-handle" role="separator" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="1" aria-valuenow="1" tabindex="0" aria-label="${t('Menyuni yopish uchun chapga torting','Потяните влево, чтобы закрыть меню','Drag left to close sidebar')}" title="${t('Yopish uchun chapga torting','Потяните влево, чтобы закрыть','Drag left to close')}"></div>`}`;
+function adminText(uz, ru, en) {
+  return locale === "ru"
+    ? ru
+    : locale === "uz"
+      ? uz
+      : window.RegionPreferences?.translate(en, locale) ||
+        window.BOZOR_EXTRA_COPY?.[locale]?.[uz] ||
+        en;
 }
-function marketBannerMarkup(){const images=['market-banner-soldier.webp','topup-hero.jpg','market-banner-worlds.webp'];return `<section class="market-banner" aria-label="${adminText('Bozor banneri','Баннер маркета','Marketplace banners')}"><div class="market-banner-images">${images.map((name,index)=>`<img ${index===0?'src':'data-src'}="https://images.gamestorehub.com/site-assets/${name}" alt="" class="market-banner-image ${index===0?'active':''}" ${index===0?'fetchpriority="high"':'loading="lazy"'} aria-hidden="true">`).join('')}</div><div class="market-banner-copy"><span>${adminText('O‘YIN MAHSULOTLARI SAVDOSI','ПОКУПКА И ПРОДАЖА ИГРОВЫХ ТОВАРОВ','BUY & SELL GAME ITEMS')}</span><h1>${adminText('Sevimli o‘yinlaringiz, barchasi bir joyda','Любимые игры — всё в одном месте','Your favorite games, all in one place')}</h1><p>${adminText('Akkauntlar, skinlar, valyuta va xizmatlarni e’lonlardan toping.','Находите аккаунты, скины, валюту и услуги в объявлениях.','Discover game accounts, skins, currency, and services in marketplace listings.')}</p><div class="market-banner-benefits"><div>${icon('shield')}<span><b>${adminText('Sotuvchi holati','Статус продавца','Seller status')}</b><small>${adminText('Profilni ko‘rib chiqing','Проверьте профиль','Review each profile')}</small></span></div><div>${icon('search')}<span><b>${adminText('Aniq tafsilotlar','Точные данные','Clear details')}</b><small>${adminText('E’lonni solishtiring','Сравните объявления','Compare listings')}</small></span></div><div>${icon('message')}<span><b>${adminText('Yordam markazi','Центр помощи','Help center')}</b><small>${adminText('Savol bering','Задайте вопрос','Ask a question')}</small></span></div></div></div><div class="market-banner-dots">${images.map((_,index)=>`<button type="button" data-market-slide="${index}" aria-label="${adminText(`${index+1}-banner`,`Баннер ${index+1}`,`Banner ${index+1}`)}" aria-current="${index===0?'true':'false'}"></button>`).join('')}</div></section>`}
-let marketBannerTimer=0;
-function setupMarketBanner(){window.StorefrontShowcase?.banner(app);}
+function renderSupportWidget() {
+  if (
+    new URLSearchParams(location.search).get("open_chat") === "1" &&
+    window.SentryLootSupport
+  ) {
+    const url = new URL(location.href);
+    url.searchParams.delete("open_chat");
+    history.replaceState(null, "", url);
+    window.SentryLootSupport.open();
+  }
 
-function marketGameTabsMarkup(filters={}){return `<nav class="market-game-tabs" aria-label="${adminText('O‘yin bo‘yicha ko‘rish','Просмотр по игре','Browse by game')}"><a href="/browse" class="${!filters.game?'active':''}" ${!filters.game?'aria-current="page"':''}>${adminText('Barchasi','Все','All')}</a>${marketGameLinks.slice(0,7).map(game=>`<a href="/browse?game=${game[0]}" class="${filters.game===game[0]?'active':''}" ${filters.game===game[0]?'aria-current="page"':''}>${esc(game[1])}</a>`).join('')}</nav>`}
-async function renderBrowsePage(filters={}){
- filters={...filters};delete filters.page;
- if(window.MobileSite?.isMobile()&&!filters.sort)filters.sort='newest';
- const [result,categories]=await Promise.all([api('/listings?'+new URLSearchParams(filters)),api('/categories')]);
- const game=marketGameLinks.find(([slug])=>slug===filters.game),category=categories.find(item=>item.slug===filters.category);
- const title=filters.q?adminText('Qidiruv natijalari','Результаты поиска','Search results'):game?game[1]:category?categoryLabel(category.name):adminText('Barcha e’lonlar','Все объявления','All listings');
- const count=Number(result.total_count||0);let shown=(result.items||[]).length,page=Number(result.page||1);
- document.body.classList.add('home-page');app.classList.add('home-background');
- app.innerHTML=`<section class="section listings-section market-browse-page"><div class="market-shell">${marketSidebarMarkup(filters)}<div class="market-main"><div class="market-browse-heading"><h1>${esc(title)}</h1><p id="market-results-count">${adminText(`${shown} / ${count} ta e’lon ko‘rsatilmoqda`,`Показано ${shown} из ${count}`,`Showing ${shown} of ${count} listings`)}</p><label class="mobile-browse-categories"><span>${adminText('Kategoriya','Категория','Category')}</span><select data-mobile-market-category><option value="">${adminText('Barcha kategoriyalar','Все категории','All categories')}</option>${categories.map(item=>`<option value="${esc(item.slug)}" ${filters.category===item.slug?'selected':''}>${esc(categoryLabel(item.name))}</option>`).join('')}</select></label></div>${marketGameTabsMarkup(filters)}${shown?`<div class="product-grid" id="market-all-cards">${result.items.map(marketCard).join('')}</div>`:`<div class="empty market-empty"><h2>${adminText('E’lonlar topilmadi','Объявления не найдены','No listings found')}</h2><p>${adminText('Boshqa o‘yinni tanlang yoki barcha e’lonlarga qayting.','Выберите другую игру или вернитесь ко всем объявлениям.','Choose another game or return to all listings.')}</p><a class="button-secondary" href="/browse">${adminText('Barcha e’lonlar','Все объявления','All listings')}</a></div>`}<div class="market-load-more-wrap">${result.has_more?`<button class="button-secondary market-load-more" id="market-load-more" type="button">${adminText('Yana e’lonlarni ko‘rish','Показать ещё','Show more listings')}</button>`:''}</div></div></div></section>`;
- if(result.corrected_query){const note=document.createElement('p');note.className='help';note.textContent=adminText('Natijalar quyidagi so‘z bo‘yicha: ','Результаты по запросу: ','Showing results for: ')+result.corrected_query;$('.market-browse-heading').append(note)}
- app.querySelector('[data-mobile-market-category]')?.addEventListener('change',event=>{const next={...filters};if(event.target.value)next.category=event.target.value;else delete next.category;delete next.page;history.pushState({},'','/browse?'+new URLSearchParams(next));navigate()});
- MarketUX.browse(filters);
- const loadMore=$('#market-load-more');if(loadMore)loadMore.addEventListener('click',async()=>{loadMore.disabled=true;try{const next=await api('/listings?'+new URLSearchParams({...filters,page:String(page+1)}));if(next.items?.length){$('#market-all-cards').insertAdjacentHTML('beforeend',next.items.map(marketCard).join(''));window.PremiumMotion?.refresh(app);shown+=next.items.length;page=Number(next.page||page+1);$('#market-results-count').textContent=adminText(`${shown} / ${count} ta e’lon ko‘rsatilmoqda`,`Показано ${shown} из ${count}`,`Showing ${shown} of ${count} listings`)}if(!next.has_more||!next.items?.length)loadMore.remove();else loadMore.disabled=false}catch(error){loadMore.disabled=false;toast(error.message,'error')}});
+  window.$crisp = window.$crisp || [];
+  if (window.__sentryLootCrispLocale !== locale) {
+    window.__sentryLootCrispLocale = locale;
+    window.$crisp.push(["config", "locale", [locale]]);
+  }
+  if (!document.documentElement.dataset.crispSupportBound) {
+    document.documentElement.dataset.crispSupportBound = "true";
+    document.addEventListener(
+      "error",
+      (event) => {
+        if (event.target?.matches?.("img[data-seller-avatar]"))
+          event.target.remove();
+      },
+      true,
+    );
+    document.addEventListener("click", (e) => {
+      const trigger = e.target.closest("[data-open-support-chat]");
+      if (!trigger) return;
+      e.preventDefault();
+      window.$crisp = window.$crisp || [];
+      const supportMessage = trigger.dataset.supportMessage;
+      if (supportMessage)
+        window.$crisp.push([
+          "set",
+          "message:text",
+          [localized(supportMessage)],
+        ]);
+      if (window.SentryLootSupport) window.SentryLootSupport.open();
+      else {
+        window.$crisp.push(["do", "chat:show"]);
+        window.$crisp.push(["do", "chat:open"]);
+        if (window.__sentryLootCrispLoadFailed)
+          window.open(CRISP_DIRECT_CHAT_URL, "_blank", "noopener,noreferrer");
+      }
+    });
+  }
 }
-function pageTitle(title,sub='',right=''){return `<div class="page-header"><div><h1 class="page-title">${title}</h1>${sub?`<div class="page-subtitle">${sub}</div>`:''}</div>${right}</div>`}
-function empty(text,cta=''){return `<div class="empty">${esc(text)}${cta?`<div class="actions" style="justify-content:center">${cta}</div>`:''}</div>`}
-function syncSellItemButton(){const button=$('#sell-item-button');if(!button)return;const label=adminText('E’lon joylash','Продать товар','Sell Item');button.textContent=label;button.setAttribute('aria-label',label)}
-function syncAdminLink(){const link=$('#admin-nav-link');if(!link)return;link.hidden=!me?.is_admin;const label=adminText('Admin paneli','Панель администратора','Admin panel');link.setAttribute('aria-label',label);link.title=label}
-let bootstrapSessionReady=null;
-function isHomeLocation(){return location.pathname==='/'&&(!location.hash||location.hash==='#home')}
-async function bootstrap(){
- locale=localStorage.getItem(localeKey)||'en';if(!supportedLocales.has(locale))locale='en';
- bootstrapSessionReady=(async()=>{
-  const marketsReady=loadAsiaMarkets();
-  let sessionRegion=null,sessionLanguage=localStorage.getItem(localeKey)||locale;
-  try{const m=await api('/me');me=m.user;csrf=m.csrf||'';sessionRegion=m.region;if(m.mfa_required)location.hash='security-unlock';sessionLanguage=me?.language||localStorage.getItem(localeKey)||m.region?.language||'en';syncProfileTrigger()}catch{}
-  await marketsReady;
-  locale=supportedLocales.has(sessionLanguage)?sessionLanguage:'en';
-  window.RegionPreferences?.init({markets:asiaMarkets,translate:adminText,getUser:()=>me,getLanguage:()=>locale,saveUser:async next=>{const result=await api('/profile',{method:'POST',body:JSON.stringify(next)});me=result.user},onChange:async next=>{locale=next.language;try{localStorage.setItem(localeKey,locale)}catch{}document.documentElement.lang=locale;document.documentElement.dir=locale==='ar'?'rtl':'ltr';syncLanguageMenu();syncProfileTrigger();renderSupportWidget();syncSellItemButton();syncAdminLink();await navigate();localizeDOM()}});
-  const regional=window.RegionPreferences?.apply(sessionRegion,me);
-  if(!me&&regional?.language&&supportedLocales.has(regional.language))locale=regional.language;
-  document.documentElement.lang=locale;document.documentElement.dir=locale==='ar'?'rtl':'ltr';syncLanguageMenu();syncSellItemButton();syncAdminLink();renderSupportWidget();
- })();
- // Public discovery pages can load their data alongside session verification.
- // Protected account, selling and payment routes still wait for that session.
- const initialLocation=location.pathname+location.hash,initialLocale=locale;
- const publicRoute=location.hash?location.hash.slice(1):location.pathname.replace(/^\/|\/$/g,'');
- const initialPublic=(isHomeLocation()||/^(?:browse|top-up(?:\/[^/]+){0,2}|games\/[^/]+(?:\/[^/]+)?)$/.test(publicRoute))?navigate():null;
- await bootstrapSessionReady;
- window.MobileSite?.sessionReady();
- const collectionsReady=ExperienceUX.sync().catch(()=>{});
- if(initialPublic){await initialPublic;await window.OrderFlow?.guardNavigation();if(initialLocale!==locale||initialLocation!==location.pathname+location.hash)await navigate()}else{if(location.hash==='#compare'||location.pathname==='/compare')await collectionsReady;await navigate()}
- const linkedProvider=new URLSearchParams(location.search).get('oauth_linked');if(linkedProvider==='facebook'){toast('Facebook hisobingiz SentryLoot profilingizga bog‘landi.');history.replaceState(history.state,'',location.pathname+'#home')}
- window.RegionPreferences?.refreshPrices();localizeDOM();refreshCart();refreshNotifications();
+const CRISP_DIRECT_CHAT_URL =
+  "https://go.crisp.chat/chat/embed/?website_id=23d64f2d-3d3a-4e73-bca1-4e24795ba125";
+function localizeDOM(root = document.body) {
+  if (!root) return;
+  const skip =
+    ".product-title,.detail-desc,.bubble,.conversation-item,.seller-mini,.product-cover strong,.product-game,[data-user-content],#language-menu,.region-preferences-dialog,.crisp-client,#qa-vitals";
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    if (!node.data.trim() || node.parentElement?.closest(skip)) continue;
+    let rec = copyTextCache.get(node);
+    if (!rec) rec = { source: node.data, last: node.data };
+    else if (node.data !== rec.last)
+      rec = { source: node.data, last: node.data };
+    const next = localized(rec.source);
+    if (next !== node.data) node.data = next;
+    rec.last = next;
+    copyTextCache.set(node, rec);
+  }
+  for (const el of $$("[placeholder],[aria-label],[title],[alt]", root)) {
+    if (el.closest(skip)) continue;
+    let rec = copyAttrCache.get(el) || {};
+    for (const attr of ["placeholder", "aria-label", "title", "alt"]) {
+      if (!el.hasAttribute(attr)) continue;
+      const value = el.getAttribute(attr);
+      if (!rec[attr] || value !== rec[attr].last)
+        rec[attr] = { source: value, last: value };
+      const next = localized(rec[attr].source);
+      if (next !== value) el.setAttribute(attr, next);
+      rec[attr].last = next;
+    }
+    copyAttrCache.set(el, rec);
+  }
+  if (document.documentElement.lang !== locale)
+    document.documentElement.lang = locale;
+  const direction = locale === "ar" ? "rtl" : "ltr";
+  if (document.documentElement.dir !== direction)
+    document.documentElement.dir = direction;
+  syncLanguageMenu();
+  const skipLink = $("[data-skip-to-content]");
+  if (skipLink) {
+    const label = adminText(
+      "Asosiy mazmunga o‘tish",
+      "Перейти к основному содержимому",
+      "Skip to main content",
+    );
+    if (skipLink.textContent !== label) skipLink.textContent = label;
+  }
+}
+let localizeQueued = false;
+new MutationObserver(() => {
+  if (localizeQueued) return;
+  localizeQueued = true;
+  requestAnimationFrame(() => {
+    localizeQueued = false;
+    localizeDOM();
+  });
+}).observe(document.body, { childList: true, subtree: true });
+function esc(x = "") {
+  return String(x).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
+}
+function icon(name, extra = "") {
+  return `<svg class="icon ${extra}" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-${name}" x="3" y="3" width="18" height="18"></use></svg>`;
+}
+function fieldIconName(control) {
+  const name = (control.name || "").toLowerCase(),
+    type = (control.type || "").toLowerCase(),
+    hint =
+      `${name} ${control.id || ""} ${control.autocomplete || ""} ${control.placeholder || ""}`.toLowerCase();
+  if (
+    type === "hidden" ||
+    [
+      "checkbox",
+      "radio",
+      "submit",
+      "button",
+      "file",
+      "email",
+      "password",
+    ].includes(type) ||
+    /email|mail|password|passcode|token|secret/.test(hint)
+  )
+    return "";
+  if (/game|platform/.test(hint)) return "gamepad";
+  if (/category|genre|tag/.test(hint)) return "layers";
+  if (/delivery_method/.test(name)) return "cart";
+  if (/delivery_eta|date|time|eta/.test(hint)) return "clock";
+  if (/title|slug|post|listing/.test(hint)) return "file-text";
+  if (
+    /description|message|comment|body|bio|requirement|resolution|delivery/.test(
+      hint,
+    ) ||
+    control.tagName === "TEXTAREA"
+  )
+    return "message";
+  if (/price|amount|budget|commission|currency|wallet|payout/.test(hint))
+    return "wallet";
+  if (/region|country|language|locale|server/.test(hint)) return "globe";
+  if (/stock|quantity|count|item/.test(hint)) return "box";
+  if (/rank|rating|review/.test(hint)) return "star";
+  if (/photo|image|upload|file/.test(hint)) return "upload";
+  if (/search|query|\bq\b/.test(hint) || type === "search") return "search";
+  if (
+    /name|user|seller|buyer|account/.test(hint) ||
+    control.autocomplete === "name"
+  )
+    return "user";
+  if (type === "number") return "settings";
+  if (control.tagName === "SELECT") return "layers";
+  return "file-text";
+}
+function decorateFieldControl(label, control) {
+  // The approved mobile login owns its two leading icons.
+  if (control.dataset?.mobileLoginControl && window.MobileSite?.isMobile())
+    return;
+  label.querySelectorAll(".field-icon").forEach((node) => node.remove());
+  const authForm = control.closest("#auth-form");
+  const offerAttribute =
+    control.closest("[data-offer-wizard]") &&
+    control.name?.startsWith("game_attr_");
+  const offerGlyph = /email/.test(control.name)
+    ? ""
+    : /rank|tier|mmr|rating/.test(control.name)
+      ? "star"
+      : /level|score/.test(control.name)
+        ? "user"
+        : /server|region/.test(control.name)
+          ? "globe"
+          : /amount|unit/.test(control.name)
+            ? "wallet"
+            : /item/.test(control.name)
+              ? "box"
+              : "layers";
+  const name =
+    control.closest(".phone-verification-page") ||
+    (authForm && !control.closest(".auth-page.is-register"))
+      ? ""
+      : offerAttribute
+        ? offerGlyph
+        : control.closest("[data-offer-wizard]") && control.type === "search"
+          ? "search"
+          : fieldIconName(control);
+  let wrap = control.parentElement?.classList.contains("field-control")
+    ? control.parentElement
+    : null;
+  if (!name) {
+    if (wrap) {
+      wrap
+        .querySelectorAll(":scope > .field-control-icon")
+        .forEach((node) => node.remove());
+      wrap.classList.remove("has-icon");
+      delete wrap.dataset.controlKind;
+      if (!wrap.classList.contains("auth-password-control")) {
+        wrap.before(control);
+        wrap.remove();
+      }
+    }
+    return;
+  }
+  // A select may be enhanced before the label observer runs. Move its picker
+  // with the native control so its icon and trigger share the same geometry.
+  const isPicker = (node) => node?.classList.contains("site-select");
+  const picker = control.classList.contains("site-select-native")
+    ? isPicker(control.nextElementSibling)
+      ? control.nextElementSibling
+      : isPicker(wrap?.nextElementSibling)
+        ? wrap.nextElementSibling
+        : null
+    : null;
+  if (!wrap) {
+    wrap = document.createElement("div");
+    wrap.className = "field-control";
+    control.before(wrap);
+    wrap.append(control);
+  }
+  if (picker && picker.parentElement !== wrap) wrap.append(picker);
+  wrap.classList.add("has-icon");
+  wrap.dataset.controlKind =
+    control.tagName === "SELECT"
+      ? "select"
+      : control.tagName === "TEXTAREA"
+        ? "multiline"
+        : "input";
+  const glyph = wrap.querySelector(":scope > .field-control-icon");
+  if (!glyph)
+    wrap.insertAdjacentHTML("afterbegin", icon(name, "field-control-icon"));
+  else {
+    const use = glyph.querySelector("use");
+    if (use && use.getAttribute("href") !== "#i-" + name)
+      use.setAttribute("href", "#i-" + name);
+  }
 }
 
-async function refreshCart(){const badge=$('#cart-count');if(!badge)return;if(!me){badge.textContent='0';badge.hidden=true;return}try{const count=(await api('/cart')).items.reduce((n,x)=>n+x.quantity,0);badge.textContent=count>9?'9+':String(count);badge.hidden=count<1}catch{}}
-async function refreshNotifications(){const badge=$('#notification-count');if(!badge)return;if(!me){badge.hidden=true;badge.textContent='0';return}try{const items=await api('/notifications');window.ExperienceUX?.browserAlerts(items).catch(()=>{});const count=items.filter(x=>!x.read_at).length;badge.textContent=count>9?'9+':String(count);badge.hidden=count===0}catch{badge.hidden=true}}
+const listingProviders = [
+  ["google", "Google", "G"],
+  ["facebook", "Facebook", "f"],
+  ["apple", "Apple / iCloud", "A"],
+  ["steam", "Steam", "S"],
+  ["playstation", "PlayStation", "PS"],
+  ["xbox", "Xbox", "X"],
+  ["other", "Boshqa", "+"],
+];
+function providerFields(selected = []) {
+  return `<fieldset class="listing-provider-field"><legend>${adminText("Hisob qaysi xizmatlarga ulangan?", "К каким сервисам привязан аккаунт?", "Which services are linked to the account?")}</legend><p class="field-hint">${adminText("Faqat ulangan xizmatlarni belgilang. Parol, email yoki tasdiqlash kodini bu yerga yozmang.", "Отметьте только подключённые сервисы. Не вводите здесь пароль, email или код подтверждения.", "Select connected services only. Never enter passwords, email addresses, or verification codes here.")}</p><div class="provider-choice-grid">${listingProviders.map(([key, label, mark]) => `<label class="provider-choice"><input type="checkbox" name="linked_accounts" value="${key}" ${selected.includes(key) ? "checked" : ""}>${providerFieldsIcon(key)}<span>${key === "other" ? adminText("Boshqa", "Другое", "Other") : adminText(label, key === "apple" ? "Apple / iCloud" : label, label)}</span></label>`).join("")}</div></fieldset>`;
+}
+const LISTING_TYPE_FIELDS = {
+  item: [
+    [
+      "item_name",
+      "Buyum yoki skin nomi",
+      "Название предмета или скина",
+      "Item or skin name",
+      true,
+    ],
+    [
+      "item_variant",
+      "Variant / sifat (ixtiyoriy)",
+      "Вариант / качество (необязательно)",
+      "Variant / condition (optional)",
+      false,
+    ],
+    [
+      "transfer_method",
+      "Buyum qanday o‘tkaziladi?",
+      "Как передаётся предмет?",
+      "How is the item transferred?",
+      true,
+    ],
+  ],
+  currency: [
+    [
+      "amount",
+      "Bir to‘plamdagi miqdor",
+      "Количество в одном пакете",
+      "Amount per package",
+      true,
+    ],
+    ["unit", "Valyuta nomi", "Название валюты", "Currency name", true],
+    [
+      "transfer_method",
+      "Valyuta qanday yetkaziladi?",
+      "Как доставляется валюта?",
+      "How is the currency delivered?",
+      true,
+    ],
+  ],
+  service: [
+    [
+      "service_scope",
+      "Xizmat natijasi",
+      "Результат услуги",
+      "Service outcome",
+      true,
+    ],
+    [
+      "service_duration",
+      "Bajarish muddati (ixtiyoriy)",
+      "Срок выполнения (необязательно)",
+      "Completion window (optional)",
+      false,
+    ],
+  ],
+  code: [
+    [
+      "code_kind",
+      "Kod yoki obuna turi",
+      "Тип кода или подписки",
+      "Code or subscription type",
+      true,
+    ],
+    [
+      "redemption_region",
+      "Faollashtirish hududi",
+      "Регион активации",
+      "Redemption region",
+      true,
+    ],
+    [
+      "expiry",
+      "Amal qilish muddati (ixtiyoriy)",
+      "Срок действия (необязательно)",
+      "Expiry (optional)",
+      false,
+    ],
+  ],
+  digital: [
+    [
+      "product_format",
+      "Mahsulot formati",
+      "Формат товара",
+      "Product format",
+      true,
+    ],
+    [
+      "access_method",
+      "Xaridor nimani va qanday oladi?",
+      "Что и как получит покупатель?",
+      "What and how will the buyer receive?",
+      true,
+    ],
+  ],
+};
+LISTING_TYPE_FIELDS.item.push(
+  ["item_type", "Buyum turi", "Тип предмета", "Item type"],
+  [
+    "condition",
+    "Holati (FN, MW, FT…)",
+    "Состояние (FN, MW, FT…)",
+    "Condition (FN, MW, FT…)",
+  ],
+  ["float_value", "Float (0–1)", "Float (0–1)", "Float (0–1)"],
+  ["rarity", "Noyoblik", "Редкость", "Rarity"],
+  ["pattern", "Pattern", "Паттерн", "Pattern"],
+);
+function listingTypeFieldsMarkup(type, attributes = {}) {
+  const fields = LISTING_TYPE_FIELDS[type] || [];
+  if (!fields.length) return "";
+  return `<div class="listing-type-fields" data-product-fields="${esc(type)}"><div class="form-grid">${fields.map(([key, uz, ru, en, required]) => `<div class="field"><label>${adminText(uz, ru, en)}${["rank", "current_rank", "competitive_rank", "tier", "rank_medal"].includes(key) ? adminText(" (ixtiyoriy)", " (необязательно)", " (optional)") : ""}</label><input name="game_attr_${key}" ${key === "float_value" ? 'type="number" min="0" max="1" step="any"' : key === "amount" ? 'type="number" min="1" max="999999999999" step="1" inputmode="numeric"' : `minlength="${required ? 2 : 0}" maxlength="160"`} value="${esc(attributes[key] || "")}" ${required ? "required" : ""}></div>`).join("")}</div><small class="field-hint">${adminText("Narx va soni bitta to‘plam uchun. Maxfiy kod yoki kirish ma’lumotini e’londa yozmang.", "Цена и количество указаны за один пакет. Не публикуйте секретный код или данные доступа.", "Price and quantity are per package. Do not publish a secret code or access credentials.")}</small></div>`;
+}
+function listingAttributeFacts(item) {
+  const attrs = item.attributes || {},
+    definitions = {
+      item: [
+        ["item_name", "Buyum", "Предмет", "Item"],
+        ["item_variant", "Variant", "Вариант", "Variant"],
+        ["transfer_method", "O‘tkazish", "Передача", "Transfer"],
+        ["item_type", "Buyum turi", "Тип предмета", "Item type"],
+        ["pattern", "Pattern", "Паттерн", "Pattern"],
+      ],
+      currency: [
+        ["amount", "Miqdor", "Количество", "Amount"],
+        ["unit", "Valyuta", "Валюта", "Currency"],
+        ["transfer_method", "Yetkazish", "Доставка", "Delivery"],
+      ],
+      service: [
+        ["service_scope", "Natija", "Результат", "Outcome"],
+        ["service_duration", "Muddat", "Срок", "Window"],
+      ],
+      code: [
+        ["code_kind", "Tur", "Тип", "Type"],
+        [
+          "redemption_region",
+          "Faollashtirish hududi",
+          "Регион активации",
+          "Redemption region",
+        ],
+        ["expiry", "Amal qilish muddati", "Срок действия", "Expiry"],
+      ],
+      digital: [
+        ["product_format", "Format", "Формат", "Format"],
+        ["access_method", "Yetkazish", "Доставка", "Delivery"],
+      ],
+    };
+  return (definitions[item.product_type] || [])
+    .filter(([key]) => attrs[key])
+    .map(([key, uz, ru, en]) => [adminText(uz, ru, en), String(attrs[key])]);
+}
+const GAME_ACCOUNT_FIELDS = {
+  valorant: [
+    ["account_level", "Hisob darajasi", "Уровень аккаунта", "Account level"],
+    [
+      "competitive_rank",
+      "Competitive rank",
+      "Ранг в рейтинге",
+      "Competitive rank",
+    ],
+    ["region", "Shard / region", "Регион / shard", "Shard / region"],
+  ],
+  "pubg-mobile": [
+    ["account_level", "Hisob darajasi", "Уровень аккаунта", "Account level"],
+    ["tier", "Joriy tier", "Текущий уровень", "Current tier"],
+    [
+      "platform_binding",
+      "Bog‘langan platforma",
+      "Привязанная платформа",
+      "Linked platform",
+    ],
+  ],
+  "dota-2": [
+    ["mmr", "MMR", "MMR", "MMR"],
+    ["behavior_score", "Behavior score", "Порядочность", "Behavior score"],
+    ["rank_medal", "Rank medal", "Медаль ранга", "Rank medal"],
+  ],
+  "counter-strike-2": [
+    ["premier_rating", "Premier rating", "Рейтинг Premier", "Premier rating"],
+    ["prime_status", "Prime holati", "Статус Prime", "Prime status"],
+    [
+      "inventory_summary",
+      "Inventar tavsifi",
+      "Описание инвентаря",
+      "Inventory summary",
+    ],
+  ],
+  "free-fire": [
+    ["account_level", "Daraja", "Уровень", "Account level"],
+    ["current_rank", "Rank", "Ранг", "Rank"],
+    ["inventory_summary", "Inventar", "Инвентарь", "Inventory"],
+  ],
+  "honor-of-kings": [
+    ["account_level", "Daraja", "Уровень", "Account level"],
+    ["current_rank", "Rank", "Ранг", "Rank"],
+    [
+      "inventory_summary",
+      "Qahramon va skinlar",
+      "Герои и облики",
+      "Heroes and skins",
+    ],
+  ],
+  roblox: [
+    [
+      "account_level",
+      "Hisob yoshi / daraja",
+      "Возраст / уровень",
+      "Account age / level",
+    ],
+    [
+      "inventory_summary",
+      "Inventar va mahsulotlar",
+      "Инвентарь и предметы",
+      "Inventory and items",
+    ],
+  ],
+  "genshin-impact": [
+    ["account_level", "Adventure Rank", "Ранг приключений", "Adventure Rank"],
+    ["server_id", "Server", "Сервер", "Server"],
+    [
+      "inventory_summary",
+      "Qahramonlar va qurollar",
+      "Персонажи и оружие",
+      "Characters and weapons",
+    ],
+  ],
+  "mobile-legends": [
+    ["account_level", "Hisob darajasi", "Уровень аккаунта", "Account level"],
+    ["current_rank", "Joriy rank", "Текущий ранг", "Current rank"],
+    ["server_id", "Server ID", "ID сервера", "Server ID"],
+  ],
+};
+function gameSpecificFieldsMarkup(gameName, attributes = {}) {
+  const slug = String(gameName || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  const fields = GAME_ACCOUNT_FIELDS[slug] || [];
+  if (!fields.length) return "";
+  return `<div class="game-specific-fields"><h4>${adminText("Ushbu o‘yin uchun qo‘shimcha ma’lumotlar", "Дополнительные сведения об этой игре", "Game-specific details")}</h4><div class="form-grid">${fields.map(([key, uz, ru, en]) => `<div class="field"><label>${adminText(uz, ru, en)}${["rank", "current_rank", "competitive_rank", "tier", "rank_medal"].includes(key) ? adminText(" (ixtiyoriy)", " (необязательно)", " (optional)") : ""}</label><input name="game_attr_${key}" maxlength="120" autocomplete="off" value="${esc(attributes[key] || "")}"></div>`).join("")}</div><small class="field-hint">${adminText("Parol, email, telefon, OTP yoki maxfiy tiklash kodini kiritmang.", "Не вводите пароль, email, телефон, одноразовый или секретный код восстановления.", "Do not enter passwords, email, phone numbers, OTPs, or private recovery codes.")}</small></div>`;
+}
+function listingImageFields(
+  images = [],
+  requireMain = true,
+  uploadFiles = false,
+) {
+  return `<div class="listing-image-fields">${images.length ? `<div class="listing-current-photos"><b>${adminText("Joriy rasmlar", "Текущие фотографии", "Current photos")}</b><div class="listing-photo-preview-grid">${images.map((url, index) => `<figure class="listing-photo-preview-card"><img src="${esc(url)}" alt="${adminText("E’lon rasmi", "Фото объявления", "Listing photo")} ${index + 1}" loading="lazy" referrerpolicy="no-referrer"><figcaption>${index === 0 ? adminText("Asosiy rasm", "Главное фото", "Main photo") : adminText("Rasm", "Фото", "Photo") + " " + (index + 1)}</figcaption></figure>`).join("")}</div></div>` : ""}<div class="listing-upload-grid">${Array.from({ length: 4 }, (_, index) => `<label class="listing-upload-slot"><span class="listing-upload-title">${icon("upload")} ${index === 0 ? adminText("1-rasm · asosiy", "Фото 1 · главное", "Photo 1 · main") : adminText(`${index + 1}-rasm · ixtiyoriy`, `Фото ${index + 1} · необязательно`, `Photo ${index + 1} · optional`)}</span><input type="file" name="listing_photos" data-listing-photos accept="image/jpeg,image/png,image/webp" ${requireMain && index === 0 ? "required" : ""}><span class="listing-slot-preview" data-listing-photo-previews></span></label>`).join("")}</div><small class="field-hint">${uploadFiles ? adminText("Har bir joyga bittadan rasm tanlang. JPG, PNG yoki WebP; har biri 15 MB gacha.", "Выберите по одному фото для каждого места. JPG, PNG или WebP; до 15 МБ каждое.", "Choose one photo per slot. JPG, PNG, or WebP; up to 15 MB each.") : adminText("Yangi rasmlar tanlansa, joriy rasmlar almashtiriladi. Bo‘sh qoldirsangiz, joriy rasmlar saqlanadi.", "Новые фото заменят текущие. Оставьте пустыми, чтобы сохранить текущие.", "New photos replace the current ones. Leave all slots empty to keep them.")}</small><p class="field-hint">${adminText("Parol, email, telefon yoki bir martalik kod ko‘ringan rasmlarni yuklamang.", "Не загружайте изображения с паролем, email, телефоном или одноразовым кодом.", "Do not upload images showing passwords, email addresses, phone numbers, or one-time codes.")}</p></div>`;
+}
+function listingEditFormMarkup(item) {
+  const attrs = item.attributes || {},
+    images = listingGalleryImages(item);
+  return `<form data-form="edit-listing" data-id="${esc(item.id)}" class="edit-listing-form listing-form"><div class="field"><label>${adminText("O‘yin yoki platforma", "Игра или платформа", "Game or platform")}</label><input name="game_name" value="${esc(item.game_name)}" minlength="2" maxlength="80" required></div><div class="field"><label>${adminText("Sarlavha", "Заголовок", "Title")}</label><input name="title" minlength="5" maxlength="120" value="${esc(item.title)}" required></div><div class="field"><label>${adminText("Tavsif", "Описание", "Description")}</label><textarea name="description" minlength="20" maxlength="5000" required>${esc(item.description)}</textarea></div><div class="form-grid"><div class="field"><label>${adminText("Narx", "Цена", "Price")} (${esc(item.currency)} · ${adminText("kichik birlik", "младшие единицы", "minor units")})</label><input name="price_minor" type="number" min="1" value="${item.price_minor}" required></div><div class="field"><label>${adminText("Soni", "Количество", "Quantity")}</label><input name="stock" type="number" min="${item.reserved}" max="10000" value="${item.stock}" required></div></div><div class="form-grid"><div class="field"><label>${adminText("Platforma", "Платформа", "Platform")}</label><input name="platform" maxlength="60" value="${esc(item.platform)}"></div><div class="field"><label>${adminText("Hudud", "Регион", "Region")}</label><input name="region" maxlength="60" value="${esc(item.region)}"></div><div class="field"><label>${adminText("Server (ixtiyoriy)", "Сервер (необязательно)", "Server (optional)")}</label><input name="server" maxlength="60" value="${esc(attrs.server || attrs.server_id || "")}"></div></div><div class="form-grid"><div class="field" ${item.product_type === "account" ? "" : "hidden"}><label>${adminText("Rank (ixtiyoriy)", "Ранг (необязательно)", "Rank (optional)")}</label><input name="rank" maxlength="80" value="${esc(attrs.rank || "")}" ${item.product_type === "account" ? "" : "disabled"}></div><div class="field"><label>${adminText("Yetkazish muddati", "Срок доставки", "Delivery time")}</label><input name="delivery_eta" minlength="2" maxlength="60" value="${esc(item.delivery_eta)}"></div></div>${item.product_type === "account" ? gameSpecificFieldsMarkup(item.game_name, attrs) + providerFields(attrs.linked_accounts || []) : listingTypeFieldsMarkup(item.product_type, attrs)}${listingImageFields(images, false)}<div class="field"><label>${adminText("Qo‘shimcha shartlar", "Дополнительные условия", "Additional terms")}</label><input name="requirements" maxlength="1000" value="${esc(item.requirements)}"></div><button class="button-secondary" type="submit">${adminText("E’lonni saqlash", "Сохранить объявление", "Save listing")}</button></form>`;
+}
+function parseServerDate(value) {
+  if (value instanceof Date) return value;
+  let source = String(value ?? "")
+    .trim()
+    .replace(" ", "T");
+  if (!source) return new Date(NaN);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(source)) source += "T00:00:00";
+  const hasZone = /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(source);
+  source = source.replace(/([+-]\d{2})$/, "$1:00");
+  return new Date(hasZone ? source : source + "Z");
+}
+function localeTag() {
+  if (window.RegionPreferences)
+    return window.RegionPreferences.numberLocale(locale);
+  return (
+    {
+      uz: "uz-UZ",
+      ru: "ru-RU",
+      en: "en-US",
+      zh: "zh-CN",
+      ja: "ja-JP",
+      ko: "ko-KR",
+      id: "id-ID",
+      ms: "ms-MY",
+      th: "th-TH",
+      vi: "vi-VN",
+      hi: "hi-IN",
+      ar: "ar",
+      tr: "tr-TR",
+      kk: "kk-KZ",
+      bn: "bn-BD",
+    }[locale] || "en-US"
+  );
+}
+let asiaMarkets = window.SENTRYLOOT_ASIA_MARKETS || [];
+async function loadAsiaMarkets() {
+  if (window.SENTRYLOOT_MARKETS_READY)
+    asiaMarkets = await window.SENTRYLOOT_MARKETS_READY;
+  const languages = window.SENTRYLOOT_LANGUAGE_DATA?.languages;
+  if (languages?.length) {
+    localeOptions = languages.map((item) => [
+      item.code,
+      item.name,
+      item.code.toUpperCase(),
+    ]);
+    supportedLocales.clear();
+    localeOptions.forEach(([code]) => supportedLocales.add(code));
+  }
+  return asiaMarkets;
+}
+function countryLabel(code) {
+  try {
+    return (
+      new Intl.DisplayNames([localeTag()], { type: "region" }).of(code) || code
+    );
+  } catch {
+    return code;
+  }
+}
+function currencyLabel(code) {
+  try {
+    return `${new Intl.DisplayNames([localeTag()], { type: "currency" }).of(code) || code} (${code})`;
+  } catch {
+    return code;
+  }
+}
+function countryOptions(selected = "UZ") {
+  return [...asiaMarkets]
+    .sort((a, b) =>
+      countryLabel(a.country).localeCompare(
+        countryLabel(b.country),
+        localeTag(),
+      ),
+    )
+    .map(
+      (row) =>
+        `<option value="${esc(row.country)}" ${row.country === selected ? "selected" : ""}>${esc(countryLabel(row.country))}</option>`,
+    )
+    .join("");
+}
+function currencyOptions(selected = "UZS") {
+  return [...new Set(asiaMarkets.map((row) => row.currency))]
+    .sort()
+    .map(
+      (code) =>
+        `<option value="${esc(code)}" ${code === selected ? "selected" : ""}>${esc(currencyLabel(code))}</option>`,
+    )
+    .join("");
+}
+function fmt(n, c = "UZS") {
+  const region = globalThis.RegionPreferences,
+    digits = c === "MYR" || c === "USD" ? 2 : 0,
+    major = region?.toMajor(n || 0, c) ?? Number(n || 0) / 10 ** digits;
+  let original;
+  try {
+    const number = new Intl.NumberFormat(localeTag(), {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    }).format(major);
+    original = c === "MYR" ? "RM " + number : number + " " + c;
+  } catch {
+    original = major + " " + c;
+  }
+  return arguments[2] ? original : region?.money(n, c, original) || original;
+}
+
+async function loadWalletFx() {
+  const currency = me?.currency || "UZS";
+  walletFx = { currency, rate: null, date: "" };
+  if (currency === "UZS") return walletFx;
+  try {
+    const snapshot = await window.RegionPreferences?.loadRates(),
+      base = Number(snapshot?.rates?.UZS),
+      target = Number(snapshot?.rates?.[currency]);
+    if (base > 0 && target > 0)
+      walletFx = {
+        currency,
+        rate: target / base,
+        date: snapshot.dates?.[currency] || "",
+      };
+  } catch {}
+  return walletFx;
+}
+function walletAmount(n, c = "UZS") {
+  return esc(fmt(n, c));
+}
+function toast(message, kind = "success") {
+  const el = $("#toast");
+  if (!el) return;
+  kind = ["success", "error", "info"].includes(kind) ? kind : "info";
+  clearTimeout(toastTimer);
+  const duration = kind === "error" ? 8000 : 5000;
+  el.className = "toast show is-" + kind;
+  el.hidden = false;
+  el.setAttribute("role", kind === "error" ? "alert" : "status");
+  el.setAttribute("aria-live", kind === "error" ? "assertive" : "polite");
+  el.setAttribute("aria-atomic", "true");
+  el.style.setProperty("--toast-duration", duration + "ms");
+  const symbol = document.createElement("span");
+  symbol.className = "toast-symbol";
+  symbol.setAttribute("aria-hidden", "true");
+  symbol.innerHTML = `<svg class="toast-status-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.5"/>${kind === "success" ? '<path d="m6 10 2.5 2.5L14 7"/>' : kind === "error" ? '<path d="M10 5.8v5.3M10 14h.01"/>' : '<path d="M10 9v5M10 6h.01"/>'}</svg>`;
+  const copy = document.createElement("div");
+  copy.className = "toast-copy";
+  const text = document.createElement("span");
+  text.className = "toast-message";
+  text.textContent = localized(String(message || ""));
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "toast-close";
+  close.setAttribute("aria-label", adminText("Yopish", "Закрыть", "Close"));
+  close.innerHTML =
+    '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg>';
+  const progress = document.createElement("span");
+  progress.className = "toast-progress";
+  progress.setAttribute("aria-hidden", "true");
+  const dismiss = () => {
+    clearTimeout(toastTimer);
+    el.classList.remove("show");
+    el.hidden = true;
+  };
+  copy.append(text);
+  el.replaceChildren(symbol, copy, close, progress);
+  close.onclick = dismiss;
+  toastTimer = setTimeout(dismiss, duration);
+}
+function promptLocale(message, defaultValue = "") {
+  return window.prompt(localized(message), defaultValue);
+}
+function confirmLocale(message) {
+  return window.confirm(localized(message));
+}
+const referenceCache = new Map(),
+  referencePending = new Map();
+let referenceGeneration = 0;
+const referenceCopy = (value) => JSON.parse(JSON.stringify(value));
+async function api(path, opt = {}) {
+  const method = (opt.method || "GET").toUpperCase(),
+    reference =
+      method === "GET" &&
+      ["/games", "/categories"].includes(path) &&
+      !opt.signal;
+  if (method !== "GET") {
+    referenceGeneration++;
+    referenceCache.clear();
+    referencePending.clear();
+  }
+  if (!reference) return apiRequest(path, opt);
+  const cached = referenceCache.get(path);
+  if (cached && cached.until > Date.now()) return referenceCopy(cached.value);
+  let pending = referencePending.get(path);
+  if (!pending) {
+    const generation = referenceGeneration;
+    pending = apiRequest(path, opt).then((value) => {
+      if (generation === referenceGeneration)
+        referenceCache.set(path, {
+          value: referenceCopy(value),
+          until: Date.now() + 60000,
+        });
+      return value;
+    });
+    referencePending.set(path, pending);
+    pending
+      .finally(() => {
+        if (referencePending.get(path) === pending)
+          referencePending.delete(path);
+      })
+      .catch(() => {});
+  }
+  return referenceCopy(await pending);
+}
+async function apiRequest(path, opt = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(opt.headers || {}),
+  };
+  if (opt.method && opt.method !== "GET" && csrf)
+    headers["X-CSRF-Token"] = csrf;
+  // A stalled read must stop loading. Writes retain their existing semantics:
+  // aborting a payment or order submission could hide a successful server write.
+  const controller =
+    !opt.signal && (opt.method || "GET").toUpperCase() === "GET"
+      ? new AbortController()
+      : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 15000) : null;
+  let r, j;
+  try {
+    r = await fetch("/api" + path, {
+      ...opt,
+      headers,
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+    j = await r.json().catch((error) => {
+      if (error.name === "AbortError") throw error;
+      return { error: "Server javobi o‘qilmadi" };
+    });
+  } catch (error) {
+    if (controller?.signal.aborted)
+      throw Error(
+        adminText(
+          "Server javobi kechikdi. Qayta urinib ko‘ring.",
+          "Сервер не ответил вовремя. Попробуйте ещё раз.",
+          "The server took too long to respond. Please try again.",
+        ),
+      );
+    throw error;
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
+  if (!r.ok) {
+    const error = Error(localized(j.error || `Xatolik ${r.status}`));
+    error.status = r.status;
+    error.fields = Object.fromEntries(
+      Object.entries(j.fields || {}).map(([key, value]) => [
+        key,
+        localized(value),
+      ]),
+    );
+    window.ExperienceUX?.errorFromApi(error);
+    throw error;
+  }
+  return j;
+}
+function btn(text, action, cls = "button-secondary", attrs = "") {
+  return `<button class="${cls}" data-action="${action}" ${attrs}>${text}</button>`;
+}
+function status(s) {
+  return `<span class="status ${esc(s)}">${esc({ pending_payment: "To‘lov kutilmoqda", paid: "To‘langan", awaiting_delivery: "Yetkazish kutilmoqda", delivered: "Yetkazildi", completed: "Yakunlandi", cancelled: "Bekor qilindi", disputed: "Nizoda", pending_review: "Tekshiruvda", approved_private: "Tasdiqlangan · yashirin", published: "Faol", rejected: "Rad etildi", draft: "Qoralama", paused: "To‘xtatilgan", not_public: "Bozorda ko‘rinmaydi", open: "Ochiq", pending: "Kutilmoqda", approved: "Tasdiqlandi", paid_out: "To‘landi" }[s] || s)}</span>`;
+}
+function cover(it) {
+  const image = it.image_url
+    ? `<img src="${esc(it.image_url)}" alt="${esc(it.title)}" loading="lazy" referrerpolicy="no-referrer">`
+    : `<span class="product-cover-placeholder" aria-hidden="true">${icon("gamepad")}</span>`;
+  return `<div class="product-cover ${it.image_url ? "" : "product-cover-empty"}">${image}</div>`;
+}
+function listingGalleryImages(it) {
+  const values = Array.isArray(it.attributes?.images)
+    ? it.attributes.images
+    : [];
+  return [
+    ...new Set(
+      [it.image_url, ...values].filter((x) => typeof x === "string" && x),
+    ),
+  ].slice(0, 8);
+}
+function listingDetailGallery(it) {
+  const images = listingGalleryImages(it),
+    count = images.length,
+    t = adminText;
+  return `<div class="listing-gallery-shell"><div class="detail-cover detail-gallery ${count ? "" : "is-empty"}" role="group" aria-label="${t("E’lon rasmlari", "Фотографии объявления", "Listing photos")}" tabindex="0">${count ? `<img class="detail-gallery-image" src="${esc(images[0])}" alt="${esc(it.title)} — 1 / ${count}" loading="eager" referrerpolicy="no-referrer">` : `<div class="detail-gallery-empty">${icon("box")}<span>${t("Rasm qo‘shilmagan", "Фото не добавлено", "No photo added")}</span></div>`}${count > 1 ? `<button type="button" class="detail-gallery-arrow is-prev" data-gallery-prev aria-label="${t("Oldingi rasm", "Предыдущее фото", "Previous photo")}"><svg class="gallery-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 7 9.5 12 14.5 17"/></svg></button><button type="button" class="detail-gallery-arrow is-next" data-gallery-next aria-label="${t("Keyingi rasm", "Следующее фото", "Next photo")}"><svg class="gallery-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 7 14.5 12 9.5 17"/></svg></button>` : ""}${count ? `<button type="button" class="listing-gallery-expand" data-gallery-expand aria-label="${t("To‘liq ekran", "Полный экран", "Full screen")}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M3 3l6 6m12-6-6 6M3 21l6-6m12 6-6-6"/></svg></button>` : ""}${count ? `<span class="listing-gallery-count" data-gallery-count aria-live="polite">1 / ${count}</span>` : ""}</div>${count > 1 || (count && window.MobileSite?.isMobile()) ? `<div class="listing-gallery-thumbnails" aria-label="${t("Rasm tanlash", "Выбор фото", "Choose photo")}">${images.map((url, index) => `<button type="button" data-gallery-index="${index}" aria-pressed="${index === 0}" aria-label="${t("Rasm", "Фото", "Photo")} ${index + 1}"><img src="${esc(url)}" alt="" width="160" height="90" loading="lazy" decoding="async" referrerpolicy="no-referrer"></button>`).join("")}</div>` : ""}</div>`;
+}
+function setupListingDetailGallery(root, it) {
+  const shell = $(".listing-gallery-shell", root),
+    gallery = $(".detail-gallery", root),
+    images = listingGalleryImages(it);
+  if (!gallery || !images.length) return;
+  const image = $(".detail-gallery-image", gallery);
+  let current = 0;
+  const show = (index) => {
+    current = (index + images.length) % images.length;
+    image.src = images[current];
+    image.alt = `${it.title} — ${current + 1} / ${images.length}`;
+    const count = $("[data-gallery-count]", shell);
+    if (count) count.textContent = `${current + 1} / ${images.length}`;
+    $$("[data-gallery-index]", shell).forEach((button) =>
+      button.setAttribute(
+        "aria-pressed",
+        String(Number(button.dataset.galleryIndex) === current),
+      ),
+    );
+  };
+  $$("[data-gallery-index]", shell).forEach((button) =>
+    button.addEventListener("click", () =>
+      show(Number(button.dataset.galleryIndex)),
+    ),
+  );
+  $("[data-gallery-prev]", gallery)?.addEventListener("click", () =>
+    show(current - 1),
+  );
+  $("[data-gallery-next]", gallery)?.addEventListener("click", () =>
+    show(current + 1),
+  );
+  const keyboard = (event) => {
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      show(current + (event.key === "ArrowRight" ? 1 : -1));
+    }
+  };
+  shell.addEventListener("keydown", keyboard);
+  let startX = 0,
+    startY = 0;
+  gallery.addEventListener(
+    "touchstart",
+    (event) => {
+      startX = event.changedTouches[0].clientX;
+      startY = event.changedTouches[0].clientY;
+    },
+    { passive: true },
+  );
+  gallery.addEventListener(
+    "touchend",
+    (event) => {
+      const dx = event.changedTouches[0].clientX - startX,
+        dy = event.changedTouches[0].clientY - startY;
+      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy))
+        show(current + (dx < 0 ? 1 : -1));
+    },
+    { passive: true },
+  );
+  $("[data-gallery-expand]", shell)?.addEventListener("click", () => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "listing-lightbox";
+    dialog.innerHTML = `<button type="button" class="listing-lightbox-close" aria-label="${adminText("Yopish", "Закрыть", "Close")}">×</button><img src="${esc(images[current])}" alt="${esc(it.title)}" referrerpolicy="no-referrer">${images.length > 1 ? '<button type="button" class="detail-gallery-arrow is-prev" aria-label="Previous photo"><svg class="gallery-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 7 9.5 12 14.5 17"/></svg></button><button type="button" class="detail-gallery-arrow is-next" aria-label="Next photo"><svg class="gallery-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 7 14.5 12 9.5 17"/></svg></button>' : ""}`;
+    const update = (step) => {
+      show(current + step);
+      $("img", dialog).src = images[current];
+    };
+    $(".is-prev", dialog)?.addEventListener("click", () => update(-1));
+    $(".is-next", dialog)?.addEventListener("click", () => update(1));
+    $(".listing-lightbox-close", dialog).onclick = () => dialog.close();
+    dialog.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
+        update(event.key === "ArrowRight" ? 1 : -1);
+      }
+    });
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    dialog.addEventListener(
+      "close",
+      () => {
+        dialog.remove();
+        $("[data-gallery-expand]", shell)?.focus();
+      },
+      { once: true },
+    );
+    document.body.append(dialog);
+    dialog.showModal();
+  });
+}
+function setupListingTabs(root) {
+  const tabs = $$("[data-listing-tab]", root),
+    panels = $$("[data-listing-panel]", root);
+  const select = (tab) => {
+    tabs.forEach((button) => {
+      const active = button === tab;
+      button.setAttribute("aria-selected", String(active));
+      button.tabIndex = active ? 0 : -1;
+    });
+    panels.forEach(
+      (panel) =>
+        (panel.hidden = panel.dataset.listingPanel !== tab.dataset.listingTab),
+    );
+  };
+  tabs.forEach((tab, index) => {
+    tab.addEventListener("click", () => select(tab));
+    tab.addEventListener("keydown", (event) => {
+      let next;
+      if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+      if (event.key === "ArrowLeft")
+        next = (index + tabs.length - 1) % tabs.length;
+      if (event.key === "Home") next = 0;
+      if (event.key === "End") next = tabs.length - 1;
+      if (next !== undefined) {
+        event.preventDefault();
+        select(tabs[next]);
+        tabs[next].focus();
+      }
+    });
+  });
+  $("[data-seller-profile]", root)?.addEventListener("click", () => {
+    const profile = $("#listing-seller-profile", root);
+    profile.hidden = !profile.hidden;
+    $("[data-seller-profile]", root).setAttribute(
+      "aria-expanded",
+      String(!profile.hidden),
+    );
+  });
+}
+function setupListingDescription(root) {
+  const description = $("#listing-description", root),
+    button = $("#listing-description-toggle", root);
+  if (!description || !button) return;
+  if (description.scrollHeight > description.clientHeight + 2)
+    button.hidden = false;
+  button.addEventListener("click", () => {
+    const expanded = description.classList.toggle("is-expanded");
+    button.setAttribute("aria-expanded", String(expanded));
+    button.textContent = expanded
+      ? adminText("Qisqartirish", "Свернуть", "Show less")
+      : adminText("To‘liq o‘qish", "Читать полностью", "Read full description");
+  });
+}
+function setupListingFilePreviews(root) {
+  root.querySelectorAll("[data-listing-photos]").forEach((input) => {
+    const preview = $(
+      "[data-listing-photo-previews]",
+      input.closest(".listing-upload-slot"),
+    );
+    let objectUrl = "";
+    input.addEventListener("change", () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      objectUrl = "";
+      preview.replaceChildren();
+      const file = input.files?.[0];
+      input.setCustomValidity(
+        file?.size > 15 * 1024 * 1024
+          ? adminText(
+              "Har bir asl rasm 15 MB dan kichik bo‘lishi kerak.",
+              "Размер исходного изображения не должен превышать 15 МБ.",
+              "Each original photo must be 15 MB or smaller.",
+            )
+          : file &&
+              !["image/jpeg", "image/png", "image/webp"].includes(file.type)
+            ? adminText(
+                "Faqat JPG, PNG yoki WebP rasmlarni tanlang.",
+                "Выберите файлы JPG, PNG или WebP.",
+                "Choose JPG, PNG, or WebP images only.",
+              )
+            : "",
+      );
+      if (!file || !file.type.startsWith("image/")) return;
+      objectUrl = URL.createObjectURL(file);
+      const image = document.createElement("img");
+      image.src = objectUrl;
+      image.alt = file.name;
+      const caption = document.createElement("span");
+      caption.textContent = file.name;
+      preview.append(image, caption);
+    });
+  });
+}
+async function prepareListingPhoto(file) {
+  if (file.size > 15 * 1024 * 1024)
+    throw Error(
+      adminText(
+        "Asl rasm 15 MB dan kichik bo‘lishi kerak.",
+        "Исходное изображение должно быть не более 15 МБ.",
+        "Original photo must be 15 MB or smaller.",
+      ),
+    );
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type))
+    throw Error(
+      adminText(
+        "Faqat JPG, PNG yoki WebP rasmlarni tanlang.",
+        "Выберите файлы JPG, PNG или WebP.",
+        "Choose JPG, PNG, or WebP images only.",
+      ),
+    );
+  let image,
+    width,
+    height,
+    release = () => {};
+  if ("createImageBitmap" in window) {
+    const bitmap = await createImageBitmap(file);
+    image = bitmap;
+    width = bitmap.width;
+    height = bitmap.height;
+    release = () => bitmap.close?.();
+  } else {
+    const url = URL.createObjectURL(file);
+    try {
+      image = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(Error("decode"));
+        img.src = url;
+      });
+      width = image.naturalWidth;
+      height = image.naturalHeight;
+      release = () => URL.revokeObjectURL(url);
+    } catch (error) {
+      URL.revokeObjectURL(url);
+      throw Error(
+        adminText(
+          "Rasmni o‘qib bo‘lmadi. Boshqa rasm tanlang.",
+          "Не удалось прочитать изображение. Выберите другое.",
+          "Could not read the image. Choose another photo.",
+        ),
+      );
+    }
+  }
+  try {
+    if (!width || !height || width * height > 25000000)
+      throw Error(
+        adminText(
+          "Rasm o‘lchami juda katta. Boshqa rasm tanlang.",
+          "Размер изображения слишком велик. Выберите другое.",
+          "Image dimensions are too large. Choose another photo.",
+        ),
+      );
+    const maxBytes = 4900 * 1024;
+    for (const scale of [
+      Math.min(1, 1600 / Math.max(width, height)),
+      Math.min(1, 1280 / Math.max(width, height)),
+      Math.min(1, 1024 / Math.max(width, height)),
+    ]) {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
+      const context = canvas.getContext("2d");
+      if (!context)
+        throw Error(
+          adminText(
+            "Rasmni tayyorlab bo‘lmadi.",
+            "Не удалось подготовить изображение.",
+            "Could not prepare the image.",
+          ),
+        );
+      context.fillStyle = "#fff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      for (const quality of [0.84, 0.76, 0.68, 0.6, 0.52]) {
+        const blob = await new Promise((resolve) =>
+          canvas.toBlob(resolve, "image/webp", quality),
+        );
+        if (blob && blob.size <= maxBytes)
+          return new File(
+            [blob],
+            `${file.name.replace(/\.[^.]+$/, "") || "listing-photo"}.webp`,
+            { type: "image/webp", lastModified: Date.now() },
+          );
+      }
+    }
+    throw Error(
+      adminText(
+        "Rasmni siqib 5 MB dan kichik qilib bo‘lmadi. Kichikroq rasm tanlang.",
+        "Не удалось уменьшить фото до 5 МБ. Выберите изображение поменьше.",
+        "Could not compress the photo below 5 MB. Choose a smaller image.",
+      ),
+    );
+  } finally {
+    release();
+  }
+}
+async function uploadListingPhoto(file, prepared = false) {
+  if (!prepared) file = await prepareListingPhoto(file);
+  const headers = { "Content-Type": file.type, "X-CSRF-Token": csrf };
+  const response = await fetch("/api/listing-images", {
+    method: "POST",
+    headers,
+    body: file,
+  });
+  const result = await response.json().catch(() => ({
+    error: adminText(
+      "Server javobi o‘qilmadi",
+      "Не удалось прочитать ответ сервера",
+      "Server response could not be read",
+    ),
+  }));
+  if (!response.ok)
+    throw Error(localized(result.error || `Xatolik ${response.status}`));
+  return result.url;
+}
+async function renderListingReview(id) {
+  return OfferWizard.review(id);
+}
+function linkedAccountMarkup(providers = []) {
+  const labels = Object.fromEntries(
+    listingProviders.map(([key, label]) => [key, label]),
+  );
+  return providers
+    .filter((x) => labels[x])
+    .map(
+      (key) =>
+        `<span class="linked-account-badge">${providerFieldsIcon(key)}${adminText(labels[key], labels[key] === "Apple / iCloud" ? "Apple / iCloud" : labels[key], labels[key])}</span>`,
+    )
+    .join("");
+}
+function providerFieldsIcon(key) {
+  const entry = listingProviders.find((x) => x[0] === key);
+  if (!entry) return "";
+  const glyph =
+    key === "apple"
+      ? '<svg viewBox="0 0 24 24"><path d="M16.4 12.5c0-2.3 1.9-3.4 2-3.5-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9s-2-.9-3.3-.9c-1.7 0-3.2 1-4.1 2.5-1.8 3.1-.5 7.6 1.3 10.1.9 1.2 1.9 2.5 3.2 2.4 1.3-.1 1.8-.8 3.4-.8s2 .8 3.4.8c1.4 0 2.3-1.2 3.1-2.4 1-1.4 1.4-2.8 1.5-2.9-.1 0-3.3-1.2-3.3-4.3zM14 5.4c.7-.9 1.2-2.1 1.1-3.3-1.1.1-2.4.7-3.1 1.5-.7.8-1.3 2-1.2 3.1 1.2.1 2.4-.5 3.2-1.3z"/></svg>'
+      : `<b>${entry[2]}</b>`;
+  return `<span class="provider-mark provider-${key}" aria-hidden="true"><span class="provider-glyph">${glyph}</span></span>`;
+}
+function card(it) {
+  return marketCard(it);
+}
+
+const marketGameLinks = [
+  [
+    "counter-strike-2",
+    "CS2",
+    "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/cs2.png?v=original-1",
+    "cs2",
+  ],
+  [
+    "pubg-mobile",
+    "PUBG Mobile",
+    "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/pubg-mobile.png?v=original-1",
+    "pubg",
+  ],
+  [
+    "mobile-legends",
+    "Mobile Legends",
+    "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/mobile-legends.png?v=original-1",
+    "ml",
+  ],
+  [
+    "free-fire",
+    "Free Fire",
+    "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/free-fire.png?v=original-1",
+    "ff",
+  ],
+  [
+    "honor-of-kings",
+    "Honor of Kings",
+    "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/honor-of-kings.png?v=original-1",
+    "hok",
+  ],
+  [
+    "roblox",
+    "Roblox",
+    "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/roblox.png?v=original-1",
+    "roblox",
+  ],
+  [
+    "valorant",
+    "Valorant",
+    "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/valorant.png?v=original-1",
+    "valorant",
+  ],
+  [
+    "genshin-impact",
+    "Genshin Impact",
+    "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/genshin-impact.png?v=original-1",
+    "genshin",
+  ],
+  [
+    "fortnite",
+    "Fortnite",
+    "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/fortnite.png?v=original-1",
+    "fortnite",
+  ],
+  [
+    "minecraft",
+    "Minecraft",
+    "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/minecraft.png?v=original-1",
+    "minecraft",
+  ],
+  [
+    "gta-6",
+    "GTA 6",
+    "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/gta-6.png?v=original-1",
+    "gta",
+  ],
+  [
+    "league-of-legends",
+    "League of Legends",
+    "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/league-of-legends.png?v=original-1",
+    "lol",
+  ],
+  [
+    "dota-2",
+    "Dota 2",
+    "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/dota-2.png?v=original-1",
+    "dota",
+  ],
+  [
+    "call-of-duty-mobile",
+    "Call of Duty Mobile",
+    "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/call-of-duty-mobile-1280.webp",
+    "codm",
+  ],
+  [
+    "ea-sports-fc",
+    "EA Sports FC",
+    "https://images.gamestorehub.com/site-assets/storefront-7c336bd6c7318e89/game-art/ea-sports-fc.png?v=original-1",
+    "fc",
+  ],
+];
+function marketGameMark(game) {
+  const [, , mark, theme] = game;
+  return `<span class="market-game-mark market-game-${theme}" aria-hidden="true"><img src="${mark}" alt="" width="640" height="360" loading="lazy" decoding="async"></span>`;
+}
+function homeGameCarouselMarkup() {
+  const t = adminText,
+    order = [
+      "pubg-mobile",
+      "mobile-legends",
+      "valorant",
+      "counter-strike-2",
+      "free-fire",
+      "roblox",
+      "fortnite",
+      "minecraft",
+      "gta-5",
+      "league-of-legends",
+      "dota-2",
+      "genshin-impact",
+      "honor-of-kings",
+      "call-of-duty-mobile",
+      "ea-sports-fc",
+    ];
+  const games = [...marketGameLinks].sort((a, b) => {
+    const rank = (game) =>
+      order.includes(game[0]) ? order.indexOf(game[0]) : order.length;
+    return rank(a) - rank(b);
+  });
+  return `<section class="home-mobile-games" data-game-carousel aria-roledescription="${t("karusel", "карусель", "carousel")}" aria-labelledby="home-games-title"><div class="home-section-heading"><h2 id="home-games-title">Top games</h2><a href="/browse">${t("Barchasi", "Все", "View all")} →</a></div><nav class="game-carousel-stage" aria-label="${t("O‘yinlar", "Игры", "Games")}">${games.map((game) => `<a data-game-card data-game-name="${esc(game[1])}" href="/browse?game=${encodeURIComponent(game[0])}">${marketGameMark(game)}<span class="game-carousel-caption"><strong>${esc(game[1])}</strong><small>${t("Takliflarni ko‘rish", "Смотреть предложения", "Explore listings")} →</small></span></a>`).join("")}</nav><span class="sr-only" data-game-announcement aria-live="polite" aria-atomic="true"></span></section>`;
+}
+function marketSellerIdentity(it) {
+  const name = String(
+    it.seller_display_name ||
+      it.seller?.display_name ||
+      it.seller_name ||
+      adminText("Sotuvchi", "Продавец", "Seller"),
+  ).trim();
+  return {
+    name,
+    avatar: it.seller_avatar_url || it.seller?.avatar_url || "",
+    id: it.store_id || it.seller_id || "",
+  };
+}
+function marketAvatarMarkup(
+  name,
+  avatar = "",
+  className = "market-seller-avatar",
+  owner = "",
+) {
+  return window.SentryLootAccount.avatar(name, avatar, className, owner);
+}
+function updateProfileAvatar(url) {
+  if (!me) return;
+  me.avatar_url = url;
+  document
+    .querySelectorAll(".user-avatar[data-avatar-owner]")
+    .forEach((avatar) => {
+      if (avatar.dataset.avatarOwner !== me.id) return;
+      const classes = avatar.className
+        .split(/\s+/)
+        .filter((c) => c !== "user-avatar")
+        .join(" ");
+      avatar.outerHTML = marketAvatarMarkup(
+        me.display_name || me.email,
+        url,
+        classes,
+        me.id,
+      );
+    });
+  syncProfileTrigger();
+}
+function marketCardFacts(it) {
+  const a = it.attributes || {};
+  const facts =
+    it.product_type === "account"
+      ? [
+          it.platform,
+          a.original_email_included === "yes"
+            ? adminText("Email beriladi", "Email включён", "Email included")
+            : it.region,
+        ]
+      : it.product_type === "item"
+        ? [it.platform, a.item_variant || a.condition || it.region]
+        : it.product_type === "currency"
+          ? [
+              it.region,
+              a.amount && a.unit ? `${a.amount} ${a.unit}` : it.platform,
+            ]
+          : [it.platform, it.region];
+  return [
+    ...new Set(
+      facts.filter((value) => value && String(value).trim()).map(String),
+    ),
+  ].slice(0, 2);
+}
+function marketCard(it) {
+  if (
+    it.status === "sold_out" ||
+    (it.available != null && Number(it.available) <= 0)
+  )
+    return "";
+  const artwork = it.image_url;
+  const art = artwork
+    ? `<img src="${esc(artwork)}" alt="${esc(it.title)}" width="640" height="400" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
+    : `<span class="market-card-art-empty" aria-hidden="true">${icon("gamepad")}</span>`;
+  const owner = marketSellerIdentity(it),
+    facts = marketCardFacts(it);
+  const reviews = Math.max(0, Number(it.seller_card_review_count) || 0),
+    rating = Number(it.seller_card_rating);
+  const ratingMarkup = `<span class="market-card-rating" title="${reviews ? adminText("Sotuvchining tasdiqlangan xaridorlar reytingi", "Рейтинг продавца от подтверждённых покупателей", "Seller rating from verified purchases") : adminText("Hali baholanmagan", "Нет оценок", "Not rated yet")}">${icon("star")}<span>${reviews && Number.isFinite(rating) && rating >= 1 && rating <= 5 ? `${rating.toFixed(1)} <small>(${reviews})</small>` : "—"}</span></span>`;
+  const sold = Math.max(0, Math.floor(Number(it.seller_sales_count) || 0));
+  const soldLabel =
+    it.product_type === "account"
+      ? adminText(
+          "ta account sotilgan",
+          "аккаунтов продано",
+          sold === 1 ? "account sold" : "accounts sold",
+        )
+      : adminText("ta sotilgan", "продано", "sold");
+  const salesMarkup = `<span class="market-card-sales">${sold.toLocaleString()} ${soldLabel}</span>`;
+  const available =
+    it.available !== undefined
+      ? Number(it.available)
+      : it.stock !== undefined
+        ? Number(it.stock) - Number(it.reserved || 0)
+        : null;
+  const soldOut =
+    it.status === "sold_out" || (available !== null && available <= 0);
+  const verified =
+    it.identity_verified || it.verification_status === "verified";
+  const viewUrl = `/listing/${encodeURIComponent(it.id)}`;
+  const sellerUrl = owner.id
+    ? `/store/${encodeURIComponent(owner.id)}`
+    : viewUrl;
+  const favorite = `<button type="button" class="favorite-card-button ${it.is_favorite ? "saved" : ""}" data-action="favorite" data-id="${esc(it.id)}" data-saved="${it.is_favorite ? "1" : "0"}" aria-pressed="${it.is_favorite ? "true" : "false"}" aria-label="${it.is_favorite ? adminText("Saqlanganlardan olib tashlash", "Убрать из избранного", "Remove from saved") : adminText("Saqlash", "Сохранить", "Save listing")}">${icon("heart")}</button>`;
+  return `<article class="product-card market-product-card${soldOut ? " is-sold-out" : ""}"><a class="product-cover market-card-cover${artwork ? "" : " product-cover-empty"}" href="${viewUrl}" aria-label="${adminText("E’lonni ko‘rish", "Открыть объявление", "View listing")}: ${esc(it.title)}">${art}${soldOut ? `<span class="market-sold-out">${adminText("Sotilgan", "Распродано", "Sold out")}</span>` : ""}</a>${favorite}<div class="product-card-body"><p class="market-card-category"><span>${esc(it.game_name || adminText("O‘yin", "Игра", "Game"))}</span><span aria-hidden="true">·</span><span>${esc(categoryLabel(it.category_name || it.product_type || "Digital"))}</span></p><h3 class="product-title"><a href="${viewUrl}">${esc(it.title)}</a></h3><div class="market-card-bottom"><strong class="price"><span>${esc(fmt(it.price_minor, it.currency))}</span></strong><a class="market-card-view" href="${viewUrl}" aria-label="${adminText("Taklifni ko‘rish", "Смотреть предложение", "View offer")}: ${esc(it.title)}"><span>${adminText("Taklifni ko‘rish", "Смотреть", "View offer")}</span><span aria-hidden="true">→</span></a></div><div class="market-card-meta"><p class="market-card-facts" title="${esc(facts.join(" · "))}">${facts.map((value) => `<span>${esc(value)}</span>`).join('<span aria-hidden="true">·</span>')}</p><div class="market-card-delivery">${icon("clock")}<span>${esc(it.delivery_eta || adminText("Sotuvchidan so‘rang", "Уточните у продавца", "Ask seller"))}</span></div></div><div class="market-card-footer"><a class="market-seller-link" href="${sellerUrl}" aria-label="${adminText("Sotuvchi", "Продавец", "Seller")}: ${esc(owner.name)}">${marketAvatarMarkup(owner.name, owner.avatar, "market-seller-avatar", owner.id)}<span class="market-seller-copy"><span class="market-seller-name-row"><span class="market-seller-name" title="${esc(owner.name)}">${esc(owner.name)}</span>${verified ? `<span class="market-seller-verified" title="${adminText("Tasdiqlangan sotuvchi", "Проверенный продавец", "Verified seller")}">${icon("shield")}</span>` : ""}</span>${salesMarkup}</span></a><div class="market-card-reputation">${ratingMarkup}<span class="market-mobile-sales">${sold.toLocaleString()} ${adminText("ta sotilgan", "продаж", "sales")}</span></div></div></div></article>`;
+}
+async function showMarketListingDetails(id) {
+  const dialog = document.createElement("dialog");
+  dialog.className = "market-details-dialog";
+  dialog.setAttribute(
+    "aria-label",
+    adminText("E’lon tafsilotlari", "Детали объявления", "Listing details"),
+  );
+  dialog.innerHTML = `<div class="market-details-loading">${adminText("Tafsilotlar yuklanmoqda…", "Загрузка деталей…", "Loading details…")}</div>`;
+  document.body.append(dialog);
+  dialog.showModal();
+  const close = () => dialog.close();
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) close();
+  });
+  dialog.addEventListener("close", () => dialog.remove(), { once: true });
+  try {
+    const item = await api("/listings/" + encodeURIComponent(id));
+    const attrs = item.attributes || {},
+      images = listingGalleryImages(item),
+      facts = [
+        [
+          adminText("Yetkazish tezligi", "Скорость доставки", "Delivery speed"),
+          item.delivery_eta,
+        ],
+        [
+          adminText(
+            "Minimal miqdor",
+            "Минимальное количество",
+            "Minimum quantity",
+          ),
+          `${Math.max(1, Number(item.min_quantity || 1))} ${item.unit_label || ""}`,
+        ],
+        [
+          adminText("Mavjud", "В наличии", "Available"),
+          String(
+            Math.max(
+              0,
+              Number(
+                item.available ??
+                  Number(item.stock || 0) - Number(item.reserved || 0),
+              ),
+            ),
+          ),
+        ],
+        [adminText("O‘yin", "Игра", "Game"), item.game_name],
+        [
+          adminText("Kategoriya", "Категория", "Category"),
+          categoryLabel(item.category_name || item.product_type),
+        ],
+        [adminText("Platforma", "Платформа", "Platform"), item.platform],
+        [adminText("Hudud", "Регион", "Region"), item.region],
+        ...Object.entries(attrs)
+          .filter(
+            ([key, value]) =>
+              key !== "images" &&
+              !key.startsWith("_") &&
+              value !== "" &&
+              value != null,
+          )
+          .map(([key, value]) => [
+            esc(key.replaceAll("_", " ")),
+            Array.isArray(value)
+              ? value.join(", ")
+              : typeof value === "object"
+                ? JSON.stringify(value)
+                : String(value),
+          ]),
+      ].filter(
+        ([, value]) =>
+          value !== undefined && value !== null && String(value).trim() !== "",
+      );
+    dialog.innerHTML = `<header class="market-details-header"><h2>${adminText("Batafsil ma’lumot", "Подробнее", "More details")}</h2><button type="button" class="market-details-close" aria-label="${adminText("Yopish", "Закрыть", "Close")}">${icon("close")}</button></header><h3 class="market-details-title">${esc(item.title)}</h3><section class="market-details-facts">${facts.map(([label, value]) => `<div><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join("")}</section>${images.length ? `<section class="market-details-media" aria-label="${adminText("Media", "Медиа", "Media")}">${images.map((url, index) => `<figure><img src="${esc(url)}" alt="${adminText("E’lon rasmi", "Фото объявления", "Listing photo")} ${String(index + 1).padStart(2, "0")}" loading="lazy" referrerpolicy="no-referrer"><figcaption>${adminText("Media", "Медиа", "Media")} - ${String(index + 1).padStart(2, "0")}</figcaption></figure>`).join("")}</section>` : ""}${item.description ? `<section class="market-details-copy"><p>${esc(item.description)}</p><a class="market-details-more" href="/listing/${encodeURIComponent(item.id)}">${adminText("Batafsil ko‘rish", "Читать подробнее", "View more")}</a></section>` : ""}${item.requirements ? `<section class="market-details-copy"><h3>${adminText("Qo‘shimcha talablar", "Дополнительные требования", "Requirements")}</h3><p>${esc(item.requirements)}</p></section>` : ""}<footer class="market-details-footer"><strong>${esc(fmt(item.price_minor, item.currency))}</strong><a class="market-card-view" href="/listing/${encodeURIComponent(item.id)}">${adminText("E’lon sahifasini ochish", "Открыть объявление", "View listing")}</a></footer>`;
+    dialog
+      .querySelector(".market-details-close")
+      .addEventListener("click", close);
+  } catch (error) {
+    dialog.innerHTML = `<header class="market-details-header"><h2>${adminText("Tafsilotlar yuklanmadi", "Не удалось загрузить детали", "Could not load details")}</h2><button type="button" class="market-details-close" aria-label="${adminText("Yopish", "Закрыть", "Close")}">${icon("close")}</button></header><p class="market-details-error">${esc(error.message || adminText("Server bilan bog‘lanib bo‘lmadi.", "Не удалось связаться с сервером.", "Could not reach the server."))}</p>`;
+    dialog
+      .querySelector(".market-details-close")
+      .addEventListener("click", close);
+  }
+}
+function setupMarketSidebarToggle() {
+  const button = $("#market-sidebar-toggle");
+  if (!button) return;
+  const key = "sentryloot_sidebar_collapsed";
+  let collapsed = false,
+    queued = false,
+    previousSidebar = null,
+    savedScroll = 0,
+    drag = null;
+  try {
+    collapsed = localStorage.getItem(key) === "1";
+  } catch {}
+  function sync() {
+    queued = false;
+    const sidebar = $("#market-sidebar"),
+      handle = $("#market-sidebar-handle");
+    document.documentElement.classList.toggle(
+      "market-sidebar-collapsed",
+      collapsed,
+    );
+    button.hidden = !sidebar || !collapsed;
+    const label = adminText("Menyuni ochish", "Открыть меню", "Open sidebar");
+    button.setAttribute("aria-expanded", String(!collapsed));
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    if (!sidebar) {
+      if (drag) finishDrag(false);
+      previousSidebar = null;
+      return;
+    }
+    // Mobile navigation uses the shared links inside the modal menu.
+    if (window.matchMedia("(max-width:840px)").matches) {
+      button.hidden = true;
+      sidebar.hidden = true;
+      sidebar.inert = true;
+      if (handle) {
+        handle.hidden = true;
+        handle.inert = true;
+      }
+      previousSidebar = sidebar;
+      return;
+    }
+    const sameSidebar = previousSidebar === sidebar,
+      changed = !sameSidebar || sidebar.hidden !== collapsed;
+    sidebar.hidden = collapsed;
+    sidebar.inert = collapsed;
+    if (handle) {
+      handle.hidden = collapsed;
+      handle.inert = collapsed;
+    }
+    if (collapsed) {
+      const style = getComputedStyle(sidebar),
+        link = sidebar.querySelector("a"),
+        bar = button.closest(".topbar").getBoundingClientRect(),
+        left = parseFloat(style.left);
+      button.style.left =
+        (Number.isFinite(left)
+          ? left
+          : sidebar.closest(".market-shell").getBoundingClientRect().left) +
+        (parseFloat(style.paddingLeft) || 0) +
+        (link ? parseFloat(getComputedStyle(link).paddingLeft) || 0 : 0) -
+        bar.left +
+        "px";
+    }
+    if (!collapsed && !drag) {
+      const rect = sidebar.getBoundingClientRect(),
+        frame = sidebar.querySelector(".market-nav-icon"),
+        topbar = button.closest(".topbar").getBoundingClientRect();
+      if (!drag && frame)
+        button.style.left =
+          frame.getBoundingClientRect().left - topbar.left + "px";
+      if (handle) {
+        handle.style.left = rect.right - 6 + "px";
+        handle.style.top = Math.max(rect.top, topbar.bottom) + "px";
+        handle.style.height =
+          Math.max(
+            0,
+            Math.min(rect.bottom, window.innerHeight) -
+              Math.max(rect.top, topbar.bottom),
+          ) + "px";
+      }
+      if (changed)
+        requestAnimationFrame(() => {
+          if (sidebar.isConnected)
+            sidebar.scrollTop = sameSidebar ? savedScroll : 0;
+        });
+    }
+    previousSidebar = sidebar;
+  }
+  function setCollapsed(value) {
+    const sidebar = $("#market-sidebar");
+    if (!sidebar) return;
+    if (value && !collapsed) savedScroll = sidebar.scrollTop;
+    collapsed = value;
+    try {
+      localStorage.setItem(key, collapsed ? "1" : "0");
+    } catch {}
+    sync();
+  }
+  function finishDrag(commit) {
+    if (!drag) return;
+    const current = drag;
+    drag = null;
+    document.documentElement.classList.remove("market-sidebar-dragging");
+    document.documentElement.style.removeProperty("--market-sidebar-drag-x");
+    try {
+      current.handle.releasePointerCapture(current.pointerId);
+    } catch {}
+    if (commit && current.delta <= -Math.min(56, current.width * 0.25))
+      setCollapsed(true);
+  }
+  button.addEventListener("click", (event) => {
+    if (!collapsed) return;
+    setCollapsed(false);
+    if (event.detail === 0)
+      requestAnimationFrame(() =>
+        $("#market-sidebar a")?.focus({ preventScroll: true }),
+      );
+  });
+  app.addEventListener("pointerdown", (event) => {
+    const handle = event.target.closest("#market-sidebar-handle"),
+      sidebar = $("#market-sidebar");
+    if (!handle || !sidebar || collapsed || event.button !== 0) return;
+    drag = {
+      handle,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      width: sidebar.getBoundingClientRect().width,
+      delta: 0,
+    };
+    document.documentElement.classList.add("market-sidebar-dragging");
+    handle.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+  document.addEventListener(
+    "pointermove",
+    (event) => {
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      drag.delta = Math.max(
+        -drag.width,
+        Math.min(0, event.clientX - drag.startX),
+      );
+      document.documentElement.style.setProperty(
+        "--market-sidebar-drag-x",
+        drag.delta + "px",
+      );
+      event.preventDefault();
+    },
+    { passive: false },
+  );
+  document.addEventListener("pointerup", (event) => {
+    if (drag?.pointerId === event.pointerId) finishDrag(true);
+  });
+  document.addEventListener("pointercancel", (event) => {
+    if (drag?.pointerId === event.pointerId) finishDrag(false);
+  });
+  app.addEventListener("keydown", (event) => {
+    if (
+      event.target.id !== "market-sidebar-handle" ||
+      !["ArrowLeft", "Enter", " "].includes(event.key)
+    )
+      return;
+    event.preventDefault();
+    setCollapsed(true);
+    button.focus({ preventScroll: true });
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && drag) {
+      event.preventDefault();
+      finishDrag(false);
+    }
+  });
+  new MutationObserver(() => {
+    if (!queued) {
+      queued = true;
+      requestAnimationFrame(sync);
+    }
+  }).observe(app, { childList: true, subtree: true });
+  window.addEventListener("resize", () => {
+    if (drag) finishDrag(false);
+    sync();
+  });
+  window.addEventListener("storage", (event) => {
+    if (event.key !== key) return;
+    collapsed = event.newValue === "1";
+    sync();
+  });
+  sync();
+}
+function marketSidebarMarkup(filters = {}, { mobile = false } = {}) {
+  const t = (uz, ru, en) => adminText(uz, ru, en);
+  const entries = [
+    ...(mobile
+      ? [
+          [
+            "/#home",
+            "home",
+            t("Bosh sahifa", "Главная", "Home"),
+            location.pathname === "/" &&
+              (!location.hash || location.hash === "#home"),
+          ],
+        ]
+      : []),
+    [
+      "/browse",
+      "gamepad",
+      t("Bozor", "Маркет", "Marketplace"),
+      (!mobile || location.pathname === "/browse") &&
+        !filters.category &&
+        !filters.game &&
+        filters.sort !== "price_asc",
+    ],
+    ["/top-up", "wallet", "Top Up", false],
+    ["/community", "users", t("Hamjamiyat", "Сообщество", "Community"), false],
+    [
+      "/browse?category=accounts",
+      "user",
+      t("Akkauntlar", "Аккаунты", "Accounts"),
+      filters.category === "accounts",
+    ],
+    [
+      "/browse?category=currency",
+      "layers",
+      t("O‘yin valyutasi", "Игровая валюта", "Game Currency"),
+      filters.category === "currency",
+    ],
+    [
+      "/browse?category=services",
+      "settings",
+      t("O‘yin xizmatlari", "Игровые услуги", "Game Services"),
+      filters.category === "services",
+    ],
+    [
+      "/browse?sort=price_asc",
+      "ticket",
+      t("Eng arzon", "Самые дешёвые", "Lowest prices"),
+      filters.sort === "price_asc" && !filters.category && !filters.game,
+    ],
+  ];
+  const row = ([href, glyph, label, active]) =>
+    `<a href="${href}" ${active ? 'aria-current="page"' : ""}><span class="market-nav-icon" aria-hidden="true">${icon(glyph)}</span><span>${label}</span></a>`;
+  const personal = me
+    ? [
+        ["/#messages", "message", t("Xabarlar", "Сообщения", "Messages")],
+        ["/#orders", "cart", t("Xaridlarim", "Мои покупки", "My purchases")],
+        ["/#favorites", "heart", t("Saqlanganlar", "Избранное", "Favourites")],
+        ["/#my-reviews", "star", t("Sharhlarim", "Мои отзывы", "My reviews")],
+        [
+          "/#requests",
+          "search",
+          t("Mahsulot so‘rovlari", "Запросы товаров", "Product requests"),
+        ],
+      ]
+    : [["/#login", "user", t("Hisobga kirish", "Войти в аккаунт", "Sign in")]];
+  return `<aside id="${mobile ? "mobile-market-sidebar" : "market-sidebar"}" class="market-sidebar" aria-label="${t("Bozor navigatsiyasi", "Навигация маркета", "Marketplace navigation")}"><nav class="market-sidebar-main" aria-label="${t("Bozor bo‘limlari", "Разделы маркета", "Marketplace sections")}">${entries.map(row).join("")}</nav><section class="market-sidebar-account"><h2>${me ? t("Mening bo‘limlarim", "Мои разделы", "Your space") : t("Sizning hisobingiz", "Ваш аккаунт", "Your account")}</h2><nav class="market-sidebar-main market-sidebar-personal" aria-label="${t("Shaxsiy bo‘limlar", "Личные разделы", "Your account sections")}">${personal.map(row).join("")}${row(["/blog", "file-text", t("Blog va qo‘llanmalar", "Блог и руководства", "Blog & guides")])}</nav></section></aside>${mobile ? "" : `<div id="market-sidebar-handle" class="market-sidebar-drag-handle" role="separator" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="1" aria-valuenow="1" tabindex="0" aria-label="${t("Menyuni yopish uchun chapga torting", "Потяните влево, чтобы закрыть меню", "Drag left to close sidebar")}" title="${t("Yopish uchun chapga torting", "Потяните влево, чтобы закрыть", "Drag left to close")}"></div>`}`;
+}
+function marketBannerMarkup() {
+  const images = [
+    "market-banner-soldier.webp",
+    "topup-hero.jpg",
+    "market-banner-worlds.webp",
+  ];
+  return `<section class="market-banner" aria-label="${adminText("Bozor banneri", "Баннер маркета", "Marketplace banners")}"><div class="market-banner-images">${images.map((name, index) => `<img ${index === 0 ? "src" : "data-src"}="https://images.gamestorehub.com/site-assets/${name}" alt="" class="market-banner-image ${index === 0 ? "active" : ""}" ${index === 0 ? 'fetchpriority="high"' : 'loading="lazy"'} aria-hidden="true">`).join("")}</div><div class="market-banner-copy"><span>${adminText("O‘YIN MAHSULOTLARI SAVDOSI", "ПОКУПКА И ПРОДАЖА ИГРОВЫХ ТОВАРОВ", "BUY & SELL GAME ITEMS")}</span><h1>${adminText("Sevimli o‘yinlaringiz, barchasi bir joyda", "Любимые игры — всё в одном месте", "Your favorite games, all in one place")}</h1><p>${adminText("Akkauntlar, skinlar, valyuta va xizmatlarni e’lonlardan toping.", "Находите аккаунты, скины, валюту и услуги в объявлениях.", "Discover game accounts, skins, currency, and services in marketplace listings.")}</p><div class="market-banner-benefits"><div>${icon("shield")}<span><b>${adminText("Sotuvchi holati", "Статус продавца", "Seller status")}</b><small>${adminText("Profilni ko‘rib chiqing", "Проверьте профиль", "Review each profile")}</small></span></div><div>${icon("search")}<span><b>${adminText("Aniq tafsilotlar", "Точные данные", "Clear details")}</b><small>${adminText("E’lonni solishtiring", "Сравните объявления", "Compare listings")}</small></span></div><div>${icon("message")}<span><b>${adminText("Yordam markazi", "Центр помощи", "Help center")}</b><small>${adminText("Savol bering", "Задайте вопрос", "Ask a question")}</small></span></div></div></div><div class="market-banner-dots">${images.map((_, index) => `<button type="button" data-market-slide="${index}" aria-label="${adminText(`${index + 1}-banner`, `Баннер ${index + 1}`, `Banner ${index + 1}`)}" aria-current="${index === 0 ? "true" : "false"}"></button>`).join("")}</div></section>`;
+}
+let marketBannerTimer = 0;
+function setupMarketBanner() {
+  window.StorefrontShowcase?.banner(app);
+}
+
+function marketGameTabsMarkup(filters = {}) {
+  return `<nav class="market-game-tabs" aria-label="${adminText("O‘yin bo‘yicha ko‘rish", "Просмотр по игре", "Browse by game")}"><a href="/browse" class="${!filters.game ? "active" : ""}" ${!filters.game ? 'aria-current="page"' : ""}>${adminText("Barchasi", "Все", "All")}</a>${marketGameLinks
+    .slice(0, 7)
+    .map(
+      (game) =>
+        `<a href="/browse?game=${game[0]}" class="${filters.game === game[0] ? "active" : ""}" ${filters.game === game[0] ? 'aria-current="page"' : ""}>${esc(game[1])}</a>`,
+    )
+    .join("")}</nav>`;
+}
+async function renderBrowsePage(filters = {}) {
+  filters = { ...filters };
+  delete filters.page;
+  if (window.MobileSite?.isMobile() && !filters.sort) filters.sort = "newest";
+  const [result, categories] = await Promise.all([
+    api("/listings?" + new URLSearchParams(filters)),
+    api("/categories"),
+  ]);
+  const game = marketGameLinks.find(([slug]) => slug === filters.game),
+    category = categories.find((item) => item.slug === filters.category);
+  const title = filters.q
+    ? adminText("Qidiruv natijalari", "Результаты поиска", "Search results")
+    : game
+      ? game[1]
+      : category
+        ? categoryLabel(category.name)
+        : adminText("Barcha e’lonlar", "Все объявления", "All listings");
+  const count = Number(result.total_count || 0);
+  let shown = (result.items || []).length,
+    page = Number(result.page || 1);
+  document.body.classList.add("home-page");
+  app.classList.add("home-background");
+  app.innerHTML = `<section class="section listings-section market-browse-page"><div class="market-shell">${marketSidebarMarkup(filters)}<div class="market-main"><div class="market-browse-heading"><h1>${esc(title)}</h1><p id="market-results-count">${adminText(`${shown} / ${count} ta e’lon ko‘rsatilmoqda`, `Показано ${shown} из ${count}`, `Showing ${shown} of ${count} listings`)}</p><label class="mobile-browse-categories"><span>${adminText("Kategoriya", "Категория", "Category")}</span><select data-mobile-market-category><option value="">${adminText("Barcha kategoriyalar", "Все категории", "All categories")}</option>${categories.map((item) => `<option value="${esc(item.slug)}" ${filters.category === item.slug ? "selected" : ""}>${esc(categoryLabel(item.name))}</option>`).join("")}</select></label></div>${marketGameTabsMarkup(filters)}${shown ? `<div class="product-grid" id="market-all-cards">${result.items.map(marketCard).join("")}</div>` : `<div class="empty market-empty"><h2>${adminText("E’lonlar topilmadi", "Объявления не найдены", "No listings found")}</h2><p>${adminText("Boshqa o‘yinni tanlang yoki barcha e’lonlarga qayting.", "Выберите другую игру или вернитесь ко всем объявлениям.", "Choose another game or return to all listings.")}</p><a class="button-secondary" href="/browse">${adminText("Barcha e’lonlar", "Все объявления", "All listings")}</a></div>`}<div class="market-load-more-wrap">${result.has_more ? `<button class="button-secondary market-load-more" id="market-load-more" type="button">${adminText("Yana e’lonlarni ko‘rish", "Показать ещё", "Show more listings")}</button>` : ""}</div></div></div></section>`;
+  if (result.corrected_query) {
+    const note = document.createElement("p");
+    note.className = "help";
+    note.textContent =
+      adminText(
+        "Natijalar quyidagi so‘z bo‘yicha: ",
+        "Результаты по запросу: ",
+        "Showing results for: ",
+      ) + result.corrected_query;
+    $(".market-browse-heading").append(note);
+  }
+  app
+    .querySelector("[data-mobile-market-category]")
+    ?.addEventListener("change", (event) => {
+      const next = { ...filters };
+      if (event.target.value) next.category = event.target.value;
+      else delete next.category;
+      delete next.page;
+      history.pushState({}, "", "/browse?" + new URLSearchParams(next));
+      navigate();
+    });
+  MarketUX.browse(filters);
+  const loadMore = $("#market-load-more");
+  if (loadMore)
+    loadMore.addEventListener("click", async () => {
+      loadMore.disabled = true;
+      try {
+        const next = await api(
+          "/listings?" +
+            new URLSearchParams({ ...filters, page: String(page + 1) }),
+        );
+        if (next.items?.length) {
+          $("#market-all-cards").insertAdjacentHTML(
+            "beforeend",
+            next.items.map(marketCard).join(""),
+          );
+          window.PremiumMotion?.refresh(app);
+          shown += next.items.length;
+          page = Number(next.page || page + 1);
+          $("#market-results-count").textContent = adminText(
+            `${shown} / ${count} ta e’lon ko‘rsatilmoqda`,
+            `Показано ${shown} из ${count}`,
+            `Showing ${shown} of ${count} listings`,
+          );
+        }
+        if (!next.has_more || !next.items?.length) loadMore.remove();
+        else loadMore.disabled = false;
+      } catch (error) {
+        loadMore.disabled = false;
+        toast(error.message, "error");
+      }
+    });
+}
+function pageTitle(title, sub = "", right = "") {
+  return `<div class="page-header"><div><h1 class="page-title">${title}</h1>${sub ? `<div class="page-subtitle">${sub}</div>` : ""}</div>${right}</div>`;
+}
+function empty(text, cta = "") {
+  return `<div class="empty">${esc(text)}${cta ? `<div class="actions" style="justify-content:center">${cta}</div>` : ""}</div>`;
+}
+function syncSellItemButton() {
+  const button = $("#sell-item-button");
+  if (!button) return;
+  const label = adminText("E’lon joylash", "Продать товар", "Sell Item");
+  button.textContent = label;
+  button.setAttribute("aria-label", label);
+}
+function syncAdminLink() {
+  const link = $("#admin-nav-link");
+  if (!link) return;
+  link.hidden = !me?.is_admin;
+  const label = adminText(
+    "Admin paneli",
+    "Панель администратора",
+    "Admin panel",
+  );
+  link.setAttribute("aria-label", label);
+  link.title = label;
+}
+let bootstrapSessionReady = null;
+function isHomeLocation() {
+  return (
+    location.pathname === "/" && (!location.hash || location.hash === "#home")
+  );
+}
+async function bootstrap() {
+  locale = localStorage.getItem(localeKey) || "en";
+  if (!supportedLocales.has(locale)) locale = "en";
+  bootstrapSessionReady = (async () => {
+    const marketsReady = loadAsiaMarkets();
+    let sessionRegion = null,
+      sessionLanguage = localStorage.getItem(localeKey) || locale;
+    try {
+      const m = await api("/me");
+      me = m.user;
+      csrf = m.csrf || "";
+      sessionRegion = m.region;
+      if (m.mfa_required) location.hash = "security-unlock";
+      sessionLanguage =
+        me?.language ||
+        localStorage.getItem(localeKey) ||
+        m.region?.language ||
+        "en";
+      syncProfileTrigger();
+    } catch {}
+    await marketsReady;
+    locale = supportedLocales.has(sessionLanguage) ? sessionLanguage : "en";
+    window.RegionPreferences?.init({
+      markets: asiaMarkets,
+      translate: adminText,
+      getUser: () => me,
+      getLanguage: () => locale,
+      saveUser: async (next) => {
+        const result = await api("/profile", {
+          method: "POST",
+          body: JSON.stringify(next),
+        });
+        me = result.user;
+      },
+      onChange: async (next) => {
+        locale = next.language;
+        try {
+          localStorage.setItem(localeKey, locale);
+        } catch {}
+        document.documentElement.lang = locale;
+        document.documentElement.dir = locale === "ar" ? "rtl" : "ltr";
+        syncLanguageMenu();
+        syncProfileTrigger();
+        renderSupportWidget();
+        syncSellItemButton();
+        syncAdminLink();
+        await navigate();
+        localizeDOM();
+      },
+    });
+    const regional = window.RegionPreferences?.apply(sessionRegion, me);
+    if (!me && regional?.language && supportedLocales.has(regional.language))
+      locale = regional.language;
+    document.documentElement.lang = locale;
+    document.documentElement.dir = locale === "ar" ? "rtl" : "ltr";
+    syncLanguageMenu();
+    syncSellItemButton();
+    syncAdminLink();
+    renderSupportWidget();
+  })();
+  // Public discovery pages can load their data alongside session verification.
+  // Protected account, selling and payment routes still wait for that session.
+  const initialLocation = location.pathname + location.hash,
+    initialLocale = locale;
+  const publicRoute = location.hash
+    ? location.hash.slice(1)
+    : location.pathname.replace(/^\/|\/$/g, "");
+  const initialPublic =
+    isHomeLocation() ||
+    /^(?:browse|top-up(?:\/[^/]+){0,2}|games\/[^/]+(?:\/[^/]+)?)$/.test(
+      publicRoute,
+    )
+      ? navigate()
+      : null;
+  await bootstrapSessionReady;
+  window.MobileSite?.sessionReady();
+  const collectionsReady = ExperienceUX.sync().catch(() => {});
+  if (initialPublic) {
+    await initialPublic;
+    await window.OrderFlow?.guardNavigation();
+    if (
+      initialLocale !== locale ||
+      initialLocation !== location.pathname + location.hash
+    )
+      await navigate();
+  } else {
+    if (location.hash === "#compare" || location.pathname === "/compare")
+      await collectionsReady;
+    await navigate();
+  }
+  const linkedProvider = new URLSearchParams(location.search).get(
+    "oauth_linked",
+  );
+  if (linkedProvider === "facebook") {
+    toast("Facebook hisobingiz SentryLoot profilingizga bog‘landi.");
+    history.replaceState(history.state, "", location.pathname + "#home");
+  }
+  window.RegionPreferences?.refreshPrices();
+  localizeDOM();
+  refreshCart();
+  refreshNotifications();
+}
+
+async function refreshCart() {
+  const badge = $("#cart-count");
+  if (!badge) return;
+  if (!me) {
+    badge.textContent = "0";
+    badge.hidden = true;
+    return;
+  }
+  try {
+    const count = (await api("/cart")).items.reduce(
+      (n, x) => n + x.quantity,
+      0,
+    );
+    badge.textContent = count > 9 ? "9+" : String(count);
+    badge.hidden = count < 1;
+  } catch {}
+}
+async function refreshNotifications() {
+  const badge = $("#notification-count");
+  if (!badge) return;
+  if (!me) {
+    badge.hidden = true;
+    badge.textContent = "0";
+    return;
+  }
+  try {
+    const items = await api("/notifications");
+    window.ExperienceUX?.browserAlerts(items).catch(() => {});
+    const count = items.filter((x) => !x.read_at).length;
+    badge.textContent = count > 9 ? "9+" : String(count);
+    badge.hidden = count === 0;
+  } catch {
+    badge.hidden = true;
+  }
+}
 // A visible, signed-in tab refreshes presence; the server expires it after three minutes.
-setInterval(()=>{if(me&&document.visibilityState==='visible')api('/me').catch(()=>{});},90_000);
-document.addEventListener('visibilitychange',()=>{if(me&&document.visibilityState==='visible')api('/me').catch(()=>{});});
-function updateRouteMetadata(route,infoPage){const base=location.origin,pages={'top-up':[adminText('O‘yin valutasini to‘ldirish','Пополнение игровой валюты','Game currency top ups'),adminText('PUBG Mobile, Mobile Legends, Free Fire va Honor of Kings paketlari.','Пакеты PUBG Mobile, Mobile Legends, Free Fire и Honor of Kings.','Top up PUBG Mobile, Mobile Legends, Free Fire, and Honor of Kings.'),'/top-up'],home:[adminText('SentryLoot — o‘yin marketplace’i','SentryLoot — игровая площадка','SentryLoot — Game Marketplace'),adminText('Osiyo bo‘ylab ruxsat etilgan o‘yin mahsulotlari va xizmatlarini toping.','Находите разрешённые игровые товары и услуги по всей Азии.','Explore approved game items and services across Asia'),'/'],browse:[adminText('SentryLoot marketplace','SentryLoot — объявления','SentryLoot Marketplace'),adminText('Tasdiqlangan o‘yin e’lonlarini ko‘ring.','Смотрите одобренные игровые объявления.','Browse approved game listings across Asia'),'/browse'],blog:[adminText('SentryLoot blogi','Блог SentryLoot','SentryLoot Blog'),adminText('Xavfsiz xarid va savdo bo‘yicha qo‘llanmalar.','Советы по безопасным покупкам и продажам.','Guides to safer buying and selling'),'/blog']};const privateRoute=/^(notification-settings|saved-searches|order-case|admin|account|security-unlock|support-ticket|support-tickets|dispute(?:\/|$)|email-change|catalog-readiness|spin-win|rewards|bonuses|seller|cart|orders|wallet|messages|notifications|favorites|payout-options|admin-blog|top-up-admin|login|register|password-reset|conversation\/|order\/|listing-review\/)/.test(route),[title,description,path]=infoPage?[infoPage.title,infoPage.lead,infoPage.path]:pages[route]||(route.startsWith('top-up/')?[adminText('O‘yin valutasini to‘ldirish','Пополнение игровой валюты','Game currency top up')+' | SentryLoot',adminText('O‘yin valutasini Top Up qilish paketlari.','Пакеты пополнения игровой валюты.','Game currency top-up packages.'),location.pathname]:[adminText('SentryLoot','SentryLoot','SentryLoot'),adminText('SentryLoot sahifasi','Страница SentryLoot','SentryLoot page'),location.pathname]);document.title=title;const desc=$('meta[name="description"]');if(desc)desc.content=description;let canonical=$('link[rel="canonical"]');if(!canonical){canonical=document.createElement('link');canonical.rel='canonical';document.head.append(canonical)}canonical.href=base+path;let robots=$('meta[name="robots"]');if(!robots){robots=document.createElement('meta');robots.name='robots';document.head.append(robots)}robots.content=privateRoute?'noindex,nofollow':'index,follow';for(const [selector,value] of [['meta[property="og:title"]',title],['meta[property="og:description"]',description],['meta[property="og:url"]',base+path]]){const el=$(selector);if(el)el.content=value}}
-function currentPageAnchor(){
- const fragment=location.hash.slice(1),path=location.pathname.replace(/\/+$/,'')||'/';
- const infoRoute=window.SENTRYLOOT_INFO_PAGES?.paths[path];
- if(infoRoute&&/^info-section-[1-9][0-9]*$/.test(fragment))return fragment;
- if(infoRoute==='about'&&['about-platform','about-purpose','about-trust','about-payments','about-contact'].includes(fragment))return fragment;
- if(infoRoute==='support'&&['payments','orders','refunds'].includes(fragment))return fragment;
- if(/^\/top-up(?:\/[a-z0-9-]+){0,2}$/.test(location.pathname)&&(fragment==='topup-id-help'||/^purchase-reviews-topup-[a-z0-9-]+$/.test(fragment)))return fragment;
- return '';
-}
-function scrollToPageAnchor(anchor){if(anchor)requestAnimationFrame(()=>{
- const target=document.getElementById(anchor);
- target?.scrollIntoView();
- if(target?.hasAttribute('tabindex'))target.focus({preventScroll:true});
-})}
-const browseFilterKeys=new Set(['float_min','float_max','online','verified','delivery','seller','item_type','condition','item_variant','q','category','game','platform','region','server','rank','min','max','sort','page']);
-function browseFilters(search){return Object.fromEntries([...new URLSearchParams(search)].filter(([key,value])=>browseFilterKeys.has(key)&&value))}
-function openBrowse(filters={}){const params=new URLSearchParams(Object.entries(filters).filter(([key,value])=>browseFilterKeys.has(key)&&value!=null&&String(value).trim()));location.assign('/browse'+(params.size?'?'+params:''))}
-async function navigate(){if(me&&await window.OrderFlow?.guardNavigation())return;window.AdminConsole?.stop();window.PremiumMotion?.stop();window.MarketUX?.stop();window.ExperienceUX?.stop();window.SENTRYLOOT_INFO_PAGES?.stop();if(typeof closeProfileMenu==='function')closeProfileMenu();const pageAnchor=currentPageAnchor();let hashRoute=pageAnchor?'':location.hash.slice(1);if(hashRoute&&location.pathname!=='/'){history.replaceState(history.state,'','/#'+hashRoute)}const storePath=location.pathname.match(/^\/store\/([A-Za-z0-9_-]+)$/),gamePath=location.pathname.match(/^\/games\/([a-z0-9-]+)(?:\/([a-z0-9-]+))?$/),productPath=location.pathname.match(/^\/listing\/([^/]+)$/),blogPath=location.pathname.match(/^\/blog\/([a-z0-9]+(?:-[a-z0-9]+)*)$/),topupPath=location.pathname.match(/^\/top-up(?:\/([a-z0-9-]+))?(?:\/([a-z0-9-]+))?$/),path=location.pathname.replace(/\/+$/,'')||'/',infoPages=window.SENTRYLOOT_INFO_PAGES,pathRoute=infoPages?.paths[path]||({'/top-up':'top-up','/browse':'browse','/blog':'blog'})[path],route=hashRoute||(storePath?`store/${storePath[1]}`:gamePath?`games/${gamePath[1]}${gamePath[2]?'/'+gamePath[2]:''}`:productPath?`listing/${decodeURIComponent(productPath[1])}`:blogPath?`blog/${decodeURIComponent(blogPath[1])}`:topupPath?(topupPath[1]?`top-up/${topupPath[1]}${topupPath[2]?'/'+topupPath[2]:''}`:'top-up'):pathRoute||'home');updateRouteMetadata(route);stopHomeCanvas();document.body.classList.remove('home-page');app.classList.remove('home-background');if(app.classList.toggle('admin-context',['admin','admin-rewards','admin-spin-win','top-up-admin','admin-blog','admin-support','catalog-readiness','order-cases','launch-settings','review-moderation','staff'].includes(route)||Boolean(me?.is_admin&&/^(support-ticket|order-case)\//.test(route))))window.scrollTo({top:0,behavior:'instant'});delete app.dataset.routeReady;app.setAttribute('aria-busy','true');if(app.firstElementChild?.dataset.infoRoute!==route)app.innerHTML='<div class="loading"><span class="spinner"></span> Yuklanmoqda…</div>';try{
- if(route==='top-up'){await renderTopUpCatalog();scrollToPageAnchor(pageAnchor);return}if(route.startsWith('top-up/')){const parts=route.split('/');if(parts.length>2)await renderTopUpProduct(parts[1],parts[2]);else await renderTopUpCatalog(parts[1]);scrollToPageAnchor(pageAnchor);return}if(route==='top-up-admin')return await renderTopUpAdmin();if(route==='home')return await renderHome();if(route==='search')return window.MobileSite?.isMobile()?await window.MobileSite.search():await renderBrowsePage({});if(route==='browse'||route.startsWith('browse?'))return await renderBrowsePage(location.pathname==='/browse'?browseFilters(location.search):queryState);if(route==='compare')return await renderComparison();
- if(route==='spin-win')return await window.SpinWin.customer();if(route==='admin-spin-win')return await window.SpinWin.admin();if(route==='rewards')return await window.RewardsUI.customer();if(route==='admin-rewards')return await window.RewardsUI.admin();
- if(route==='benefits')return await LaunchUX.benefits();if(route==='seller-pricing')return await LaunchUX.tools();if(route==='seller-checklist')return await LaunchUX.sellerReadiness();if(route==='staff')return await LaunchUX.staff();if(route==='launch-settings')return await LaunchUX.admin();if(route==='service-status')return await LaunchUX.status();if(route==='topup-saved')return await LaunchUX.saved();
- if(route==='notification-settings')return await ExperienceUX.settingsPage();if(route.startsWith('games/')){const parts=route.split('/');return await ExperienceUX.gamePage(parts[1],parts[2]||'')}
- if(route==='saved-searches')return await TradeUX.saved();if(route==='order-cases')return await TradeUX.queue();if(route.startsWith('order-case/'))return await TradeUX.casePage(decodeURIComponent(route.slice(11)));
- if(route==='security-unlock')return await OperationsUX.unlock();if(route==='support-tickets')return await OperationsUX.tickets();if(route==='admin-support')return await OperationsUX.tickets(true);if(route==='catalog-readiness')return await OperationsUX.readiness();if(route.startsWith('support-ticket/'))return await OperationsUX.ticket(decodeURIComponent(route.slice(15)));if(route.startsWith('dispute/'))return await OperationsUX.dispute(decodeURIComponent(route.slice(8)));if(route.startsWith('email-change/'))return await OperationsUX.confirmEmail(decodeURIComponent(route.slice(13)));
- if(route.startsWith('store/'))return await MarketUX.store(decodeURIComponent(route.slice(6)));
- if(route.startsWith('listing/'))return await renderListing(decodeURIComponent(route.slice(8)));
- if(route==='menu'&&window.MobileSite?.isMobile())return await window.MobileSite.menu();if(route==='check-email')return window.MobileSite.emailCheck();if(route==='contact-details')return await renderContactDetails();if(route==='login'||route==='register')return await renderAuth(route);if(route==='password-reset')return await renderPasswordReset();if(route.startsWith('password-reset-confirm/'))return await renderPasswordReset(decodeURIComponent(route.slice('password-reset-confirm/'.length)));if(route.startsWith('verify/'))return await renderEmailVerification(decodeURIComponent(route.slice('verify/'.length)));
- if(route.startsWith('listing-review/'))return await renderListingReview(decodeURIComponent(route.slice('listing-review/'.length)));if(route==='notifications')return await renderNotifications();if(route==='account')return window.MobileSite?.isMobile()?await window.MobileSite.account():await renderAccount();if(route.startsWith('account/'))return window.MobileSite?.isMobile()?await window.MobileSite.settings(route):await renderAccount();if(route==='cart')return await renderCart();if(route==='orders')return await renderOrders();if(route==='seller'||route==='seller/dashboard')return await renderSeller();if(route==='wallet')return await renderWallet();if(route==='payout-options')return await renderPayoutOptions();if(route==='review-moderation')return await window.ReviewHub.moderate();if(route==='my-reviews')return await renderMyReviews();if(route==='blog')return await renderBlog();if(route.startsWith('blog/'))return await renderBlogArticle(decodeURIComponent(route.slice(5)));if(route==='admin')return await renderAdmin();if(route==='admin-blog')return await renderAdminBlog();if(route==='requests')return await renderRequests();if(route==='messages')return await renderMessages();if(route==='favorites')return await renderFavorites();if(route==='privacy-policy')return await renderPrivacyPolicy();if(route==='data-deletion')return await renderDataDeletion();if(infoPages&&Object.values(infoPages.paths).includes(route)){await renderInfoPage(route);scrollToPageAnchor(pageAnchor);return}
- if(route.startsWith('conversation/')){selectedConversation=route.split('/')[1];return await renderMessages(selectedConversation)}
- if(route==='stripe-test-connect')return await renderStripeTestConnect();
- if(route==='stripe-test')return await renderStripeTestAdmin();
- if(route.startsWith('topup-order/'))return await renderStripeTopupOrder(decodeURIComponent(route.slice(12)));
- if(route.startsWith('order/'))return await renderOrder(decodeURIComponent(route.slice(6)));
- return await renderNotFound();
- }catch(e){app.innerHTML=`<section class="page">${pageTitle('Xatolik')}<div class="notice error">${esc(e.message)}</div><a class="button-secondary" href="/#home">${adminText('Bosh sahifa','Главная','Home')}</a></section>`}finally{window.OperationsUX?.enhance();window.TradeUX?.enhance();window.ExperienceUX?.enhance();window.RewardsUI?.enhance();window.MobileSite?.sync(route);window.PremiumMotion?.mount(app);app.dataset.routeReady=route;app.setAttribute('aria-busy','false')}}
-function renderNotFound(){
- document.title=adminText('Sahifa topilmadi','Страница не найдена','Page not found')+' | SentryLoot';
- const robots=document.querySelector('meta[name="robots"]');if(robots)robots.content='noindex,nofollow';
- app.innerHTML=`<section class="page desktop-not-found"><span class="ux-eyebrow">404</span>${pageTitle(adminText('Sahifa topilmadi','Страница не найдена','Page not found'),adminText('Havola eskirgan yoki sahifa ko‘chirilgan bo‘lishi mumkin.','Ссылка могла устареть или страница была перемещена.','The link may have expired or the page may have moved.'))}<div class="actions"><a class="button-primary" href="/browse">${adminText('Mahsulotlarni ko‘rish','Смотреть предложения','Browse listings')}</a><a class="button-secondary" href="/support">${adminText('Yordam markazi','Центр помощи','Help center')}</a></div></section>`;
-}
-function renderHeroBlank(){return '<div class="hero-visual" aria-hidden="true"><canvas class="hero-art-canvas"></canvas></div>'}
-let homeCanvasFrame=0,homeCanvasResize=null,homeCanvasActive=false;
-const homeBackgroundImage=new Image();
-homeBackgroundImage.src='https://images.gamestorehub.com/site-assets/market-banner-soldier.webp';
-function stopHeroVisualCanvas(){heroArtCanvasActive=false;if(heroArtCanvasFrame)cancelAnimationFrame(heroArtCanvasFrame);heroArtCanvasFrame=0;if(heroArtCanvasResize){window.removeEventListener('resize',heroArtCanvasResize);heroArtCanvasResize=null}}
-function stopHomeCanvas(){window.StorefrontShowcase?.stop();clearInterval(marketBannerTimer);homeCanvasActive=false;if(homeCanvasFrame)cancelAnimationFrame(homeCanvasFrame);homeCanvasFrame=0;if(homeCanvasResize){window.removeEventListener('resize',homeCanvasResize);homeCanvasResize=null}stopHeroVisualCanvas()}
-function startHomeCanvas(){
- const canvas=$('.home-canvas-background'),hero=$('#home-hero-inner');
- if(!canvas||!hero)return;
- homeCanvasActive=true;
- const ctx=canvas.getContext('2d');if(!ctx)return;
- const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
- let width=0,height=0,dpr=1,lastFrame=0;
- const orbitingDots=Array.from({length:22},(_,i)=>{
-  const n=i+1;
-  return {cx:.59+((n*29)%34)/100,cy:.12+((n*17)%76)/100,rx:.025+((n*11)%8)/100,ry:.035+((n*7)%10)/100,phase:n*2.399963,speed:.00012+(n%5)*.000025,size:.85+(n%3)*.35,alpha:.3+(n%4)*.09};
- });
- function resize(){
-  if(!homeCanvasActive)return;
-  const rect=hero.getBoundingClientRect();width=rect.width;height=rect.height;
-  if(!width||!height)return;
-  dpr=Math.min(window.devicePixelRatio||1,1.5);
-  canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  if(homeCanvasFrame)cancelAnimationFrame(homeCanvasFrame);homeCanvasFrame=0;
-  draw(performance.now());
- }
- function draw(time){
-  if(!homeCanvasActive)return;
-  if(!reduced&&time-lastFrame<1000/30){homeCanvasFrame=requestAnimationFrame(draw);return}
-  lastFrame=time;
-  ctx.clearRect(0,0,width,height);
-  if(!homeBackgroundImage.complete){if(!reduced)homeCanvasFrame=requestAnimationFrame(draw);return}
-  if(!homeBackgroundImage.naturalWidth)return;
-  const zoom=reduced?1:1.025+.018*(.5-.5*Math.cos(time*.00012));
-  const scale=Math.max(width/homeBackgroundImage.naturalWidth,height/homeBackgroundImage.naturalHeight)*zoom;
-  const imageWidth=homeBackgroundImage.naturalWidth*scale,imageHeight=homeBackgroundImage.naturalHeight*scale;
-  const driftX=reduced?0:Math.sin(time*.000035)*width*.008,driftY=reduced?0:Math.cos(time*.000028)*height*.006;
-  ctx.drawImage(homeBackgroundImage,(width-imageWidth)/2+driftX,(height-imageHeight)/2+driftY,imageWidth,imageHeight);
-  const leftShade=ctx.createLinearGradient(0,0,width,0);
-  leftShade.addColorStop(0,'rgba(3,6,14,.79)');leftShade.addColorStop(.42,'rgba(3,6,14,.48)');leftShade.addColorStop(.72,'rgba(3,6,14,.26)');leftShade.addColorStop(1,'rgba(3,6,14,.4)');
-  ctx.fillStyle=leftShade;ctx.fillRect(0,0,width,height);
-  const lowerShade=ctx.createLinearGradient(0,0,0,height);
-  lowerShade.addColorStop(0,'rgba(3,6,14,.06)');lowerShade.addColorStop(.72,'rgba(3,6,14,.08)');lowerShade.addColorStop(1,'rgba(3,6,14,.56)');
-  ctx.fillStyle=lowerShade;ctx.fillRect(0,0,width,height);
-  const drift=reduced?0:time*.000035;
-  const glowX=width*(.73+.1*Math.sin(drift)),glowY=height*(.52+.13*Math.cos(drift*.8)),glowRadius=Math.max(width,height)*.34;
-  const redGlow=ctx.createRadialGradient(glowX,glowY,0,glowX,glowY,glowRadius);
-  redGlow.addColorStop(0,'rgba(170,48,232,.14)');redGlow.addColorStop(.35,'rgba(107,28,157,.07)');redGlow.addColorStop(1,'rgba(107,28,157,0)');
-  ctx.fillStyle=redGlow;ctx.fillRect(0,0,width,height);
-  if(!reduced){
-   ctx.save();ctx.globalCompositeOperation='screen';
-   for(const dot of orbitingDots){
-    const angle=time*dot.speed+dot.phase,x=width*(dot.cx+Math.cos(angle)*dot.rx),y=height*(dot.cy+Math.sin(angle)*dot.ry);
-    const tailAngle=angle-.2,tailX=width*(dot.cx+Math.cos(tailAngle)*dot.rx),tailY=height*(dot.cy+Math.sin(tailAngle)*dot.ry);
-    const trail=ctx.createLinearGradient(tailX,tailY,x,y);trail.addColorStop(0,'rgba(255,255,255,0)');trail.addColorStop(1,`rgba(255,255,255,${dot.alpha*.32})`);
-    ctx.beginPath();ctx.moveTo(tailX,tailY);ctx.lineTo(x,y);ctx.strokeStyle=trail;ctx.lineWidth=.8;ctx.stroke();
-    ctx.beginPath();ctx.arc(x,y,dot.size,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${dot.alpha})`;ctx.shadowColor=`rgba(255,255,255,${dot.alpha*.7})`;ctx.shadowBlur=7;ctx.fill();ctx.shadowBlur=0;
-   }
-   ctx.restore();homeCanvasFrame=requestAnimationFrame(draw);
+setInterval(() => {
+  if (me && document.visibilityState === "visible") api("/me").catch(() => {});
+}, 90_000);
+document.addEventListener("visibilitychange", () => {
+  if (me && document.visibilityState === "visible") api("/me").catch(() => {});
+});
+function updateRouteMetadata(route, infoPage) {
+  const base = location.origin,
+    pages = {
+      "top-up": [
+        adminText(
+          "O‘yin valutasini to‘ldirish",
+          "Пополнение игровой валюты",
+          "Game currency top ups",
+        ),
+        adminText(
+          "PUBG Mobile, Mobile Legends, Free Fire va Honor of Kings paketlari.",
+          "Пакеты PUBG Mobile, Mobile Legends, Free Fire и Honor of Kings.",
+          "Top up PUBG Mobile, Mobile Legends, Free Fire, and Honor of Kings.",
+        ),
+        "/top-up",
+      ],
+      home: [
+        adminText(
+          "SentryLoot — o‘yin marketplace’i",
+          "SentryLoot — игровая площадка",
+          "SentryLoot — Game Marketplace",
+        ),
+        adminText(
+          "Osiyo bo‘ylab ruxsat etilgan o‘yin mahsulotlari va xizmatlarini toping.",
+          "Находите разрешённые игровые товары и услуги по всей Азии.",
+          "Explore approved game items and services across Asia",
+        ),
+        "/",
+      ],
+      browse: [
+        adminText(
+          "SentryLoot marketplace",
+          "SentryLoot — объявления",
+          "SentryLoot Marketplace",
+        ),
+        adminText(
+          "Tasdiqlangan o‘yin e’lonlarini ko‘ring.",
+          "Смотрите одобренные игровые объявления.",
+          "Browse approved game listings across Asia",
+        ),
+        "/browse",
+      ],
+      blog: [
+        adminText("SentryLoot blogi", "Блог SentryLoot", "SentryLoot Blog"),
+        adminText(
+          "Xavfsiz xarid va savdo bo‘yicha qo‘llanmalar.",
+          "Советы по безопасным покупкам и продажам.",
+          "Guides to safer buying and selling",
+        ),
+        "/blog",
+      ],
+    };
+  const privateRoute =
+      /^(notification-settings|saved-searches|order-case|admin|account|security-unlock|support-ticket|support-tickets|dispute(?:\/|$)|email-change|catalog-readiness|spin-win|rewards|bonuses|seller|cart|orders|wallet|messages|notifications|favorites|payout-options|admin-blog|top-up-admin|login|register|password-reset|conversation\/|order\/|listing-review\/)/.test(
+        route,
+      ),
+    [title, description, path] = infoPage
+      ? [infoPage.title, infoPage.lead, infoPage.path]
+      : pages[route] ||
+        (route.startsWith("top-up/")
+          ? [
+              adminText(
+                "O‘yin valutasini to‘ldirish",
+                "Пополнение игровой валюты",
+                "Game currency top up",
+              ) + " | SentryLoot",
+              adminText(
+                "O‘yin valutasini Top Up qilish paketlari.",
+                "Пакеты пополнения игровой валюты.",
+                "Game currency top-up packages.",
+              ),
+              location.pathname,
+            ]
+          : [
+              adminText("SentryLoot", "SentryLoot", "SentryLoot"),
+              adminText(
+                "SentryLoot sahifasi",
+                "Страница SentryLoot",
+                "SentryLoot page",
+              ),
+              location.pathname,
+            ]);
+  document.title = title;
+  const desc = $('meta[name="description"]');
+  if (desc) desc.content = description;
+  let canonical = $('link[rel="canonical"]');
+  if (!canonical) {
+    canonical = document.createElement("link");
+    canonical.rel = "canonical";
+    document.head.append(canonical);
   }
- }
- homeCanvasResize=resize;window.addEventListener('resize',homeCanvasResize,{passive:true});
- if(!homeBackgroundImage.complete)homeBackgroundImage.addEventListener('load',resize,{once:true});
- resize();
+  canonical.href = base + path;
+  let robots = $('meta[name="robots"]');
+  if (!robots) {
+    robots = document.createElement("meta");
+    robots.name = "robots";
+    document.head.append(robots);
+  }
+  robots.content = privateRoute ? "noindex,nofollow" : "index,follow";
+  for (const [selector, value] of [
+    ['meta[property="og:title"]', title],
+    ['meta[property="og:description"]', description],
+    ['meta[property="og:url"]', base + path],
+  ]) {
+    const el = $(selector);
+    if (el) el.content = value;
+  }
 }
-let heroArtCanvasFrame=0,heroArtCanvasResize=null,heroArtCanvasActive=false;
-function startHeroVisualCanvas(){
- const canvas=$('.hero-art-canvas'),visual=$('.hero-visual');if(!canvas||!visual)return;
- const ctx=canvas.getContext('2d');if(!ctx)return;
- heroArtCanvasActive=true;
- const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
- const games=[
-  {name:'PUBG MOBILE',src:'https://pbs.twimg.com/media/EZrVgJ_XkAQX9jX.jpg',x:.18,y:.52,w:.32,h:.88,angle:-.04},
-  {name:'FREE FIRE',src:'https://cdn.wildflamestudio.com/common/web_event/official2.ff.garena.all/202210/2d6e7a11b79218c9b29167f77a9b92eb.jpg',x:.5,y:.5,w:.34,h:.94,angle:0},
-  {name:'MOBILE LEGENDS',src:'https://en.moonton.com/upload/image/20260904/37ce82b6e6bcf523b232de69de356286.JPEG',x:.82,y:.52,w:.32,h:.88,angle:.04}
- ].map(game=>{const image=new Image();image.src=game.src;image.onload=()=>{if(heroArtCanvasActive)draw(performance.now())};return {...game,image}});
- const particles=Array.from({length:34},(_,i)=>({p:(i*.61803398875)%1,y:.12+((i*37)%76)/100,s:.6+(i%3)*.4,v:.000025+(i%5)*.000007}));
- let width=0,height=0,dpr=1,pointerX=0,pointerY=0,lastFrame=0;
- function roundedRect(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r)}
- function drawCard(game,time,index){
-  const drift=reduced?0:Math.sin(time*.00055+index*2.1)*.012;
-  const px=width*(game.x+drift)+pointerX*(index===0?5:8),py=height*(game.y+Math.cos(time*.00045+index)*.01)+pointerY*(index===0?4:7);
-  const w=width*game.w,h=height*game.h,angle=game.angle+(reduced?0:Math.sin(time*.0003+index)*.009),r=Math.max(9,width*.018);
-  ctx.save();ctx.translate(px,py);ctx.rotate(angle);
-  ctx.shadowColor='rgba(0,0,0,.58)';ctx.shadowBlur=30;ctx.shadowOffsetY=17;roundedRect(-w/2,-h/2,w,h,r);ctx.fillStyle='#12071e';ctx.fill();ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetY=0;
-  ctx.save();roundedRect(-w/2,-h/2,w,h,r);ctx.clip();
-  const image=game.image;
-  if(image.complete&&image.naturalWidth){const scale=Math.max(w/image.naturalWidth,h/image.naturalHeight),iw=image.naturalWidth*scale,ih=image.naturalHeight*scale;ctx.drawImage(image,-iw/2,-ih/2,iw,ih)}else{const g=ctx.createLinearGradient(-w/2,-h/2,w/2,h/2);g.addColorStop(0,['#8b48bd','#693c9e','#aa6a38'][index]);g.addColorStop(1,'#0a101d');ctx.fillStyle=g;ctx.fillRect(-w/2,-h/2,w,h)}
-  const shade=ctx.createLinearGradient(0,h*.03,0,h/2);shade.addColorStop(0,'rgba(12,2,24,0)');shade.addColorStop(.43,'rgba(12,2,24,.12)');shade.addColorStop(1,'rgba(12,2,24,.88)');ctx.fillStyle=shade;ctx.fillRect(-w/2,-h/2,w,h);
-  const sheen=ctx.createLinearGradient(-w/2,-h/2,w*.28,h*.18);sheen.addColorStop(0,'rgba(244,220,255,.17)');sheen.addColorStop(.3,'rgba(232,203,255,.025)');sheen.addColorStop(1,'rgba(232,203,255,0)');ctx.fillStyle=sheen;ctx.fillRect(-w/2,-h/2,w,h);
-  ctx.restore();roundedRect(-w/2,-h/2,w,h,r);ctx.strokeStyle=index===0?'rgba(242,189,104,.72)':'rgba(197,145,255,.42)';ctx.lineWidth=index===0?1.35:1;ctx.stroke();
-  ctx.textAlign='left';ctx.textBaseline='bottom';ctx.font=`700 ${Math.max(8,Math.min(11,width*.023))}px system-ui, sans-serif`;ctx.fillStyle='rgba(242,247,255,.93)';ctx.fillText(game.name,-w/2+12,h/2-11);
-  ctx.restore();
- }
- function draw(time){
-  if(!heroArtCanvasActive)return;
-  if(!reduced&&time-lastFrame<1000/30){heroArtCanvasFrame=requestAnimationFrame(draw);return}
-  lastFrame=time;
-  ctx.clearRect(0,0,width,height);if(!width||!height)return;
-  const reducedTime=reduced?0:time;
-  const glow=ctx.createRadialGradient(width*.59,height*.46,0,width*.59,height*.46,width*.56);glow.addColorStop(0,'rgba(164,62,226,.24)');glow.addColorStop(.48,'rgba(88,35,135,.12)');glow.addColorStop(1,'rgba(20,5,32,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,width,height);
-  // Fine traces give the artwork a little depth without enclosing it in a ring or frame.
-  ctx.save();ctx.globalAlpha=.18;ctx.strokeStyle='rgba(222,168,255,.32)';ctx.lineWidth=.7;ctx.beginPath();ctx.moveTo(width*.04,height*.83);ctx.lineTo(width*.25,height*.83);ctx.lineTo(width*.32,height*.77);ctx.moveTo(width*.72,height*.16);ctx.lineTo(width*.91,height*.16);ctx.lineTo(width*.96,height*.21);ctx.stroke();ctx.restore();
-  drawCard(games[2],reducedTime,2);drawCard(games[1],reducedTime,1);drawCard(games[0],reducedTime,0);
-  if(!reduced){ctx.save();ctx.globalCompositeOperation='screen';for(const mote of particles){const progress=(time*mote.v+mote.p)%1,x=width*(.05+progress*.9),y=height*(mote.y+Math.sin(progress*7+mote.p*13)*.018),tail=width*.012;ctx.beginPath();ctx.moveTo(x-tail,y);ctx.lineTo(x,y);ctx.strokeStyle='rgba(197,145,255,.28)';ctx.lineWidth=mote.s*.7;ctx.stroke();ctx.beginPath();ctx.arc(x,y,mote.s,0,Math.PI*2);ctx.fillStyle='rgba(242,189,104,.62)';ctx.fill()}ctx.restore();heroArtCanvasFrame=requestAnimationFrame(draw)}
- }
- function resize(){if(!heroArtCanvasActive)return;const rect=visual.getBoundingClientRect();width=rect.width;height=rect.height;if(!width||!height)return;dpr=Math.min(window.devicePixelRatio||1,1.5);canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);if(heroArtCanvasFrame)cancelAnimationFrame(heroArtCanvasFrame);heroArtCanvasFrame=0;draw(performance.now())}
- heroArtCanvasResize=resize;window.addEventListener('resize',heroArtCanvasResize,{passive:true});
- visual.onpointermove=e=>{const rect=visual.getBoundingClientRect();pointerX=(e.clientX-rect.left)/rect.width-.5;pointerY=(e.clientY-rect.top)/rect.height-.5};visual.onpointerleave=()=>{pointerX=0;pointerY=0};
- resize();
+function currentPageAnchor() {
+  const fragment = location.hash.slice(1),
+    path = location.pathname.replace(/\/+$/, "") || "/";
+  const infoRoute = window.SENTRYLOOT_INFO_PAGES?.paths[path];
+  if (infoRoute && /^info-section-[1-9][0-9]*$/.test(fragment)) return fragment;
+  if (
+    infoRoute === "about" &&
+    [
+      "about-platform",
+      "about-purpose",
+      "about-trust",
+      "about-payments",
+      "about-contact",
+    ].includes(fragment)
+  )
+    return fragment;
+  if (
+    infoRoute === "support" &&
+    ["payments", "orders", "refunds"].includes(fragment)
+  )
+    return fragment;
+  if (
+    /^\/top-up(?:\/[a-z0-9-]+){0,2}$/.test(location.pathname) &&
+    (fragment === "topup-id-help" ||
+      /^purchase-reviews-topup-[a-z0-9-]+$/.test(fragment))
+  )
+    return fragment;
+  return "";
 }
-async function renderHome(filters={}){
-
- const t=(uz,ru,en)=>adminText(uz,ru,en),categories=[];
- const dataReady=Promise.allSettled([api('/listings?'+new URLSearchParams({sort:'newest',...filters})),api('/categories')]);
- document.body.classList.add('home-page');app.classList.add('home-background');
- app.innerHTML=`<section class="listings-section home-storefront" id="browse"><div class="market-shell">
+function scrollToPageAnchor(anchor) {
+  if (anchor)
+    requestAnimationFrame(() => {
+      const target = document.getElementById(anchor);
+      target?.scrollIntoView();
+      if (target?.hasAttribute("tabindex"))
+        target.focus({ preventScroll: true });
+    });
+}
+const browseFilterKeys = new Set([
+  "float_min",
+  "float_max",
+  "online",
+  "verified",
+  "delivery",
+  "seller",
+  "item_type",
+  "condition",
+  "item_variant",
+  "q",
+  "category",
+  "game",
+  "platform",
+  "region",
+  "server",
+  "rank",
+  "min",
+  "max",
+  "sort",
+  "page",
+]);
+function browseFilters(search) {
+  return Object.fromEntries(
+    [...new URLSearchParams(search)].filter(
+      ([key, value]) => browseFilterKeys.has(key) && value,
+    ),
+  );
+}
+function openBrowse(filters = {}) {
+  const params = new URLSearchParams(
+    Object.entries(filters).filter(
+      ([key, value]) =>
+        browseFilterKeys.has(key) && value != null && String(value).trim(),
+    ),
+  );
+  location.assign("/browse" + (params.size ? "?" + params : ""));
+}
+async function navigate() {
+  if (me && (await window.OrderFlow?.guardNavigation())) return;
+  window.AdminConsole?.stop();
+  window.PremiumMotion?.stop();
+  window.MarketUX?.stop();
+  window.ExperienceUX?.stop();
+  window.SENTRYLOOT_INFO_PAGES?.stop();
+  if (typeof closeProfileMenu === "function") closeProfileMenu();
+  const pageAnchor = currentPageAnchor();
+  let hashRoute = pageAnchor ? "" : location.hash.slice(1);
+  if (hashRoute && location.pathname !== "/") {
+    history.replaceState(history.state, "", "/#" + hashRoute);
+  }
+  const storePath = location.pathname.match(/^\/store\/([A-Za-z0-9_-]+)$/),
+    gamePath = location.pathname.match(
+      /^\/games\/([a-z0-9-]+)(?:\/([a-z0-9-]+))?$/,
+    ),
+    productPath = location.pathname.match(/^\/listing\/([^/]+)$/),
+    blogPath = location.pathname.match(/^\/blog\/([a-z0-9]+(?:-[a-z0-9]+)*)$/),
+    topupPath = location.pathname.match(
+      /^\/top-up(?:\/([a-z0-9-]+))?(?:\/([a-z0-9-]+))?$/,
+    ),
+    path = location.pathname.replace(/\/+$/, "") || "/",
+    infoPages = window.SENTRYLOOT_INFO_PAGES,
+    pathRoute =
+      infoPages?.paths[path] ||
+      { "/top-up": "top-up", "/browse": "browse", "/blog": "blog" }[path],
+    route =
+      hashRoute ||
+      (storePath
+        ? `store/${storePath[1]}`
+        : gamePath
+          ? `games/${gamePath[1]}${gamePath[2] ? "/" + gamePath[2] : ""}`
+          : productPath
+            ? `listing/${decodeURIComponent(productPath[1])}`
+            : blogPath
+              ? `blog/${decodeURIComponent(blogPath[1])}`
+              : topupPath
+                ? topupPath[1]
+                  ? `top-up/${topupPath[1]}${topupPath[2] ? "/" + topupPath[2] : ""}`
+                  : "top-up"
+                : pathRoute || "home");
+  updateRouteMetadata(route);
+  stopHomeCanvas();
+  document.body.classList.remove("home-page");
+  app.classList.remove("home-background");
+  if (
+    app.classList.toggle(
+      "admin-context",
+      [
+        "admin",
+        "admin-rewards",
+        "admin-spin-win",
+        "top-up-admin",
+        "admin-blog",
+        "admin-support",
+        "catalog-readiness",
+        "order-cases",
+        "launch-settings",
+        "review-moderation",
+        "staff",
+      ].includes(route) ||
+        Boolean(me?.is_admin && /^(support-ticket|order-case)\//.test(route)),
+    )
+  )
+    window.scrollTo({ top: 0, behavior: "instant" });
+  delete app.dataset.routeReady;
+  app.setAttribute("aria-busy", "true");
+  if (app.firstElementChild?.dataset.infoRoute !== route)
+    app.innerHTML =
+      '<div class="loading"><span class="spinner"></span> Yuklanmoqda…</div>';
+  try {
+    if (route === "top-up") {
+      await renderTopUpCatalog();
+      scrollToPageAnchor(pageAnchor);
+      return;
+    }
+    if (route.startsWith("top-up/")) {
+      const parts = route.split("/");
+      if (parts.length > 2) await renderTopUpProduct(parts[1], parts[2]);
+      else await renderTopUpCatalog(parts[1]);
+      scrollToPageAnchor(pageAnchor);
+      return;
+    }
+    if (route === "top-up-admin") return await renderTopUpAdmin();
+    if (route === "home") return await renderHome();
+    if (route === "search")
+      return window.MobileSite?.isMobile()
+        ? await window.MobileSite.search()
+        : await renderBrowsePage({});
+    if (route === "browse" || route.startsWith("browse?"))
+      return await renderBrowsePage(
+        location.pathname === "/browse"
+          ? browseFilters(location.search)
+          : queryState,
+      );
+    if (route === "compare") return await renderComparison();
+    if (route === "spin-win") return await window.SpinWin.customer();
+    if (route === "admin-spin-win") return await window.SpinWin.admin();
+    if (route === "rewards") return await window.RewardsUI.customer();
+    if (route === "admin-rewards") return await window.RewardsUI.admin();
+    if (route === "benefits") return await LaunchUX.benefits();
+    if (route === "seller-pricing") return await LaunchUX.tools();
+    if (route === "seller-checklist") return await LaunchUX.sellerReadiness();
+    if (route === "staff") return await LaunchUX.staff();
+    if (route === "launch-settings") return await LaunchUX.admin();
+    if (route === "service-status") return await LaunchUX.status();
+    if (route === "topup-saved") return await LaunchUX.saved();
+    if (route === "notification-settings")
+      return await ExperienceUX.settingsPage();
+    if (route.startsWith("games/")) {
+      const parts = route.split("/");
+      return await ExperienceUX.gamePage(parts[1], parts[2] || "");
+    }
+    if (route === "saved-searches") return await TradeUX.saved();
+    if (route === "order-cases") return await TradeUX.queue();
+    if (route.startsWith("order-case/"))
+      return await TradeUX.casePage(decodeURIComponent(route.slice(11)));
+    if (route === "security-unlock") return await OperationsUX.unlock();
+    if (route === "support-tickets") return await OperationsUX.tickets();
+    if (route === "admin-support") return await OperationsUX.tickets(true);
+    if (route === "catalog-readiness") return await OperationsUX.readiness();
+    if (route.startsWith("support-ticket/"))
+      return await OperationsUX.ticket(decodeURIComponent(route.slice(15)));
+    if (route.startsWith("dispute/"))
+      return await OperationsUX.dispute(decodeURIComponent(route.slice(8)));
+    if (route.startsWith("email-change/"))
+      return await OperationsUX.confirmEmail(
+        decodeURIComponent(route.slice(13)),
+      );
+    if (route.startsWith("store/"))
+      return await MarketUX.store(decodeURIComponent(route.slice(6)));
+    if (route.startsWith("listing/"))
+      return await renderListing(decodeURIComponent(route.slice(8)));
+    if (route === "menu" && window.MobileSite?.isMobile())
+      return await window.MobileSite.menu();
+    if (route === "check-email") return window.MobileSite.emailCheck();
+    if (route === "contact-details") return await renderContactDetails();
+    if (route === "login" || route === "register")
+      return await renderAuth(route);
+    if (route === "password-reset") return await renderPasswordReset();
+    if (route.startsWith("password-reset-confirm/"))
+      return await renderPasswordReset(
+        decodeURIComponent(route.slice("password-reset-confirm/".length)),
+      );
+    if (route.startsWith("verify/"))
+      return await renderEmailVerification(
+        decodeURIComponent(route.slice("verify/".length)),
+      );
+    if (route.startsWith("listing-review/"))
+      return await renderListingReview(
+        decodeURIComponent(route.slice("listing-review/".length)),
+      );
+    if (route === "notifications") return await renderNotifications();
+    if (route === "account")
+      return window.MobileSite?.isMobile()
+        ? await window.MobileSite.account()
+        : await renderAccount();
+    if (route.startsWith("account/"))
+      return window.MobileSite?.isMobile()
+        ? await window.MobileSite.settings(route)
+        : await renderAccount();
+    if (route === "cart") return await renderCart();
+    if (route === "orders") return await renderOrders();
+    if (route === "seller" || route === "seller/dashboard")
+      return await renderSeller();
+    if (route === "wallet") return await renderWallet();
+    if (route === "payout-options") return await renderPayoutOptions();
+    if (route === "review-moderation") return await window.ReviewHub.moderate();
+    if (route === "my-reviews") return await renderMyReviews();
+    if (route === "blog") return await renderBlog();
+    if (route.startsWith("blog/"))
+      return await renderBlogArticle(decodeURIComponent(route.slice(5)));
+    if (route === "admin") return await renderAdmin();
+    if (route === "admin-blog") return await renderAdminBlog();
+    if (route === "requests") return await renderRequests();
+    if (route === "messages") return await renderMessages();
+    if (route === "favorites") return await renderFavorites();
+    if (route === "privacy-policy") return await renderPrivacyPolicy();
+    if (route === "data-deletion") return await renderDataDeletion();
+    if (infoPages && Object.values(infoPages.paths).includes(route)) {
+      await renderInfoPage(route);
+      scrollToPageAnchor(pageAnchor);
+      return;
+    }
+    if (route.startsWith("conversation/")) {
+      selectedConversation = route.split("/")[1];
+      return await renderMessages(selectedConversation);
+    }
+    if (route === "stripe-test-connect") return await renderStripeTestConnect();
+    if (route === "stripe-test") return await renderStripeTestAdmin();
+    if (route.startsWith("topup-order/"))
+      return await renderStripeTopupOrder(decodeURIComponent(route.slice(12)));
+    if (route.startsWith("order/"))
+      return await renderOrder(decodeURIComponent(route.slice(6)));
+    return await renderNotFound();
+  } catch (e) {
+    app.innerHTML = `<section class="page">${pageTitle("Xatolik")}<div class="notice error">${esc(e.message)}</div><a class="button-secondary" href="/#home">${adminText("Bosh sahifa", "Главная", "Home")}</a></section>`;
+  } finally {
+    window.OperationsUX?.enhance();
+    window.TradeUX?.enhance();
+    window.ExperienceUX?.enhance();
+    window.RewardsUI?.enhance();
+    window.MobileSite?.sync(route);
+    window.PremiumMotion?.mount(app);
+    app.dataset.routeReady = route;
+    app.setAttribute("aria-busy", "false");
+  }
+}
+function renderNotFound() {
+  document.title =
+    adminText("Sahifa topilmadi", "Страница не найдена", "Page not found") +
+    " | SentryLoot";
+  const robots = document.querySelector('meta[name="robots"]');
+  if (robots) robots.content = "noindex,nofollow";
+  app.innerHTML = `<section class="page desktop-not-found"><span class="ux-eyebrow">404</span>${pageTitle(adminText("Sahifa topilmadi", "Страница не найдена", "Page not found"), adminText("Havola eskirgan yoki sahifa ko‘chirilgan bo‘lishi mumkin.", "Ссылка могла устареть или страница была перемещена.", "The link may have expired or the page may have moved."))}<div class="actions"><a class="button-primary" href="/browse">${adminText("Mahsulotlarni ko‘rish", "Смотреть предложения", "Browse listings")}</a><a class="button-secondary" href="/support">${adminText("Yordam markazi", "Центр помощи", "Help center")}</a></div></section>`;
+}
+function renderHeroBlank() {
+  return '<div class="hero-visual" aria-hidden="true"><canvas class="hero-art-canvas"></canvas></div>';
+}
+let homeCanvasFrame = 0,
+  homeCanvasResize = null,
+  homeCanvasActive = false;
+const homeBackgroundImage = new Image();
+homeBackgroundImage.src =
+  "https://images.gamestorehub.com/site-assets/market-banner-soldier.webp";
+function stopHeroVisualCanvas() {
+  heroArtCanvasActive = false;
+  if (heroArtCanvasFrame) cancelAnimationFrame(heroArtCanvasFrame);
+  heroArtCanvasFrame = 0;
+  if (heroArtCanvasResize) {
+    window.removeEventListener("resize", heroArtCanvasResize);
+    heroArtCanvasResize = null;
+  }
+}
+function stopHomeCanvas() {
+  window.StorefrontShowcase?.stop();
+  clearInterval(marketBannerTimer);
+  homeCanvasActive = false;
+  if (homeCanvasFrame) cancelAnimationFrame(homeCanvasFrame);
+  homeCanvasFrame = 0;
+  if (homeCanvasResize) {
+    window.removeEventListener("resize", homeCanvasResize);
+    homeCanvasResize = null;
+  }
+  stopHeroVisualCanvas();
+}
+function startHomeCanvas() {
+  const canvas = $(".home-canvas-background"),
+    hero = $("#home-hero-inner");
+  if (!canvas || !hero) return;
+  homeCanvasActive = true;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let width = 0,
+    height = 0,
+    dpr = 1,
+    lastFrame = 0;
+  const orbitingDots = Array.from({ length: 22 }, (_, i) => {
+    const n = i + 1;
+    return {
+      cx: 0.59 + ((n * 29) % 34) / 100,
+      cy: 0.12 + ((n * 17) % 76) / 100,
+      rx: 0.025 + ((n * 11) % 8) / 100,
+      ry: 0.035 + ((n * 7) % 10) / 100,
+      phase: n * 2.399963,
+      speed: 0.00012 + (n % 5) * 0.000025,
+      size: 0.85 + (n % 3) * 0.35,
+      alpha: 0.3 + (n % 4) * 0.09,
+    };
+  });
+  function resize() {
+    if (!homeCanvasActive) return;
+    const rect = hero.getBoundingClientRect();
+    width = rect.width;
+    height = rect.height;
+    if (!width || !height) return;
+    dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (homeCanvasFrame) cancelAnimationFrame(homeCanvasFrame);
+    homeCanvasFrame = 0;
+    draw(performance.now());
+  }
+  function draw(time) {
+    if (!homeCanvasActive) return;
+    if (!reduced && time - lastFrame < 1000 / 30) {
+      homeCanvasFrame = requestAnimationFrame(draw);
+      return;
+    }
+    lastFrame = time;
+    ctx.clearRect(0, 0, width, height);
+    if (!homeBackgroundImage.complete) {
+      if (!reduced) homeCanvasFrame = requestAnimationFrame(draw);
+      return;
+    }
+    if (!homeBackgroundImage.naturalWidth) return;
+    const zoom = reduced
+      ? 1
+      : 1.025 + 0.018 * (0.5 - 0.5 * Math.cos(time * 0.00012));
+    const scale =
+      Math.max(
+        width / homeBackgroundImage.naturalWidth,
+        height / homeBackgroundImage.naturalHeight,
+      ) * zoom;
+    const imageWidth = homeBackgroundImage.naturalWidth * scale,
+      imageHeight = homeBackgroundImage.naturalHeight * scale;
+    const driftX = reduced ? 0 : Math.sin(time * 0.000035) * width * 0.008,
+      driftY = reduced ? 0 : Math.cos(time * 0.000028) * height * 0.006;
+    ctx.drawImage(
+      homeBackgroundImage,
+      (width - imageWidth) / 2 + driftX,
+      (height - imageHeight) / 2 + driftY,
+      imageWidth,
+      imageHeight,
+    );
+    const leftShade = ctx.createLinearGradient(0, 0, width, 0);
+    leftShade.addColorStop(0, "rgba(3,6,14,.79)");
+    leftShade.addColorStop(0.42, "rgba(3,6,14,.48)");
+    leftShade.addColorStop(0.72, "rgba(3,6,14,.26)");
+    leftShade.addColorStop(1, "rgba(3,6,14,.4)");
+    ctx.fillStyle = leftShade;
+    ctx.fillRect(0, 0, width, height);
+    const lowerShade = ctx.createLinearGradient(0, 0, 0, height);
+    lowerShade.addColorStop(0, "rgba(3,6,14,.06)");
+    lowerShade.addColorStop(0.72, "rgba(3,6,14,.08)");
+    lowerShade.addColorStop(1, "rgba(3,6,14,.56)");
+    ctx.fillStyle = lowerShade;
+    ctx.fillRect(0, 0, width, height);
+    const drift = reduced ? 0 : time * 0.000035;
+    const glowX = width * (0.73 + 0.1 * Math.sin(drift)),
+      glowY = height * (0.52 + 0.13 * Math.cos(drift * 0.8)),
+      glowRadius = Math.max(width, height) * 0.34;
+    const redGlow = ctx.createRadialGradient(
+      glowX,
+      glowY,
+      0,
+      glowX,
+      glowY,
+      glowRadius,
+    );
+    redGlow.addColorStop(0, "rgba(170,48,232,.14)");
+    redGlow.addColorStop(0.35, "rgba(107,28,157,.07)");
+    redGlow.addColorStop(1, "rgba(107,28,157,0)");
+    ctx.fillStyle = redGlow;
+    ctx.fillRect(0, 0, width, height);
+    if (!reduced) {
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      for (const dot of orbitingDots) {
+        const angle = time * dot.speed + dot.phase,
+          x = width * (dot.cx + Math.cos(angle) * dot.rx),
+          y = height * (dot.cy + Math.sin(angle) * dot.ry);
+        const tailAngle = angle - 0.2,
+          tailX = width * (dot.cx + Math.cos(tailAngle) * dot.rx),
+          tailY = height * (dot.cy + Math.sin(tailAngle) * dot.ry);
+        const trail = ctx.createLinearGradient(tailX, tailY, x, y);
+        trail.addColorStop(0, "rgba(255,255,255,0)");
+        trail.addColorStop(1, `rgba(255,255,255,${dot.alpha * 0.32})`);
+        ctx.beginPath();
+        ctx.moveTo(tailX, tailY);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = trail;
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x, y, dot.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${dot.alpha})`;
+        ctx.shadowColor = `rgba(255,255,255,${dot.alpha * 0.7})`;
+        ctx.shadowBlur = 7;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+      ctx.restore();
+      homeCanvasFrame = requestAnimationFrame(draw);
+    }
+  }
+  homeCanvasResize = resize;
+  window.addEventListener("resize", homeCanvasResize, { passive: true });
+  if (!homeBackgroundImage.complete)
+    homeBackgroundImage.addEventListener("load", resize, { once: true });
+  resize();
+}
+let heroArtCanvasFrame = 0,
+  heroArtCanvasResize = null,
+  heroArtCanvasActive = false;
+function startHeroVisualCanvas() {
+  const canvas = $(".hero-art-canvas"),
+    visual = $(".hero-visual");
+  if (!canvas || !visual) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  heroArtCanvasActive = true;
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const games = [
+    {
+      name: "PUBG MOBILE",
+      src: "https://pbs.twimg.com/media/EZrVgJ_XkAQX9jX.jpg",
+      x: 0.18,
+      y: 0.52,
+      w: 0.32,
+      h: 0.88,
+      angle: -0.04,
+    },
+    {
+      name: "FREE FIRE",
+      src: "https://cdn.wildflamestudio.com/common/web_event/official2.ff.garena.all/202210/2d6e7a11b79218c9b29167f77a9b92eb.jpg",
+      x: 0.5,
+      y: 0.5,
+      w: 0.34,
+      h: 0.94,
+      angle: 0,
+    },
+    {
+      name: "MOBILE LEGENDS",
+      src: "https://en.moonton.com/upload/image/20260904/37ce82b6e6bcf523b232de69de356286.JPEG",
+      x: 0.82,
+      y: 0.52,
+      w: 0.32,
+      h: 0.88,
+      angle: 0.04,
+    },
+  ].map((game) => {
+    const image = new Image();
+    image.src = game.src;
+    image.onload = () => {
+      if (heroArtCanvasActive) draw(performance.now());
+    };
+    return { ...game, image };
+  });
+  const particles = Array.from({ length: 34 }, (_, i) => ({
+    p: (i * 0.61803398875) % 1,
+    y: 0.12 + ((i * 37) % 76) / 100,
+    s: 0.6 + (i % 3) * 0.4,
+    v: 0.000025 + (i % 5) * 0.000007,
+  }));
+  let width = 0,
+    height = 0,
+    dpr = 1,
+    pointerX = 0,
+    pointerY = 0,
+    lastFrame = 0;
+  function roundedRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+  }
+  function drawCard(game, time, index) {
+    const drift = reduced ? 0 : Math.sin(time * 0.00055 + index * 2.1) * 0.012;
+    const px = width * (game.x + drift) + pointerX * (index === 0 ? 5 : 8),
+      py =
+        height * (game.y + Math.cos(time * 0.00045 + index) * 0.01) +
+        pointerY * (index === 0 ? 4 : 7);
+    const w = width * game.w,
+      h = height * game.h,
+      angle =
+        game.angle + (reduced ? 0 : Math.sin(time * 0.0003 + index) * 0.009),
+      r = Math.max(9, width * 0.018);
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(angle);
+    ctx.shadowColor = "rgba(0,0,0,.58)";
+    ctx.shadowBlur = 30;
+    ctx.shadowOffsetY = 17;
+    roundedRect(-w / 2, -h / 2, w, h, r);
+    ctx.fillStyle = "#12071e";
+    ctx.fill();
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.save();
+    roundedRect(-w / 2, -h / 2, w, h, r);
+    ctx.clip();
+    const image = game.image;
+    if (image.complete && image.naturalWidth) {
+      const scale = Math.max(w / image.naturalWidth, h / image.naturalHeight),
+        iw = image.naturalWidth * scale,
+        ih = image.naturalHeight * scale;
+      ctx.drawImage(image, -iw / 2, -ih / 2, iw, ih);
+    } else {
+      const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+      g.addColorStop(0, ["#8b48bd", "#693c9e", "#aa6a38"][index]);
+      g.addColorStop(1, "#0a101d");
+      ctx.fillStyle = g;
+      ctx.fillRect(-w / 2, -h / 2, w, h);
+    }
+    const shade = ctx.createLinearGradient(0, h * 0.03, 0, h / 2);
+    shade.addColorStop(0, "rgba(12,2,24,0)");
+    shade.addColorStop(0.43, "rgba(12,2,24,.12)");
+    shade.addColorStop(1, "rgba(12,2,24,.88)");
+    ctx.fillStyle = shade;
+    ctx.fillRect(-w / 2, -h / 2, w, h);
+    const sheen = ctx.createLinearGradient(-w / 2, -h / 2, w * 0.28, h * 0.18);
+    sheen.addColorStop(0, "rgba(244,220,255,.17)");
+    sheen.addColorStop(0.3, "rgba(232,203,255,.025)");
+    sheen.addColorStop(1, "rgba(232,203,255,0)");
+    ctx.fillStyle = sheen;
+    ctx.fillRect(-w / 2, -h / 2, w, h);
+    ctx.restore();
+    roundedRect(-w / 2, -h / 2, w, h, r);
+    ctx.strokeStyle =
+      index === 0 ? "rgba(242,189,104,.72)" : "rgba(197,145,255,.42)";
+    ctx.lineWidth = index === 0 ? 1.35 : 1;
+    ctx.stroke();
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
+    ctx.font = `700 ${Math.max(8, Math.min(11, width * 0.023))}px system-ui, sans-serif`;
+    ctx.fillStyle = "rgba(242,247,255,.93)";
+    ctx.fillText(game.name, -w / 2 + 12, h / 2 - 11);
+    ctx.restore();
+  }
+  function draw(time) {
+    if (!heroArtCanvasActive) return;
+    if (!reduced && time - lastFrame < 1000 / 30) {
+      heroArtCanvasFrame = requestAnimationFrame(draw);
+      return;
+    }
+    lastFrame = time;
+    ctx.clearRect(0, 0, width, height);
+    if (!width || !height) return;
+    const reducedTime = reduced ? 0 : time;
+    const glow = ctx.createRadialGradient(
+      width * 0.59,
+      height * 0.46,
+      0,
+      width * 0.59,
+      height * 0.46,
+      width * 0.56,
+    );
+    glow.addColorStop(0, "rgba(164,62,226,.24)");
+    glow.addColorStop(0.48, "rgba(88,35,135,.12)");
+    glow.addColorStop(1, "rgba(20,5,32,0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, width, height);
+    // Fine traces give the artwork a little depth without enclosing it in a ring or frame.
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.strokeStyle = "rgba(222,168,255,.32)";
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(width * 0.04, height * 0.83);
+    ctx.lineTo(width * 0.25, height * 0.83);
+    ctx.lineTo(width * 0.32, height * 0.77);
+    ctx.moveTo(width * 0.72, height * 0.16);
+    ctx.lineTo(width * 0.91, height * 0.16);
+    ctx.lineTo(width * 0.96, height * 0.21);
+    ctx.stroke();
+    ctx.restore();
+    drawCard(games[2], reducedTime, 2);
+    drawCard(games[1], reducedTime, 1);
+    drawCard(games[0], reducedTime, 0);
+    if (!reduced) {
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      for (const mote of particles) {
+        const progress = (time * mote.v + mote.p) % 1,
+          x = width * (0.05 + progress * 0.9),
+          y = height * (mote.y + Math.sin(progress * 7 + mote.p * 13) * 0.018),
+          tail = width * 0.012;
+        ctx.beginPath();
+        ctx.moveTo(x - tail, y);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = "rgba(197,145,255,.28)";
+        ctx.lineWidth = mote.s * 0.7;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x, y, mote.s, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(242,189,104,.62)";
+        ctx.fill();
+      }
+      ctx.restore();
+      heroArtCanvasFrame = requestAnimationFrame(draw);
+    }
+  }
+  function resize() {
+    if (!heroArtCanvasActive) return;
+    const rect = visual.getBoundingClientRect();
+    width = rect.width;
+    height = rect.height;
+    if (!width || !height) return;
+    dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (heroArtCanvasFrame) cancelAnimationFrame(heroArtCanvasFrame);
+    heroArtCanvasFrame = 0;
+    draw(performance.now());
+  }
+  heroArtCanvasResize = resize;
+  window.addEventListener("resize", heroArtCanvasResize, { passive: true });
+  visual.onpointermove = (e) => {
+    const rect = visual.getBoundingClientRect();
+    pointerX = (e.clientX - rect.left) / rect.width - 0.5;
+    pointerY = (e.clientY - rect.top) / rect.height - 0.5;
+  };
+  visual.onpointerleave = () => {
+    pointerX = 0;
+    pointerY = 0;
+  };
+  resize();
+}
+async function renderHome(filters = {}) {
+  const t = (uz, ru, en) => adminText(uz, ru, en),
+    categories = [];
+  const dataReady = Promise.allSettled([
+    api("/listings?" + new URLSearchParams({ sort: "newest", ...filters })),
+    api("/categories"),
+  ]);
+  document.body.classList.add("home-page");
+  app.classList.add("home-background");
+  app.innerHTML = `<section class="listings-section home-storefront" id="browse"><div class="market-shell">
  ${marketSidebarMarkup(filters)}
  <div class="market-main home-market-main">
   <section class="home-intro" aria-labelledby="home-title">
-   ${['home-intro-premium-8255d9609b33a3c1dc41.png','topup-hero.jpg','market-banner-worlds.webp'].map((name,index)=>`<img class="home-intro-image ${index===0?'active':''}" ${index===0?'src':'data-src'}="https://images.gamestorehub.com/site-assets/${name}" alt="" ${index===0?'fetchpriority="high"':'loading="lazy"'} width="1400" height="600">`).join('')}
+   ${["home-intro-premium-8255d9609b33a3c1dc41.png", "topup-hero.jpg", "market-banner-worlds.webp"].map((name, index) => `<img class="home-intro-image ${index === 0 ? "active" : ""}" ${index === 0 ? "src" : "data-src"}="https://images.gamestorehub.com/site-assets/${name}" alt="" ${index === 0 ? 'fetchpriority="high"' : 'loading="lazy"'} width="1400" height="600">`).join("")}
    <div class="home-intro-copy"><span class="home-kicker">SENTRYLOOT MARKETPLACE</span>
-    <h1 id="home-title"><span class="home-desktop-title">${t('O‘yiningiz.<br><span class="premium-title-accent">Siz izlagan mahsulot.</span>','Ваша игра.<br><span class="premium-title-accent">Ваши находки.</span>','Your game.<br><span class="premium-title-accent">Your next find.</span>')}</span><span class="home-phone-title">${t('O‘yiningizni yangi bosqichga olib chiqing.','Ваша игра на новом уровне.','Your next<br><span class="premium-title-accent">game upgrade.</span>')}</span></h1>
-    <p><span class="home-desktop-title">${t('Akkauntlar, skinlar va o‘yin xizmatlarini bir joyda toping.','Находите аккаунты, скины и игровые услуги в одном месте.','Discover accounts, skins, and game services in one place.')}</span><span class="home-phone-title">${t('Kerakli akkaunt yoki buyumni toping.','Найдите нужный аккаунт или предмет.','Find your next account or item.')}</span></p>
-    <div class="home-intro-actions"><a class="home-intro-link" href="/browse">${t('Bozorga o‘tish','Открыть маркет','Explore marketplace')} ${icon('arrow-up-right')}</a><a class="home-intro-secondary" href="/guide">${t('Xarid qanday ishlaydi','Как это работает','How it works')} <span aria-hidden="true">→</span></a></div>
+    <h1 id="home-title"><span class="home-desktop-title">${t('O‘yiningiz.<br><span class="premium-title-accent">Siz izlagan mahsulot.</span>', 'Ваша игра.<br><span class="premium-title-accent">Ваши находки.</span>', 'Your game.<br><span class="premium-title-accent">Your next find.</span>')}</span><span class="home-phone-title">${t("O‘yiningizni yangi bosqichga olib chiqing.", "Ваша игра на новом уровне.", 'Your next<br><span class="premium-title-accent">game upgrade.</span>')}</span></h1>
+    <p><span class="home-desktop-title">${t("Akkauntlar, skinlar va o‘yin xizmatlarini bir joyda toping.", "Находите аккаунты, скины и игровые услуги в одном месте.", "Discover accounts, skins, and game services in one place.")}</span><span class="home-phone-title">${t("Kerakli akkaunt yoki buyumni toping.", "Найдите нужный аккаунт или предмет.", "Find your next account or item.")}</span></p>
+    <div class="home-intro-actions"><a class="home-intro-link" href="/browse">${t("Bozorga o‘tish", "Открыть маркет", "Explore marketplace")} ${icon("arrow-up-right")}</a><a class="home-intro-secondary" href="/guide">${t("Xarid qanday ishlaydi", "Как это работает", "How it works")} <span aria-hidden="true">→</span></a></div>
    </div>
-   <div class="home-banner-controls"><div class="market-banner-dots">${[0,1,2].map(index=>`<button type="button" data-market-slide="${index}" aria-label="${t(`${index+1}-rasm`,`Изображение ${index+1}`,`Image ${index+1}`)}" aria-current="${index===0?'true':'false'}"></button>`).join('')}</div></div>
+   <div class="home-banner-controls"><div class="market-banner-dots">${[0, 1, 2].map((index) => `<button type="button" data-market-slide="${index}" aria-label="${t(`${index + 1}-rasm`, `Изображение ${index + 1}`, `Image ${index + 1}`)}" aria-current="${index === 0 ? "true" : "false"}"></button>`).join("")}</div></div>
   </section>
   <div data-home-status></div>
 
   <dialog class="sw-popup" data-home-spin aria-labelledby="home-spin-title"></dialog>
   ${homeGameCarouselMarkup()}
-  <section class="home-topups" aria-labelledby="home-topups-title"><div class="home-section-heading"><div><h2 id="home-topups-title">Top up</h2><p>${t('O‘yin valutalari, sovg‘a kartalari va boshqalar.','Игровая валюта, подарочные карты и многое другое.','Game currency, gift cards and more.')}</p></div><a href="/top-up">${t('Barcha top-uplar','Все пополнения','View all top ups')} →</a></div><div data-home-topups aria-busy="true"><div class="loading" role="status"><span class="spinner"></span>${t('Top-uplar yuklanmoqda…','Загрузка пополнений…','Loading top ups…')}</div></div></section>
-  <section class="home-catalog" aria-labelledby="home-listings-title"><div class="home-section-heading"><div><h2 id="home-listings-title">${filters.q?t('Qidiruv natijalari','Результаты поиска','Search results'):t('Yangi e’lonlar','Новые объявления','Latest listings')}</h2><p>${t('Narx, yetkazish muddati va sotuvchini solishtiring.','Сравните цену, сроки доставки и продавца.','Compare prices, delivery times, and sellers.')}</p></div>  <form id="hero-search-form" class="hero-search home-search" role="search">
-   <label class="sr-only" for="hero-search-input">${t('E’lonlarni qidirish','Поиск объявлений','Search listings')}</label>
-   <input id="hero-search-input" name="q" type="search" value="${esc(filters.q||'')}" placeholder="${t('O‘yin yoki mahsulot qidiring…','Найдите игру или товар…','Search a game or item…')}">
-   <label class="sr-only" for="home-category">${t('Kategoriya','Категория','Category')}</label>
-   <select id="home-category" name="category"><option value="">${t('Barcha kategoriyalar','Все категории','All categories')}</option>${categories.map(c=>`<option value="${esc(c.slug)}" ${filters.category===c.slug?'selected':''}>${esc(categoryLabel(c.name))}</option>`).join('')}</select>
-   <button type="submit" aria-label="${t('Qidirish','Поиск','Search')}">${icon('search')}</button>
-  </form><a href="/browse">${t('Barchasini ko‘rish','Смотреть все','View all listings')} →</a></div>
-   <div data-home-listings aria-busy="true"><div class="loading" role="status"><span class="spinner"></span>${t('E’lonlar yuklanmoqda…','Загрузка объявлений…','Loading listings…')}</div></div>
+  <section class="home-topups" aria-labelledby="home-topups-title"><div class="home-section-heading"><div><h2 id="home-topups-title">Top up</h2><p>${t("O‘yin valutalari, sovg‘a kartalari va boshqalar.", "Игровая валюта, подарочные карты и многое другое.", "Game currency, gift cards and more.")}</p></div><a href="/top-up">${t("Barcha top-uplar", "Все пополнения", "View all top ups")} →</a></div><div data-home-topups aria-busy="true"><div class="loading" role="status"><span class="spinner"></span>${t("Top-uplar yuklanmoqda…", "Загрузка пополнений…", "Loading top ups…")}</div></div></section>
+  <section class="home-catalog" aria-labelledby="home-listings-title"><div class="home-section-heading"><div><h2 id="home-listings-title">${filters.q ? t("Qidiruv natijalari", "Результаты поиска", "Search results") : t("Yangi e’lonlar", "Новые объявления", "Latest listings")}</h2><p>${t("Narx, yetkazish muddati va sotuvchini solishtiring.", "Сравните цену, сроки доставки и продавца.", "Compare prices, delivery times, and sellers.")}</p></div>  <form id="hero-search-form" class="hero-search home-search" role="search">
+   <label class="sr-only" for="hero-search-input">${t("E’lonlarni qidirish", "Поиск объявлений", "Search listings")}</label>
+   <input id="hero-search-input" name="q" type="search" value="${esc(filters.q || "")}" placeholder="${t("O‘yin yoki mahsulot qidiring…", "Найдите игру или товар…", "Search a game or item…")}">
+   <label class="sr-only" for="home-category">${t("Kategoriya", "Категория", "Category")}</label>
+   <select id="home-category" name="category"><option value="">${t("Barcha kategoriyalar", "Все категории", "All categories")}</option>${categories.map((c) => `<option value="${esc(c.slug)}" ${filters.category === c.slug ? "selected" : ""}>${esc(categoryLabel(c.name))}</option>`).join("")}</select>
+   <button type="submit" aria-label="${t("Qidirish", "Поиск", "Search")}">${icon("search")}</button>
+  </form><a href="/browse">${t("Barchasini ko‘rish", "Смотреть все", "View all listings")} →</a></div>
+   <div data-home-listings aria-busy="true"><div class="loading" role="status"><span class="spinner"></span>${t("E’lonlar yuklanmoqda…", "Загрузка объявлений…", "Loading listings…")}</div></div>
   </section>
   <section data-home-reviews></section>
-  <section class="home-guide" aria-labelledby="home-guide-title"><div><span class="home-kicker">${t('BIRINCHI XARIDINGIZMI?','ПЕРВАЯ ПОКУПКА?','FIRST TIME HERE?')}</span><h2 id="home-guide-title">${t('Boshlash oson','Начать просто','Getting started is easy')}</h2><a href="/guide">${t('Qo‘llanmani o‘qish','Читать руководство','Read the guide')} →</a></div><ol>${[
-   [t('Mahsulotni toping','Найдите товар','Find your item'),t('O‘yin va xususiyatlarni tanlang.','Выберите игру и характеристики.','Choose your game and requirements.')],
-   [t('Sotuvchini tekshiring','Проверьте продавца','Check the seller'),t('Sharhlarni o‘qing, savolingizni yozing.','Прочитайте отзывы и задайте вопросы.','Read reviews and ask your questions.')],
-   [t('Buyurtmani kuzating','Следите за заказом','Follow your order'),t('Yetkazish va keyingi qadamlar bir joyda.','Доставка и следующие шаги в одном месте.','Delivery and next steps, all in one place.')]
-  ].map(([title,copy],i)=>`<li><span>${String(i+1).padStart(2,'0')}</span><div><h3>${title}</h3><p>${copy}</p></div></li>`).join('')}</ol></section>
+  <section class="home-guide" aria-labelledby="home-guide-title"><div><span class="home-kicker">${t("BIRINCHI XARIDINGIZMI?", "ПЕРВАЯ ПОКУПКА?", "FIRST TIME HERE?")}</span><h2 id="home-guide-title">${t("Boshlash oson", "Начать просто", "Getting started is easy")}</h2><a href="/guide">${t("Qo‘llanmani o‘qish", "Читать руководство", "Read the guide")} →</a></div><ol>${[
+    [
+      t("Mahsulotni toping", "Найдите товар", "Find your item"),
+      t(
+        "O‘yin va xususiyatlarni tanlang.",
+        "Выберите игру и характеристики.",
+        "Choose your game and requirements.",
+      ),
+    ],
+    [
+      t("Sotuvchini tekshiring", "Проверьте продавца", "Check the seller"),
+      t(
+        "Sharhlarni o‘qing, savolingizni yozing.",
+        "Прочитайте отзывы и задайте вопросы.",
+        "Read reviews and ask your questions.",
+      ),
+    ],
+    [
+      t("Buyurtmani kuzating", "Следите за заказом", "Follow your order"),
+      t(
+        "Yetkazish va keyingi qadamlar bir joyda.",
+        "Доставка и следующие шаги в одном месте.",
+        "Delivery and next steps, all in one place.",
+      ),
+    ],
+  ]
+    .map(
+      ([title, copy], i) =>
+        `<li><span>${String(i + 1).padStart(2, "0")}</span><div><h3>${title}</h3><p>${copy}</p></div></li>`,
+    )
+    .join("")}</ol></section>
  </div></div></section>`;
- window.MobileSite?.sync('home');
- const search=$('#hero-search-form');search.onsubmit=event=>{event.preventDefault();openBrowse(Object.fromEntries(new FormData(search)))};
- const root=$('.home-storefront',app),slot=$('[data-home-listings]',root);
- setupMarketBanner();window.StorefrontShowcase?.mount(app);
- loadHomeTopups(root.querySelector('[data-home-topups]'));
- window.ReviewHub?.home(root.querySelector('[data-home-reviews]'));
- const mountSpin = () => {
-  if(root.isConnected) window.SpinWin?.home(root.querySelector('[data-home-spin]'));
- };
- if(bootstrapSessionReady) bootstrapSessionReady.then(mountSpin); else mountSpin();
- const [listingResult,categoryResult]=await dataReady;
- if(!root.isConnected)return;
- // Public catalogue content need not wait for the profile request.
- // Personal navigation is refreshed only after that session is known.
- const syncSidebar=()=>{if(!root.isConnected)return;const sidebar=$('#market-sidebar',root);if(sidebar){const holder=document.createElement('div');holder.innerHTML=marketSidebarMarkup(filters);sidebar.replaceWith(holder.firstElementChild)}};
- if(bootstrapSessionReady)bootstrapSessionReady.then(syncSidebar).catch(()=>{});else syncSidebar();
- const category=$('#home-category',root);
- if(categoryResult.status==='fulfilled')category.insertAdjacentHTML('beforeend',categoryResult.value.map(c=>`<option value="${esc(c.slug)}" ${filters.category===c.slug?'selected':''}>${esc(categoryLabel(c.name))}</option>`).join(''));
- const items=listingResult.status==='fulfilled'?(listingResult.value.items||[]):[];
- slot.setAttribute('aria-busy','false');
- if(listingResult.status==='fulfilled')slot.innerHTML=items.length?`<div class="product-grid home-listing-grid">${items.slice(0,8).map(marketCard).join('')}</div>`:`<div class="empty home-empty"><span>${icon('box')}</span><h3>${t('Yangi e’lonlar tez orada','Новые предложения скоро появятся','New listings are on the way')}</h3><p>${t('Tasdiqlangan mahsulotlar shu yerda paydo bo‘ladi.','Одобренные товары появятся здесь.','Approved products will appear here.')}</p><a class="text-link" href="/browse">${t('Bozorni ko‘rish','Открыть маркет','Browse marketplace')} →</a></div>`;
- else{slot.innerHTML=`<div class="notice error" role="alert">${esc(t('E’lonlarni yuklab bo‘lmadi.','Не удалось загрузить объявления.','Could not load listings.'))} <button class="button-secondary" type="button" data-home-retry>${t('Qayta urinish','Повторить','Try again')}</button></div>`;slot.querySelector('[data-home-retry]').onclick=()=>navigate()}
- MarketUX.home();
+  window.MobileSite?.sync("home");
+  const search = $("#hero-search-form");
+  search.onsubmit = (event) => {
+    event.preventDefault();
+    openBrowse(Object.fromEntries(new FormData(search)));
+  };
+  const root = $(".home-storefront", app),
+    slot = $("[data-home-listings]", root);
+  setupMarketBanner();
+  window.StorefrontShowcase?.mount(app);
+  loadHomeTopups(root.querySelector("[data-home-topups]"));
+  window.ReviewHub?.home(root.querySelector("[data-home-reviews]"));
+  const mountSpin = () => {
+    if (root.isConnected)
+      window.SpinWin?.home(root.querySelector("[data-home-spin]"));
+  };
+  if (bootstrapSessionReady) bootstrapSessionReady.then(mountSpin);
+  else mountSpin();
+  const [listingResult, categoryResult] = await dataReady;
+  if (!root.isConnected) return;
+  // Public catalogue content need not wait for the profile request.
+  // Personal navigation is refreshed only after that session is known.
+  const syncSidebar = () => {
+    if (!root.isConnected) return;
+    const sidebar = $("#market-sidebar", root);
+    if (sidebar) {
+      const holder = document.createElement("div");
+      holder.innerHTML = marketSidebarMarkup(filters);
+      sidebar.replaceWith(holder.firstElementChild);
+    }
+  };
+  if (bootstrapSessionReady)
+    bootstrapSessionReady.then(syncSidebar).catch(() => {});
+  else syncSidebar();
+  const category = $("#home-category", root);
+  if (categoryResult.status === "fulfilled")
+    category.insertAdjacentHTML(
+      "beforeend",
+      categoryResult.value
+        .map(
+          (c) =>
+            `<option value="${esc(c.slug)}" ${filters.category === c.slug ? "selected" : ""}>${esc(categoryLabel(c.name))}</option>`,
+        )
+        .join(""),
+    );
+  const items =
+    listingResult.status === "fulfilled" ? listingResult.value.items || [] : [];
+  slot.setAttribute("aria-busy", "false");
+  if (listingResult.status === "fulfilled")
+    slot.innerHTML = items.length
+      ? `<div class="product-grid home-listing-grid">${items.slice(0, 8).map(marketCard).join("")}</div>`
+      : `<div class="empty home-empty"><span>${icon("box")}</span><h3>${t("Yangi e’lonlar tez orada", "Новые предложения скоро появятся", "New listings are on the way")}</h3><p>${t("Tasdiqlangan mahsulotlar shu yerda paydo bo‘ladi.", "Одобренные товары появятся здесь.", "Approved products will appear here.")}</p><a class="text-link" href="/browse">${t("Bozorni ko‘rish", "Открыть маркет", "Browse marketplace")} →</a></div>`;
+  else {
+    slot.innerHTML = `<div class="notice error" role="alert">${esc(t("E’lonlarni yuklab bo‘lmadi.", "Не удалось загрузить объявления.", "Could not load listings."))} <button class="button-secondary" type="button" data-home-retry>${t("Qayta urinish", "Повторить", "Try again")}</button></div>`;
+    slot.querySelector("[data-home-retry]").onclick = () => navigate();
+  }
+  MarketUX.home();
 }
-async function renderComparison(){return ExperienceUX.comparison()}
-async function renderListing(id){const it=await api('/listings/'+encodeURIComponent(id));updateRouteMetadata('listing/'+encodeURIComponent(id));const title=`${it.title} | ${it.game_name} | SentryLoot`;const description=String(it.description||`${it.game_name} ${it.product_type}`).replace(/\s+/g,' ').slice(0,260);document.title=title;const desc=$('meta[name="description"]');if(desc)desc.content=description;for(const [selector,value] of [['meta[property="og:title"]',title],['meta[property="og:description"]',description],['meta[property="og:url"]',location.href],['meta[property="og:image"]',it.image_url||'https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark.png']]){const el=$(selector);if(el)el.content=value}
- app.innerHTML=ListingDetail.markup(it);
- setupListingDetailGallery(app,it);setupListingDescription(app);ListingDetail.setup(app);
- MarketUX.listing(it);TradeUX.listing(it);await ExperienceUX.listing(it);await window.RegionPreferences?.loadRates();window.RegionPreferences?.refreshPrices();
+async function renderComparison() {
+  return ExperienceUX.comparison();
 }
-
-function setupAuthCountryPicker(){const select=$('#auth-country');if(select)window.SelectMenus.enhance(select)}
-
-async function renderContactDetails(){
- if(!me?.phone_verification_enabled){location.hash='home';return}
- if(!me){location.hash='login';return}
- const T=adminText,countries=await api('/phone/countries'),names=new Intl.DisplayNames([locale],{type:'region'});let pending='',channel='sms',retryAt=0,busy=false,editingPhone=false,phoneCountry=countries.some(c=>c.country===me.country)?me.country:'US';countries.sort((a,b)=>names.of(a.country).localeCompare(names.of(b.country),locale));
- try{const status=await api('/phone/status');pending=status.pending_phone;channel=status.channel;retryAt=Date.now()+status.retry_after*1000}catch(error){toast(error.message,'error')}
- const next=()=>{location.hash=sessionStorage.getItem('phone-verification-return')==='seller'?'seller':'home';sessionStorage.removeItem('phone-verification-return')};
- function render(){
-  app.innerHTML=`<section class="page phone-verification-page"><div class="phone-verification-card"><a class="phone-brand" href="#home">Sentry<span>Loot</span></a><div class="phone-step">${T('HISOBNI SOZLASH','НАСТРОЙКА АККАУНТА','ACCOUNT SETUP')} <span>${pending?'2 / 2':'1 / 2'}</span></div><h1>${pending?T('Kodni kiriting','Введите код','Enter your code'):T('Telefon raqamingizni tasdiqlang','Подтвердите номер телефона','Verify your phone number')}</h1><p class="phone-intro">${pending?T(`${pending} raqamiga kod so‘raldi.`, `Код запрошен для ${pending}.`, `A code was requested for ${pending}.`):T('Hisobingiz uchun ishlaydigan telefon raqamini kiriting.','Укажите действующий номер для вашего аккаунта.','Enter a phone number you can use for your account.')}</p>
-  <div class="phone-account-email">${icon('check')}<span>${esc(me.email)}</span><small>${me.email_verified?T('Tasdiqlangan','Подтверждён','Verified'):T('Emailni tasdiqlang','Подтвердите почту','Verify your email')}</small></div>
-  ${!me.email_verified?`<p class="notice warn">${T('Avval emailingizga yuborilgan havolani oching.','Сначала откройте ссылку из письма.','First open the verification link sent to your email.')}</p>`:me.phone_verified&&!pending&&!editingPhone?`<div class="phone-confirmed">${icon('check')}<b>${esc(me.phone)}</b><p>${T('Telefon raqami tasdiqlangan.','Номер подтверждён.','Your phone number is verified.')}</p></div><button class="button-primary" id="phone-done">${T('Davom etish','Продолжить','Continue')}</button><button class="text-link" id="phone-change">${T('Raqamni almashtirish','Изменить номер','Change number')}</button>`:
-  `<form id="phone-form" novalidate>${pending?`<div class="field"><label for="phone-code">${T('Tasdiqlash kodi','Код подтверждения','Verification code')}</label><input id="phone-code" class="phone-code-input" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,8}" minlength="4" maxlength="8" required aria-describedby="phone-error"><small>${T('Kod 5 daqiqa amal qiladi.','Код действует 5 минут.','Your code is valid for 5 minutes.')}</small></div>`:
-  `<div class="field"><label for="phone-country">${T('Mamlakat yoki hudud','Страна или регион','Country or region')}</label><select id="phone-country" name="country" required>${countries.map(c=>`<option value="${esc(c.country)}" ${c.country===phoneCountry?'selected':''}>${esc(names.of(c.country))} (${esc(c.dial_code)})</option>`).join('')}</select></div><div class="field"><label for="phone-number">${T('Telefon raqami','Номер телефона','Phone number')}</label><div class="phone-national-control"><span id="phone-prefix">${esc(countries.find(c=>c.country===phoneCountry).dial_code)}</span><input id="phone-number" name="phone" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="${T('Telefon raqami','Номер телефона','Phone number')}" maxlength="20" required aria-describedby="phone-error phone-country-hint"></div><small id="phone-country-hint">${T('Tanlangan mamlakatga tegishli raqamni kiriting.','Введите номер выбранной страны.','Enter a phone number for the selected country.')}</small></div><fieldset class="phone-channels"><legend>${T('Kodni qayerga yuboramiz?','Куда отправить код?','Where should we send the code?')}</legend><label><input type="radio" name="channel" value="sms" ${channel==='sms'?'checked':''}><span>SMS</span></label><label><input type="radio" name="channel" value="whatsapp" ${channel==='whatsapp'?'checked':''}><span>WhatsApp</span></label></fieldset>`}
-  <p class="phone-error" id="phone-error" role="alert" hidden></p><button type="submit" class="button-primary">${pending?T('Tasdiqlash va davom etish','Подтвердить и продолжить','Verify and continue'):T('Kod yuborish','Отправить код','Send code')}</button></form>
-  ${pending?`<div class="phone-code-actions"><button type="button" id="phone-edit">${T('Boshqa raqam','Другой номер','Use another number')}</button><button type="button" id="phone-resend">${T('Qayta yuborish','Отправить снова','Resend code')}</button></div>`:''}
-  <p class="phone-privacy">${T('Raqamingiz ommaga ko‘rsatilmaydi. WhatsApp ishlamasa, kod SMS orqali kelishi mumkin.','Номер не виден публично. Если WhatsApp недоступен, код может прийти по SMS.','Your number stays private. If WhatsApp is unavailable, your code may arrive by SMS.')}</p>`}</div></section>`;
-  const error=message=>{const el=$('#phone-error');if(el){el.textContent=message;el.hidden=false}};
-  async function send(phone,method,country){const result=await api('/phone/send',{method:'POST',body:JSON.stringify({phone,channel:method,...(country?{country}:{})})});pending=result.phone;channel=result.channel;retryAt=Date.now()+result.retry_after*1000;render();$('#phone-code')?.focus()}
-  const countrySelect=$('#phone-country');if(countrySelect)countrySelect.onchange=()=>{phoneCountry=countrySelect.value;$('#phone-prefix').textContent=countries.find(c=>c.country===phoneCountry).dial_code;$('#phone-number').value='';$('#phone-number').focus()};
-  const form=$('#phone-form');if(form)form.onsubmit=async event=>{event.preventDefault();if(busy)return;if(!form.reportValidity())return;busy=true;const button=form.querySelector('[type=submit]');button.disabled=true;$('#phone-error').hidden=true;try{const data=Object.fromEntries(new FormData(form));if(pending){const result=await api('/phone/check',{method:'POST',body:JSON.stringify({code:data.code})});me=result.user;toast(T('Telefon tasdiqlandi','Телефон подтверждён','Phone verified'));next()}else await send(data.phone,data.channel,data.country)}catch(e){error(e.message)}finally{busy=false;button.disabled=false}};
-  const resend=$('#phone-resend');if(resend){const label=T('Qayta yuborish','Отправить снова','Resend code');const tick=()=>{const seconds=Math.max(0,Math.ceil((retryAt-Date.now())/1000));resend.disabled=seconds>0||busy;resend.textContent=seconds?`${label} · ${seconds}s`:label};tick();const interval=setInterval(()=>{if(!resend.isConnected){clearInterval(interval);return}tick()},1000);resend.onclick=async()=>{if(busy)return;busy=true;resend.disabled=true;try{await send(pending,channel)}catch(e){error(e.message)}finally{busy=false;tick()}}}
-  const edit=$('#phone-edit');if(edit)edit.onclick=()=>{if(busy)return;pending='';render();$('#phone-number')?.focus()};
-  const done=$('#phone-done');if(done)done.onclick=next;
-  const change=$('#phone-change');if(change)change.onclick=()=>{editingPhone=true;render();$('#phone-number')?.focus()};
- }
- render();
-}
-async function renderAuth(route){
- await loadAsiaMarkets();
- const register=route==='register';
- const providers=await api('/oauth/providers').catch(()=>({google:false,facebook:false}));
- const providersHtml=providers.google||providers.facebook?`<div class="auth-provider-list">${providers.google?'<button class="auth-provider-button auth-provider-google" data-action="oauth-google"><span class="google-mark" aria-hidden="true">G</span><span>Google bilan davom etish</span><span class="auth-provider-arrow" aria-hidden="true">↗</span></button>':''}${providers.facebook?'<button class="auth-provider-button auth-provider-facebook" data-action="oauth-facebook"><span class="facebook-mark" aria-hidden="true">f</span><span>Facebook bilan davom etish</span><span class="auth-provider-arrow" aria-hidden="true">↗</span></button>':''}</div>`:'';
- const termsHtml=(register||providers.google||providers.facebook)?`<label class="auth-oauth-terms"><input id="auth-terms" type="checkbox" ${register?'required':''}><span>${adminText('Men','Я принимаю','I agree to the')} <a class="text-link" href="/terms">${adminText('Foydalanish shartlari','Условия использования','Terms of Service')}</a> ${adminText('va','и','and')} <a class="text-link" href="/privacy-policy">${adminText('Maxfiylik siyosati','Политику конфиденциальности','Privacy Policy')}</a>${adminText('ga roziman.','.','.')}</span></label>`:'';
- app.innerHTML=`<section class="page auth-page ${register?'is-register':'is-login'}"><div class="auth-shell"><aside class="auth-showcase"><div class="auth-showcase-brand"><span class="brand-mark"><img src="https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-256.webp?v=1" alt=""></span><span>Sentry<span>Loot</span></span></div><div class="auth-showcase-art" aria-hidden="true"><div class="auth-orbit auth-orbit-one"></div><div class="auth-orbit auth-orbit-two"></div><div class="auth-art-core"><img src="https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-256.webp?v=1" alt="" width="140" height="140"></div><span class="auth-spark auth-spark-one"></span><span class="auth-spark auth-spark-two"></span><span class="auth-spark auth-spark-three"></span></div><div class="auth-showcase-copy"><span class="auth-kicker"><span></span>SENTRYLOOT ACCOUNT</span><h2>O‘yin olamingizga<br>ishonch bilan kiring.</h2><p>Hisobingiz, e’lonlaringiz va xabarlaringiz bir joyda — xavfsiz va tartibli.</p></div><div class="auth-showcase-foot"><span>${icon('shield')} ${adminText('Himoyalangan kirish','Защищённый вход','Secure sign-in')}</span><span>01 / 03</span></div></aside><div class="form-card auth-card"><div class="auth-heading"><div class="auth-mobile-brand"><span class="brand-mark"><img src="https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-256.webp?v=1" alt=""></span> Sentry<span>Loot</span></div><span class="auth-eyebrow">SentryLoot hisob</span><h1 class="page-title">${register?'Ro‘yxatdan o‘tish':'Hisobingizga kiring'}</h1><p class="auth-subtitle">${register?'Yangi akkaunt yarating va SentryLoot olamiga qo‘shiling.':'Davom etish uchun akkauntingizga kiring.'}</p></div><div id="auth-message"></div>${providersHtml?`<div class="auth-social-section">${termsHtml}${providersHtml}</div><div class="auth-divider"><span>yoki email orqali</span></div>`:''}<form id="auth-form">${register?`<div class="field auth-country-field"><label for="auth-country">${adminText('Mamlakat yoki hudud','Страна или регион','Country or region')}</label><select id="auth-country" required>${countryOptions(window.RegionPreferences?.state.country||'US')}</select><small class="field-hint">${adminText('Mamlakatga mos ko‘rsatish valyutasi tanlanadi.','Для страны будет выбрана валюта отображения.','A display currency will be selected for your country.')}</small></div>`:''}${register?'<div class="field"><label>Ismingiz</label><input name="name" autocomplete="name" minlength="2" maxlength="80" required></div>':''}<div class="field"><label>Email</label><input name="email" type="email" autocomplete="email" placeholder="name@example.com" required></div><div class="field"><div class="auth-label-row"><label for="auth-password">Parol</label>${!register?'<a class="text-link" href="#password-reset">Parolni tiklash</a>':''}</div><div class="auth-password-control"><input id="auth-password" name="password" type="password" autocomplete="${register?'new-password':'current-password'}" placeholder="${register?'Kamida 10 belgi':'Parolingizni kiriting'}" ${register?'minlength="10"':''} required><button id="auth-password-toggle" class="password-visibility-toggle" type="button" aria-label="${adminText('Parolni ko‘rsatish','Показать пароль','Show password')}" aria-controls="auth-password" aria-pressed="false">${icon('eye')}</button></div><p id="auth-password-error" class="auth-password-error" role="alert" hidden></p>${!register&&providers.google?`<small class="field-hint auth-password-hint">${adminText('Google bilan kirgan bo‘lsangiz, Google tugmasidan foydalaning yoki sayt parolini tiklang. Gmail parolingiz SentryLoot parolidan alohida.','Если вы входили через Google, используйте кнопку Google или восстановите пароль сайта. Пароль Gmail отличается от пароля SentryLoot.','If you signed in with Google, use the Google button or reset your site password. Your Gmail password is separate.')}</small>`:''}</div>${register&&!providersHtml?`<div class="auth-registration-terms">${termsHtml}<span class="help">${adminText('Shartlar loyiha holatida, ishga tushirishdan oldin yuridik ko‘rib chiqish talab etiladi.','Условия пока в проекте и требуют юридической проверки до запуска.','These draft terms require legal review before launch.')}</span></div>`:''}<button type="submit" class="button-primary auth-submit">${register?'Hisob yaratish':'Kirish'}<span aria-hidden="true">→</span></button></form>${!register&&!providersHtml?termsHtml:''}<p class="auth-switch">${register?adminText('Hisobingiz bormi?','Уже есть аккаунт?','Already have an account?'):adminText('Yangi foydalanuvchimisiz?','Впервые здесь?','New here?')} <a class="text-link" href="${register?'#login':'#register'}">${register?'Kirish':'Hisob yaratish'}</a></p></div></div></section>`;
- setupAuthCountryPicker();
- const oauthError=new URLSearchParams(location.search).get('oauth_error');const oauthMessages={account_exists:'Bu email bilan SentryLoot hisobingiz bor. Avval avvalgi kirish usulingiz bilan kiring, so‘ng profil menyusidan Facebook’ni ulang.',link_signin_required:'Facebook’ni ulash uchun avval SentryLoot hisobingizga kiring va emailingizni tasdiqlang.',facebook_in_use:'Bu Facebook hisobi boshqa SentryLoot hisobiga ulangan.',facebook_already_linked:'Bu SentryLoot hisobiga boshqa Facebook hisobi allaqachon ulangan.'};if(oauthMessages[oauthError])$('#auth-message').innerHTML=`<div class="notice error">${oauthMessages[oauthError]}</div>`;
- const passwordInput=$('#auth-password'),passwordToggle=$('#auth-password-toggle');passwordToggle?.addEventListener('click',()=>{const show=passwordInput.type==='password';passwordInput.type=show?'text':'password';passwordToggle.setAttribute('aria-pressed',String(show));passwordToggle.setAttribute('aria-label',adminText(show?'Parolni yashirish':'Parolni ko‘rsatish',show?'Скрыть пароль':'Показать пароль',show?'Hide password':'Show password'));passwordToggle.innerHTML=icon(show?'eye-off':'eye')});
- const authShell=$('.auth-shell'),authTitle=$('.auth-heading .page-title');
- authShell?.setAttribute('role','region');
- if(authTitle){authTitle.id='auth-title';authShell?.setAttribute('aria-labelledby','auth-title')}
- const closeLink=document.createElement('a');closeLink.className='auth-close';closeLink.href='#home';closeLink.setAttribute('aria-label',adminText('Yopish','Закрыть','Close'));closeLink.textContent='×';authShell?.prepend(closeLink);
- closeLink.addEventListener('click',e=>{e.preventDefault();const page=$('.auth-page');if(!page||page.classList.contains('is-closing'))return;page.classList.add('is-closing');if(matchMedia('(prefers-reduced-motion: reduce)').matches){location.hash='home';return}window.setTimeout(()=>{location.hash='home'},460)});
- const authArtwork=$('.auth-showcase-art');if(authArtwork)authArtwork.innerHTML=`<div class="auth-orbit auth-orbit-one"></div><div class="auth-orbit auth-orbit-two"></div><img class="auth-game-character" src="https://images.gamestorehub.com/site-assets/auth-game-characters.png" width="1254" height="1254" alt=""><span class="auth-spark auth-spark-one"></span><span class="auth-spark auth-spark-two"></span><span class="auth-spark auth-spark-three"></span>`;
- $('#auth-form').onsubmit=async e=>{
-  e.preventDefault();const authForm=e.currentTarget;if(authForm.dataset.submitting)return;$('#auth-message').replaceChildren();const passwordError=$('#auth-password-error');passwordError.hidden=true;passwordError.textContent='';passwordInput.removeAttribute('aria-invalid');passwordInput.removeAttribute('aria-describedby');const d=Object.fromEntries(new FormData(authForm));if(register){d.country=$('#auth-country')?.value||window.RegionPreferences?.state.country||'US';d.accept_terms=$('#auth-terms')?.checked===true;if(!d.accept_terms){toast('Davom etish uchun foydalanish shartlarini qabul qiling.','error');return}}
-  authForm.dataset.submitting='true';const submitButton=authForm.querySelector('button[type=submit]');submitButton.disabled=true;
-  try{
-   if(register){d.language=locale;const x=await api('/register',{method:'POST',body:JSON.stringify(d)});if(window.MobileSite?.isMobile())window.MobileSite.registrationSubmitted(d.email,x);else $('#auth-message').innerHTML=`<div class="notice auth-feedback">${esc(x.message)}${x.verification_token?`<div class="field" style="margin-top:12px"><label>Development tasdiqlash tokeni</label><input id="verify-token" value="${esc(x.verification_token)}" readonly><button type="button" class="button-secondary" data-action="verify">Emailni tasdiqlash</button></div>`:''}<button type="button" class="button-secondary" style="margin-top:12px" data-action="resend-verification" data-email="${esc(d.email)}">Yangi tasdiqlash havolasini yuborish</button></div>`;}
-   else{const x=await api('/login',{method:'POST',body:JSON.stringify(d)});if(x.mfa_required){if(!authForm.querySelector('[name=otp]')){const label=document.createElement('label');label.className='field';label.innerHTML=`<span>${adminText('Authenticator yoki tiklash kodi','Код Authenticator или восстановления','Authenticator or recovery code')}</span><input name="otp" autocomplete="one-time-code" maxlength="50" required>`;authForm.querySelector('button[type=submit]')?.before(label);label.querySelector('input').focus()}return}me=x.user;csrf=x.csrf;location.hash='home';await bootstrap();}
-  }catch(err){if(!register&&err.status===401){passwordError.textContent=authForm.querySelector('[name=otp]')?err.message:adminText('Email yoki parol noto‘g‘ri.','Неверный email или пароль.','Email or password is incorrect.');passwordError.hidden=false;passwordInput.setAttribute('aria-invalid','true');passwordInput.setAttribute('aria-describedby','auth-password-error')}else{const address=$('input[name=email]',authForm).value;const resend=err.message.includes('Email tasdiqlanmagan')?`<button type="button" class="button-secondary" style="margin-top:12px" data-action="resend-verification" data-email="${esc(address)}">Yangi tasdiqlash havolasini yuborish</button>`:'';$('#auth-message').innerHTML=`<div class="notice error">${esc(err.message)}${resend}</div>`;}}finally{delete authForm.dataset.submitting;submitButton.disabled=false}
- };
-}
-function renderEmailVerification(token){
- app.innerHTML=`<section class="page"><div class="form-card auth-card"><div class="identity-mark">${icon('shield')}</div><div class="eyebrow">Email xavfsizligi</div><h1 class="page-title">Emailni tasdiqlash</h1><div id="verify-state" class="notice">Tasdiqlash havolasi tekshirilmoqda…</div><a id="verify-return" class="button-secondary" href="#login">Kirish sahifasiga qaytish</a></div></section>`;
- const mobileVerification=window.MobileSite?.isMobile();if(mobileVerification)window.MobileSite.verificationStatus('pending');
- api('/verify',{method:'POST',body:JSON.stringify({token})}).then(x=>{me=x.user;csrf=x.csrf;syncProfileTrigger();syncAdminLink();if(mobileVerification){window.MobileSite.verificationStatus('verified',me.phone_verification_enabled&&!me.phone_verified?'contact-details':'account');refreshCart();refreshNotifications();return;}if(me.phone_verification_enabled&&!me.phone_verified){location.hash='contact-details';return}$('#verify-state').className='notice identity-success';$('#verify-state').innerHTML='Email tasdiqlandi. Endi xarid qilish mumkin; sotuvchi bo‘lish uchun alohida Didit tekshiruvi kerak.';$('#verify-return').href='#account';$('#verify-return').textContent='Hisobga o‘tish';refreshCart();refreshNotifications()}).catch(e=>{if(mobileVerification){window.MobileSite.verificationStatus('error',e.message);return;}$('#verify-state').className='notice error';$('#verify-state').textContent=e.message;});
-}
-function renderPasswordReset(token=''){
- const confirming=Boolean(token);
- app.innerHTML=`<section class="page"><div class="form-card auth-card"><div class="eyebrow">Hisob xavfsizligi</div><h1 class="page-title">Parolni tiklash</h1><div id="reset-message"></div><form id="reset-request" ${confirming?'hidden':''}><div class="field"><label>Email</label><input name="email" type="email" autocomplete="email" required></div><button class="button-primary">Tiklash havolasini olish</button></form><form id="reset-confirm" ${confirming?'':'hidden'} style="margin-top:20px"><input name="token" value="${esc(token)}" type="hidden"><div class="field"><label>Yangi parol</label><input name="password" type="password" minlength="10" autocomplete="new-password" required></div><button class="button-primary">Parolni yangilash</button></form><p class="help">${confirming?'Yangi parol kamida 10 belgidan iborat bo‘lsin.':'Tiklash havolasi emailingizga yuboriladi, 30 daqiqa amal qiladi va faqat bir marta ishlatiladi.'}</p></div></section>`;
- $('#reset-request').onsubmit=async e=>{e.preventDefault();try{const x=await api('/password-reset',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.currentTarget)))});const devLink=x.reset_token?`<p><a class="text-link" href="#password-reset-confirm/${encodeURIComponent(x.reset_token)}">Development reset havolasini ochish</a></p>`:'';$('#reset-message').innerHTML=`<div class="notice">${esc(x.message)}${devLink}</div>`;}catch(x){toast(x.message,'error')}};
- $('#reset-confirm').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget;try{const x=await api('/password-reset/confirm',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(form)))});$('#reset-message').innerHTML=`<div class="notice identity-success">${esc(x.message)} <a class="text-link" href="#login">Kirish</a></div>`;form.hidden=true;}catch(x){toast(x.message,'error')}};
-}
-function syncProfileTrigger(){
- const button=$('#account-button');if(!button)return;
- button.classList.toggle('is-profile-trigger',Boolean(me));button.setAttribute('aria-expanded',String(Boolean($('#profile-dropdown'))));
- if(!me){button.innerHTML=`<span class="account-guest-icon" aria-hidden="true">${icon('user')}</span><span class="account-guest-label">${adminText('Kirish','Войти','Sign in')}</span>`;button.setAttribute('aria-label',adminText('Kirish','Войти','Sign in'));return}
- button.innerHTML=marketAvatarMarkup(me.display_name||me.email,me.avatar_url,'account-avatar',me.id);
- button.setAttribute('aria-label',adminText('Profil menyusini ochish','Открыть меню профиля','Open profile menu'));
-}
-function profileMenuMarkup(){
- return window.SentryLootAccount.menu(me,{t:adminText,icon,created:parseServerDate(me.created_at).toLocaleDateString(localeTag(),{year:'numeric',month:'long'})});
-}
-async function refreshProfileBonusBalance(){
- const balance=$('#profile-bonus-balance');if(!balance)return;
- try{const bonuses=await api('/bonuses');if(!balance.isConnected)return;const real=Number(bonuses.real_points)||0,preview=Number(bonuses.preview_points)||0;balance.textContent=real.toLocaleString(localeTag())+' '+adminText('ball','баллов','points')+(preview?' · '+preview.toLocaleString(localeTag())+' '+adminText('sinov','тест','preview'):'')}
- catch{if(balance.isConnected)balance.textContent=adminText('Yuklanmadi','Не загрузилось','Unavailable')}
-}
-async function refreshProfileWalletBalance(){
- if(me?.seller?.identity_status!=='verified'||!me?.seller?.selling_enabled)return;
- const balance=$('#profile-wallet-balance');if(!balance)return;
- try{const summary=await api('/seller/summary');if(!balance.isConnected)return;const test=summary.test_wallet?.balances?.find(b=>b.currency==='MYR');if(summary.stripe_test_enabled&&test)balance.textContent=fmt(test.available_minor,test.currency)+' · '+adminText('Sinov','Тест','Test');else{await loadWalletFx();if(balance.isConnected)balance.innerHTML=walletAmount(summary.wallet.available_minor,summary.wallet.currency)}}
- catch{if(balance.isConnected)balance.textContent=adminText('Balansni yuklab bo‘lmadi','Не удалось загрузить баланс','Balance unavailable')}
-}
-async function openProfileMenu(){
- if(!me){location.hash='login';return}
- await loadAsiaMarkets();
- const root=$('#profile-menu-root');if(!root)return;
- root.innerHTML=profileMenuMarkup();root.hidden=false;document.body.classList.add('profile-menu-open');
- $('#account-button')?.setAttribute('aria-expanded','true');
- void refreshProfileBonusBalance();
- void refreshProfileWalletBalance();
- $('#profile-dropdown')?.focus({preventScroll:true});
- const form=$('#profile-form');if(form){form.elements.namedItem('language').value=locale;form.elements.namedItem('currency').value=me.currency}
-}
-function closeProfileMenu(){const root=$('#profile-menu-root');if(!root)return;root.innerHTML='';root.hidden=true;document.body.classList.remove('profile-menu-open');$('#account-button')?.setAttribute('aria-expanded','false')}
-async function renderAccount(){closeProfileMenu();await OperationsUX.account();window.RewardsUI?.enhance()}
-async function renderCart(){if(!window.OrderFlow)throw Error(adminText('Sahifa yuklanmadi. Yangilab qayta urinib ko‘ring.','Страница не загрузилась. Обновите её и повторите.','This page could not be loaded. Refresh and try again.'));return window.OrderFlow.cart()}
-function notificationRoute(href){const value=String(href||'').replace(/^\/?#?/,'');if(['','notification-settings','saved-searches','order-cases','admin','admin-support','support-tickets','catalog-readiness','seller','orders','requests','account','messages','favorites','my-reviews','wallet','guide','fees','policies'].includes(value))return value||'home';if(/^(order|order-case|conversation|listing|support-ticket|dispute)\/[A-Za-z0-9_-]+$/.test(value))return value;return 'account'}
-async function renderNotifications(){if(!me){location.hash='login';return}const items=await api('/notifications'),unread=items.filter(x=>!x.read_at).length;if(window.MobileSite?.isMobile()){MobileSite.notifications(items);refreshNotifications();return;}app.innerHTML=`<section class="page">${pageTitle('Bildirishnomalar','Buyurtma, xabar va hisobingizdagi yangiliklar.',unread?'<button class="button-secondary" data-action="read-all-notifications">Hammasini o‘qilgan deb belgilash</button>':'')}<div class="notification-list">${items.length?items.map(n=>`<article class="notification-item ${n.read_at?'':'unread'}"><div><h3>${esc(localized(n.title))}</h3><p>${esc(localized(n.body))}</p><time>${parseServerDate(n.created_at).toLocaleString(localeTag())}</time></div><div class="queue-actions"><a class="button-secondary" href="#${esc(notificationRoute(n.href))}" data-action="open-notification" data-id="${esc(n.id)}">Ochish</a>${!n.read_at?`<button class="button-secondary" data-action="mark-notification-read" data-id="${esc(n.id)}">O‘qildi</button>`:''}</div></article>`).join(''):empty('Hozircha bildirishnoma yo‘q.')}</div></section>`;refreshNotifications()}
-function desktopOrderGroup(order){return order.status==='completed'?'completed':['cancelled','refunded'].includes(order.status)?'closed':'active'}
-async function renderOrders(saved={}){
- if(!me){location.hash='login';return}
- const route=location.href;
- if(window.MobileSite?.isMobile()){const [orders,games]=await Promise.all([api('/orders'),api('/games').catch(()=>[])]);if(location.href!==route)return;return MobileSite.orders(orders,games);}
- let role=['purchases','sales'].includes(saved.role)?saved.role:me.seller?.selling_enabled?'sales':'purchases',group=['active','completed','closed','all'].includes(saved.group)?saved.group:'active',query=typeof saved.query==='string'?saved.query:'',cursors=[null],nextCursor=null,requestVersion=0,controller=null,searchTimer;
- app.innerHTML=`<section class="page desktop-orders">${pageTitle(adminText('Buyurtmalar','Заказы','Orders'),adminText('Xarid va sotuvlaringizni kuzating.','Следите за покупками и продажами.','Track your purchases and sales.'),'<button type="button" class="button-secondary" data-orders-refresh>'+icon('refresh')+' '+adminText('Yangilash','Обновить','Refresh')+'</button>')}<div class="desktop-order-toolbar"><div class="desktop-order-roles" aria-label="${adminText('Buyurtma turi','Тип заказов','Order type')}">${[['purchases',adminText('Xaridlar','Покупки','Purchases')],['sales',adminText('Sotuvlar','Продажи','Sales')]].map(([key,label])=>`<button type="button" data-order-role="${key}" aria-pressed="false">${label}</button>`).join('')}</div><label class="desktop-order-search">${icon('search')}<input type="search" aria-label="${adminText('Buyurtmalarni qidirish','Поиск заказов','Search orders')}" placeholder="${adminText('Buyurtma raqami yoki mahsulot','Номер заказа или товар','Order number or product')}" maxlength="100" data-order-search value="${esc(query)}"></label></div><div class="desktop-order-filters" aria-label="${adminText('Buyurtma holati','Статус заказов','Order status')}">${[['active',adminText('Faol','Активные','Active')],['completed',adminText('Yakunlangan','Завершённые','Completed')],['closed',adminText('Bekor qilingan / qaytarilgan','Отменённые / возвраты','Cancelled / refunded')],['all',adminText('Barchasi','Все','All')]].map(([key,label])=>`<button type="button" data-order-group="${key}" aria-pressed="false"><span>${label}</span></button>`).join('')}</div><p class="help" data-orders-count aria-live="polite"></p><div class="desktop-order-list" data-orders-results></div><nav class="desktop-orders-pager" aria-label="${adminText('Buyurtma sahifalari','Страницы заказов','Order pages')}"><button class="button-secondary" type="button" data-orders-prev>${adminText('Oldingi','Назад','Previous')}</button><span data-orders-page></span><button class="button-secondary" type="button" data-orders-next>${adminText('Keyingi','Далее','Next')}</button></nav></section>`;
- const root=app.querySelector('.desktop-orders'),results=root.querySelector('[data-orders-results]'),previous=root.querySelector('[data-orders-prev]'),next=root.querySelector('[data-orders-next]');
- const load=async()=>{if(!root.isConnected||location.href!==route)return;const version=++requestVersion;controller?.abort();controller=new AbortController();root.setAttribute('aria-busy','true');previous.disabled=next.disabled=true;root.querySelectorAll('[data-order-role]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.orderRole===role)));root.querySelectorAll('[data-order-group]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.orderGroup===group)));root.querySelector('[data-orders-count]').textContent=adminText('Buyurtmalar yuklanmoqda…','Загрузка заказов…','Loading orders…');
-  try{const params=new URLSearchParams({paged:'1',role,status:group,limit:'20'});if(query.trim())params.set('q',query.trim());if(cursors.at(-1))params.set('cursor',cursors.at(-1));const page=await api('/orders?'+params,{signal:controller.signal});if(!root.isConnected||version!==requestVersion||location.href!==route)return;nextCursor=page.next_cursor;root.querySelector('[data-orders-count]').textContent=adminText('Ko‘rsatilgan buyurtmalar: ','Показано заказов: ','Orders shown: ')+page.items.length;root.querySelector('[data-orders-page]').textContent=adminText('Sahifa ','Страница ','Page ')+cursors.length;
-  results.innerHTML=page.items.length?page.items.map(o=>`<a class="panel desktop-order-card" href="/#order/${encodeURIComponent(o.id)}"><header><b>${esc(o.reference)}</b><span class="desktop-order-status" data-order-state="${esc(desktopOrderGroup(o))}">${esc(window.OrderFlow.statusLabel(o.status))}</span></header><div class="desktop-order-items">${o.items.slice(0,1).map(i=>{const image=i.image_url||i.snapshot?.image_url;return `<div class="desktop-order-item">${image?`<img src="${esc(image)}" alt="" width="40" height="40" loading="lazy">`:`<span class="desktop-order-item-icon">${icon('box')}</span>`}<div><h2>${esc(i.title)}</h2><small>${adminText('Miqdor','Количество','Quantity')}: ${Number(i.quantity)}${o.item_count>1?' · +'+(o.item_count-1)+' '+adminText('mahsulot','товаров','items'):''}</small></div></div>`;}).join('')}</div><footer><strong>${fmt(o.total_minor,o.currency)}</strong><time>${parseServerDate(o.created_at).toLocaleDateString(localeTag(),{month:'short',day:'numeric',year:'numeric'})}</time><span class="desktop-order-open">${icon('arrow-right')}</span></footer></a>`).join(''):`<div class="panel desktop-orders-empty"><h2>${query?adminText('Mos buyurtma topilmadi','Заказы не найдены','No matching orders'):adminText('Bu bo‘limda buyurtma yo‘q','В этом разделе нет заказов','No orders in this section')}</h2><p>${adminText('Boshqa holatni tanlang yoki qidiruvni o‘zgartiring.','Выберите другой статус или измените поиск.','Choose another status or change your search.')}</p><a class="button-secondary" href="/browse">${adminText('Mahsulotlarni ko‘rish','Смотреть предложения','Browse listings')}</a></div>`;previous.disabled=cursors.length<=1;next.disabled=!page.has_more;
-  }catch(error){if(version!==requestVersion||!root.isConnected||error.name==='AbortError')return;nextCursor=null;root.querySelector('[data-orders-count]').textContent=error.message;results.innerHTML='';previous.disabled=cursors.length<=1;next.disabled=true;}finally{if(version===requestVersion&&root.isConnected)root.setAttribute('aria-busy','false');}
- };
- const reset=()=>{clearTimeout(searchTimer);cursors=[null];return load();};root.querySelectorAll('[data-order-role]').forEach(b=>b.onclick=()=>{role=b.dataset.orderRole;reset();});root.querySelectorAll('[data-order-group]').forEach(b=>b.onclick=()=>{group=b.dataset.orderGroup;reset();});root.querySelector('[data-order-search]').oninput=e=>{query=e.target.value;controller?.abort();requestVersion++;clearTimeout(searchTimer);searchTimer=setTimeout(()=>reset(),300);};previous.onclick=()=>{if(cursors.length>1){cursors.pop();load();}};next.onclick=()=>{if(nextCursor){cursors.push(nextCursor);load();}};root.querySelector('[data-orders-refresh]').onclick=()=>reset();await load();
+async function renderListing(id) {
+  const it = await api("/listings/" + encodeURIComponent(id));
+  updateRouteMetadata("listing/" + encodeURIComponent(id));
+  const title = `${it.title} | ${it.game_name} | SentryLoot`;
+  const description = String(
+    it.description || `${it.game_name} ${it.product_type}`,
+  )
+    .replace(/\s+/g, " ")
+    .slice(0, 260);
+  document.title = title;
+  const desc = $('meta[name="description"]');
+  if (desc) desc.content = description;
+  for (const [selector, value] of [
+    ['meta[property="og:title"]', title],
+    ['meta[property="og:description"]', description],
+    ['meta[property="og:url"]', location.href],
+    [
+      'meta[property="og:image"]',
+      it.image_url ||
+        "https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark.png",
+    ],
+  ]) {
+    const el = $(selector);
+    if (el) el.content = value;
+  }
+  app.innerHTML = ListingDetail.markup(it);
+  setupListingDetailGallery(app, it);
+  setupListingDescription(app);
+  ListingDetail.setup(app);
+  MarketUX.listing(it);
+  TradeUX.listing(it);
+  await ExperienceUX.listing(it);
+  await window.RegionPreferences?.loadRates();
+  window.RegionPreferences?.refreshPrices();
 }
 
-function orderPaymentNotice(order){const payment=order.payment||{};if(payment.status==='failed')return `<div class="notice warn order-payment-summary"><b>${adminText('To‘lov yakunlanmadi','Оплата не завершена','Payment was not completed')}</b><p>${adminText('Bu buyurtma bekor qilingan. To‘lov tasdiqlanmadi; savatchadan qayta urinib ko‘ring.','Заказ отменён. Оплата не подтверждена; попробуйте снова из корзины.','This order was cancelled because payment was not confirmed. Try again from your cart.')}</p><a class="text-link" href="#cart">${adminText('Savatchani ochish','Открыть корзину','Open cart')} →</a></div>`;if(order.status==='cancelled'&&payment.status==='expired')return `<div class="notice warn order-payment-summary"><b>${adminText('To‘lov vaqti tugadi','Время оплаты истекло','Checkout expired')}</b><p>${adminText('To‘lov olinmadi. Mahsulotlar savatchaga qaytarildi; mavjudligini tekshirib, yangi buyurtma yarating.','Оплата не прошла. Товары возвращены в корзину; проверьте наличие и создайте новый заказ.','No payment was taken. The items are back in your cart; check availability and start a new order.')}</p><a class="text-link" href="#cart">${adminText('Savatchani ochish','Открыть корзину','Open cart')} →</a></div>`;if(payment.status==='succeeded'||['paid','awaiting_delivery','delivered','under_review','completed'].includes(order.status))return `<div class="notice order-payment-summary">${adminText('To‘lov tasdiqlandi. Buyurtma yakunlanmaguncha mablag‘ sotuvchiga chiqarilmaydi. Sinov rejimida haqiqiy pul o‘tkazilmaydi.','Оплата подтверждена. Средства не перечисляются продавцу до завершения заказа. В тестовом режиме реальные деньги не переводятся.','Payment confirmed. Funds stay on hold until the order is complete. Sandbox mode does not move real money.')}</div>`;if(order.status==='pending_payment')return `<div class="notice warn order-payment-summary">${adminText('Keyingi qadam: to‘lovni yakunlang. Bu sinov rejimi; haqiqiy pul yechilmaydi.','Следующий шаг: завершите оплату. Это тестовый режим; реальные деньги не списываются.','Next: complete payment. This is sandbox mode; no real money is charged.')}</div>`;return ''}
-async function renderOrder(id){if(!window.OrderFlow)throw Error(adminText('Sahifa yuklanmadi. Yangilab qayta urinib ko‘ring.','Страница не загрузилась. Обновите её и повторите.','This page could not be loaded. Refresh and try again.'));return window.OrderFlow.order(id)}
+function setupAuthCountryPicker() {
+  const select = $("#auth-country");
+  if (select) window.SelectMenus.enhance(select);
+}
+
+async function renderContactDetails() {
+  if (!me?.phone_verification_enabled) {
+    location.hash = "home";
+    return;
+  }
+  if (!me) {
+    location.hash = "login";
+    return;
+  }
+  const T = adminText,
+    countries = await api("/phone/countries"),
+    names = new Intl.DisplayNames([locale], { type: "region" });
+  let pending = "",
+    channel = "sms",
+    retryAt = 0,
+    busy = false,
+    editingPhone = false,
+    phoneCountry = countries.some((c) => c.country === me.country)
+      ? me.country
+      : "US";
+  countries.sort((a, b) =>
+    names.of(a.country).localeCompare(names.of(b.country), locale),
+  );
+  try {
+    const status = await api("/phone/status");
+    pending = status.pending_phone;
+    channel = status.channel;
+    retryAt = Date.now() + status.retry_after * 1000;
+  } catch (error) {
+    toast(error.message, "error");
+  }
+  const next = () => {
+    location.hash =
+      sessionStorage.getItem("phone-verification-return") === "seller"
+        ? "seller"
+        : "home";
+    sessionStorage.removeItem("phone-verification-return");
+  };
+  function render() {
+    app.innerHTML = `<section class="page phone-verification-page"><div class="phone-verification-card"><a class="phone-brand" href="#home">Sentry<span>Loot</span></a><div class="phone-step">${T("HISOBNI SOZLASH", "НАСТРОЙКА АККАУНТА", "ACCOUNT SETUP")} <span>${pending ? "2 / 2" : "1 / 2"}</span></div><h1>${pending ? T("Kodni kiriting", "Введите код", "Enter your code") : T("Telefon raqamingizni tasdiqlang", "Подтвердите номер телефона", "Verify your phone number")}</h1><p class="phone-intro">${pending ? T(`${pending} raqamiga kod so‘raldi.`, `Код запрошен для ${pending}.`, `A code was requested for ${pending}.`) : T("Hisobingiz uchun ishlaydigan telefon raqamini kiriting.", "Укажите действующий номер для вашего аккаунта.", "Enter a phone number you can use for your account.")}</p>
+  <div class="phone-account-email">${icon("check")}<span>${esc(me.email)}</span><small>${me.email_verified ? T("Tasdiqlangan", "Подтверждён", "Verified") : T("Emailni tasdiqlang", "Подтвердите почту", "Verify your email")}</small></div>
+  ${
+    !me.email_verified
+      ? `<p class="notice warn">${T("Avval emailingizga yuborilgan havolani oching.", "Сначала откройте ссылку из письма.", "First open the verification link sent to your email.")}</p>`
+      : me.phone_verified && !pending && !editingPhone
+        ? `<div class="phone-confirmed">${icon("check")}<b>${esc(me.phone)}</b><p>${T("Telefon raqami tasdiqlangan.", "Номер подтверждён.", "Your phone number is verified.")}</p></div><button class="button-primary" id="phone-done">${T("Davom etish", "Продолжить", "Continue")}</button><button class="text-link" id="phone-change">${T("Raqamni almashtirish", "Изменить номер", "Change number")}</button>`
+        : `<form id="phone-form" novalidate>${
+            pending
+              ? `<div class="field"><label for="phone-code">${T("Tasdiqlash kodi", "Код подтверждения", "Verification code")}</label><input id="phone-code" class="phone-code-input" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,8}" minlength="4" maxlength="8" required aria-describedby="phone-error"><small>${T("Kod 5 daqiqa amal qiladi.", "Код действует 5 минут.", "Your code is valid for 5 minutes.")}</small></div>`
+              : `<div class="field"><label for="phone-country">${T("Mamlakat yoki hudud", "Страна или регион", "Country or region")}</label><select id="phone-country" name="country" required>${countries.map((c) => `<option value="${esc(c.country)}" ${c.country === phoneCountry ? "selected" : ""}>${esc(names.of(c.country))} (${esc(c.dial_code)})</option>`).join("")}</select></div><div class="field"><label for="phone-number">${T("Telefon raqami", "Номер телефона", "Phone number")}</label><div class="phone-national-control"><span id="phone-prefix">${esc(countries.find((c) => c.country === phoneCountry).dial_code)}</span><input id="phone-number" name="phone" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="${T("Telefon raqami", "Номер телефона", "Phone number")}" maxlength="20" required aria-describedby="phone-error phone-country-hint"></div><small id="phone-country-hint">${T("Tanlangan mamlakatga tegishli raqamni kiriting.", "Введите номер выбранной страны.", "Enter a phone number for the selected country.")}</small></div><fieldset class="phone-channels"><legend>${T("Kodni qayerga yuboramiz?", "Куда отправить код?", "Where should we send the code?")}</legend><label><input type="radio" name="channel" value="sms" ${channel === "sms" ? "checked" : ""}><span>SMS</span></label><label><input type="radio" name="channel" value="whatsapp" ${channel === "whatsapp" ? "checked" : ""}><span>WhatsApp</span></label></fieldset>`
+          }
+  <p class="phone-error" id="phone-error" role="alert" hidden></p><button type="submit" class="button-primary">${pending ? T("Tasdiqlash va davom etish", "Подтвердить и продолжить", "Verify and continue") : T("Kod yuborish", "Отправить код", "Send code")}</button></form>
+  ${pending ? `<div class="phone-code-actions"><button type="button" id="phone-edit">${T("Boshqa raqam", "Другой номер", "Use another number")}</button><button type="button" id="phone-resend">${T("Qayta yuborish", "Отправить снова", "Resend code")}</button></div>` : ""}
+  <p class="phone-privacy">${T("Raqamingiz ommaga ko‘rsatilmaydi. WhatsApp ishlamasa, kod SMS orqali kelishi mumkin.", "Номер не виден публично. Если WhatsApp недоступен, код может прийти по SMS.", "Your number stays private. If WhatsApp is unavailable, your code may arrive by SMS.")}</p>`
+  }</div></section>`;
+    const error = (message) => {
+      const el = $("#phone-error");
+      if (el) {
+        el.textContent = message;
+        el.hidden = false;
+      }
+    };
+    async function send(phone, method, country) {
+      const result = await api("/phone/send", {
+        method: "POST",
+        body: JSON.stringify({
+          phone,
+          channel: method,
+          ...(country ? { country } : {}),
+        }),
+      });
+      pending = result.phone;
+      channel = result.channel;
+      retryAt = Date.now() + result.retry_after * 1000;
+      render();
+      $("#phone-code")?.focus();
+    }
+    const countrySelect = $("#phone-country");
+    if (countrySelect)
+      countrySelect.onchange = () => {
+        phoneCountry = countrySelect.value;
+        $("#phone-prefix").textContent = countries.find(
+          (c) => c.country === phoneCountry,
+        ).dial_code;
+        $("#phone-number").value = "";
+        $("#phone-number").focus();
+      };
+    const form = $("#phone-form");
+    if (form)
+      form.onsubmit = async (event) => {
+        event.preventDefault();
+        if (busy) return;
+        if (!form.reportValidity()) return;
+        busy = true;
+        const button = form.querySelector("[type=submit]");
+        button.disabled = true;
+        $("#phone-error").hidden = true;
+        try {
+          const data = Object.fromEntries(new FormData(form));
+          if (pending) {
+            const result = await api("/phone/check", {
+              method: "POST",
+              body: JSON.stringify({ code: data.code }),
+            });
+            me = result.user;
+            toast(
+              T("Telefon tasdiqlandi", "Телефон подтверждён", "Phone verified"),
+            );
+            next();
+          } else await send(data.phone, data.channel, data.country);
+        } catch (e) {
+          error(e.message);
+        } finally {
+          busy = false;
+          button.disabled = false;
+        }
+      };
+    const resend = $("#phone-resend");
+    if (resend) {
+      const label = T("Qayta yuborish", "Отправить снова", "Resend code");
+      const tick = () => {
+        const seconds = Math.max(0, Math.ceil((retryAt - Date.now()) / 1000));
+        resend.disabled = seconds > 0 || busy;
+        resend.textContent = seconds ? `${label} · ${seconds}s` : label;
+      };
+      tick();
+      const interval = setInterval(() => {
+        if (!resend.isConnected) {
+          clearInterval(interval);
+          return;
+        }
+        tick();
+      }, 1000);
+      resend.onclick = async () => {
+        if (busy) return;
+        busy = true;
+        resend.disabled = true;
+        try {
+          await send(pending, channel);
+        } catch (e) {
+          error(e.message);
+        } finally {
+          busy = false;
+          tick();
+        }
+      };
+    }
+    const edit = $("#phone-edit");
+    if (edit)
+      edit.onclick = () => {
+        if (busy) return;
+        pending = "";
+        render();
+        $("#phone-number")?.focus();
+      };
+    const done = $("#phone-done");
+    if (done) done.onclick = next;
+    const change = $("#phone-change");
+    if (change)
+      change.onclick = () => {
+        editingPhone = true;
+        render();
+        $("#phone-number")?.focus();
+      };
+  }
+  render();
+}
+async function renderAuth(route) {
+  await loadAsiaMarkets();
+  const register = route === "register";
+  const providers = await api("/oauth/providers").catch(() => ({
+    google: false,
+    facebook: false,
+  }));
+  const providersHtml =
+    providers.google || providers.facebook
+      ? `<div class="auth-provider-list">${providers.google ? '<button class="auth-provider-button auth-provider-google" data-action="oauth-google"><span class="google-mark" aria-hidden="true">G</span><span>Google bilan davom etish</span><span class="auth-provider-arrow" aria-hidden="true">↗</span></button>' : ""}${providers.facebook ? '<button class="auth-provider-button auth-provider-facebook" data-action="oauth-facebook"><span class="facebook-mark" aria-hidden="true">f</span><span>Facebook bilan davom etish</span><span class="auth-provider-arrow" aria-hidden="true">↗</span></button>' : ""}</div>`
+      : "";
+  const termsHtml =
+    register || providers.google || providers.facebook
+      ? `<label class="auth-oauth-terms"><input id="auth-terms" type="checkbox" ${register ? "required" : ""}><span>${adminText("Men", "Я принимаю", "I agree to the")} <a class="text-link" href="/terms">${adminText("Foydalanish shartlari", "Условия использования", "Terms of Service")}</a> ${adminText("va", "и", "and")} <a class="text-link" href="/privacy-policy">${adminText("Maxfiylik siyosati", "Политику конфиденциальности", "Privacy Policy")}</a>${adminText("ga roziman.", ".", ".")}</span></label>`
+      : "";
+  app.innerHTML = `<section class="page auth-page ${register ? "is-register" : "is-login"}"><div class="auth-shell"><aside class="auth-showcase"><div class="auth-showcase-brand"><span class="brand-mark"><img src="https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-256.webp?v=1" alt=""></span><span>Sentry<span>Loot</span></span></div><div class="auth-showcase-art" aria-hidden="true"><div class="auth-orbit auth-orbit-one"></div><div class="auth-orbit auth-orbit-two"></div><div class="auth-art-core"><img src="https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-256.webp?v=1" alt="" width="140" height="140"></div><span class="auth-spark auth-spark-one"></span><span class="auth-spark auth-spark-two"></span><span class="auth-spark auth-spark-three"></span></div><div class="auth-showcase-copy"><span class="auth-kicker"><span></span>SENTRYLOOT ACCOUNT</span><h2>O‘yin olamingizga<br>ishonch bilan kiring.</h2><p>Hisobingiz, e’lonlaringiz va xabarlaringiz bir joyda — xavfsiz va tartibli.</p></div><div class="auth-showcase-foot"><span>${icon("shield")} ${adminText("Himoyalangan kirish", "Защищённый вход", "Secure sign-in")}</span><span>01 / 03</span></div></aside><div class="form-card auth-card"><div class="auth-heading"><div class="auth-mobile-brand"><span class="brand-mark"><img src="https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-256.webp?v=1" alt=""></span> Sentry<span>Loot</span></div><span class="auth-eyebrow">SentryLoot hisob</span><h1 class="page-title">${register ? "Ro‘yxatdan o‘tish" : "Hisobingizga kiring"}</h1><p class="auth-subtitle">${register ? "Yangi akkaunt yarating va SentryLoot olamiga qo‘shiling." : "Davom etish uchun akkauntingizga kiring."}</p></div><div id="auth-message"></div>${providersHtml ? `<div class="auth-social-section">${termsHtml}${providersHtml}</div><div class="auth-divider"><span>yoki email orqali</span></div>` : ""}<form id="auth-form">${register ? `<div class="field auth-country-field"><label for="auth-country">${adminText("Mamlakat yoki hudud", "Страна или регион", "Country or region")}</label><select id="auth-country" required>${countryOptions(window.RegionPreferences?.state.country || "US")}</select><small class="field-hint">${adminText("Mamlakatga mos ko‘rsatish valyutasi tanlanadi.", "Для страны будет выбрана валюта отображения.", "A display currency will be selected for your country.")}</small></div>` : ""}${register ? '<div class="field"><label>Ismingiz</label><input name="name" autocomplete="name" minlength="2" maxlength="80" required></div>' : ""}<div class="field"><label>Email</label><input name="email" type="email" autocomplete="email" placeholder="name@example.com" required></div><div class="field"><div class="auth-label-row"><label for="auth-password">Parol</label>${!register ? '<a class="text-link" href="#password-reset">Parolni tiklash</a>' : ""}</div><div class="auth-password-control"><input id="auth-password" name="password" type="password" autocomplete="${register ? "new-password" : "current-password"}" placeholder="${register ? "Kamida 10 belgi" : "Parolingizni kiriting"}" ${register ? 'minlength="10"' : ""} required><button id="auth-password-toggle" class="password-visibility-toggle" type="button" aria-label="${adminText("Parolni ko‘rsatish", "Показать пароль", "Show password")}" aria-controls="auth-password" aria-pressed="false">${icon("eye")}</button></div><p id="auth-password-error" class="auth-password-error" role="alert" hidden></p>${!register && providers.google ? `<small class="field-hint auth-password-hint">${adminText("Google bilan kirgan bo‘lsangiz, Google tugmasidan foydalaning yoki sayt parolini tiklang. Gmail parolingiz SentryLoot parolidan alohida.", "Если вы входили через Google, используйте кнопку Google или восстановите пароль сайта. Пароль Gmail отличается от пароля SentryLoot.", "If you signed in with Google, use the Google button or reset your site password. Your Gmail password is separate.")}</small>` : ""}</div>${register && !providersHtml ? `<div class="auth-registration-terms">${termsHtml}<span class="help">${adminText("Shartlar loyiha holatida, ishga tushirishdan oldin yuridik ko‘rib chiqish talab etiladi.", "Условия пока в проекте и требуют юридической проверки до запуска.", "These draft terms require legal review before launch.")}</span></div>` : ""}<button type="submit" class="button-primary auth-submit">${register ? "Hisob yaratish" : "Kirish"}<span aria-hidden="true">→</span></button></form>${!register && !providersHtml ? termsHtml : ""}<p class="auth-switch">${register ? adminText("Hisobingiz bormi?", "Уже есть аккаунт?", "Already have an account?") : adminText("Yangi foydalanuvchimisiz?", "Впервые здесь?", "New here?")} <a class="text-link" href="${register ? "#login" : "#register"}">${register ? "Kirish" : "Hisob yaratish"}</a></p></div></div></section>`;
+  setupAuthCountryPicker();
+  const oauthError = new URLSearchParams(location.search).get("oauth_error");
+  const oauthMessages = {
+    account_exists:
+      "Bu email bilan SentryLoot hisobingiz bor. Avval avvalgi kirish usulingiz bilan kiring, so‘ng profil menyusidan Facebook’ni ulang.",
+    link_signin_required:
+      "Facebook’ni ulash uchun avval SentryLoot hisobingizga kiring va emailingizni tasdiqlang.",
+    facebook_in_use: "Bu Facebook hisobi boshqa SentryLoot hisobiga ulangan.",
+    facebook_already_linked:
+      "Bu SentryLoot hisobiga boshqa Facebook hisobi allaqachon ulangan.",
+  };
+  if (oauthMessages[oauthError])
+    $("#auth-message").innerHTML =
+      `<div class="notice error">${oauthMessages[oauthError]}</div>`;
+  const passwordInput = $("#auth-password"),
+    passwordToggle = $("#auth-password-toggle");
+  passwordToggle?.addEventListener("click", () => {
+    const show = passwordInput.type === "password";
+    passwordInput.type = show ? "text" : "password";
+    passwordToggle.setAttribute("aria-pressed", String(show));
+    passwordToggle.setAttribute(
+      "aria-label",
+      adminText(
+        show ? "Parolni yashirish" : "Parolni ko‘rsatish",
+        show ? "Скрыть пароль" : "Показать пароль",
+        show ? "Hide password" : "Show password",
+      ),
+    );
+    passwordToggle.innerHTML = icon(show ? "eye-off" : "eye");
+  });
+  const authShell = $(".auth-shell"),
+    authTitle = $(".auth-heading .page-title");
+  authShell?.setAttribute("role", "region");
+  if (authTitle) {
+    authTitle.id = "auth-title";
+    authShell?.setAttribute("aria-labelledby", "auth-title");
+  }
+  const closeLink = document.createElement("a");
+  closeLink.className = "auth-close";
+  closeLink.href = "#home";
+  closeLink.setAttribute("aria-label", adminText("Yopish", "Закрыть", "Close"));
+  closeLink.textContent = "×";
+  authShell?.prepend(closeLink);
+  closeLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    const page = $(".auth-page");
+    if (!page || page.classList.contains("is-closing")) return;
+    page.classList.add("is-closing");
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      location.hash = "home";
+      return;
+    }
+    window.setTimeout(() => {
+      location.hash = "home";
+    }, 460);
+  });
+  const authArtwork = $(".auth-showcase-art");
+  if (authArtwork)
+    authArtwork.innerHTML = `<div class="auth-orbit auth-orbit-one"></div><div class="auth-orbit auth-orbit-two"></div><img class="auth-game-character" src="https://images.gamestorehub.com/site-assets/auth-game-characters.png" width="1254" height="1254" alt=""><span class="auth-spark auth-spark-one"></span><span class="auth-spark auth-spark-two"></span><span class="auth-spark auth-spark-three"></span>`;
+  $("#auth-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const authForm = e.currentTarget;
+    if (authForm.dataset.submitting) return;
+    $("#auth-message").replaceChildren();
+    const passwordError = $("#auth-password-error");
+    passwordError.hidden = true;
+    passwordError.textContent = "";
+    passwordInput.removeAttribute("aria-invalid");
+    passwordInput.removeAttribute("aria-describedby");
+    const d = Object.fromEntries(new FormData(authForm));
+    if (register) {
+      d.country =
+        $("#auth-country")?.value ||
+        window.RegionPreferences?.state.country ||
+        "US";
+      d.accept_terms = $("#auth-terms")?.checked === true;
+      if (!d.accept_terms) {
+        toast(
+          "Davom etish uchun foydalanish shartlarini qabul qiling.",
+          "error",
+        );
+        return;
+      }
+    }
+    authForm.dataset.submitting = "true";
+    const submitButton = authForm.querySelector("button[type=submit]");
+    submitButton.disabled = true;
+    try {
+      if (register) {
+        d.language = locale;
+        const x = await api("/register", {
+          method: "POST",
+          body: JSON.stringify(d),
+        });
+        if (window.MobileSite?.isMobile())
+          window.MobileSite.registrationSubmitted(d.email, x);
+        else
+          $("#auth-message").innerHTML =
+            `<div class="notice auth-feedback">${esc(x.message)}${x.verification_token ? `<div class="field" style="margin-top:12px"><label>Development tasdiqlash tokeni</label><input id="verify-token" value="${esc(x.verification_token)}" readonly><button type="button" class="button-secondary" data-action="verify">Emailni tasdiqlash</button></div>` : ""}<button type="button" class="button-secondary" style="margin-top:12px" data-action="resend-verification" data-email="${esc(d.email)}">Yangi tasdiqlash havolasini yuborish</button></div>`;
+      } else {
+        const x = await api("/login", {
+          method: "POST",
+          body: JSON.stringify(d),
+        });
+        if (x.mfa_required) {
+          if (!authForm.querySelector("[name=otp]")) {
+            const label = document.createElement("label");
+            label.className = "field";
+            label.innerHTML = `<span>${adminText("Authenticator yoki tiklash kodi", "Код Authenticator или восстановления", "Authenticator or recovery code")}</span><input name="otp" autocomplete="one-time-code" maxlength="50" required>`;
+            authForm.querySelector("button[type=submit]")?.before(label);
+            label.querySelector("input").focus();
+          }
+          return;
+        }
+        me = x.user;
+        csrf = x.csrf;
+        location.hash = "home";
+        await bootstrap();
+      }
+    } catch (err) {
+      if (!register && err.status === 401) {
+        passwordError.textContent = authForm.querySelector("[name=otp]")
+          ? err.message
+          : adminText(
+              "Email yoki parol noto‘g‘ri.",
+              "Неверный email или пароль.",
+              "Email or password is incorrect.",
+            );
+        passwordError.hidden = false;
+        passwordInput.setAttribute("aria-invalid", "true");
+        passwordInput.setAttribute("aria-describedby", "auth-password-error");
+      } else {
+        const address = $("input[name=email]", authForm).value;
+        const resend = err.message.includes("Email tasdiqlanmagan")
+          ? `<button type="button" class="button-secondary" style="margin-top:12px" data-action="resend-verification" data-email="${esc(address)}">Yangi tasdiqlash havolasini yuborish</button>`
+          : "";
+        $("#auth-message").innerHTML =
+          `<div class="notice error">${esc(err.message)}${resend}</div>`;
+      }
+    } finally {
+      delete authForm.dataset.submitting;
+      submitButton.disabled = false;
+    }
+  };
+}
+function renderEmailVerification(token) {
+  app.innerHTML = `<section class="page"><div class="form-card auth-card"><div class="identity-mark">${icon("shield")}</div><div class="eyebrow">Email xavfsizligi</div><h1 class="page-title">Emailni tasdiqlash</h1><div id="verify-state" class="notice">Tasdiqlash havolasi tekshirilmoqda…</div><a id="verify-return" class="button-secondary" href="#login">Kirish sahifasiga qaytish</a></div></section>`;
+  const mobileVerification = window.MobileSite?.isMobile();
+  if (mobileVerification) window.MobileSite.verificationStatus("pending");
+  api("/verify", { method: "POST", body: JSON.stringify({ token }) })
+    .then((x) => {
+      me = x.user;
+      csrf = x.csrf;
+      syncProfileTrigger();
+      syncAdminLink();
+      if (mobileVerification) {
+        window.MobileSite.verificationStatus(
+          "verified",
+          me.phone_verification_enabled && !me.phone_verified
+            ? "contact-details"
+            : "account",
+        );
+        refreshCart();
+        refreshNotifications();
+        return;
+      }
+      if (me.phone_verification_enabled && !me.phone_verified) {
+        location.hash = "contact-details";
+        return;
+      }
+      $("#verify-state").className = "notice identity-success";
+      $("#verify-state").innerHTML =
+        "Email tasdiqlandi. Endi xarid qilish mumkin; sotuvchi bo‘lish uchun alohida Didit tekshiruvi kerak.";
+      $("#verify-return").href = "#account";
+      $("#verify-return").textContent = "Hisobga o‘tish";
+      refreshCart();
+      refreshNotifications();
+    })
+    .catch((e) => {
+      if (mobileVerification) {
+        window.MobileSite.verificationStatus("error", e.message);
+        return;
+      }
+      $("#verify-state").className = "notice error";
+      $("#verify-state").textContent = e.message;
+    });
+}
+function renderPasswordReset(token = "") {
+  const confirming = Boolean(token);
+  app.innerHTML = `<section class="page"><div class="form-card auth-card"><div class="eyebrow">Hisob xavfsizligi</div><h1 class="page-title">Parolni tiklash</h1><div id="reset-message"></div><form id="reset-request" ${confirming ? "hidden" : ""}><div class="field"><label>Email</label><input name="email" type="email" autocomplete="email" required></div><button class="button-primary">Tiklash havolasini olish</button></form><form id="reset-confirm" ${confirming ? "" : "hidden"} style="margin-top:20px"><input name="token" value="${esc(token)}" type="hidden"><div class="field"><label>Yangi parol</label><input name="password" type="password" minlength="10" autocomplete="new-password" required></div><button class="button-primary">Parolni yangilash</button></form><p class="help">${confirming ? "Yangi parol kamida 10 belgidan iborat bo‘lsin." : "Tiklash havolasi emailingizga yuboriladi, 30 daqiqa amal qiladi va faqat bir marta ishlatiladi."}</p></div></section>`;
+  $("#reset-request").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const x = await api("/password-reset", {
+        method: "POST",
+        body: JSON.stringify(Object.fromEntries(new FormData(e.currentTarget))),
+      });
+      const devLink = x.reset_token
+        ? `<p><a class="text-link" href="#password-reset-confirm/${encodeURIComponent(x.reset_token)}">Development reset havolasini ochish</a></p>`
+        : "";
+      $("#reset-message").innerHTML =
+        `<div class="notice">${esc(x.message)}${devLink}</div>`;
+    } catch (x) {
+      toast(x.message, "error");
+    }
+  };
+  $("#reset-confirm").onsubmit = async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    try {
+      const x = await api("/password-reset/confirm", {
+        method: "POST",
+        body: JSON.stringify(Object.fromEntries(new FormData(form))),
+      });
+      $("#reset-message").innerHTML =
+        `<div class="notice identity-success">${esc(x.message)} <a class="text-link" href="#login">Kirish</a></div>`;
+      form.hidden = true;
+    } catch (x) {
+      toast(x.message, "error");
+    }
+  };
+}
+function syncProfileTrigger() {
+  const button = $("#account-button");
+  if (!button) return;
+  button.classList.toggle("is-profile-trigger", Boolean(me));
+  button.setAttribute("aria-expanded", String(Boolean($("#profile-dropdown"))));
+  if (!me) {
+    button.innerHTML = `<span class="account-guest-icon" aria-hidden="true">${icon("user")}</span><span class="account-guest-label">${adminText("Kirish", "Войти", "Sign in")}</span>`;
+    button.setAttribute("aria-label", adminText("Kirish", "Войти", "Sign in"));
+    return;
+  }
+  button.innerHTML = marketAvatarMarkup(
+    me.display_name || me.email,
+    me.avatar_url,
+    "account-avatar",
+    me.id,
+  );
+  button.setAttribute(
+    "aria-label",
+    adminText(
+      "Profil menyusini ochish",
+      "Открыть меню профиля",
+      "Open profile menu",
+    ),
+  );
+}
+function profileMenuMarkup() {
+  return window.SentryLootAccount.menu(me, {
+    t: adminText,
+    icon,
+    created: parseServerDate(me.created_at).toLocaleDateString(localeTag(), {
+      year: "numeric",
+      month: "long",
+    }),
+  });
+}
+async function refreshProfileBonusBalance() {
+  const balance = $("#profile-bonus-balance");
+  if (!balance) return;
+  try {
+    const bonuses = await api("/bonuses");
+    if (!balance.isConnected) return;
+    const real = Number(bonuses.real_points) || 0,
+      preview = Number(bonuses.preview_points) || 0;
+    balance.textContent =
+      real.toLocaleString(localeTag()) +
+      " " +
+      adminText("ball", "баллов", "points") +
+      (preview
+        ? " · " +
+          preview.toLocaleString(localeTag()) +
+          " " +
+          adminText("sinov", "тест", "preview")
+        : "");
+  } catch {
+    if (balance.isConnected)
+      balance.textContent = adminText(
+        "Yuklanmadi",
+        "Не загрузилось",
+        "Unavailable",
+      );
+  }
+}
+async function refreshProfileWalletBalance() {
+  if (
+    me?.seller?.identity_status !== "verified" ||
+    !me?.seller?.selling_enabled
+  )
+    return;
+  const balance = $("#profile-wallet-balance");
+  if (!balance) return;
+  try {
+    const summary = await api("/seller/summary");
+    if (!balance.isConnected) return;
+    const test = summary.test_wallet?.balances?.find(
+      (b) => b.currency === "MYR",
+    );
+    if (summary.stripe_test_enabled && test)
+      balance.textContent =
+        fmt(test.available_minor, test.currency) +
+        " · " +
+        adminText("Sinov", "Тест", "Test");
+    else {
+      await loadWalletFx();
+      if (balance.isConnected)
+        balance.innerHTML = walletAmount(
+          summary.wallet.available_minor,
+          summary.wallet.currency,
+        );
+    }
+  } catch {
+    if (balance.isConnected)
+      balance.textContent = adminText(
+        "Balansni yuklab bo‘lmadi",
+        "Не удалось загрузить баланс",
+        "Balance unavailable",
+      );
+  }
+}
+async function openProfileMenu() {
+  if (!me) {
+    location.hash = "login";
+    return;
+  }
+  await loadAsiaMarkets();
+  const root = $("#profile-menu-root");
+  if (!root) return;
+  root.innerHTML = profileMenuMarkup();
+  root.hidden = false;
+  document.body.classList.add("profile-menu-open");
+  $("#account-button")?.setAttribute("aria-expanded", "true");
+  void refreshProfileBonusBalance();
+  void refreshProfileWalletBalance();
+  $("#profile-dropdown")?.focus({ preventScroll: true });
+  const form = $("#profile-form");
+  if (form) {
+    form.elements.namedItem("language").value = locale;
+    form.elements.namedItem("currency").value = me.currency;
+  }
+}
+function closeProfileMenu() {
+  const root = $("#profile-menu-root");
+  if (!root) return;
+  root.innerHTML = "";
+  root.hidden = true;
+  document.body.classList.remove("profile-menu-open");
+  $("#account-button")?.setAttribute("aria-expanded", "false");
+}
+async function renderAccount() {
+  closeProfileMenu();
+  await OperationsUX.account();
+  window.RewardsUI?.enhance();
+}
+async function renderCart() {
+  if (!window.OrderFlow)
+    throw Error(
+      adminText(
+        "Sahifa yuklanmadi. Yangilab qayta urinib ko‘ring.",
+        "Страница не загрузилась. Обновите её и повторите.",
+        "This page could not be loaded. Refresh and try again.",
+      ),
+    );
+  return window.OrderFlow.cart();
+}
+function notificationRoute(href) {
+  const value = String(href || "").replace(/^\/?#?/, "");
+  if (
+    [
+      "",
+      "notification-settings",
+      "saved-searches",
+      "order-cases",
+      "admin",
+      "admin-support",
+      "support-tickets",
+      "catalog-readiness",
+      "seller",
+      "orders",
+      "requests",
+      "account",
+      "messages",
+      "favorites",
+      "my-reviews",
+      "wallet",
+      "guide",
+      "fees",
+      "policies",
+    ].includes(value)
+  )
+    return value || "home";
+  if (
+    /^(order|order-case|conversation|listing|support-ticket|dispute)\/[A-Za-z0-9_-]+$/.test(
+      value,
+    )
+  )
+    return value;
+  return "account";
+}
+async function renderNotifications() {
+  if (!me) {
+    location.hash = "login";
+    return;
+  }
+  const items = await api("/notifications"),
+    unread = items.filter((x) => !x.read_at).length;
+  if (window.MobileSite?.isMobile()) {
+    MobileSite.notifications(items);
+    refreshNotifications();
+    return;
+  }
+  app.innerHTML = `<section class="page">${pageTitle("Bildirishnomalar", "Buyurtma, xabar va hisobingizdagi yangiliklar.", unread ? '<button class="button-secondary" data-action="read-all-notifications">Hammasini o‘qilgan deb belgilash</button>' : "")}<div class="notification-list">${items.length ? items.map((n) => `<article class="notification-item ${n.read_at ? "" : "unread"}"><div><h3>${esc(localized(n.title))}</h3><p>${esc(localized(n.body))}</p><time>${parseServerDate(n.created_at).toLocaleString(localeTag())}</time></div><div class="queue-actions"><a class="button-secondary" href="#${esc(notificationRoute(n.href))}" data-action="open-notification" data-id="${esc(n.id)}">Ochish</a>${!n.read_at ? `<button class="button-secondary" data-action="mark-notification-read" data-id="${esc(n.id)}">O‘qildi</button>` : ""}</div></article>`).join("") : empty("Hozircha bildirishnoma yo‘q.")}</div></section>`;
+  refreshNotifications();
+}
+function desktopOrderGroup(order) {
+  return order.status === "completed"
+    ? "completed"
+    : ["cancelled", "refunded"].includes(order.status)
+      ? "closed"
+      : "active";
+}
+async function renderOrders(saved = {}) {
+  if (!me) {
+    location.hash = "login";
+    return;
+  }
+  const route = location.href;
+  if (window.MobileSite?.isMobile()) {
+    const [orders, games] = await Promise.all([
+      api("/orders"),
+      api("/games").catch(() => []),
+    ]);
+    if (location.href !== route) return;
+    return MobileSite.orders(orders, games);
+  }
+  let role = ["purchases", "sales"].includes(saved.role)
+      ? saved.role
+      : me.seller?.selling_enabled
+        ? "sales"
+        : "purchases",
+    group = ["active", "completed", "closed", "all"].includes(saved.group)
+      ? saved.group
+      : "active",
+    query = typeof saved.query === "string" ? saved.query : "",
+    cursors = [null],
+    nextCursor = null,
+    requestVersion = 0,
+    controller = null,
+    searchTimer;
+  app.innerHTML = `<section class="page desktop-orders">${pageTitle(adminText("Buyurtmalar", "Заказы", "Orders"), adminText("Xarid va sotuvlaringizni kuzating.", "Следите за покупками и продажами.", "Track your purchases and sales."), '<button type="button" class="button-secondary" data-orders-refresh>' + icon("refresh") + " " + adminText("Yangilash", "Обновить", "Refresh") + "</button>")}<div class="desktop-order-toolbar"><div class="desktop-order-roles" aria-label="${adminText("Buyurtma turi", "Тип заказов", "Order type")}">${[
+    ["purchases", adminText("Xaridlar", "Покупки", "Purchases")],
+    ["sales", adminText("Sotuvlar", "Продажи", "Sales")],
+  ]
+    .map(
+      ([key, label]) =>
+        `<button type="button" data-order-role="${key}" aria-pressed="false">${label}</button>`,
+    )
+    .join(
+      "",
+    )}</div><label class="desktop-order-search">${icon("search")}<input type="search" aria-label="${adminText("Buyurtmalarni qidirish", "Поиск заказов", "Search orders")}" placeholder="${adminText("Buyurtma raqami yoki mahsulot", "Номер заказа или товар", "Order number or product")}" maxlength="100" data-order-search value="${esc(query)}"></label></div><div class="desktop-order-filters" aria-label="${adminText("Buyurtma holati", "Статус заказов", "Order status")}">${[
+    ["active", adminText("Faol", "Активные", "Active")],
+    ["completed", adminText("Yakunlangan", "Завершённые", "Completed")],
+    [
+      "closed",
+      adminText(
+        "Bekor qilingan / qaytarilgan",
+        "Отменённые / возвраты",
+        "Cancelled / refunded",
+      ),
+    ],
+    ["all", adminText("Barchasi", "Все", "All")],
+  ]
+    .map(
+      ([key, label]) =>
+        `<button type="button" data-order-group="${key}" aria-pressed="false"><span>${label}</span></button>`,
+    )
+    .join(
+      "",
+    )}</div><p class="help" data-orders-count aria-live="polite"></p><div class="desktop-order-list" data-orders-results></div><nav class="desktop-orders-pager" aria-label="${adminText("Buyurtma sahifalari", "Страницы заказов", "Order pages")}"><button class="button-secondary" type="button" data-orders-prev>${adminText("Oldingi", "Назад", "Previous")}</button><span data-orders-page></span><button class="button-secondary" type="button" data-orders-next>${adminText("Keyingi", "Далее", "Next")}</button></nav></section>`;
+  const root = app.querySelector(".desktop-orders"),
+    results = root.querySelector("[data-orders-results]"),
+    previous = root.querySelector("[data-orders-prev]"),
+    next = root.querySelector("[data-orders-next]");
+  const load = async () => {
+    if (!root.isConnected || location.href !== route) return;
+    const version = ++requestVersion;
+    controller?.abort();
+    controller = new AbortController();
+    root.setAttribute("aria-busy", "true");
+    previous.disabled = next.disabled = true;
+    root
+      .querySelectorAll("[data-order-role]")
+      .forEach((b) =>
+        b.setAttribute("aria-pressed", String(b.dataset.orderRole === role)),
+      );
+    root
+      .querySelectorAll("[data-order-group]")
+      .forEach((b) =>
+        b.setAttribute("aria-pressed", String(b.dataset.orderGroup === group)),
+      );
+    root.querySelector("[data-orders-count]").textContent = adminText(
+      "Buyurtmalar yuklanmoqda…",
+      "Загрузка заказов…",
+      "Loading orders…",
+    );
+    try {
+      const params = new URLSearchParams({
+        paged: "1",
+        role,
+        status: group,
+        limit: "20",
+      });
+      if (query.trim()) params.set("q", query.trim());
+      if (cursors.at(-1)) params.set("cursor", cursors.at(-1));
+      const page = await api("/orders?" + params, {
+        signal: controller.signal,
+      });
+      if (
+        !root.isConnected ||
+        version !== requestVersion ||
+        location.href !== route
+      )
+        return;
+      nextCursor = page.next_cursor;
+      root.querySelector("[data-orders-count]").textContent =
+        adminText(
+          "Ko‘rsatilgan buyurtmalar: ",
+          "Показано заказов: ",
+          "Orders shown: ",
+        ) + page.items.length;
+      root.querySelector("[data-orders-page]").textContent =
+        adminText("Sahifa ", "Страница ", "Page ") + cursors.length;
+      results.innerHTML = page.items.length
+        ? page.items
+            .map(
+              (o) =>
+                `<a class="panel desktop-order-card" href="/#order/${encodeURIComponent(o.id)}"><header><b>${esc(o.reference)}</b><span class="desktop-order-status" data-order-state="${esc(desktopOrderGroup(o))}">${esc(window.OrderFlow.statusLabel(o.status))}</span></header><div class="desktop-order-items">${o.items
+                  .slice(0, 1)
+                  .map((i) => {
+                    const image = i.image_url || i.snapshot?.image_url;
+                    return `<div class="desktop-order-item">${image ? `<img src="${esc(image)}" alt="" width="40" height="40" loading="lazy">` : `<span class="desktop-order-item-icon">${icon("box")}</span>`}<div><h2>${esc(i.title)}</h2><small>${adminText("Miqdor", "Количество", "Quantity")}: ${Number(i.quantity)}${o.item_count > 1 ? " · +" + (o.item_count - 1) + " " + adminText("mahsulot", "товаров", "items") : ""}</small></div></div>`;
+                  })
+                  .join(
+                    "",
+                  )}</div><footer><strong>${fmt(o.total_minor, o.currency)}</strong><time>${parseServerDate(o.created_at).toLocaleDateString(localeTag(), { month: "short", day: "numeric", year: "numeric" })}</time><span class="desktop-order-open">${icon("arrow-right")}</span></footer></a>`,
+            )
+            .join("")
+        : `<div class="panel desktop-orders-empty"><h2>${query ? adminText("Mos buyurtma topilmadi", "Заказы не найдены", "No matching orders") : adminText("Bu bo‘limda buyurtma yo‘q", "В этом разделе нет заказов", "No orders in this section")}</h2><p>${adminText("Boshqa holatni tanlang yoki qidiruvni o‘zgartiring.", "Выберите другой статус или измените поиск.", "Choose another status or change your search.")}</p><a class="button-secondary" href="/browse">${adminText("Mahsulotlarni ko‘rish", "Смотреть предложения", "Browse listings")}</a></div>`;
+      previous.disabled = cursors.length <= 1;
+      next.disabled = !page.has_more;
+    } catch (error) {
+      if (
+        version !== requestVersion ||
+        !root.isConnected ||
+        error.name === "AbortError"
+      )
+        return;
+      nextCursor = null;
+      root.querySelector("[data-orders-count]").textContent = error.message;
+      results.innerHTML = "";
+      previous.disabled = cursors.length <= 1;
+      next.disabled = true;
+    } finally {
+      if (version === requestVersion && root.isConnected)
+        root.setAttribute("aria-busy", "false");
+    }
+  };
+  const reset = () => {
+    clearTimeout(searchTimer);
+    cursors = [null];
+    return load();
+  };
+  root.querySelectorAll("[data-order-role]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        role = b.dataset.orderRole;
+        reset();
+      }),
+  );
+  root.querySelectorAll("[data-order-group]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        group = b.dataset.orderGroup;
+        reset();
+      }),
+  );
+  root.querySelector("[data-order-search]").oninput = (e) => {
+    query = e.target.value;
+    controller?.abort();
+    requestVersion++;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => reset(), 300);
+  };
+  previous.onclick = () => {
+    if (cursors.length > 1) {
+      cursors.pop();
+      load();
+    }
+  };
+  next.onclick = () => {
+    if (nextCursor) {
+      cursors.push(nextCursor);
+      load();
+    }
+  };
+  root.querySelector("[data-orders-refresh]").onclick = () => reset();
+  await load();
+}
+
+function orderPaymentNotice(order) {
+  const payment = order.payment || {};
+  if (payment.status === "failed")
+    return `<div class="notice warn order-payment-summary"><b>${adminText("To‘lov yakunlanmadi", "Оплата не завершена", "Payment was not completed")}</b><p>${adminText("Bu buyurtma bekor qilingan. To‘lov tasdiqlanmadi; savatchadan qayta urinib ko‘ring.", "Заказ отменён. Оплата не подтверждена; попробуйте снова из корзины.", "This order was cancelled because payment was not confirmed. Try again from your cart.")}</p><a class="text-link" href="#cart">${adminText("Savatchani ochish", "Открыть корзину", "Open cart")} →</a></div>`;
+  if (order.status === "cancelled" && payment.status === "expired")
+    return `<div class="notice warn order-payment-summary"><b>${adminText("To‘lov vaqti tugadi", "Время оплаты истекло", "Checkout expired")}</b><p>${adminText("To‘lov olinmadi. Mahsulotlar savatchaga qaytarildi; mavjudligini tekshirib, yangi buyurtma yarating.", "Оплата не прошла. Товары возвращены в корзину; проверьте наличие и создайте новый заказ.", "No payment was taken. The items are back in your cart; check availability and start a new order.")}</p><a class="text-link" href="#cart">${adminText("Savatchani ochish", "Открыть корзину", "Open cart")} →</a></div>`;
+  if (
+    payment.status === "succeeded" ||
+    [
+      "paid",
+      "awaiting_delivery",
+      "delivered",
+      "under_review",
+      "completed",
+    ].includes(order.status)
+  )
+    return `<div class="notice order-payment-summary">${adminText("To‘lov tasdiqlandi. Buyurtma yakunlanmaguncha mablag‘ sotuvchiga chiqarilmaydi. Sinov rejimida haqiqiy pul o‘tkazilmaydi.", "Оплата подтверждена. Средства не перечисляются продавцу до завершения заказа. В тестовом режиме реальные деньги не переводятся.", "Payment confirmed. Funds stay on hold until the order is complete. Sandbox mode does not move real money.")}</div>`;
+  if (order.status === "pending_payment")
+    return `<div class="notice warn order-payment-summary">${adminText("Keyingi qadam: to‘lovni yakunlang. Bu sinov rejimi; haqiqiy pul yechilmaydi.", "Следующий шаг: завершите оплату. Это тестовый режим; реальные деньги не списываются.", "Next: complete payment. This is sandbox mode; no real money is charged.")}</div>`;
+  return "";
+}
+async function renderOrder(id) {
+  if (!window.OrderFlow)
+    throw Error(
+      adminText(
+        "Sahifa yuklanmadi. Yangilab qayta urinib ko‘ring.",
+        "Страница не загрузилась. Обновите её и повторите.",
+        "This page could not be loaded. Refresh and try again.",
+      ),
+    );
+  return window.OrderFlow.order(id);
+}
 let identityPollTimer;
-function identityText(uz,ru,en){return adminText(uz,ru,en)}
-function scheduleIdentityStatusPoll(expected='pending'){clearTimeout(identityPollTimer);identityPollTimer=setTimeout(async()=>{if(location.hash.slice(1)!=='seller'||!me)return;try{const current=await api('/me');if(current.user?.seller){if(current.user.seller.identity_status!==expected){me=current.user;csrf=current.csrf||csrf;await renderSeller();return}me=current.user;scheduleIdentityStatusPoll(expected)}}catch{}},8000)}
-async function renderSellerIdentity(){
- clearTimeout(identityPollTimer);const seller=me.seller,status=seller.identity_status||'not_started';let configured=false;try{configured=(await api('/health')).identity_verification==='didit-configured'}catch{}
- const title=identityText('Sotuvchi shaxsini tasdiqlash','Подтверждение личности продавца','Verify seller identity');
- const stateLabel=status==='verified'?identityText('Tasdiqlandi','Подтверждено','Verified'):status==='rejected'?identityText('Qayta tekshiruv kerak','Нужно пройти проверку заново','Review needed'):status==='pending'?identityText('Ko‘rib chiqilmoqda','На проверке','In review'):identityText('Boshlanmagan','Не начато','Not started');
- const identityAction=configured&&status!=='verified'?`<div class="identity-consent-panel"><label class="identity-consent"><input id="didit-consent" type="checkbox"><span>${identityText('Shaxsni tasdiqlash uchun hisobimdagi aloqa ma’lumotlari, hujjatim va yuz tasvirim Didit’ga uzatilishiga roziman. SentryLoot hujjat yoki biometrik ma’lumot nusxasini saqlamaydi.','Я согласен передать Didit контактные данные моего аккаунта, документ и изображение лица для подтверждения личности. SentryLoot не хранит копии документов или биометрических данных.','I consent to sending my account contact details, identity document and face image to Didit for verification. SentryLoot does not store copies of identity documents or biometrics.')}</span></label><p>${identityText('SentryLoot tekshiruv natijalari, ism, mamlakat, hujjat turi va raqamining oxirgi 4 belgisini saqlaydi. Vakolatli adminlar ko‘rib chiqish uchun hujjatlarni Diditdan ochishi mumkin; rasmlar SentryLootda saqlanmaydi.','SentryLoot хранит результаты проверок, имя, страну, тип документа и последние 4 символа номера. Уполномоченные администраторы могут просматривать документы через Didit; изображения в SentryLoot не сохраняются.','SentryLoot stores check results, name, country, document type and the last 4 characters of its number. Authorized administrators can view documents from Didit for review; images are not stored by SentryLoot.')}</p><button id="launch-didit" class="button-accent" type="button">${icon('shield')}${identityText(status==='pending'?'Tekshiruvni ochish':'Xavfsiz tekshiruvni boshlash',status==='pending'?'Открыть проверку':'Начать защищённую проверку',status==='pending'?'Resume verification':'Start secure verification')}</button></div>`:!configured?`<div class="notice warn identity-message"><b>${identityText('Didit ulanishi sozlanmoqda','Интеграция Didit настраивается','Didit connection is being configured')}</b><br>${identityText('Tekshiruvni yoqish uchun serverga Didit API key, workflow ID va webhook secret qo‘shilishi kerak.','Чтобы включить проверку, добавьте API key, workflow ID и webhook secret Didit в настройки сервера.','Add the Didit API key, workflow ID, and webhook secret to the server configuration to enable verification.')}</div>`:'';
- app.innerHTML=`<section class="page identity-page"><div class="identity-shell"><div class="identity-top"><div><div class="eyebrow">${identityText('Sotuvchi hisobi · Xavfsiz tekshiruv','Аккаунт продавца · Защищённая проверка','Seller account · Secure verification')}</div><h1 class="page-title">${title}</h1><p class="identity-intro">${identityText('Sotishni boshlash uchun shaxsni tasdiqlang. Xaridorlar odatiy email tasdiqlangan hisob bilan foydalanishda davom etadi.','Чтобы начать продавать, подтвердите личность. Покупатели продолжают пользоваться обычным аккаунтом с подтверждённой почтой.','Verify your identity to start selling. Buyers can continue with a regular email-verified account.')}</p></div><div class="identity-mark">${icon('shield')}</div></div>
- <div class="identity-status-card ${status==='verified'?'is-good':status==='rejected'?'is-bad':''}"><span class="identity-status-dot"></span><div><small>${identityText('Didit tekshiruv holati','Статус проверки Didit','Didit review status')}</small><b>${esc(stateLabel)}</b></div><span class="identity-provider-pill">Didit</span></div>
- <div class="identity-steps"><article class="identity-step is-done"><span class="identity-step-check is-complete" aria-label="${identityText('Bajarildi','Выполнено','Completed')}">✓</span><div><b>${identityText('Email tasdiqlangan','Почта подтверждена','Email verified')}</b><small>${esc(me.email)}</small></div></article><article class="identity-step ${status==='verified'?'is-done':status==='pending'?'is-active':''}"><span class="identity-step-check ${status==='verified'?'is-complete':'is-number'}">${status==='verified'?'✓':'02'}</span><div><b>${identityText('Pasport/ID va yuz tekshiruvi','Паспорт/ID и проверка лица','Passport/ID and face check')}</b><small>${identityText('Hujjat, liveness va yuz mosligi Didit himoyalangan sahifasida tekshiriladi.','Документ, liveness и совпадение лица проверяются на защищённой странице Didit.','Document, liveness, and face match are checked on Didit’s secure page.')}</small></div></article><article class="identity-step ${status==='verified'?'is-active':''}"><span class="identity-step-check is-number">03</span><div><b>${identityText('Marketplace admin ko‘rigi','Проверка администратором','Marketplace admin review')}</b><small>${identityText('Didit natijasidan keyin alohida tasdiq','Отдельное подтверждение после результата Didit','A separate review follows Didit’s result')}</small></div></article></div>
- ${status==='rejected'?`<div class="notice warn identity-message">${identityText('Tekshiruv yakunlanmadi. Qayta urinish uchun yangi tekshiruvni boshlang.','Проверка не пройдена. Начните новую проверку, чтобы попробовать ещё раз.','Verification was not approved. Start a new session to try again.')}</div>`:status==='pending'?`<div class="notice identity-message">${identityText('Tekshiruv yuborildi yoki davom etmoqda. Natija kelganda holat avtomatik yangilanadi.','Проверка отправлена или продолжается. Статус обновится автоматически после результата.','Verification has started or is in progress. This status updates automatically when Didit sends a result.')}</div>`:''}
+function identityText(uz, ru, en) {
+  return adminText(uz, ru, en);
+}
+function scheduleIdentityStatusPoll(expected = "pending") {
+  clearTimeout(identityPollTimer);
+  identityPollTimer = setTimeout(async () => {
+    if (location.hash.slice(1) !== "seller" || !me) return;
+    try {
+      const current = await api("/me");
+      if (current.user?.seller) {
+        if (current.user.seller.identity_status !== expected) {
+          me = current.user;
+          csrf = current.csrf || csrf;
+          await renderSeller();
+          return;
+        }
+        me = current.user;
+        scheduleIdentityStatusPoll(expected);
+      }
+    } catch {}
+  }, 8000);
+}
+async function renderSellerIdentity() {
+  clearTimeout(identityPollTimer);
+  const seller = me.seller,
+    status = seller.identity_status || "not_started";
+  let configured = false;
+  try {
+    configured =
+      (await api("/health")).identity_verification === "didit-configured";
+  } catch {}
+  const title = identityText(
+    "Sotuvchi shaxsini tasdiqlash",
+    "Подтверждение личности продавца",
+    "Verify seller identity",
+  );
+  const stateLabel =
+    status === "verified"
+      ? identityText("Tasdiqlandi", "Подтверждено", "Verified")
+      : status === "rejected"
+        ? identityText(
+            "Qayta tekshiruv kerak",
+            "Нужно пройти проверку заново",
+            "Review needed",
+          )
+        : status === "pending"
+          ? identityText("Ko‘rib chiqilmoqda", "На проверке", "In review")
+          : identityText("Boshlanmagan", "Не начато", "Not started");
+  const identityAction =
+    configured && status !== "verified"
+      ? `<div class="identity-consent-panel"><label class="identity-consent"><input id="didit-consent" type="checkbox"><span>${identityText("Shaxsni tasdiqlash uchun hisobimdagi aloqa ma’lumotlari, hujjatim va yuz tasvirim Didit’ga uzatilishiga roziman. SentryLoot hujjat yoki biometrik ma’lumot nusxasini saqlamaydi.", "Я согласен передать Didit контактные данные моего аккаунта, документ и изображение лица для подтверждения личности. SentryLoot не хранит копии документов или биометрических данных.", "I consent to sending my account contact details, identity document and face image to Didit for verification. SentryLoot does not store copies of identity documents or biometrics.")}</span></label><p>${identityText("SentryLoot tekshiruv natijalari, ism, mamlakat, hujjat turi va raqamining oxirgi 4 belgisini saqlaydi. Vakolatli adminlar ko‘rib chiqish uchun hujjatlarni Diditdan ochishi mumkin; rasmlar SentryLootda saqlanmaydi.", "SentryLoot хранит результаты проверок, имя, страну, тип документа и последние 4 символа номера. Уполномоченные администраторы могут просматривать документы через Didit; изображения в SentryLoot не сохраняются.", "SentryLoot stores check results, name, country, document type and the last 4 characters of its number. Authorized administrators can view documents from Didit for review; images are not stored by SentryLoot.")}</p><button id="launch-didit" class="button-accent" type="button">${icon("shield")}${identityText(status === "pending" ? "Tekshiruvni ochish" : "Xavfsiz tekshiruvni boshlash", status === "pending" ? "Открыть проверку" : "Начать защищённую проверку", status === "pending" ? "Resume verification" : "Start secure verification")}</button></div>`
+      : !configured
+        ? `<div class="notice warn identity-message"><b>${identityText("Didit ulanishi sozlanmoqda", "Интеграция Didit настраивается", "Didit connection is being configured")}</b><br>${identityText("Tekshiruvni yoqish uchun serverga Didit API key, workflow ID va webhook secret qo‘shilishi kerak.", "Чтобы включить проверку, добавьте API key, workflow ID и webhook secret Didit в настройки сервера.", "Add the Didit API key, workflow ID, and webhook secret to the server configuration to enable verification.")}</div>`
+        : "";
+  app.innerHTML = `<section class="page identity-page"><div class="identity-shell"><div class="identity-top"><div><div class="eyebrow">${identityText("Sotuvchi hisobi · Xavfsiz tekshiruv", "Аккаунт продавца · Защищённая проверка", "Seller account · Secure verification")}</div><h1 class="page-title">${title}</h1><p class="identity-intro">${identityText("Sotishni boshlash uchun shaxsni tasdiqlang. Xaridorlar odatiy email tasdiqlangan hisob bilan foydalanishda davom etadi.", "Чтобы начать продавать, подтвердите личность. Покупатели продолжают пользоваться обычным аккаунтом с подтверждённой почтой.", "Verify your identity to start selling. Buyers can continue with a regular email-verified account.")}</p></div><div class="identity-mark">${icon("shield")}</div></div>
+ <div class="identity-status-card ${status === "verified" ? "is-good" : status === "rejected" ? "is-bad" : ""}"><span class="identity-status-dot"></span><div><small>${identityText("Didit tekshiruv holati", "Статус проверки Didit", "Didit review status")}</small><b>${esc(stateLabel)}</b></div><span class="identity-provider-pill">Didit</span></div>
+ <div class="identity-steps"><article class="identity-step is-done"><span class="identity-step-check is-complete" aria-label="${identityText("Bajarildi", "Выполнено", "Completed")}">✓</span><div><b>${identityText("Email tasdiqlangan", "Почта подтверждена", "Email verified")}</b><small>${esc(me.email)}</small></div></article><article class="identity-step ${status === "verified" ? "is-done" : status === "pending" ? "is-active" : ""}"><span class="identity-step-check ${status === "verified" ? "is-complete" : "is-number"}">${status === "verified" ? "✓" : "02"}</span><div><b>${identityText("Pasport/ID va yuz tekshiruvi", "Паспорт/ID и проверка лица", "Passport/ID and face check")}</b><small>${identityText("Hujjat, liveness va yuz mosligi Didit himoyalangan sahifasida tekshiriladi.", "Документ, liveness и совпадение лица проверяются на защищённой странице Didit.", "Document, liveness, and face match are checked on Didit’s secure page.")}</small></div></article><article class="identity-step ${status === "verified" ? "is-active" : ""}"><span class="identity-step-check is-number">03</span><div><b>${identityText("Marketplace admin ko‘rigi", "Проверка администратором", "Marketplace admin review")}</b><small>${identityText("Didit natijasidan keyin alohida tasdiq", "Отдельное подтверждение после результата Didit", "A separate review follows Didit’s result")}</small></div></article></div>
+ ${status === "rejected" ? `<div class="notice warn identity-message">${identityText("Tekshiruv yakunlanmadi. Qayta urinish uchun yangi tekshiruvni boshlang.", "Проверка не пройдена. Начните новую проверку, чтобы попробовать ещё раз.", "Verification was not approved. Start a new session to try again.")}</div>` : status === "pending" ? `<div class="notice identity-message">${identityText("Tekshiruv yuborildi yoki davom etmoqda. Natija kelganda holat avtomatik yangilanadi.", "Проверка отправлена или продолжается. Статус обновится автоматически после результата.", "Verification has started or is in progress. This status updates automatically when Didit sends a result.")}</div>` : ""}
  ${identityAction}
- <details class="identity-privacy"><summary>${identityText('Maxfiylik va xavfsizlik','Конфиденциальность и безопасность','Privacy and security')}</summary><p>${identityText('Pasport rasmini email, chat yoki SentryLoot formasiga yubormang. Hujjat va kamera oqimi Didit’ning himoyalangan tekshiruv sahifasiga yuboriladi. Sotish Didit ijobiy natija bergani va administrator tasdiqlaganidan keyin ochiladi.','Не отправляйте фото паспорта по email, в чат или через формы SentryLoot. Документ и камера передаются только на защищённую страницу Didit. Продажи включатся после положительной проверки Didit и подтверждения администратора.','Do not send passport images by email, chat, or SentryLoot forms. The document and camera flow go to Didit’s secure verification page. Selling opens after Didit approves the check and an administrator approves the seller.')}</p></details></div></section>`;
- if(status==='pending')scheduleIdentityStatusPoll('pending');const start=$('#launch-didit');if(start)start.onclick=async()=>{if(me.phone_verification_enabled&&!me.phone_verified){sessionStorage.setItem('phone-verification-return','seller');location.hash='contact-details';return}if(!$('#didit-consent')?.checked){toast(identityText('Davom etish uchun rozilikni belgilang.','Для продолжения отметьте согласие.','Check the consent box to continue.'),'error');return}start.disabled=true;start.innerHTML=`<span class="spinner"></span>${identityText('Ulanmoqda…','Подключение…','Connecting…')}`;try{const session=await api('/seller/identity-session',{method:'POST',body:JSON.stringify({consent:true})});me.seller.identity_status='pending';me.seller.identity_provider='didit';scheduleIdentityStatusPoll('pending');location.assign(session.url)}catch(e){toast(e.message,'error');start.disabled=false;start.innerHTML=`${icon('shield')}${identityText('Xavfsiz tekshiruvni boshlash','Начать защищённую проверку','Start secure verification')}`}};
+ <details class="identity-privacy"><summary>${identityText("Maxfiylik va xavfsizlik", "Конфиденциальность и безопасность", "Privacy and security")}</summary><p>${identityText("Pasport rasmini email, chat yoki SentryLoot formasiga yubormang. Hujjat va kamera oqimi Didit’ning himoyalangan tekshiruv sahifasiga yuboriladi. Sotish Didit ijobiy natija bergani va administrator tasdiqlaganidan keyin ochiladi.", "Не отправляйте фото паспорта по email, в чат или через формы SentryLoot. Документ и камера передаются только на защищённую страницу Didit. Продажи включатся после положительной проверки Didit и подтверждения администратора.", "Do not send passport images by email, chat, or SentryLoot forms. The document and camera flow go to Didit’s secure verification page. Selling opens after Didit approves the check and an administrator approves the seller.")}</p></details></div></section>`;
+  if (status === "pending") scheduleIdentityStatusPoll("pending");
+  const start = $("#launch-didit");
+  if (start)
+    start.onclick = async () => {
+      if (me.phone_verification_enabled && !me.phone_verified) {
+        sessionStorage.setItem("phone-verification-return", "seller");
+        location.hash = "contact-details";
+        return;
+      }
+      if (!$("#didit-consent")?.checked) {
+        toast(
+          identityText(
+            "Davom etish uchun rozilikni belgilang.",
+            "Для продолжения отметьте согласие.",
+            "Check the consent box to continue.",
+          ),
+          "error",
+        );
+        return;
+      }
+      start.disabled = true;
+      start.innerHTML = `<span class="spinner"></span>${identityText("Ulanmoqda…", "Подключение…", "Connecting…")}`;
+      try {
+        const session = await api("/seller/identity-session", {
+          method: "POST",
+          body: JSON.stringify({ consent: true }),
+        });
+        me.seller.identity_status = "pending";
+        me.seller.identity_provider = "didit";
+        scheduleIdentityStatusPoll("pending");
+        location.assign(session.url);
+      } catch (e) {
+        toast(e.message, "error");
+        start.disabled = false;
+        start.innerHTML = `${icon("shield")}${identityText("Xavfsiz tekshiruvni boshlash", "Начать защищённую проверку", "Start secure verification")}`;
+      }
+    };
 }
-function sellerDashboardSummary(summary){
- const count=rows=>(rows||[]).reduce((n,row)=>n+Number(row.count||0),0);
- const stripe=summary.stripe_test_enabled;
- const balances=stripe?summary.test_wallet?.balances||[]:[{currency:summary.wallet.currency,pending_minor:summary.wallet.held_minor,available_minor:summary.wallet.available_minor}];
- const amount=key=>balances.map(b=>`<span class="seller-balance-value">${fmt(b[key]||0,b.currency)}</span>`).join('');
- return `<div class="stats seller-overview"><div class="stat"><small>${adminText('E’lonlar','Объявления','Listings')}</small><b>${count(summary.listings)}</b></div><div class="stat"><small>${adminText('Buyurtmalar','Заказы','Orders')}</small><b>${count(summary.orders)}</b></div><a class="stat" href="/#wallet"><small>${adminText('Kutilayotgan','Ожидается','Pending')}</small><b>${amount('pending_minor')}</b></a><a class="stat" href="/#wallet"><small>${adminText('Mavjud balans','Доступный баланс','Available balance')}</small><b>${amount('available_minor')}</b></a></div><p class="help seller-balance-note">${adminText('Balanslar o‘z valyutasida ko‘rsatiladi. Buyurtma va to‘lov tafsilotlari hamyonda.','Балансы показаны в исходной валюте. Подробности заказов и выплат — в кошельке.','Balances are shown in their original currency. View order and payout details in your wallet.')} <a class="text-link" href="/#wallet">${adminText('Hamyonni ochish','Открыть кошелёк','Open wallet')} →</a></p>`;
+function sellerDashboardSummary(summary) {
+  const count = (rows) =>
+    (rows || []).reduce((n, row) => n + Number(row.count || 0), 0);
+  const stripe = summary.stripe_test_enabled;
+  const balances = stripe
+    ? summary.test_wallet?.balances || []
+    : [
+        {
+          currency: summary.wallet.currency,
+          pending_minor: summary.wallet.held_minor,
+          available_minor: summary.wallet.available_minor,
+        },
+      ];
+  const amount = (key) =>
+    balances
+      .map(
+        (b) =>
+          `<span class="seller-balance-value">${fmt(b[key] || 0, b.currency)}</span>`,
+      )
+      .join("");
+  return `<div class="stats seller-overview"><div class="stat"><small>${adminText("E’lonlar", "Объявления", "Listings")}</small><b>${count(summary.listings)}</b></div><div class="stat"><small>${adminText("Buyurtmalar", "Заказы", "Orders")}</small><b>${count(summary.orders)}</b></div><a class="stat" href="/#wallet"><small>${adminText("Kutilayotgan", "Ожидается", "Pending")}</small><b>${amount("pending_minor")}</b></a><a class="stat" href="/#wallet"><small>${adminText("Mavjud balans", "Доступный баланс", "Available balance")}</small><b>${amount("available_minor")}</b></a></div><p class="help seller-balance-note">${adminText("Balanslar o‘z valyutasida ko‘rsatiladi. Buyurtma va to‘lov tafsilotlari hamyonda.", "Балансы показаны в исходной валюте. Подробности заказов и выплат — в кошельке.", "Balances are shown in their original currency. View order and payout details in your wallet.")} <a class="text-link" href="/#wallet">${adminText("Hamyonni ochish", "Открыть кошелёк", "Open wallet")} →</a></p>`;
 }
-let sellerRenderVersion=0;
-async function renderSeller(){const renderVersion=++sellerRenderVersion,route=location.href;if(!me){location.hash='login';return}if(!me.email_verified){app.innerHTML=`<section class="page">${pageTitle(adminText('Sotuvchi bo‘lish','Стать продавцом','Become a seller'))}<div class="notice warn">${adminText('Sotuvchi profilini yoqishdan oldin email tasdiqlanishi kerak.','Подтвердите email перед созданием профиля продавца.','Verify your email before creating a seller profile.')}</div></section>`;return}if(!me.seller){app.innerHTML=`<section class="page">${pageTitle(adminText('Sotuvchi profilini yoqish','Активировать профиль продавца','Enable seller profile'),adminText('Bitta hisob xaridor va sotuvchi vazifalarini bajarishi mumkin.','Один аккаунт может быть и покупателем, и продавцом.','One account can act as both a buyer and a seller.'))}<div class="form-card"><div class="notice">${adminText('Sotuvchi profilini yarating. Keyingi bosqichda email va Didit orqali shaxsni tekshirasiz; pasport rasmi SentryLoot serveriga yuklanmaydi.','Создайте профиль продавца. На следующем этапе подтвердите email и личность через Didit; фото паспорта не загружается на сервер SentryLoot.','Create your seller profile. In the next step, verify your email and identity with Didit; passport images are not uploaded to SentryLoot.')}</div><form id="seller-form"><div class="field"><label>${adminText('Do‘kon nomi','Название магазина','Shop name')}</label><input name="shop_name" maxlength="80" required></div><div class="field"><label>${adminText('Qisqacha tavsif','Краткое описание','Short description')}</label><textarea name="bio" maxlength="1000"></textarea></div><button class="button-primary">${adminText('Sotuvchi profilini yaratish','Создать профиль продавца','Create seller profile')}</button></form></div></section>`;return}
- if(me.seller.identity_status!=='verified')return renderSellerIdentity();
- if(me.seller.verification_status!=='verified'||!me.seller.selling_enabled){const state=me.seller.verification_status||'pending';const sellerState=state==='pending'?adminText('Ko‘rib chiqilmoqda','На проверке','In review'):state==='rejected'?adminText('Rad etildi','Отклонено','Rejected'):state==='verified'?adminText('Tasdiqlandi','Подтверждено','Verified'):state;app.innerHTML=`<section class="page">${pageTitle(adminText('Sotuvchi tekshiruvi','Проверка продавца','Seller verification'),esc(me.seller.shop_name))}<div class="form-card"><div class="notice warn"><b>${adminText('Holat:','Статус:','Status:')} ${esc(sellerState)}</b><br>${adminText('Sotish, buyurtma yetkazish va mablag‘ yechish so‘rash profil tekshirilib tasdiqlangandan keyin ochiladi. Didit shaxsni tasdiqladi. Sotish administrator ushbu profilni alohida tasdiqlagach yoqiladi.','Продажа, доставка заказов и запрос выплат станут доступны после проверки и подтверждения профиля. Didit подтвердил личность. Продажи включит администратор после отдельного одобрения профиля.','Selling, order delivery, and payout requests will unlock after the profile is reviewed and approved. Didit has verified your identity. An administrator must approve this profile separately before selling is enabled.')}</div><form id="seller-form"><div class="field"><label>${adminText('Do‘kon nomi','Название магазина','Shop name')}</label><input name="shop_name" value="${esc(me.seller.shop_name)}" maxlength="80" required></div><div class="field"><label>${adminText('Qisqacha tavsif','Краткое описание','Short description')}</label><textarea name="bio" maxlength="1000">${esc(me.seller.bio||'')}</textarea></div><button class="button-primary" ${state==='pending'?'disabled':''}>${state==='pending'?adminText('Tekshiruv kutilmoqda','Проверка ожидается','Review pending'):adminText('Tekshiruvga yuborish','Отправить на проверку','Submit for review')}</button></form></div></section>`;return}
- if(location.hash!=='#seller/dashboard'){const [games,cats]=await Promise.all([api('/seller/catalog'),api('/categories')]);return OfferWizard.render(games,cats);}
- const [summary,health,own]=await Promise.all([api('/seller/summary'),api('/health'),api('/seller/listings')]);if(renderVersion!==sellerRenderVersion||location.href!==route)return;const prelaunch=health.mode==='production'&&!health.sales_enabled&&!health.internal_testing_enabled;app.innerHTML=`<section class="page seller-dashboard">${pageTitle(adminText('Sotuvchi paneli','Панель продавца','Seller dashboard'),esc(me.seller.shop_name)+' · '+adminText('Holat: tasdiqlangan','Статус: подтверждён','Status: verified'),'<a class="button-secondary" href="#orders">'+adminText('Buyurtmalar','Заказы','Orders')+'</a>' )}${sellerDashboardSummary(summary)}<div data-seller-insights></div><div class="seller-workspace"><div class="panel seller-create-panel"><h2>${adminText('Yangi e’lon','Новое предложение','Create a new offer')}</h2><p class="help">${adminText('Mahsulotni tanlang, ma’lumotlarni kiriting va tekshiruvga yuboring.','Выберите товар, добавьте сведения и отправьте на проверку.','Choose your product, add the details and submit it for review.')}</p><a class="button-primary" href="#seller">${adminText('E’lon yaratish','Создать предложение','Create offer')} →</a></div><div><div class="panel seller-listings-panel"><h3>${adminText('E’lonlarim','Мои объявления','My listings')}</h3><div id="my-listings" class="help">Yuklanmoqda…</div></div></div></div></section>`;
+let sellerRenderVersion = 0;
+async function renderSeller() {
+  const renderVersion = ++sellerRenderVersion,
+    route = location.href;
+  if (!me) {
+    location.hash = "login";
+    return;
+  }
+  if (!me.email_verified) {
+    app.innerHTML = `<section class="page">${pageTitle(adminText("Sotuvchi bo‘lish", "Стать продавцом", "Become a seller"))}<div class="notice warn">${adminText("Sotuvchi profilini yoqishdan oldin email tasdiqlanishi kerak.", "Подтвердите email перед созданием профиля продавца.", "Verify your email before creating a seller profile.")}</div></section>`;
+    return;
+  }
+  if (!me.seller) {
+    app.innerHTML = `<section class="page">${pageTitle(adminText("Sotuvchi profilini yoqish", "Активировать профиль продавца", "Enable seller profile"), adminText("Bitta hisob xaridor va sotuvchi vazifalarini bajarishi mumkin.", "Один аккаунт может быть и покупателем, и продавцом.", "One account can act as both a buyer and a seller."))}<div class="form-card"><div class="notice">${adminText("Sotuvchi profilini yarating. Keyingi bosqichda email va Didit orqali shaxsni tekshirasiz; pasport rasmi SentryLoot serveriga yuklanmaydi.", "Создайте профиль продавца. На следующем этапе подтвердите email и личность через Didit; фото паспорта не загружается на сервер SentryLoot.", "Create your seller profile. In the next step, verify your email and identity with Didit; passport images are not uploaded to SentryLoot.")}</div><form id="seller-form"><div class="field"><label>${adminText("Do‘kon nomi", "Название магазина", "Shop name")}</label><input name="shop_name" maxlength="80" required></div><div class="field"><label>${adminText("Qisqacha tavsif", "Краткое описание", "Short description")}</label><textarea name="bio" maxlength="1000"></textarea></div><button class="button-primary">${adminText("Sotuvchi profilini yaratish", "Создать профиль продавца", "Create seller profile")}</button></form></div></section>`;
+    return;
+  }
+  if (me.seller.identity_status !== "verified") return renderSellerIdentity();
+  if (
+    me.seller.verification_status !== "verified" ||
+    !me.seller.selling_enabled
+  ) {
+    const state = me.seller.verification_status || "pending";
+    const sellerState =
+      state === "pending"
+        ? adminText("Ko‘rib chiqilmoqda", "На проверке", "In review")
+        : state === "rejected"
+          ? adminText("Rad etildi", "Отклонено", "Rejected")
+          : state === "verified"
+            ? adminText("Tasdiqlandi", "Подтверждено", "Verified")
+            : state;
+    app.innerHTML = `<section class="page">${pageTitle(adminText("Sotuvchi tekshiruvi", "Проверка продавца", "Seller verification"), esc(me.seller.shop_name))}<div class="form-card"><div class="notice warn"><b>${adminText("Holat:", "Статус:", "Status:")} ${esc(sellerState)}</b><br>${adminText("Sotish, buyurtma yetkazish va mablag‘ yechish so‘rash profil tekshirilib tasdiqlangandan keyin ochiladi. Didit shaxsni tasdiqladi. Sotish administrator ushbu profilni alohida tasdiqlagach yoqiladi.", "Продажа, доставка заказов и запрос выплат станут доступны после проверки и подтверждения профиля. Didit подтвердил личность. Продажи включит администратор после отдельного одобрения профиля.", "Selling, order delivery, and payout requests will unlock after the profile is reviewed and approved. Didit has verified your identity. An administrator must approve this profile separately before selling is enabled.")}</div><form id="seller-form"><div class="field"><label>${adminText("Do‘kon nomi", "Название магазина", "Shop name")}</label><input name="shop_name" value="${esc(me.seller.shop_name)}" maxlength="80" required></div><div class="field"><label>${adminText("Qisqacha tavsif", "Краткое описание", "Short description")}</label><textarea name="bio" maxlength="1000">${esc(me.seller.bio || "")}</textarea></div><button class="button-primary" ${state === "pending" ? "disabled" : ""}>${state === "pending" ? adminText("Tekshiruv kutilmoqda", "Проверка ожидается", "Review pending") : adminText("Tekshiruvga yuborish", "Отправить на проверку", "Submit for review")}</button></form></div></section>`;
+    return;
+  }
+  if (location.hash !== "#seller/dashboard") {
+    const [games, cats] = await Promise.all([
+      api("/seller/catalog"),
+      api("/categories"),
+    ]);
+    return OfferWizard.render(games, cats);
+  }
+  const [summary, health, own] = await Promise.all([
+    api("/seller/summary"),
+    api("/health"),
+    api("/seller/listings"),
+  ]);
+  if (renderVersion !== sellerRenderVersion || location.href !== route) return;
+  const prelaunch =
+    health.mode === "production" &&
+    !health.sales_enabled &&
+    !health.internal_testing_enabled;
+  app.innerHTML = `<section class="page seller-dashboard">${pageTitle(adminText("Sotuvchi paneli", "Панель продавца", "Seller dashboard"), esc(me.seller.shop_name) + " · " + adminText("Holat: tasdiqlangan", "Статус: подтверждён", "Status: verified"), '<a class="button-secondary" href="#orders">' + adminText("Buyurtmalar", "Заказы", "Orders") + "</a>")}${sellerDashboardSummary(summary)}<div data-seller-insights></div><div class="seller-workspace"><div class="panel seller-create-panel"><h2>${adminText("Yangi e’lon", "Новое предложение", "Create a new offer")}</h2><p class="help">${adminText("Mahsulotni tanlang, ma’lumotlarni kiriting va tekshiruvga yuboring.", "Выберите товар, добавьте сведения и отправьте на проверку.", "Choose your product, add the details and submit it for review.")}</p><a class="button-primary" href="#seller">${adminText("E’lon yaratish", "Создать предложение", "Create offer")} →</a></div><div><div class="panel seller-listings-panel"><h3>${adminText("E’lonlarim", "Мои объявления", "My listings")}</h3><div id="my-listings" class="help">Yuklanmoqda…</div></div></div></div></section>`;
 
-
- const listingRoot=$('#my-listings');listingRoot.innerHTML=own.length?own.map(l=>`<div class="order-line"><div class="order-head"><b>${esc(l.title)}</b>${status(l.status==='published'&&l.marketplace_visible===false?'not_public':l.status)}</div><p class="help">${fmt(l.price_minor,l.currency)} · ${esc(l.moderation_note||'')}</p>${l.status==='published'&&l.marketplace_visible===false?`<div class="notice warn">${adminText('E’lon hisobingizda faol, ammo hozir ommaviy bozorda ko‘rinmaydi: savdo rejimi, o‘yin tasdig‘i yoki mahsulot qoldig‘i talabi bajarilmagan.','Объявление активно в кабинете, но не отображается на публичном рынке: не выполнены условия режима торговли, допуска игры или наличия товара.','Your listing is active in your account but hidden from the public marketplace because the sales mode, game approval, or available stock requirement is not met.')}</div>`:''}<div class="queue-actions">${!prelaunch&&['draft','rejected','paused'].includes(l.status)?`<button class="button-secondary" data-action="submit-listing" data-id="${esc(l.id)}">${adminText('Tekshiruvga yuborish','Отправить на проверку','Submit for review')}</button>`:''}${l.status==='published'?`<button class="button-secondary" data-action="pause-listing" data-id="${esc(l.id)}">${adminText('Vaqtincha yashirish','Приостановить','Pause listing')}</button>`:''}${!prelaunch&&l.status==='paused'?`<button class="button-secondary" data-action="resume-listing" data-id="${esc(l.id)}">${adminText('Qayta yuborish','Отправить повторно','Resubmit')}</button>`:''}${['draft','rejected','paused','approved_private'].includes(l.status)?`<button class="button-danger" data-action="archive-listing" data-id="${esc(l.id)}">${adminText('Arxivlash','Архивировать','Archive')}</button>`:''}</div><details style="margin-top:10px"><summary class="text-link">${adminText('E’lonni tahrirlash','Редактировать объявление','Edit listing')}</summary>${listingEditFormMarkup(l)}</details></div>`).join(''):empty(adminText('Hozircha e’lon yo‘q.','Объявлений пока нет.','No listings yet.'));setupListingFilePreviews($('#my-listings'));MarketUX.seller(own);}
-async function renderRequests(){const [rows,mine,games,cats]=await Promise.all([api('/requests'),me?api('/requests?mine=1'):Promise.resolve([]),api('/games'),api('/categories')]);const replies=await Promise.all(mine.map(async r=>[r.id,await api('/requests/'+encodeURIComponent(r.id)+'/responses').catch(()=>[])]));const byId=Object.fromEntries(replies);app.innerHTML=`<section class="page">${pageTitle('Mahsulot so‘rovlari','Bozorda yo‘q mahsulotni so‘rang yoki ochiq talablarni ko‘rib chiqing.')}<div class="detail-grid"><div><div class="panel"><h2>Ochiq so‘rovlar</h2>${rows.length?rows.map(r=>`<div class="order-line"><div class="order-head"><div><h3>${esc(r.title)}</h3><div class="help">${esc(r.game_name)} · ${esc(r.requester)} · ${parseServerDate(r.created_at).toLocaleDateString(localeTag())}</div></div>${r.budget_minor?`<b>${fmt(r.budget_minor,r.currency)}</b>`:''}</div><p class="detail-desc">${esc(r.description)}</p>${me?.seller&&!r.is_own?`<button class="button-secondary" data-action="respond-request" data-id="${esc(r.id)}">Javob berish</button><form data-form="request-response" data-request="${esc(r.id)}" hidden><div class="field"><label>Taklifingiz</label><textarea name="message" required minlength="2" maxlength="2000" placeholder="Mahsulot, narx yoki muddat bo‘yicha taklif yozing"></textarea></div><div class="actions"><button class="button-primary">Javob yuborish</button><button type="button" class="button-secondary" data-action="cancel-request-response">Bekor qilish</button></div></form>`:''}</div>`).join(''):empty('Hozircha ochiq so‘rovlar yo‘q.')}</div>${mine.length?`<div class="panel" style="margin-top:14px"><h2>So‘rovlarim va sotuvchilar javoblari</h2>${mine.map(r=>`<div class="order-line"><b>${esc(r.title)}</b> ${status(r.status)}<p class="help">${esc(r.description)}</p>${(byId[r.id]||[]).map(a=>`<div class="notice"><b>${esc(a.seller_name)}</b><p>${esc(a.message)}</p>${a.listing_id?`<a class="text-link" href="/listing/${encodeURIComponent(a.listing_id)}">E’lonni ko‘rish →</a>`:''}<div class="actions"><button class="button-secondary" data-action="contact-request" data-id="${esc(r.id)}" data-seller="${esc(a.seller_id)}">Sotuvchi bilan suhbat</button></div></div>`).join('')||'<p class="help">Sotuvchilardan javob kutilmoqda.</p>'}</div>`).join('')}</div>`:''}</div><div class="form-card"><h2>So‘rov yuborish</h2>${me?`<form id="request-form"><div class="field"><label>O‘yin</label><select name="game_id">${games.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('')}</select></div><div class="field"><label>Kategoriya</label><select name="category_id"><option value="">Ixtiyoriy</option>${cats.map(c=>`<option value="${esc(c.id)}">${esc(categoryLabel(c.name))}</option>`).join('')}</select></div><div class="field"><label>Sarlavha</label><input name="title" required minlength="5" maxlength="120"></div><div class="field"><label>Tavsif</label><textarea name="description" required minlength="10" maxlength="3000"></textarea></div><div class="field"><label>Maqsad budjeti (UZS)</label><input type="number" min="1" name="budget_minor"></div><button class="button-primary">So‘rov yaratish</button></form>`:'<div class="notice">So‘rov yuborish uchun <a class="text-link" href="#login">tizimga kiring</a>.</div>'}</div></div></section>`;if($('#request-form'))$('#request-form').onsubmit=async e=>{e.preventDefault();let d=Object.fromEntries(new FormData(e.currentTarget));if(d.budget_minor)d.budget_minor=Number(d.budget_minor);if(!d.category_id)delete d.category_id;try{await api('/requests',{method:'POST',body:JSON.stringify(d)});toast('So‘rov yaratildi');renderRequests()}catch(x){toast(x.message,'error')}}}
-async function renderMessages(id=selectedConversation){return await MarketUX.messages(id)}
-async function renderFavorites(){return await MarketUX.favorites()}
-async function renderWallet(){if(!window.OrderFlow)throw Error(adminText('Sahifa yuklanmadi. Yangilab qayta urinib ko‘ring.','Страница не загрузилась. Обновите её и повторите.','This page could not be loaded. Refresh and try again.'));return window.OrderFlow.wallet()}
-async function renderPayoutOptions(){if(!window.OrderFlow)throw Error(adminText('Sahifa yuklanmadi. Yangilab qayta urinib ko‘ring.','Страница не загрузилась. Обновите её и повторите.','This page could not be loaded. Refresh and try again.'));return window.OrderFlow.wallet()}
-async function renderMyReviews(){return window.ReviewHub.mine()}
-function blogDate(value){const d=parseServerDate(value);return Number.isNaN(+d)?'':d.toLocaleDateString(localeTag(),{year:'numeric',month:'long',day:'numeric'})}
-function blogCard(post){const i=locale==='ru'?1:locale==='uz'?0:2;return `<article class="blog-card"><span class="blog-category">${esc(post.category[i])}</span><time class="blog-date">${blogDate(post.published_at||post.created_at)}</time><h2><a href="/blog/${encodeURIComponent(post.slug)}">${esc(post.title[i])}</a></h2><p>${esc(post.summary[i])}</p><a class="text-link" href="/blog/${encodeURIComponent(post.slug)}">${adminText('Maqolani o‘qish →','Читать статью →','Read article →')}</a></article>`}
-async function renderBlog(){const posts=await api('/blog'),i=locale==='ru'?1:locale==='uz'?0:2;app.innerHTML=`<section class="page">${pageTitle(adminText('SentryLoot blogi','Блог SentryLoot','SentryLoot blog'),adminText('Xavfsiz xarid, ishonchli savdo va o‘yin bozoriga oid qo‘llanmalar.','Советы по безопасным покупкам, продажам и игровому рынку.','Guides to safer buying, selling, and gaming marketplaces.'),me?.is_admin?`<a class="button-secondary" href="#admin-blog">${adminText('Maqolalarni boshqarish','Управление статьями','Manage articles')}</a>`:'')}<div class="blog-feature"><span>SENTRYLOOT · ${adminText('QO‘LLANMALAR','ГИДЫ','GUIDES')}</span><h2>${posts.length?esc(posts[0].title[i]):adminText('Yangi maqolalar tez orada','Новые статьи скоро появятся','New articles coming soon')}</h2><p>${posts.length?esc(posts[0].summary[i]):adminText('Xarid va savdo bo‘yicha foydali qo‘llanmalar shu yerda chiqadi.','Здесь появятся полезные руководства по покупкам и продажам.','Helpful buying and selling guides will appear here.')}</p>${posts.length?`<a class="button-primary" href="/blog/${encodeURIComponent(posts[0].slug)}">${adminText('O‘qishni boshlash','Начать чтение','Start reading')}</a>`:''}</div><div class="blog-grid">${posts.slice(1).map(blogCard).join('')}</div>${posts.length?'':empty(adminText('Hozircha nashr qilingan maqola yo‘q.','Пока нет опубликованных статей.','No published articles yet.'))}</section>`}
-async function renderBlogArticle(slug){let post;try{post=await api('/blog/'+encodeURIComponent(slug))}catch{}if(!post){app.innerHTML=`<section class="page">${pageTitle(adminText('Maqola topilmadi','Статья не найдена','Article not found'))}</section>`;return}const i=locale==='ru'?1:locale==='uz'?0:2;updateRouteMetadata('blog/'+encodeURIComponent(slug));const articleTitle=`${post.title[i]} | SentryLoot`;document.title=articleTitle;const metaDescription=$('meta[name="description"]');if(metaDescription)metaDescription.content=post.summary[i];for(const [selector,value] of [['meta[property="og:title"]',articleTitle],['meta[property="og:description"]',post.summary[i]],['meta[property="og:url"]',location.href]]){const el=$(selector);if(el)el.content=value}app.innerHTML=`<article class="page blog-article"><span class="blog-category">${esc(post.category[i])}</span><time class="blog-date">${blogDate(post.published_at||post.created_at)}</time><h1 class="page-title">${esc(post.title[i])}</h1><p class="page-subtitle">${esc(post.summary[i])}</p><div class="blog-article-body">${post.body[i].map((p,n)=>`<p>${n+1}. ${esc(p)}</p>`).join('')}</div><div class="notice">${adminText('Ushbu maqolalar umumiy ma’lumot uchun. Har bir e’lon va o‘yin qoidalarini alohida tekshiring.','Статьи носят общий информационный характер. Проверяйте каждое объявление и правила игры отдельно.','These articles are general information. Check each listing and the game’s rules separately.')}</div></article>`}
-function blogEditor(post={}){const langs=['O‘zbekcha','Русский','English'];const values=['category','title','summary','body'];return `<form id="blog-editor" class="blog-editor-form"><input type="hidden" name="id" value="${esc(post.id||'')}"><div class="field"><label for="blog-slug">URL slug</label><input id="blog-slug" name="slug" value="${esc(post.slug||'')}" pattern="[a-z0-9]+(-[a-z0-9]+)*" required maxlength="80" placeholder="xavfsiz-xarid"></div>${langs.map((lang,i)=>`<fieldset class="blog-language-fields"><legend>${lang}</legend><div class="field"><label>${adminText('Kategoriya','Категория','Category')}</label><input name="category_${i}" required maxlength="60" value="${esc(post.category?.[i]||'')}"></div><div class="field"><label>${adminText('Sarlavha','Заголовок','Title')}</label><input name="title_${i}" required maxlength="140" value="${esc(post.title?.[i]||'')}"></div><div class="field"><label>${adminText('Qisqa mazmun','Краткое описание','Summary')}</label><textarea name="summary_${i}" required maxlength="500" rows="2">${esc(post.summary?.[i]||'')}</textarea></div><div class="field"><label>${adminText('Maqola matni (har paragraf alohida qatorda)','Текст статьи (каждый абзац с новой строки)','Article text (one paragraph per line)')}</label><textarea name="body_${i}" required rows="5">${esc(post.body?.[i]?.join('\n')||'')}</textarea></div></fieldset>`).join('')}<div class="field"><label>${adminText('Holat','Статус','Status')}</label><select name="status"><option value="draft" ${post.status!=='published'?'selected':''}>${adminText('Qoralama','Черновик','Draft')}</option><option value="published" ${post.status==='published'?'selected':''}>${adminText('Nashr qilish','Опубликовано','Published')}</option></select></div><div class="actions"><button class="button-primary">${adminText('Saqlash','Сохранить','Save')}</button><button type="button" class="button-secondary" id="blog-editor-cancel">${adminText('Bekor qilish','Отмена','Cancel')}</button></div></form>`}
-async function renderAdminBlog(){if(!me){location.hash='login';return}if(!me.is_admin&&!me.staff_capabilities?.includes('content')){app.innerHTML=`<section class="page">${pageTitle(adminText('Maqolalar boshqaruvi','Управление статьями','Article management'))}<div class="notice error">${adminText('Administrator ruxsati kerak.','Требуются права администратора.','Administrator access required.')}</div></section>`;return}const posts=await api('/admin/blog');app.innerHTML=`<section class="page">${pageTitle(adminText('Blog boshqaruvi','Управление блогом','Blog management'),adminText('Uch tildagi maqolalarni yozing, qoralama saqlang yoki saytga nashr qiling.','Пишите статьи на трёх языках, сохраняйте черновики или публикуйте.','Write articles in three languages, save drafts, or publish them.'),``)}<div class="admin-blog-toolbar"><span>${posts.length} ${adminText('maqola','статей','articles')}</span><button class="button-primary" id="blog-new">${adminText('Yangi maqola','Новая статья','New article')}</button><a class="button-secondary" href="#blog">${adminText('Blogni ko‘rish','Открыть блог','View blog')}</a></div><div class="blog-admin-list">${posts.map(p=>`<article class="panel blog-admin-row"><div><span class="blog-category">${esc(p.status)}</span><h2>${esc(p.title[0])}</h2><small>${esc(p.slug)} · ${blogDate(p.updated_at)}</small></div><button class="button-secondary" data-edit-post="${esc(p.id)}">${adminText('Tahrirlash','Редактировать','Edit')}</button></article>`).join('')||empty(adminText('Hali maqola yo‘q. Birinchi maqolani yarating.','Статей пока нет. Создайте первую.','No articles yet. Create your first one.'))}<div id="blog-editor-host"></div></div></section>`;const host=$('#blog-editor-host');const open=post=>{host.innerHTML=blogEditor(post);host.scrollIntoView({behavior:'smooth',block:'start'});$('#blog-editor-cancel')?.addEventListener('click',()=>host.replaceChildren())};$('#blog-new')?.addEventListener('click',()=>open());$$('[data-edit-post]').forEach(btn=>btn.addEventListener('click',()=>open(posts.find(p=>p.id===btn.dataset.editPost))));$('#blog-editor')?.addEventListener('submit',saveBlogEditor)}
-async function saveBlogEditor(e){e.preventDefault();const f=e.currentTarget,d=new FormData(f),post={slug:d.get('slug'),status:d.get('status'),category:[],title:[],summary:[],body:[]};for(let i=0;i<3;i++){post.category.push(d.get('category_'+i));post.title.push(d.get('title_'+i));post.summary.push(d.get('summary_'+i));post.body.push(d.get('body_'+i).split(/\r?\n/).map(x=>x.trim()).filter(Boolean))}const id=d.get('id');try{await api('/admin/blog'+(id?'/'+encodeURIComponent(id):''),{method:'POST',body:JSON.stringify(post)});toast(adminText('Maqola saqlandi','Статья сохранена','Article saved'));renderAdminBlog()}catch(x){toast(x.message,'error')}}
-function adminState(s){const labels={pending_payment:['To‘lov kutilmoqda','Ожидает оплату','Awaiting payment'],paid:['To‘langan','Оплачен','Paid'],awaiting_delivery:['Yetkazish kutilmoqda','Ожидает выдачу','Awaiting delivery'],delivered:['Yetkazildi','Выдан','Delivered'],completed:['Yakunlandi','Завершён','Completed'],cancelled:['Bekor qilindi','Отменён','Cancelled'],disputed:['Nizoda','Спор','Disputed'],pending_review:['Tekshiruvda','На проверке','In review'],approved_private:['Tasdiqlangan · yashirin','Одобрено · скрыто','Approved · hidden'],published:['Faol','Активно','Active'],rejected:['Rad etildi','Отклонено','Rejected'],draft:['Qoralama','Черновик','Draft'],paused:['To‘xtatilgan','Приостановлено','Paused'],open:['Ochiq','Открыт','Open'],pending:['Kutilmoqda','Ожидает','Pending'],approved:['Tasdiqlandi','Одобрено','Approved'],paid_out:['To‘landi','Выплачено','Paid out'],reviewing:['Ko‘rib chiqilmoqda','На рассмотрении','Reviewing'],resolved:['Yechilgan','Решён','Resolved'],dismissed:['Yopilgan','Закрыт','Dismissed'],not_started:['Boshlanmagan','Не начата','Not started'],verified:['Tasdiqlangan','Подтверждён','Verified'],unverified:['Tasdiqlanmagan','Не подтверждён','Unverified'],disabled:['O‘chirilgan','Отключён','Disabled'],rejected:['Rad etilgan','Отклонён','Rejected']};return `<span class="status ${esc(s)}">${esc(labels[s]?.[locale==='ru'?1:locale==='uz'?0:2]||s)}</span>`}
-function adminDate(value){if(!value)return '—';const date=parseServerDate(value);return Number.isNaN(+date)?esc(value):date.toLocaleDateString(localeTag(),{day:'2-digit',month:'short',year:'numeric'})}
-function adminChart(rows){const values=new Map((rows||[]).map(x=>[x.day,Number(x.count)||0]));const days=[];for(let i=6;i>=0;i--){const d=new Date();d.setUTCHours(0,0,0,0);d.setUTCDate(d.getUTCDate()-i);const key=d.toISOString().slice(0,10);days.push({key,count:values.get(key)||0,label:d.toLocaleDateString(localeTag(),{weekday:'short',timeZone:'UTC'})})}const max=Math.max(1,...days.map(x=>x.count));return `<div class="admin-chart" role="img" aria-label="${adminText('Oxirgi 7 kunlik buyurtmalar','Заказы за последние 7 дней','Orders for the last 7 days')}">${days.map(d=>`<div class="admin-chart-day"><span class="admin-chart-value">${d.count}</span><div class="admin-chart-track"><i style="height:${(d.count?Math.max(8,Math.round(d.count/max*100)):0)}%"></i></div><span class="admin-chart-label">${esc(d.label)}</span></div>`).join('')}</div>`}
-function adminOrdersTable(rows){return rows.length?`<div class="table-wrap admin-table-wrap"><table class="data-table admin-table"><thead><tr><th>${adminText('Buyurtma','Заказ','Order')}</th><th>${adminText('Xaridor','Покупатель','Buyer')}</th><th>${adminText('Jami','Сумма','Total')}</th><th>${adminText('Holat','Статус','Status')}</th><th>${adminText('Sana','Дата','Date')}</th></tr></thead><tbody>${rows.map(x=>`<tr><td><span class="admin-order-ref">${esc(x.reference||x.id)}</span></td><td>${esc(x.buyer_email)}</td><td>${fmt(x.total_minor,x.currency)}</td><td>${adminState(x.status)}</td><td>${adminDate(x.created_at)}</td></tr>`).join('')}</tbody></table></div>`:empty(adminText('Buyurtmalar hali yo‘q.','Заказов пока нет.','No orders yet.'))}
-function adminListingCard(l){const waiting=l.status==='pending_review',risks=Array.isArray(l.risk_flags)?l.risk_flags:[];return `<article class="admin-record"><div class="admin-record-main"><div class="admin-record-kicker">${esc(l.game_name||'GAME')} <span>·</span> ${esc(categoryLabel(l.category_name||l.product_type||'Digital'))}</div><h3>${esc(l.title)}</h3><p>${esc((l.description||'').slice(0,220))}</p>${risks.length?`<p class="notice warn">${adminText('Tekshiruv signallari:','Сигналы проверки:','Review signals:')} ${esc(risks.join(', '))}</p>`:''}<div class="admin-record-meta"><span>${icon('gamepad')}${esc(l.seller_name||'—')}</span><span>${fmt(l.price_minor,l.currency)}</span><span>${adminDate(l.created_at)}</span></div></div><div class="admin-record-side">${adminState(l.status)}${waiting?`<div class="admin-record-actions"><button class="button-primary" data-action="moderate" data-id="${esc(l.id)}" data-choice="approve" data-risk-flags="${esc(risks.join(', '))}">${adminText('Tasdiqlash','Одобрить','Approve')}</button><button class="button-danger" data-action="moderate" data-id="${esc(l.id)}" data-choice="reject">${adminText('Rad etish','Отклонить','Reject')}</button></div>`:''}</div></article>`}
-function adminReportCard(r){return `<article class="admin-record admin-report-record"><div class="admin-record-main"><div class="admin-record-kicker">${esc(r.reason||'report')} <span>·</span> ${adminDate(r.created_at)}</div><h3>${esc(r.reporter_email)}</h3><p>${esc(r.details||'')}</p>${r.evidence_url?`<a class="text-link" href="${esc(r.evidence_url)}" target="_blank" rel="noopener noreferrer">${adminText('Dalilni ochish ↗','Открыть доказательство ↗','Open evidence ↗')}</a>`:''}</div><div class="admin-record-side">${adminState(r.status)}<div class="admin-report-controls"><select id="report-${esc(r.id)}" aria-label="${adminText('Shikoyat holati','Статус жалобы','Report status')}"><option value="reviewing" ${r.status==='reviewing'?'selected':''}>${adminText('Ko‘rib chiqilmoqda','На рассмотрении','Reviewing')}</option><option value="resolved" ${r.status==='resolved'?'selected':''}>${adminText('Yechildi','Решён','Resolved')}</option><option value="dismissed" ${r.status==='dismissed'?'selected':''}>${adminText('Yopildi','Закрыт','Dismissed')}</option></select><input id="resolution-${esc(r.id)}" placeholder="${adminText('Qaror izohi','Комментарий к решению','Resolution note')}" value="${esc(r.resolution||'')}"><button class="button-secondary" data-action="report-update" data-id="${esc(r.id)}">${adminText('Saqlash','Сохранить','Save')}</button></div></div></article>`}
-function adminSellerCard(s){return `<article class="admin-record"><div class="admin-record-main"><div class="admin-record-kicker">${adminText('SOTUVCHI TEKSHIRUVI','ПРОВЕРКА ПРОДАВЦА','SELLER REVIEW')} <span>·</span> ${adminDate(s.created_at)}</div><h3>${esc(s.shop_name||s.display_name)} <span class="admin-secondary-name">${esc(s.display_name)}</span></h3><p>${esc(s.bio||adminText('Do‘kon tavsifi berilmagan.','Описание магазина не указано.','No shop description provided.'))}</p><div class="admin-record-meta"><span>${esc(s.email)}</span><span>${adminState(s.verification_status)}</span><span>Didit: ${adminState(s.identity_status||'not_started')}</span><span>${s.selling_enabled?adminText('Savdo yoqilgan','Продажи включены','Selling enabled'):adminText('Savdo o‘chiq','Продажи отключены','Selling disabled')}</span></div><div class="notice warn admin-note">${adminText('Tasdiqlashdan oldin Didit ID, liveness va yuz mosligini tasdiqlashi kerak. Hujjat rasmlari faqat vakolatli admin so‘raganda Diditdan ochiladi va bu yerda saqlanmaydi.','Перед одобрением Didit должен подтвердить документ, liveness и совпадение лица. Документы открываются из Didit по запросу уполномоченного администратора и здесь не сохраняются.','Didit must approve the ID, liveness, and face match before seller approval. Authorized administrators load document images from Didit on request; images are not stored here.')}</div></div><div class="admin-record-side">${adminState(s.selling_enabled?s.verification_status:'disabled')}<div class="admin-record-actions"><button class="button-primary" data-action="seller-review" data-id="${esc(s.user_id)}" data-choice="approve" ${(s.identity_status!=='verified'||s.identity_provider!=='didit')?'disabled title="Didit tekshiruvi kerak"':''}>${adminText('Tasdiqlash','Одобрить','Approve')}</button><button class="button-danger" data-action="seller-review" data-id="${esc(s.user_id)}" data-choice="reject">${adminText('Rad etish','Отклонить','Reject')}</button></div></div></article>`}
-function adminDisputeCard(d){const canResolve=d.payment_provider==='sandbox'&&d.payment_status==='succeeded',ageHours=Math.max(0,Math.floor((Date.now()-parseServerDate(d.created_at).getTime())/3600000));return `<article class="admin-record"><div class="admin-record-main"><div class="admin-record-kicker">${adminText('NIZO','СПОР','DISPUTE')} <span>·</span> ${adminDate(d.created_at)} <span>·</span> ${adminText(`${ageHours} soat navbatda`,`${ageHours} ч. в очереди`,`${ageHours}h in queue`)}</div><h3>${esc(d.reference)} <span class="admin-secondary-name">${esc(d.buyer_email)}</span></h3><p>${esc(d.details||'')}</p><div class="admin-record-meta"><span>${adminText('Buyurtma','Заказ','Order')}: ${adminState(d.order_status)}</span><span>${fmt(d.total_minor,d.currency)}</span><span>${adminText('Sotuvchi','Продавец','Seller')}: ${esc(d.seller_emails||'—')}</span></div>${!canResolve?`<div class="notice warn admin-note">${adminText('Moliyaviy amal faqat muvaffaqiyatli sinov to‘lovi uchun ko‘rsatiladi.','Финансовое действие доступно только для успешного sandbox-платежа.','Financial actions are available only for a successful sandbox payment.')}</div>`:''}</div><div class="admin-record-side">${adminState(d.report_status)}<div class="admin-record-actions admin-actions-stack"><a class="button-secondary" href="#dispute/${esc(d.order_id)}">${adminText('Nizo sahifasi','Открыть спор','Open dispute case')}</a><button class="button-secondary" data-action="dispute-review" data-id="${esc(d.order_id)}" data-choice="request_info">${adminText('Dalil so‘rash','Запросить доказательства','Request evidence')}</button>${canResolve?`<button class="button-primary" data-action="dispute-review" data-id="${esc(d.order_id)}" data-choice="release_seller">${adminText('Sotuvchiga yechish','В пользу продавца','Release to seller')}</button><button class="button-danger" data-action="dispute-review" data-id="${esc(d.order_id)}" data-choice="refund_buyer">${adminText('Xaridorga qaytarish','Вернуть покупателю','Refund buyer')}</button>`:''}</div></div></article>`}
-function adminPayoutCard(p){let actions='';if(p.status==='pending')actions=`<button class="button-primary" data-action="payout" data-id="${esc(p.id)}" data-choice="approve">${adminText('Ma’qullash','Одобрить','Approve')}</button><button class="button-danger" data-action="payout" data-id="${esc(p.id)}" data-choice="reject">${adminText('Rad etish','Отклонить','Reject')}</button>`;else if(p.status==='approved')actions=`<button class="button-primary" data-action="payout" data-id="${esc(p.id)}" data-choice="mark_paid">${adminText('Tashqi o‘tkazmani qayd etish','Записать внешний перевод','Record external transfer')}</button>`;return `<article class="admin-record"><div class="admin-record-main"><div class="admin-record-kicker">${adminText('MABLAG‘ YECHISH SO‘ROVI','ЗАПРОС НА ВЫПЛАТУ','PAYOUT REQUEST')} <span>·</span> ${adminDate(p.created_at)}</div><h3>${esc(p.display_name||p.email)} <span class="admin-secondary-name">${fmt(p.amount_minor,p.currency)}</span></h3><p>${esc(p.note||adminText('Izoh yo‘q.','Без комментария.','No note provided.'))}</p><div class="admin-record-meta"><span>${esc(p.email)}</span>${p.external_reference?`<span>${adminText('Tashqi ID','Внешний ID','External ID')}: ${esc(p.external_reference)}</span>`:''}</div></div><div class="admin-record-side">${adminState(p.status)}${actions?`<div class="admin-record-actions">${actions}</div>`:''}</div></article>`}
-function adminDeletionCard(d){return `<article class="admin-record admin-compact-record"><div class="admin-record-main"><div class="admin-record-kicker">${adminDate(d.created_at)}</div><h3>${esc(d.display_name||d.email)} <span class="admin-secondary-name">${esc(d.email)}</span></h3><p>${esc(d.reason||adminText('Sabab ko‘rsatilmagan.','Причина не указана.','No reason provided.'))}</p></div><div class="admin-record-side">${adminState(d.status)}<div class="admin-record-actions"><button class="button-secondary" data-action="deletion-review" data-id="${esc(d.id)}" data-choice="reviewing">${adminText('Ko‘rib chiqish','Рассмотреть','Review')}</button><button class="button-secondary" data-action="deletion-review" data-id="${esc(d.id)}" data-choice="resolved">${adminText('Yakunlash','Завершить','Resolve')}</button><button class="button-danger" data-action="deletion-review" data-id="${esc(d.id)}" data-choice="dismissed">${adminText('Yopish','Закрыть','Dismiss')}</button></div></div></article>`}
-function adminUserRows(users){return users.length?`<div class="table-wrap admin-table-wrap"><table class="data-table admin-table"><thead><tr><th>${adminText('Foydalanuvchi','Пользователь','User')}</th><th>${adminText('Email holati','Статус email','Email status')}</th><th>${adminText('Ro‘yxatdan o‘tgan','Регистрация','Joined')}</th><th>${adminText('Holat / amal','Статус / действие','Status / action')}</th></tr></thead><tbody>${users.map(u=>`<tr><td><b>${esc(u.display_name)}</b><small class="admin-cell-sub">${esc(u.email)}</small></td><td>${u.email_verified?adminText('Tasdiqlangan','Подтверждён','Verified'):adminText('Tasdiqlanmagan','Не подтверждён','Unverified')}</td><td>${adminDate(u.created_at)}</td><td><div class="admin-user-action">${u.suspended?`<span class="status rejected">${adminText('Cheklangan','Ограничен','Suspended')}</span>`:`<span class="status published">${adminText('Faol','Активен','Active')}</span>`}<button class="button-secondary" data-action="suspend-user" data-id="${esc(u.id)}" data-choice="${u.suspended?'restore':'suspend'}" ${u.id===me.id?'disabled':''}>${u.id===me.id?adminText('Joriy admin','Текущий администратор','Current admin'):u.suspended?adminText('Qayta yoqish','Восстановить','Restore'):adminText('Cheklash','Ограничить','Suspend')}</button></div></td></tr>`).join('')}</tbody></table></div>`:empty(adminText('Foydalanuvchi topilmadi.','Пользователи не найдены.','No users found.'))}
-function activateAdminView(name,scroll=false){adminActiveView=name;$$('[data-admin-view]',app).forEach(s=>s.hidden=s.dataset.adminView!==name);$$('[data-admin-view-target]',app).forEach(b=>{const active=b.dataset.adminViewTarget===name;b.classList.toggle('is-active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});const title=$(`[data-admin-heading="${name}"]`,app);const h=$('#admin-page-title',app);if(title&&h)h.textContent=title.textContent;if(scroll)app.querySelector('.admin-workspace')?.scrollIntoView({block:'start',behavior:'instant'});loadAdminView(name)}
-function adminAccountReviewCard(review){const canView=review.evidence?.length===2&&review.evidence.every(item=>item.url);return `<article class="account-review-card"><div class="admin-record-head"><div><span class="admin-record-kicker">${esc(review.reference)} · ${fmt(review.total_minor,review.currency)}</span><h3>${esc(review.buyer_name||review.buyer_email)}</h3><p>${esc(review.buyer_email)} · ${adminText('Yuborildi','Отправлено','Submitted')}: ${esc(review.submitted_at||'—')}</p></div><span class="admin-count-pill is-alert">${adminText('Akkaunt tekshiruvi','Проверка аккаунта','Account review')}</span></div><p class="help">${adminText('Dalil faqat xaridor akkauntga kira olganini ko‘rsatishi mumkin; kelajakda akkaunt qaytarib olinmasligini kafolatlamaydi. Rasmda parol, OTP yoki shaxsiy ma’lumot ko‘rinsa, darhol qo‘shimcha ma’lumot so‘rang.','Скриншоты могут подтвердить только доступ покупателя, но не гарантируют, что аккаунт не восстановят позже. Если видны пароли, OTP или личные данные, запросите новые доказательства.','Screenshots can show buyer access only; they cannot guarantee the account will not later be recovered. If a password, OTP, or personal information is visible, request safer evidence.')}</p><div class="account-evidence-grid">${(review.evidence||[]).map(item=>`<figure><figcaption>${adminText('Skrinshot','Скриншот','Screenshot')} ${item.slot}</figcaption>${item.url?`<a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer"><img src="${esc(item.url)}" alt="${adminText('Yopiq buyurtma dalili','Закрытое доказательство заказа','Private order evidence')} ${item.slot}" loading="lazy" referrerpolicy="no-referrer"></a>`:`<div class="notice warn">${adminText('Maxfiy Storage hali sozlanmagan; faylni ko‘rib bo‘lmaydi.','Private Storage не настроено; файл недоступен.','Private Storage is not configured; this file cannot be viewed.')}</div>`}</figure>`).join('')}</div><label class="field"><span>${adminText('Moderator izohi','Комментарий модератора','Moderator note')}</span><textarea data-account-review-note="${esc(review.order_id)}" minlength="5" maxlength="1500" placeholder="${adminText('Qaror sababini yozing…','Укажите причину решения…','Record the reason for your decision…')}" required></textarea></label><div class="actions"><button class="button-primary" data-action="account-review" data-id="${esc(review.order_id)}" data-choice="approve" ${canView?'':'disabled'}>${adminText('Tasdiqlash · sotuvchi balansiga yozish','Одобрить · зачислить продавцу','Approve · credit seller balance')}</button><button class="button-secondary" data-action="account-review" data-id="${esc(review.order_id)}" data-choice="request_info" ${canView?'':'disabled'}>${adminText('Qo‘shimcha dalil so‘rash','Запросить дополнительные доказательства','Request more evidence')}</button><button class="button-danger" data-action="account-review" data-id="${esc(review.order_id)}" data-choice="refund_buyer">${adminText('Sinov qaytarimini qayd etish','Оформить возврат sandbox','Record sandbox refund')}</button></div></article>`}
-let adminPage=null;
-function adminLoadingMarkup(){return `<div class="loading" role="status"><span class="spinner"></span>${adminText('Yuklanmoqda…','Загрузка…','Loading…')}</div>`}
-function adminViewMarkup(name,data){
- const {o={},ls=[],reports=[],payouts=[],orders=[],deletions=[],sellers=[],disputes=[],accountReviews=[],users=[]}=data;
- const publicReports=reports.filter(r=>r.reason!=='order_dispute'),mode=String(o.mode||'development').toUpperCase(),daily=o.daily_orders||[],orderRows=name==='overview'?(o.recent_orders||[]):orders.slice(0,100);
- switch(name){
- case 'overview':return `<div class="admin-kpis"><article class="admin-kpi"><span class="admin-kpi-icon">${icon('arrow-up-right')}</span><small>${adminText('Bugungi buyurtmalar','Заказы сегодня','Orders today')}</small><b>${o.today_orders}</b><em>${adminText('Joriy kun','Текущий день','Current day')}</em></article><article class="admin-kpi"><span class="admin-kpi-icon is-violet">${icon('shield')}</span><small>${adminText('Yakunlangan buyurtmalar','Завершённые заказы','Completed orders')}</small><b>${o.completed_orders}</b><em>${adminText('Barcha vaqt','За всё время','All time')}</em></article><article class="admin-kpi"><span class="admin-kpi-icon is-blue">${icon('box')}</span><small>${adminText('Faol e’lonlar','Активные объявления','Active listings')}</small><b>${o.active_listings}</b><em>${adminText('Hozir ommada','Сейчас опубликованы','Currently published')}</em></article><article class="admin-kpi"><span class="admin-kpi-icon is-gold">${icon('heart')}</span><small>${adminText('Foydalanuvchilar','Пользователи','Users')}</small><b>${o.users}</b><em>${adminText('Jami akkauntlar','Всего аккаунтов','Total accounts')}</em></article></div><div class="admin-dashboard-grid"><article class="admin-panel admin-activity-panel"><div class="admin-panel-heading"><div><span class="admin-eyebrow">${adminText('FAOLLIK','АКТИВНОСТЬ','ACTIVITY')}</span><h2>${adminText('Buyurtmalar faolligi','Активность заказов','Order activity')}</h2></div><span class="admin-period-tag">${adminText('SO‘NGGI 7 KUN','ПОСЛЕДНИЕ 7 ДНЕЙ','LAST 7 DAYS')}</span></div>${adminChart(daily)}</article><article class="admin-panel admin-queue-panel"><div class="admin-panel-heading"><div><span class="admin-eyebrow">${adminText('ISH NAVBATI','ОЧЕРЕДЬ ЗАДАЧ','WORK QUEUE')}</span><h2>${adminText('E’tibor talab qiladi','Требует внимания','Needs attention')}</h2></div>${icon('clock')}</div><button data-admin-view-target="listings" class="admin-queue-link"><span>${adminText('Tekshiriladigan e’lonlar','Объявления на проверке','Listings to review')}</span><b>${o.pending_listings}</b></button><button data-admin-view-target="sellers" class="admin-queue-link"><span>${adminText('Sotuvchi tasdiqlari','Проверки продавцов','Seller verifications')}</span><b>${o.pending_sellers}</b></button><button data-admin-view-target="disputes" class="admin-queue-link"><span>${adminText('Ochiq nizolar','Открытые споры','Open disputes')}</span><b>${o.open_disputes}</b></button><button data-admin-view-target="reports" class="admin-queue-link"><span>${adminText('Ochiq shikoyatlar','Открытые жалобы','Open reports')}</span><b>${o.open_reports}</b></button><button data-admin-view-target="payouts" class="admin-queue-link"><span>${adminText('Mablag‘ yechish navbatida','Ожидают выплаты','Pending payouts')}</span><b>${o.pending_payouts}</b></button></article></div><article class="admin-panel admin-orders-panel"><div class="admin-panel-heading"><div><span class="admin-eyebrow">${adminText('SO‘NGGI FAOLLIK','ПОСЛЕДНЯЯ АКТИВНОСТЬ','LATEST ACTIVITY')}</span><h2>${adminText('So‘nggi buyurtmalar','Последние заказы','Recent orders')}</h2></div><button class="admin-inline-link" data-admin-view-target="orders">${adminText('Barcha buyurtmalar','Все заказы','All orders')} ${icon('arrow-up-right')}</button></div>${adminOrdersTable(orderRows.slice(0,7))}</article><div class="admin-sandbox-banner"><span class="admin-sandbox-icon">${icon('shield')}</span><div><b>${mode==='PRODUCTION'?adminText('Haqiqiy to‘lovlar ulanmagan','Реальные платежи не подключены','Live payments are not connected'):adminText('To‘lovlar sinov muhitida ishlaydi','Платежи работают в тестовом режиме','Payments are in sandbox mode')}</b><p>${adminText('Haqiqiy provayder yoki pul o‘tkazmasi ulanmagan. Mablag‘ yechish tasdig‘i tashqi o‘tkazmani avtomatik bajarmaydi.','Реальный платёжный провайдер не подключён. Одобрение выплаты не переводит деньги автоматически.','No live payment provider or transfer is connected. Approving a payout does not move funds.')}</p></div><span class="admin-sandbox-volume"><small>${adminText('SINOV TO‘LOV HAJMI','ОБЪЁМ SANDBOX-ПЛАТЕЖЕЙ','SANDBOX PAYMENT VOLUME')}</small><b>${fmt(o.sandbox_volume_minor,'UZS')}</b></span></div>`;
- case 'listings':return `<div class="admin-section-intro"><div><h2>${adminText('E’lonlar va moderatsiya','Объявления и модерация','Listings and review')}</h2><p>${adminText('Navbatdagi e’lonlarni tekshiring va faol e’lonlar holatini kuzating.','Проверяйте объявления в очереди и отслеживайте активные.','Review queued listings and inspect active listings.')}</p></div><span class="admin-count-pill">${ls.filter(x=>x.status==='pending_review').length} ${adminText('kutilmoqda','ожидают','pending')}</span></div><div class="admin-record-list">${ls.length?ls.map(adminListingCard).join(''):empty(adminText('Moderatsiya uchun e’lon yo‘q.','Нет объявлений для модерации.','No listings need review.'))}</div>`;
- case 'orders':return `<div class="admin-section-intro"><div><h2>${adminText('Barcha buyurtmalar','Все заказы','All orders')}</h2><p>${adminText('Oxirgi 100 ta buyurtma. Har bir holat bazadagi joriy ma’lumotdan olinadi.','Последние 100 заказов. Статусы отражают текущие данные базы.','Latest 100 orders. Statuses reflect current database records.')}</p></div><span class="admin-count-pill">${orders.length} ${adminText('buyurtma','заказов','orders')}</span></div>${adminOrdersTable(orderRows)}`;
- case 'sellers':return `<div class="admin-section-intro"><div><h2>${adminText('Sotuvchi hisoblarini tekshirish','Проверка аккаунтов продавцов','Seller account review')}</h2><p>${adminText('Tasdiqlash yoki rad etish qarori audit jurnaliga yoziladi.','Решения об одобрении и отказе записываются в журнал аудита.','Approval and rejection decisions are recorded in the audit log.')}</p></div><span class="admin-count-pill">${sellers.length} ${adminText('navbatda','в очереди','in queue')}</span></div><div class="admin-record-list">${sellers.length?sellers.map(adminSellerCard).join(''):empty(adminText('Tekshiruv kutayotgan sotuvchi yo‘q.','Нет продавцов, ожидающих проверки.','No sellers are waiting for review.'))}</div>`;
- case 'disputes':return `<div class="admin-section-intro"><div><h2>${adminText('Ochiq buyurtma nizolari','Открытые споры по заказам','Open order disputes')}</h2><p>${adminText('Qaror va dalillarni moderator yozuvi bilan saqlang. Pul amallari faqat sinov’da qayd etiladi.','Сохраняйте решение и доказательства вместе с комментарием модератора. Финансовые действия доступны только в sandbox.','Record decisions with a moderator note. Financial actions are sandbox-only.')}</p></div><span class="admin-count-pill is-alert">${disputes.length} ${adminText('ochiq','открыто','open')}</span></div><div class="admin-record-list">${disputes.length?disputes.map(adminDisputeCard).join(''):empty(adminText('Ochiq nizo yo‘q.','Открытых споров нет.','No open disputes.'))}</div>`;
- case 'account-reviews':return `<div class="admin-section-intro"><div><h2>${adminText('Akkaunt xaridi tekshiruvi','Проверка купленных аккаунтов','Purchased account review')}</h2><p>${adminText('Ikki skrinshotni maxfiy havola orqali ko‘rib chiqing. Tasdiq faqat buyer kirishini ko‘rsatadi; qaytarib olish xavfini yo‘q qilmaydi. Qaror uchun moderator izohi shart.','Просмотрите два скриншота по закрытым ссылкам. Они подтверждают только доступ покупателя и не исключают последующее восстановление аккаунта. Для решения нужен комментарий модератора.','Review two screenshots through private links. They show buyer access only and do not prevent later account recovery. A moderator note is required.')}</p></div><span class="admin-count-pill is-alert">${accountReviews.length}</span></div><div class="admin-record-list">${accountReviews.length?accountReviews.map(adminAccountReviewCard).join(''):empty(adminText('Kutilayotgan akkaunt tekshiruvi yo‘q.','Нет ожидающих проверок.','No account reviews are waiting.'))}</div>`;
- case 'reports':return `<div class="admin-section-intro"><div><h2>${adminText('Foydalanuvchi shikoyatlari','Жалобы пользователей','User reports')}</h2><p>${adminText('Buyurtma nizolari alohida bo‘limda boshqariladi.','Споры по заказам обрабатываются отдельно.','Order disputes are handled in their own section.')}</p></div><span class="admin-count-pill">${publicReports.length}</span></div><div class="admin-record-list">${publicReports.length?publicReports.map(adminReportCard).join(''):empty(adminText('Shikoyatlar yo‘q.','Жалоб нет.','No reports.'))}</div>`;
- case 'payouts':return `<div class="admin-section-intro"><div><h2>${adminText('Sotuvchilarning mablag‘ yechish so‘rovlari','Запросы продавцов на выплаты','Seller payout requests')}</h2><p>${adminText('Ma’qullash pulni o‘tkazmaydi. Tashqi provayderda o‘tkazmani bajaring va tasdiq ID sini kiriting.','Одобрение не переводит деньги. Выполните перевод у платёжного провайдера и укажите ID операции.','Approval does not transfer money. Complete the transfer with your provider and enter its reference ID.')}</p></div><span class="admin-count-pill">${payouts.length}</span></div><div class="notice warn admin-global-notice">${adminText('Moliyaviy yozuvlar sinov hisobidir; haqiqiy mablag‘ ko‘chirilmaydi.','Финансовые записи ведутся в sandbox; реальные средства не переводятся.','Financial records are sandbox-only; no real funds are moved.')}</div><div class="admin-record-list">${payouts.length?payouts.map(adminPayoutCard).join(''):empty(adminText('Mablag‘ yechish so‘rovi yo‘q.','Запросов на выплату нет.','No payout requests.'))}</div>`;
- case 'users':return `<div class="admin-section-intro"><div><h2>${adminText('Akkauntlarni boshqarish','Управление аккаунтами','Account management')}</h2><p>${adminText('Qidiruv, akkaunt holati va hisobni o‘chirish so‘rovlari.','Поиск, статус аккаунта и запросы на удаление.','Search, account status, and account deletion requests.')}</p></div></div><form id="user-search" class="admin-search-form"><label class="admin-search-box">${icon('search')}<input name="q" aria-label="${adminText('Email yoki ism bo‘yicha qidirish','Поиск по email или имени','Search by email or name')}" placeholder="${adminText('Email yoki ismni kiriting','Введите email или имя','Enter email or name')}"></label><button class="button-primary">${adminText('Qidirish','Найти','Search')}</button></form><div id="user-results" class="admin-user-results">${adminUserRows(users)}</div><div class="admin-subsection-heading"><div><span class="admin-eyebrow">${adminText('MAXFIYLIK SO‘ROVLARI','ЗАПРОСЫ КОНФИДЕНЦИАЛЬНОСТИ','PRIVACY REQUESTS')}</span><h2>${adminText('Hisobni o‘chirish navbati','Очередь удаления аккаунтов','Account deletion queue')}</h2></div><span class="admin-count-pill">${deletions.filter(d=>['pending','reviewing'].includes(d.status)).length}</span></div><div class="admin-record-list">${deletions.length?deletions.map(adminDeletionCard).join(''):empty(adminText('O‘chirish so‘rovlari yo‘q.','Запросов на удаление нет.','No deletion requests.'))}</div>`;
- case 'settings':return `<div class="admin-section-intro"><div><h2>${adminText('Platforma sozlamalari','Настройки платформы','Platform settings')}</h2><p>${adminText('Savdo konfiguratsiyasidagi amallar audit jurnaliga yoziladi.','Изменения торговых параметров записываются в журнал аудита.','Changes to commerce settings are recorded in the audit log.')}</p></div></div><div class="admin-settings-grid"><article class="admin-panel admin-setting-card"><span class="admin-setting-icon">${icon('arrow-up-right')}</span><h3>${adminText('Platforma komissiyasi','Комиссия платформы','Platform commission')}</h3><p>${adminText('Yangi buyurtmalarga qo‘llanadigan stavkani belgilang. 100 bps = 1%. Eski buyurtmalardagi stavka o‘zgarmaydi.','Установите ставку для новых заказов. 100 bps = 1%. Ставка существующих заказов не меняется.','Set the rate for new orders. 100 bps = 1%. Existing orders keep their original rate.')}</p><form id="config-form" class="admin-config-form"><label for="commission-bps">${adminText('Komissiya (bazis punkt)','Комиссия (базисные пункты)','Commission (basis points)')}</label><div class="admin-config-input"><input id="commission-bps" name="commission_bps" type="number" min="0" max="3000" step="1" value="${esc(o.config.commission_bps||0)}" required><span>bps</span></div><button class="button-primary">${adminText('Sozlamani saqlash','Сохранить настройку','Save setting')}</button></form><div class="admin-config-footnote">${adminText('Ruxsat etilgan oraliq: 0–3000 bps.','Допустимый диапазон: 0–3000 bps.','Allowed range: 0–3000 bps.')}</div></article><article class="admin-panel admin-setting-card admin-security-card"><span class="admin-setting-icon is-violet">${icon('shield')}</span><h3>${adminText('To‘lovlar va xavfsizlik','Платежи и безопасность','Payments & safety')}</h3><p>${adminText('Joriy muhitdagi savdo va to‘lov holati.','Состояние торговли и платежей в текущей среде.','Commerce and payment status for the current environment.')}</p><div class="admin-security-line"><span>${adminText('Server rejimi','Режим сервера','Server mode')}</span><b>${esc(mode)}</b></div><div class="admin-security-line"><span>${adminText('To‘lov provayderlari','Платёжные провайдеры','Payment providers')}</span><b>${mode==='PRODUCTION'?adminText('Ulanmagan','Не подключены','Not connected'):adminText('Sinov','Sandbox','Sandbox')}</b></div><div class="admin-security-line"><span>${adminText('Audit jurnali','Журнал аудита','Audit log')}</span><b class="admin-enabled">${adminText('Faol','Активен','Active')}</b></div><div class="notice warn">${adminText('Haqiqiy to‘lov provayderi ulanmaguncha tizim real to‘lov yoki mablag‘ yechish bajarmaydi.','Пока не подключён реальный платёжный провайдер, система не проводит реальные платежи и выплаты.','The system will not process live payments or payouts until a production provider is configured.')}</div></article></div>`;
- default:return '';
- }
+  const listingRoot = $("#my-listings");
+  listingRoot.innerHTML = own.length
+    ? own
+        .map(
+          (l) =>
+            `<div class="order-line"><div class="order-head"><b>${esc(l.title)}</b>${status(l.status === "published" && l.marketplace_visible === false ? "not_public" : l.status)}</div><p class="help">${fmt(l.price_minor, l.currency)} · ${esc(l.moderation_note || "")}</p>${l.status === "published" && l.marketplace_visible === false ? `<div class="notice warn">${adminText("E’lon hisobingizda faol, ammo hozir ommaviy bozorda ko‘rinmaydi: savdo rejimi, o‘yin tasdig‘i yoki mahsulot qoldig‘i talabi bajarilmagan.", "Объявление активно в кабинете, но не отображается на публичном рынке: не выполнены условия режима торговли, допуска игры или наличия товара.", "Your listing is active in your account but hidden from the public marketplace because the sales mode, game approval, or available stock requirement is not met.")}</div>` : ""}<div class="queue-actions">${!prelaunch && ["draft", "rejected", "paused"].includes(l.status) ? `<button class="button-secondary" data-action="submit-listing" data-id="${esc(l.id)}">${adminText("Tekshiruvga yuborish", "Отправить на проверку", "Submit for review")}</button>` : ""}${l.status === "published" ? `<button class="button-secondary" data-action="pause-listing" data-id="${esc(l.id)}">${adminText("Vaqtincha yashirish", "Приостановить", "Pause listing")}</button>` : ""}${!prelaunch && l.status === "paused" ? `<button class="button-secondary" data-action="resume-listing" data-id="${esc(l.id)}">${adminText("Qayta yuborish", "Отправить повторно", "Resubmit")}</button>` : ""}${["draft", "rejected", "paused", "approved_private"].includes(l.status) ? `<button class="button-danger" data-action="archive-listing" data-id="${esc(l.id)}">${adminText("Arxivlash", "Архивировать", "Archive")}</button>` : ""}</div><details style="margin-top:10px"><summary class="text-link">${adminText("E’lonni tahrirlash", "Редактировать объявление", "Edit listing")}</summary>${listingEditFormMarkup(l)}</details></div>`,
+        )
+        .join("")
+    : empty(
+        adminText(
+          "Hozircha e’lon yo‘q.",
+          "Объявлений пока нет.",
+          "No listings yet.",
+        ),
+      );
+  setupListingFilePreviews($("#my-listings"));
+  MarketUX.seller(own);
 }
-function bindAdminForms(panel){$('#config-form',panel)?.addEventListener('submit',async e=>{e.preventDefault();try{await api('/admin/config',{method:'POST',body:JSON.stringify({commission_bps:Number(new FormData(e.currentTarget).get('commission_bps'))})});toast(adminText('Komissiya yangilandi','Комиссия обновлена','Commission updated'))}catch(x){toast(x.message,'error')}});$('#user-search',panel)?.addEventListener('submit',async e=>{e.preventDefault();try{const q=new URLSearchParams({q:new FormData(e.currentTarget).get('q')});const xs=await api('/admin/users?'+q);$('#user-results',panel).innerHTML=adminUserRows(xs)}catch(x){toast(x.message,'error')}});}
-let sellerVerificationAssets=null;
-function ensureSellerVerification(){
- if(window.SellerVerification)return Promise.resolve();
- if(!sellerVerificationAssets)sellerVerificationAssets=new Promise((resolve,reject)=>{
-  if(!document.querySelector('link[data-seller-verification-style]')){const style=document.createElement('link');style.rel='stylesheet';style.href='/static/seller-verification.css?v=4';style.dataset.sellerVerificationStyle='';document.head.append(style)}
-  const script=document.createElement('script');script.src='/static/seller-verification.js?v=10';script.onload=()=>resolve();script.onerror=()=>{sellerVerificationAssets=null;script.remove();reject(new Error('Seller verification could not load. Please retry.'))};document.head.append(script);
- });
- return sellerVerificationAssets;
+async function renderRequests() {
+  const [rows, mine, games, cats] = await Promise.all([
+    api("/requests"),
+    me ? api("/requests?mine=1") : Promise.resolve([]),
+    api("/games"),
+    api("/categories"),
+  ]);
+  const replies = await Promise.all(
+    mine.map(async (r) => [
+      r.id,
+      await api("/requests/" + encodeURIComponent(r.id) + "/responses").catch(
+        () => [],
+      ),
+    ]),
+  );
+  const byId = Object.fromEntries(replies);
+  app.innerHTML = `<section class="page">${pageTitle("Mahsulot so‘rovlari", "Bozorda yo‘q mahsulotni so‘rang yoki ochiq talablarni ko‘rib chiqing.")}<div class="detail-grid"><div><div class="panel"><h2>Ochiq so‘rovlar</h2>${rows.length ? rows.map((r) => `<div class="order-line"><div class="order-head"><div><h3>${esc(r.title)}</h3><div class="help">${esc(r.game_name)} · ${esc(r.requester)} · ${parseServerDate(r.created_at).toLocaleDateString(localeTag())}</div></div>${r.budget_minor ? `<b>${fmt(r.budget_minor, r.currency)}</b>` : ""}</div><p class="detail-desc">${esc(r.description)}</p>${me?.seller && !r.is_own ? `<button class="button-secondary" data-action="respond-request" data-id="${esc(r.id)}">Javob berish</button><form data-form="request-response" data-request="${esc(r.id)}" hidden><div class="field"><label>Taklifingiz</label><textarea name="message" required minlength="2" maxlength="2000" placeholder="Mahsulot, narx yoki muddat bo‘yicha taklif yozing"></textarea></div><div class="actions"><button class="button-primary">Javob yuborish</button><button type="button" class="button-secondary" data-action="cancel-request-response">Bekor qilish</button></div></form>` : ""}</div>`).join("") : empty("Hozircha ochiq so‘rovlar yo‘q.")}</div>${mine.length ? `<div class="panel" style="margin-top:14px"><h2>So‘rovlarim va sotuvchilar javoblari</h2>${mine.map((r) => `<div class="order-line"><b>${esc(r.title)}</b> ${status(r.status)}<p class="help">${esc(r.description)}</p>${(byId[r.id] || []).map((a) => `<div class="notice"><b>${esc(a.seller_name)}</b><p>${esc(a.message)}</p>${a.listing_id ? `<a class="text-link" href="/listing/${encodeURIComponent(a.listing_id)}">E’lonni ko‘rish →</a>` : ""}<div class="actions"><button class="button-secondary" data-action="contact-request" data-id="${esc(r.id)}" data-seller="${esc(a.seller_id)}">Sotuvchi bilan suhbat</button></div></div>`).join("") || '<p class="help">Sotuvchilardan javob kutilmoqda.</p>'}</div>`).join("")}</div>` : ""}</div><div class="form-card"><h2>So‘rov yuborish</h2>${me ? `<form id="request-form"><div class="field"><label>O‘yin</label><select name="game_id">${games.map((g) => `<option value="${esc(g.id)}">${esc(g.name)}</option>`).join("")}</select></div><div class="field"><label>Kategoriya</label><select name="category_id"><option value="">Ixtiyoriy</option>${cats.map((c) => `<option value="${esc(c.id)}">${esc(categoryLabel(c.name))}</option>`).join("")}</select></div><div class="field"><label>Sarlavha</label><input name="title" required minlength="5" maxlength="120"></div><div class="field"><label>Tavsif</label><textarea name="description" required minlength="10" maxlength="3000"></textarea></div><div class="field"><label>Maqsad budjeti (UZS)</label><input type="number" min="1" name="budget_minor"></div><button class="button-primary">So‘rov yaratish</button></form>` : '<div class="notice">So‘rov yuborish uchun <a class="text-link" href="#login">tizimga kiring</a>.</div>'}</div></div></section>`;
+  if ($("#request-form"))
+    $("#request-form").onsubmit = async (e) => {
+      e.preventDefault();
+      let d = Object.fromEntries(new FormData(e.currentTarget));
+      if (d.budget_minor) d.budget_minor = Number(d.budget_minor);
+      if (!d.category_id) delete d.category_id;
+      try {
+        await api("/requests", { method: "POST", body: JSON.stringify(d) });
+        toast("So‘rov yaratildi");
+        renderRequests();
+      } catch (x) {
+        toast(x.message, "error");
+      }
+    };
 }
-const adminViewRequests={finance:[['o','/admin/overview']],audit:[],management:[],overview:[['o','/admin/overview']],listings:[['ls','/admin/listings?summary=1']],orders:[['orders','/admin/orders']],sellers:[['verification','/admin/verification']],disputes:[['disputes','/admin/disputes']],'account-reviews':[['accountReviews','/admin/account-reviews']],reports:[['reports','/admin/reports']],payouts:[['payouts','/admin/payouts']],users:[['users','/admin/users?q='],['deletions','/admin/deletions']],settings:[['o','/admin/overview']]};
-function loadAdminView(name,retry=false){
- const page=adminPage,panel=page?.root.querySelector(`[data-admin-view="${name}"]`);
- if(!panel||!page.root.isConnected)return Promise.resolve();
- if(page.pending.has(name))return page.pending.get(name);
- if(page.loaded.has(name)&&!retry)return Promise.resolve();
- panel.innerHTML=adminLoadingMarkup();panel.setAttribute('aria-busy','true');
- const loading=(async()=>{
-  try{
-   if(name==='sellers')await ensureSellerVerification();
-   await Promise.all((adminViewRequests[name]||[]).map(async([key,path])=>{
-    if(!page.resources.has(key)||retry)page.resources.set(key,api(path).catch(error=>{page.resources.delete(key);throw error}));
-    page.data[key]=await page.resources.get(key);
-   }));
-   if(!page.root.isConnected||adminPage!==page)return;
-   if(['overview','finance'].includes(name)){await window.AdminConsole.mountFinance(panel,page.data.o)}else if(name==='audit'){await window.AdminConsole.audit(panel)}else if(name==='management'){window.AdminConsole.management(panel)}else if(name==='sellers'){window.SellerVerification.mount(panel,{api,esc,icon,adminText,toast,initial:page.data.verification})}else{panel.innerHTML=adminViewMarkup(name,page.data);bindAdminForms(panel)}page.loaded.add(name);
-   if(page.data.o){
-    if(name==='sellers'&&page.data.verification)page.data.o.pending_sellers=page.data.verification.stats.pending;
-    for(const badge of page.root.querySelectorAll('[data-admin-count]')){const count=Number(page.data.o[badge.dataset.adminCount]||0);badge.textContent=count>99?'99+':String(count);badge.title=String(count);badge.hidden=count===0}
-    for(const mode of page.root.querySelectorAll('[data-admin-mode]'))mode.textContent=String(page.data.o.mode).toUpperCase();
-   }
-   localizeDOM();window.OperationsUX?.enhance();window.TradeUX?.enhance();window.ExperienceUX?.enhance();
-  }catch(error){
-   if(!page.root.isConnected||adminPage!==page)return;
-   panel.innerHTML=`<div class="notice error" role="alert">${esc(error.message)}</div><button type="button" class="button-secondary" data-admin-retry>${adminText('Qayta urinish','Повторить','Try again')}</button>`;
-   panel.querySelector('[data-admin-retry]').onclick=()=>loadAdminView(name,true);
-  }finally{panel.setAttribute('aria-busy','false');page.pending.delete(name)}
- })();
- page.pending.set(name,loading);return loading;
+async function renderMessages(id = selectedConversation) {
+  return await MarketUX.messages(id);
+}
+async function renderFavorites() {
+  return await MarketUX.favorites();
+}
+async function renderWallet() {
+  if (!window.OrderFlow)
+    throw Error(
+      adminText(
+        "Sahifa yuklanmadi. Yangilab qayta urinib ko‘ring.",
+        "Страница не загрузилась. Обновите её и повторите.",
+        "This page could not be loaded. Refresh and try again.",
+      ),
+    );
+  return window.OrderFlow.wallet();
+}
+async function renderPayoutOptions() {
+  if (!window.OrderFlow)
+    throw Error(
+      adminText(
+        "Sahifa yuklanmadi. Yangilab qayta urinib ko‘ring.",
+        "Страница не загрузилась. Обновите её и повторите.",
+        "This page could not be loaded. Refresh and try again.",
+      ),
+    );
+  return window.OrderFlow.wallet();
+}
+async function renderMyReviews() {
+  return window.ReviewHub.mine();
+}
+function blogDate(value) {
+  const d = parseServerDate(value);
+  return Number.isNaN(+d)
+    ? ""
+    : d.toLocaleDateString(localeTag(), {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+}
+function blogCard(post) {
+  const i = locale === "ru" ? 1 : locale === "uz" ? 0 : 2;
+  return `<article class="blog-card"><span class="blog-category">${esc(post.category[i])}</span><time class="blog-date">${blogDate(post.published_at || post.created_at)}</time><h2><a href="/blog/${encodeURIComponent(post.slug)}">${esc(post.title[i])}</a></h2><p>${esc(post.summary[i])}</p><a class="text-link" href="/blog/${encodeURIComponent(post.slug)}">${adminText("Maqolani o‘qish →", "Читать статью →", "Read article →")}</a></article>`;
+}
+async function renderBlog() {
+  const posts = await api("/blog"),
+    i = locale === "ru" ? 1 : locale === "uz" ? 0 : 2;
+  app.innerHTML = `<section class="page">${pageTitle(adminText("SentryLoot blogi", "Блог SentryLoot", "SentryLoot blog"), adminText("Xavfsiz xarid, ishonchli savdo va o‘yin bozoriga oid qo‘llanmalar.", "Советы по безопасным покупкам, продажам и игровому рынку.", "Guides to safer buying, selling, and gaming marketplaces."), me?.is_admin ? `<a class="button-secondary" href="#admin-blog">${adminText("Maqolalarni boshqarish", "Управление статьями", "Manage articles")}</a>` : "")}<div class="blog-feature"><span>SENTRYLOOT · ${adminText("QO‘LLANMALAR", "ГИДЫ", "GUIDES")}</span><h2>${posts.length ? esc(posts[0].title[i]) : adminText("Yangi maqolalar tez orada", "Новые статьи скоро появятся", "New articles coming soon")}</h2><p>${posts.length ? esc(posts[0].summary[i]) : adminText("Xarid va savdo bo‘yicha foydali qo‘llanmalar shu yerda chiqadi.", "Здесь появятся полезные руководства по покупкам и продажам.", "Helpful buying and selling guides will appear here.")}</p>${posts.length ? `<a class="button-primary" href="/blog/${encodeURIComponent(posts[0].slug)}">${adminText("O‘qishni boshlash", "Начать чтение", "Start reading")}</a>` : ""}</div><div class="blog-grid">${posts.slice(1).map(blogCard).join("")}</div>${posts.length ? "" : empty(adminText("Hozircha nashr qilingan maqola yo‘q.", "Пока нет опубликованных статей.", "No published articles yet."))}</section>`;
+}
+async function renderBlogArticle(slug) {
+  let post;
+  try {
+    post = await api("/blog/" + encodeURIComponent(slug));
+  } catch {}
+  if (!post) {
+    app.innerHTML = `<section class="page">${pageTitle(adminText("Maqola topilmadi", "Статья не найдена", "Article not found"))}</section>`;
+    return;
+  }
+  const i = locale === "ru" ? 1 : locale === "uz" ? 0 : 2;
+  updateRouteMetadata("blog/" + encodeURIComponent(slug));
+  const articleTitle = `${post.title[i]} | SentryLoot`;
+  document.title = articleTitle;
+  const metaDescription = $('meta[name="description"]');
+  if (metaDescription) metaDescription.content = post.summary[i];
+  for (const [selector, value] of [
+    ['meta[property="og:title"]', articleTitle],
+    ['meta[property="og:description"]', post.summary[i]],
+    ['meta[property="og:url"]', location.href],
+  ]) {
+    const el = $(selector);
+    if (el) el.content = value;
+  }
+  app.innerHTML = `<article class="page blog-article"><span class="blog-category">${esc(post.category[i])}</span><time class="blog-date">${blogDate(post.published_at || post.created_at)}</time><h1 class="page-title">${esc(post.title[i])}</h1><p class="page-subtitle">${esc(post.summary[i])}</p><div class="blog-article-body">${post.body[i].map((p, n) => `<p>${n + 1}. ${esc(p)}</p>`).join("")}</div><div class="notice">${adminText("Ushbu maqolalar umumiy ma’lumot uchun. Har bir e’lon va o‘yin qoidalarini alohida tekshiring.", "Статьи носят общий информационный характер. Проверяйте каждое объявление и правила игры отдельно.", "These articles are general information. Check each listing and the game’s rules separately.")}</div></article>`;
+}
+function blogEditor(post = {}) {
+  const langs = ["O‘zbekcha", "Русский", "English"];
+  const values = ["category", "title", "summary", "body"];
+  return `<form id="blog-editor" class="blog-editor-form"><input type="hidden" name="id" value="${esc(post.id || "")}"><div class="field"><label for="blog-slug">URL slug</label><input id="blog-slug" name="slug" value="${esc(post.slug || "")}" pattern="[a-z0-9]+(-[a-z0-9]+)*" required maxlength="80" placeholder="xavfsiz-xarid"></div>${langs.map((lang, i) => `<fieldset class="blog-language-fields"><legend>${lang}</legend><div class="field"><label>${adminText("Kategoriya", "Категория", "Category")}</label><input name="category_${i}" required maxlength="60" value="${esc(post.category?.[i] || "")}"></div><div class="field"><label>${adminText("Sarlavha", "Заголовок", "Title")}</label><input name="title_${i}" required maxlength="140" value="${esc(post.title?.[i] || "")}"></div><div class="field"><label>${adminText("Qisqa mazmun", "Краткое описание", "Summary")}</label><textarea name="summary_${i}" required maxlength="500" rows="2">${esc(post.summary?.[i] || "")}</textarea></div><div class="field"><label>${adminText("Maqola matni (har paragraf alohida qatorda)", "Текст статьи (каждый абзац с новой строки)", "Article text (one paragraph per line)")}</label><textarea name="body_${i}" required rows="5">${esc(post.body?.[i]?.join("\n") || "")}</textarea></div></fieldset>`).join("")}<div class="field"><label>${adminText("Holat", "Статус", "Status")}</label><select name="status"><option value="draft" ${post.status !== "published" ? "selected" : ""}>${adminText("Qoralama", "Черновик", "Draft")}</option><option value="published" ${post.status === "published" ? "selected" : ""}>${adminText("Nashr qilish", "Опубликовано", "Published")}</option></select></div><div class="actions"><button class="button-primary">${adminText("Saqlash", "Сохранить", "Save")}</button><button type="button" class="button-secondary" id="blog-editor-cancel">${adminText("Bekor qilish", "Отмена", "Cancel")}</button></div></form>`;
+}
+async function renderAdminBlog() {
+  if (!me) {
+    location.hash = "login";
+    return;
+  }
+  if (!me.is_admin && !me.staff_capabilities?.includes("content")) {
+    app.innerHTML = `<section class="page">${pageTitle(adminText("Maqolalar boshqaruvi", "Управление статьями", "Article management"))}<div class="notice error">${adminText("Administrator ruxsati kerak.", "Требуются права администратора.", "Administrator access required.")}</div></section>`;
+    return;
+  }
+  const posts = await api("/admin/blog");
+  app.innerHTML = `<section class="page">${pageTitle(adminText("Blog boshqaruvi", "Управление блогом", "Blog management"), adminText("Uch tildagi maqolalarni yozing, qoralama saqlang yoki saytga nashr qiling.", "Пишите статьи на трёх языках, сохраняйте черновики или публикуйте.", "Write articles in three languages, save drafts, or publish them."), ``)}<div class="admin-blog-toolbar"><span>${posts.length} ${adminText("maqola", "статей", "articles")}</span><button class="button-primary" id="blog-new">${adminText("Yangi maqola", "Новая статья", "New article")}</button><a class="button-secondary" href="#blog">${adminText("Blogni ko‘rish", "Открыть блог", "View blog")}</a></div><div class="blog-admin-list">${posts.map((p) => `<article class="panel blog-admin-row"><div><span class="blog-category">${esc(p.status)}</span><h2>${esc(p.title[0])}</h2><small>${esc(p.slug)} · ${blogDate(p.updated_at)}</small></div><button class="button-secondary" data-edit-post="${esc(p.id)}">${adminText("Tahrirlash", "Редактировать", "Edit")}</button></article>`).join("") || empty(adminText("Hali maqola yo‘q. Birinchi maqolani yarating.", "Статей пока нет. Создайте первую.", "No articles yet. Create your first one."))}<div id="blog-editor-host"></div></div></section>`;
+  const host = $("#blog-editor-host");
+  const open = (post) => {
+    host.innerHTML = blogEditor(post);
+    host.scrollIntoView({ behavior: "smooth", block: "start" });
+    $("#blog-editor-cancel")?.addEventListener("click", () =>
+      host.replaceChildren(),
+    );
+  };
+  $("#blog-new")?.addEventListener("click", () => open());
+  $$("[data-edit-post]").forEach((btn) =>
+    btn.addEventListener("click", () =>
+      open(posts.find((p) => p.id === btn.dataset.editPost)),
+    ),
+  );
+  $("#blog-editor")?.addEventListener("submit", saveBlogEditor);
+}
+async function saveBlogEditor(e) {
+  e.preventDefault();
+  const f = e.currentTarget,
+    d = new FormData(f),
+    post = {
+      slug: d.get("slug"),
+      status: d.get("status"),
+      category: [],
+      title: [],
+      summary: [],
+      body: [],
+    };
+  for (let i = 0; i < 3; i++) {
+    post.category.push(d.get("category_" + i));
+    post.title.push(d.get("title_" + i));
+    post.summary.push(d.get("summary_" + i));
+    post.body.push(
+      d
+        .get("body_" + i)
+        .split(/\r?\n/)
+        .map((x) => x.trim())
+        .filter(Boolean),
+    );
+  }
+  const id = d.get("id");
+  try {
+    await api("/admin/blog" + (id ? "/" + encodeURIComponent(id) : ""), {
+      method: "POST",
+      body: JSON.stringify(post),
+    });
+    toast(adminText("Maqola saqlandi", "Статья сохранена", "Article saved"));
+    renderAdminBlog();
+  } catch (x) {
+    toast(x.message, "error");
+  }
+}
+function adminState(s) {
+  const labels = {
+    pending_payment: [
+      "To‘lov kutilmoqda",
+      "Ожидает оплату",
+      "Awaiting payment",
+    ],
+    paid: ["To‘langan", "Оплачен", "Paid"],
+    awaiting_delivery: [
+      "Yetkazish kutilmoqda",
+      "Ожидает выдачу",
+      "Awaiting delivery",
+    ],
+    delivered: ["Yetkazildi", "Выдан", "Delivered"],
+    completed: ["Yakunlandi", "Завершён", "Completed"],
+    cancelled: ["Bekor qilindi", "Отменён", "Cancelled"],
+    disputed: ["Nizoda", "Спор", "Disputed"],
+    pending_review: ["Tekshiruvda", "На проверке", "In review"],
+    approved_private: [
+      "Tasdiqlangan · yashirin",
+      "Одобрено · скрыто",
+      "Approved · hidden",
+    ],
+    published: ["Faol", "Активно", "Active"],
+    rejected: ["Rad etildi", "Отклонено", "Rejected"],
+    draft: ["Qoralama", "Черновик", "Draft"],
+    paused: ["To‘xtatilgan", "Приостановлено", "Paused"],
+    open: ["Ochiq", "Открыт", "Open"],
+    pending: ["Kutilmoqda", "Ожидает", "Pending"],
+    approved: ["Tasdiqlandi", "Одобрено", "Approved"],
+    paid_out: ["To‘landi", "Выплачено", "Paid out"],
+    reviewing: ["Ko‘rib chiqilmoqda", "На рассмотрении", "Reviewing"],
+    resolved: ["Yechilgan", "Решён", "Resolved"],
+    dismissed: ["Yopilgan", "Закрыт", "Dismissed"],
+    not_started: ["Boshlanmagan", "Не начата", "Not started"],
+    verified: ["Tasdiqlangan", "Подтверждён", "Verified"],
+    unverified: ["Tasdiqlanmagan", "Не подтверждён", "Unverified"],
+    disabled: ["O‘chirilgan", "Отключён", "Disabled"],
+    rejected: ["Rad etilgan", "Отклонён", "Rejected"],
+  };
+  return `<span class="status ${esc(s)}">${esc(labels[s]?.[locale === "ru" ? 1 : locale === "uz" ? 0 : 2] || s)}</span>`;
+}
+function adminDate(value) {
+  if (!value) return "—";
+  const date = parseServerDate(value);
+  return Number.isNaN(+date)
+    ? esc(value)
+    : date.toLocaleDateString(localeTag(), {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+}
+function adminChart(rows) {
+  const values = new Map(
+    (rows || []).map((x) => [x.day, Number(x.count) || 0]),
+  );
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setUTCHours(0, 0, 0, 0);
+    d.setUTCDate(d.getUTCDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    days.push({
+      key,
+      count: values.get(key) || 0,
+      label: d.toLocaleDateString(localeTag(), {
+        weekday: "short",
+        timeZone: "UTC",
+      }),
+    });
+  }
+  const max = Math.max(1, ...days.map((x) => x.count));
+  return `<div class="admin-chart" role="img" aria-label="${adminText("Oxirgi 7 kunlik buyurtmalar", "Заказы за последние 7 дней", "Orders for the last 7 days")}">${days.map((d) => `<div class="admin-chart-day"><span class="admin-chart-value">${d.count}</span><div class="admin-chart-track"><i style="height:${d.count ? Math.max(8, Math.round((d.count / max) * 100)) : 0}%"></i></div><span class="admin-chart-label">${esc(d.label)}</span></div>`).join("")}</div>`;
+}
+function adminOrdersTable(rows) {
+  return rows.length
+    ? `<div class="table-wrap admin-table-wrap"><table class="data-table admin-table"><thead><tr><th>${adminText("Buyurtma", "Заказ", "Order")}</th><th>${adminText("Xaridor", "Покупатель", "Buyer")}</th><th>${adminText("Jami", "Сумма", "Total")}</th><th>${adminText("Holat", "Статус", "Status")}</th><th>${adminText("Sana", "Дата", "Date")}</th></tr></thead><tbody>${rows.map((x) => `<tr><td><span class="admin-order-ref">${esc(x.reference || x.id)}</span></td><td>${esc(x.buyer_email)}</td><td>${fmt(x.total_minor, x.currency)}</td><td>${adminState(x.status)}</td><td>${adminDate(x.created_at)}</td></tr>`).join("")}</tbody></table></div>`
+    : empty(
+        adminText(
+          "Buyurtmalar hali yo‘q.",
+          "Заказов пока нет.",
+          "No orders yet.",
+        ),
+      );
+}
+function adminListingCard(l) {
+  const waiting = l.status === "pending_review",
+    risks = Array.isArray(l.risk_flags) ? l.risk_flags : [];
+  return `<article class="admin-record"><div class="admin-record-main"><div class="admin-record-kicker">${esc(l.game_name || "GAME")} <span>·</span> ${esc(categoryLabel(l.category_name || l.product_type || "Digital"))}</div><h3>${esc(l.title)}</h3><p>${esc((l.description || "").slice(0, 220))}</p>${risks.length ? `<p class="notice warn">${adminText("Tekshiruv signallari:", "Сигналы проверки:", "Review signals:")} ${esc(risks.join(", "))}</p>` : ""}<div class="admin-record-meta"><span>${icon("gamepad")}${esc(l.seller_name || "—")}</span><span>${fmt(l.price_minor, l.currency)}</span><span>${adminDate(l.created_at)}</span></div></div><div class="admin-record-side">${adminState(l.status)}${waiting ? `<div class="admin-record-actions"><button class="button-primary" data-action="moderate" data-id="${esc(l.id)}" data-choice="approve" data-risk-flags="${esc(risks.join(", "))}">${adminText("Tasdiqlash", "Одобрить", "Approve")}</button><button class="button-danger" data-action="moderate" data-id="${esc(l.id)}" data-choice="reject">${adminText("Rad etish", "Отклонить", "Reject")}</button></div>` : ""}</div></article>`;
+}
+function adminReportCard(r) {
+  return `<article class="admin-record admin-report-record"><div class="admin-record-main"><div class="admin-record-kicker">${esc(r.reason || "report")} <span>·</span> ${adminDate(r.created_at)}</div><h3>${esc(r.reporter_email)}</h3><p>${esc(r.details || "")}</p>${r.evidence_url ? `<a class="text-link" href="${esc(r.evidence_url)}" target="_blank" rel="noopener noreferrer">${adminText("Dalilni ochish ↗", "Открыть доказательство ↗", "Open evidence ↗")}</a>` : ""}</div><div class="admin-record-side">${adminState(r.status)}<div class="admin-report-controls"><select id="report-${esc(r.id)}" aria-label="${adminText("Shikoyat holati", "Статус жалобы", "Report status")}"><option value="reviewing" ${r.status === "reviewing" ? "selected" : ""}>${adminText("Ko‘rib chiqilmoqda", "На рассмотрении", "Reviewing")}</option><option value="resolved" ${r.status === "resolved" ? "selected" : ""}>${adminText("Yechildi", "Решён", "Resolved")}</option><option value="dismissed" ${r.status === "dismissed" ? "selected" : ""}>${adminText("Yopildi", "Закрыт", "Dismissed")}</option></select><input id="resolution-${esc(r.id)}" placeholder="${adminText("Qaror izohi", "Комментарий к решению", "Resolution note")}" value="${esc(r.resolution || "")}"><button class="button-secondary" data-action="report-update" data-id="${esc(r.id)}">${adminText("Saqlash", "Сохранить", "Save")}</button></div></div></article>`;
+}
+function adminSellerCard(s) {
+  return `<article class="admin-record"><div class="admin-record-main"><div class="admin-record-kicker">${adminText("SOTUVCHI TEKSHIRUVI", "ПРОВЕРКА ПРОДАВЦА", "SELLER REVIEW")} <span>·</span> ${adminDate(s.created_at)}</div><h3>${esc(s.shop_name || s.display_name)} <span class="admin-secondary-name">${esc(s.display_name)}</span></h3><p>${esc(s.bio || adminText("Do‘kon tavsifi berilmagan.", "Описание магазина не указано.", "No shop description provided."))}</p><div class="admin-record-meta"><span>${esc(s.email)}</span><span>${adminState(s.verification_status)}</span><span>Didit: ${adminState(s.identity_status || "not_started")}</span><span>${s.selling_enabled ? adminText("Savdo yoqilgan", "Продажи включены", "Selling enabled") : adminText("Savdo o‘chiq", "Продажи отключены", "Selling disabled")}</span></div><div class="notice warn admin-note">${adminText("Tasdiqlashdan oldin Didit ID, liveness va yuz mosligini tasdiqlashi kerak. Hujjat rasmlari faqat vakolatli admin so‘raganda Diditdan ochiladi va bu yerda saqlanmaydi.", "Перед одобрением Didit должен подтвердить документ, liveness и совпадение лица. Документы открываются из Didit по запросу уполномоченного администратора и здесь не сохраняются.", "Didit must approve the ID, liveness, and face match before seller approval. Authorized administrators load document images from Didit on request; images are not stored here.")}</div></div><div class="admin-record-side">${adminState(s.selling_enabled ? s.verification_status : "disabled")}<div class="admin-record-actions"><button class="button-primary" data-action="seller-review" data-id="${esc(s.user_id)}" data-choice="approve" ${s.identity_status !== "verified" || s.identity_provider !== "didit" ? 'disabled title="Didit tekshiruvi kerak"' : ""}>${adminText("Tasdiqlash", "Одобрить", "Approve")}</button><button class="button-danger" data-action="seller-review" data-id="${esc(s.user_id)}" data-choice="reject">${adminText("Rad etish", "Отклонить", "Reject")}</button></div></div></article>`;
+}
+function adminDisputeCard(d) {
+  const canResolve =
+      d.payment_provider === "sandbox" && d.payment_status === "succeeded",
+    ageHours = Math.max(
+      0,
+      Math.floor(
+        (Date.now() - parseServerDate(d.created_at).getTime()) / 3600000,
+      ),
+    );
+  return `<article class="admin-record"><div class="admin-record-main"><div class="admin-record-kicker">${adminText("NIZO", "СПОР", "DISPUTE")} <span>·</span> ${adminDate(d.created_at)} <span>·</span> ${adminText(`${ageHours} soat navbatda`, `${ageHours} ч. в очереди`, `${ageHours}h in queue`)}</div><h3>${esc(d.reference)} <span class="admin-secondary-name">${esc(d.buyer_email)}</span></h3><p>${esc(d.details || "")}</p><div class="admin-record-meta"><span>${adminText("Buyurtma", "Заказ", "Order")}: ${adminState(d.order_status)}</span><span>${fmt(d.total_minor, d.currency)}</span><span>${adminText("Sotuvchi", "Продавец", "Seller")}: ${esc(d.seller_emails || "—")}</span></div>${!canResolve ? `<div class="notice warn admin-note">${adminText("Moliyaviy amal faqat muvaffaqiyatli sinov to‘lovi uchun ko‘rsatiladi.", "Финансовое действие доступно только для успешного sandbox-платежа.", "Financial actions are available only for a successful sandbox payment.")}</div>` : ""}</div><div class="admin-record-side">${adminState(d.report_status)}<div class="admin-record-actions admin-actions-stack"><a class="button-secondary" href="#dispute/${esc(d.order_id)}">${adminText("Nizo sahifasi", "Открыть спор", "Open dispute case")}</a><button class="button-secondary" data-action="dispute-review" data-id="${esc(d.order_id)}" data-choice="request_info">${adminText("Dalil so‘rash", "Запросить доказательства", "Request evidence")}</button>${canResolve ? `<button class="button-primary" data-action="dispute-review" data-id="${esc(d.order_id)}" data-choice="release_seller">${adminText("Sotuvchiga yechish", "В пользу продавца", "Release to seller")}</button><button class="button-danger" data-action="dispute-review" data-id="${esc(d.order_id)}" data-choice="refund_buyer">${adminText("Xaridorga qaytarish", "Вернуть покупателю", "Refund buyer")}</button>` : ""}</div></div></article>`;
+}
+function adminPayoutCard(p) {
+  let actions = "";
+  if (p.status === "pending")
+    actions = `<button class="button-primary" data-action="payout" data-id="${esc(p.id)}" data-choice="approve">${adminText("Ma’qullash", "Одобрить", "Approve")}</button><button class="button-danger" data-action="payout" data-id="${esc(p.id)}" data-choice="reject">${adminText("Rad etish", "Отклонить", "Reject")}</button>`;
+  else if (p.status === "approved")
+    actions = `<button class="button-primary" data-action="payout" data-id="${esc(p.id)}" data-choice="mark_paid">${adminText("Tashqi o‘tkazmani qayd etish", "Записать внешний перевод", "Record external transfer")}</button>`;
+  return `<article class="admin-record"><div class="admin-record-main"><div class="admin-record-kicker">${adminText("MABLAG‘ YECHISH SO‘ROVI", "ЗАПРОС НА ВЫПЛАТУ", "PAYOUT REQUEST")} <span>·</span> ${adminDate(p.created_at)}</div><h3>${esc(p.display_name || p.email)} <span class="admin-secondary-name">${fmt(p.amount_minor, p.currency)}</span></h3><p>${esc(p.note || adminText("Izoh yo‘q.", "Без комментария.", "No note provided."))}</p><div class="admin-record-meta"><span>${esc(p.email)}</span>${p.external_reference ? `<span>${adminText("Tashqi ID", "Внешний ID", "External ID")}: ${esc(p.external_reference)}</span>` : ""}</div></div><div class="admin-record-side">${adminState(p.status)}${actions ? `<div class="admin-record-actions">${actions}</div>` : ""}</div></article>`;
+}
+function adminDeletionCard(d) {
+  return `<article class="admin-record admin-compact-record"><div class="admin-record-main"><div class="admin-record-kicker">${adminDate(d.created_at)}</div><h3>${esc(d.display_name || d.email)} <span class="admin-secondary-name">${esc(d.email)}</span></h3><p>${esc(d.reason || adminText("Sabab ko‘rsatilmagan.", "Причина не указана.", "No reason provided."))}</p></div><div class="admin-record-side">${adminState(d.status)}<div class="admin-record-actions"><button class="button-secondary" data-action="deletion-review" data-id="${esc(d.id)}" data-choice="reviewing">${adminText("Ko‘rib chiqish", "Рассмотреть", "Review")}</button><button class="button-secondary" data-action="deletion-review" data-id="${esc(d.id)}" data-choice="resolved">${adminText("Yakunlash", "Завершить", "Resolve")}</button><button class="button-danger" data-action="deletion-review" data-id="${esc(d.id)}" data-choice="dismissed">${adminText("Yopish", "Закрыть", "Dismiss")}</button></div></div></article>`;
+}
+function adminUserRows(users) {
+  return users.length
+    ? `<div class="table-wrap admin-table-wrap"><table class="data-table admin-table"><thead><tr><th>${adminText("Foydalanuvchi", "Пользователь", "User")}</th><th>${adminText("Email holati", "Статус email", "Email status")}</th><th>${adminText("Ro‘yxatdan o‘tgan", "Регистрация", "Joined")}</th><th>${adminText("Holat / amal", "Статус / действие", "Status / action")}</th></tr></thead><tbody>${users.map((u) => `<tr><td><b>${esc(u.display_name)}</b><small class="admin-cell-sub">${esc(u.email)}</small></td><td>${u.email_verified ? adminText("Tasdiqlangan", "Подтверждён", "Verified") : adminText("Tasdiqlanmagan", "Не подтверждён", "Unverified")}</td><td>${adminDate(u.created_at)}</td><td><div class="admin-user-action">${u.suspended ? `<span class="status rejected">${adminText("Cheklangan", "Ограничен", "Suspended")}</span>` : `<span class="status published">${adminText("Faol", "Активен", "Active")}</span>`}<button class="button-secondary" data-action="suspend-user" data-id="${esc(u.id)}" data-choice="${u.suspended ? "restore" : "suspend"}" ${u.id === me.id ? "disabled" : ""}>${u.id === me.id ? adminText("Joriy admin", "Текущий администратор", "Current admin") : u.suspended ? adminText("Qayta yoqish", "Восстановить", "Restore") : adminText("Cheklash", "Ограничить", "Suspend")}</button></div></td></tr>`).join("")}</tbody></table></div>`
+    : empty(
+        adminText(
+          "Foydalanuvchi topilmadi.",
+          "Пользователи не найдены.",
+          "No users found.",
+        ),
+      );
+}
+function activateAdminView(name, scroll = false) {
+  adminActiveView = name;
+  $$("[data-admin-view]", app).forEach(
+    (s) => (s.hidden = s.dataset.adminView !== name),
+  );
+  $$("[data-admin-view-target]", app).forEach((b) => {
+    const active = b.dataset.adminViewTarget === name;
+    b.classList.toggle("is-active", active);
+    if (active) b.setAttribute("aria-current", "page");
+    else b.removeAttribute("aria-current");
+  });
+  const title = $(`[data-admin-heading="${name}"]`, app);
+  const h = $("#admin-page-title", app);
+  if (title && h) h.textContent = title.textContent;
+  if (scroll)
+    app
+      .querySelector(".admin-workspace")
+      ?.scrollIntoView({ block: "start", behavior: "instant" });
+  loadAdminView(name);
+}
+function adminAccountReviewCard(review) {
+  const canView =
+    review.evidence?.length === 2 && review.evidence.every((item) => item.url);
+  return `<article class="account-review-card"><div class="admin-record-head"><div><span class="admin-record-kicker">${esc(review.reference)} · ${fmt(review.total_minor, review.currency)}</span><h3>${esc(review.buyer_name || review.buyer_email)}</h3><p>${esc(review.buyer_email)} · ${adminText("Yuborildi", "Отправлено", "Submitted")}: ${esc(review.submitted_at || "—")}</p></div><span class="admin-count-pill is-alert">${adminText("Akkaunt tekshiruvi", "Проверка аккаунта", "Account review")}</span></div><p class="help">${adminText("Dalil faqat xaridor akkauntga kira olganini ko‘rsatishi mumkin; kelajakda akkaunt qaytarib olinmasligini kafolatlamaydi. Rasmda parol, OTP yoki shaxsiy ma’lumot ko‘rinsa, darhol qo‘shimcha ma’lumot so‘rang.", "Скриншоты могут подтвердить только доступ покупателя, но не гарантируют, что аккаунт не восстановят позже. Если видны пароли, OTP или личные данные, запросите новые доказательства.", "Screenshots can show buyer access only; they cannot guarantee the account will not later be recovered. If a password, OTP, or personal information is visible, request safer evidence.")}</p><div class="account-evidence-grid">${(review.evidence || []).map((item) => `<figure><figcaption>${adminText("Skrinshot", "Скриншот", "Screenshot")} ${item.slot}</figcaption>${item.url ? `<a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer"><img src="${esc(item.url)}" alt="${adminText("Yopiq buyurtma dalili", "Закрытое доказательство заказа", "Private order evidence")} ${item.slot}" loading="lazy" referrerpolicy="no-referrer"></a>` : `<div class="notice warn">${adminText("Maxfiy Storage hali sozlanmagan; faylni ko‘rib bo‘lmaydi.", "Private Storage не настроено; файл недоступен.", "Private Storage is not configured; this file cannot be viewed.")}</div>`}</figure>`).join("")}</div><label class="field"><span>${adminText("Moderator izohi", "Комментарий модератора", "Moderator note")}</span><textarea data-account-review-note="${esc(review.order_id)}" minlength="5" maxlength="1500" placeholder="${adminText("Qaror sababini yozing…", "Укажите причину решения…", "Record the reason for your decision…")}" required></textarea></label><div class="actions"><button class="button-primary" data-action="account-review" data-id="${esc(review.order_id)}" data-choice="approve" ${canView ? "" : "disabled"}>${adminText("Tasdiqlash · sotuvchi balansiga yozish", "Одобрить · зачислить продавцу", "Approve · credit seller balance")}</button><button class="button-secondary" data-action="account-review" data-id="${esc(review.order_id)}" data-choice="request_info" ${canView ? "" : "disabled"}>${adminText("Qo‘shimcha dalil so‘rash", "Запросить дополнительные доказательства", "Request more evidence")}</button><button class="button-danger" data-action="account-review" data-id="${esc(review.order_id)}" data-choice="refund_buyer">${adminText("Sinov qaytarimini qayd etish", "Оформить возврат sandbox", "Record sandbox refund")}</button></div></article>`;
+}
+let adminPage = null;
+function adminLoadingMarkup() {
+  return `<div class="loading" role="status"><span class="spinner"></span>${adminText("Yuklanmoqda…", "Загрузка…", "Loading…")}</div>`;
+}
+function adminViewMarkup(name, data) {
+  const {
+    o = {},
+    ls = [],
+    reports = [],
+    payouts = [],
+    orders = [],
+    deletions = [],
+    sellers = [],
+    disputes = [],
+    accountReviews = [],
+    users = [],
+  } = data;
+  const publicReports = reports.filter((r) => r.reason !== "order_dispute"),
+    mode = String(o.mode || "development").toUpperCase(),
+    daily = o.daily_orders || [],
+    orderRows =
+      name === "overview" ? o.recent_orders || [] : orders.slice(0, 100);
+  switch (name) {
+    case "overview":
+      return `<div class="admin-kpis"><article class="admin-kpi"><span class="admin-kpi-icon">${icon("arrow-up-right")}</span><small>${adminText("Bugungi buyurtmalar", "Заказы сегодня", "Orders today")}</small><b>${o.today_orders}</b><em>${adminText("Joriy kun", "Текущий день", "Current day")}</em></article><article class="admin-kpi"><span class="admin-kpi-icon is-violet">${icon("shield")}</span><small>${adminText("Yakunlangan buyurtmalar", "Завершённые заказы", "Completed orders")}</small><b>${o.completed_orders}</b><em>${adminText("Barcha vaqt", "За всё время", "All time")}</em></article><article class="admin-kpi"><span class="admin-kpi-icon is-blue">${icon("box")}</span><small>${adminText("Faol e’lonlar", "Активные объявления", "Active listings")}</small><b>${o.active_listings}</b><em>${adminText("Hozir ommada", "Сейчас опубликованы", "Currently published")}</em></article><article class="admin-kpi"><span class="admin-kpi-icon is-gold">${icon("heart")}</span><small>${adminText("Foydalanuvchilar", "Пользователи", "Users")}</small><b>${o.users}</b><em>${adminText("Jami akkauntlar", "Всего аккаунтов", "Total accounts")}</em></article></div><div class="admin-dashboard-grid"><article class="admin-panel admin-activity-panel"><div class="admin-panel-heading"><div><span class="admin-eyebrow">${adminText("FAOLLIK", "АКТИВНОСТЬ", "ACTIVITY")}</span><h2>${adminText("Buyurtmalar faolligi", "Активность заказов", "Order activity")}</h2></div><span class="admin-period-tag">${adminText("SO‘NGGI 7 KUN", "ПОСЛЕДНИЕ 7 ДНЕЙ", "LAST 7 DAYS")}</span></div>${adminChart(daily)}</article><article class="admin-panel admin-queue-panel"><div class="admin-panel-heading"><div><span class="admin-eyebrow">${adminText("ISH NAVBATI", "ОЧЕРЕДЬ ЗАДАЧ", "WORK QUEUE")}</span><h2>${adminText("E’tibor talab qiladi", "Требует внимания", "Needs attention")}</h2></div>${icon("clock")}</div><button data-admin-view-target="listings" class="admin-queue-link"><span>${adminText("Tekshiriladigan e’lonlar", "Объявления на проверке", "Listings to review")}</span><b>${o.pending_listings}</b></button><button data-admin-view-target="sellers" class="admin-queue-link"><span>${adminText("Sotuvchi tasdiqlari", "Проверки продавцов", "Seller verifications")}</span><b>${o.pending_sellers}</b></button><button data-admin-view-target="disputes" class="admin-queue-link"><span>${adminText("Ochiq nizolar", "Открытые споры", "Open disputes")}</span><b>${o.open_disputes}</b></button><button data-admin-view-target="reports" class="admin-queue-link"><span>${adminText("Ochiq shikoyatlar", "Открытые жалобы", "Open reports")}</span><b>${o.open_reports}</b></button><button data-admin-view-target="payouts" class="admin-queue-link"><span>${adminText("Mablag‘ yechish navbatida", "Ожидают выплаты", "Pending payouts")}</span><b>${o.pending_payouts}</b></button></article></div><article class="admin-panel admin-orders-panel"><div class="admin-panel-heading"><div><span class="admin-eyebrow">${adminText("SO‘NGGI FAOLLIK", "ПОСЛЕДНЯЯ АКТИВНОСТЬ", "LATEST ACTIVITY")}</span><h2>${adminText("So‘nggi buyurtmalar", "Последние заказы", "Recent orders")}</h2></div><button class="admin-inline-link" data-admin-view-target="orders">${adminText("Barcha buyurtmalar", "Все заказы", "All orders")} ${icon("arrow-up-right")}</button></div>${adminOrdersTable(orderRows.slice(0, 7))}</article><div class="admin-sandbox-banner"><span class="admin-sandbox-icon">${icon("shield")}</span><div><b>${mode === "PRODUCTION" ? adminText("Haqiqiy to‘lovlar ulanmagan", "Реальные платежи не подключены", "Live payments are not connected") : adminText("To‘lovlar sinov muhitida ishlaydi", "Платежи работают в тестовом режиме", "Payments are in sandbox mode")}</b><p>${adminText("Haqiqiy provayder yoki pul o‘tkazmasi ulanmagan. Mablag‘ yechish tasdig‘i tashqi o‘tkazmani avtomatik bajarmaydi.", "Реальный платёжный провайдер не подключён. Одобрение выплаты не переводит деньги автоматически.", "No live payment provider or transfer is connected. Approving a payout does not move funds.")}</p></div><span class="admin-sandbox-volume"><small>${adminText("SINOV TO‘LOV HAJMI", "ОБЪЁМ SANDBOX-ПЛАТЕЖЕЙ", "SANDBOX PAYMENT VOLUME")}</small><b>${fmt(o.sandbox_volume_minor, "UZS")}</b></span></div>`;
+    case "listings":
+      return `<div class="admin-section-intro"><div><h2>${adminText("E’lonlar va moderatsiya", "Объявления и модерация", "Listings and review")}</h2><p>${adminText("Navbatdagi e’lonlarni tekshiring va faol e’lonlar holatini kuzating.", "Проверяйте объявления в очереди и отслеживайте активные.", "Review queued listings and inspect active listings.")}</p></div><span class="admin-count-pill">${ls.filter((x) => x.status === "pending_review").length} ${adminText("kutilmoqda", "ожидают", "pending")}</span></div><div class="admin-record-list">${ls.length ? ls.map(adminListingCard).join("") : empty(adminText("Moderatsiya uchun e’lon yo‘q.", "Нет объявлений для модерации.", "No listings need review."))}</div>`;
+    case "orders":
+      return `<div class="admin-section-intro"><div><h2>${adminText("Barcha buyurtmalar", "Все заказы", "All orders")}</h2><p>${adminText("Oxirgi 100 ta buyurtma. Har bir holat bazadagi joriy ma’lumotdan olinadi.", "Последние 100 заказов. Статусы отражают текущие данные базы.", "Latest 100 orders. Statuses reflect current database records.")}</p></div><span class="admin-count-pill">${orders.length} ${adminText("buyurtma", "заказов", "orders")}</span></div>${adminOrdersTable(orderRows)}`;
+    case "sellers":
+      return `<div class="admin-section-intro"><div><h2>${adminText("Sotuvchi hisoblarini tekshirish", "Проверка аккаунтов продавцов", "Seller account review")}</h2><p>${adminText("Tasdiqlash yoki rad etish qarori audit jurnaliga yoziladi.", "Решения об одобрении и отказе записываются в журнал аудита.", "Approval and rejection decisions are recorded in the audit log.")}</p></div><span class="admin-count-pill">${sellers.length} ${adminText("navbatda", "в очереди", "in queue")}</span></div><div class="admin-record-list">${sellers.length ? sellers.map(adminSellerCard).join("") : empty(adminText("Tekshiruv kutayotgan sotuvchi yo‘q.", "Нет продавцов, ожидающих проверки.", "No sellers are waiting for review."))}</div>`;
+    case "disputes":
+      return `<div class="admin-section-intro"><div><h2>${adminText("Ochiq buyurtma nizolari", "Открытые споры по заказам", "Open order disputes")}</h2><p>${adminText("Qaror va dalillarni moderator yozuvi bilan saqlang. Pul amallari faqat sinov’da qayd etiladi.", "Сохраняйте решение и доказательства вместе с комментарием модератора. Финансовые действия доступны только в sandbox.", "Record decisions with a moderator note. Financial actions are sandbox-only.")}</p></div><span class="admin-count-pill is-alert">${disputes.length} ${adminText("ochiq", "открыто", "open")}</span></div><div class="admin-record-list">${disputes.length ? disputes.map(adminDisputeCard).join("") : empty(adminText("Ochiq nizo yo‘q.", "Открытых споров нет.", "No open disputes."))}</div>`;
+    case "account-reviews":
+      return `<div class="admin-section-intro"><div><h2>${adminText("Akkaunt xaridi tekshiruvi", "Проверка купленных аккаунтов", "Purchased account review")}</h2><p>${adminText("Ikki skrinshotni maxfiy havola orqali ko‘rib chiqing. Tasdiq faqat buyer kirishini ko‘rsatadi; qaytarib olish xavfini yo‘q qilmaydi. Qaror uchun moderator izohi shart.", "Просмотрите два скриншота по закрытым ссылкам. Они подтверждают только доступ покупателя и не исключают последующее восстановление аккаунта. Для решения нужен комментарий модератора.", "Review two screenshots through private links. They show buyer access only and do not prevent later account recovery. A moderator note is required.")}</p></div><span class="admin-count-pill is-alert">${accountReviews.length}</span></div><div class="admin-record-list">${accountReviews.length ? accountReviews.map(adminAccountReviewCard).join("") : empty(adminText("Kutilayotgan akkaunt tekshiruvi yo‘q.", "Нет ожидающих проверок.", "No account reviews are waiting."))}</div>`;
+    case "reports":
+      return `<div class="admin-section-intro"><div><h2>${adminText("Foydalanuvchi shikoyatlari", "Жалобы пользователей", "User reports")}</h2><p>${adminText("Buyurtma nizolari alohida bo‘limda boshqariladi.", "Споры по заказам обрабатываются отдельно.", "Order disputes are handled in their own section.")}</p></div><span class="admin-count-pill">${publicReports.length}</span></div><div class="admin-record-list">${publicReports.length ? publicReports.map(adminReportCard).join("") : empty(adminText("Shikoyatlar yo‘q.", "Жалоб нет.", "No reports."))}</div>`;
+    case "payouts":
+      return `<div class="admin-section-intro"><div><h2>${adminText("Sotuvchilarning mablag‘ yechish so‘rovlari", "Запросы продавцов на выплаты", "Seller payout requests")}</h2><p>${adminText("Ma’qullash pulni o‘tkazmaydi. Tashqi provayderda o‘tkazmani bajaring va tasdiq ID sini kiriting.", "Одобрение не переводит деньги. Выполните перевод у платёжного провайдера и укажите ID операции.", "Approval does not transfer money. Complete the transfer with your provider and enter its reference ID.")}</p></div><span class="admin-count-pill">${payouts.length}</span></div><div class="notice warn admin-global-notice">${adminText("Moliyaviy yozuvlar sinov hisobidir; haqiqiy mablag‘ ko‘chirilmaydi.", "Финансовые записи ведутся в sandbox; реальные средства не переводятся.", "Financial records are sandbox-only; no real funds are moved.")}</div><div class="admin-record-list">${payouts.length ? payouts.map(adminPayoutCard).join("") : empty(adminText("Mablag‘ yechish so‘rovi yo‘q.", "Запросов на выплату нет.", "No payout requests."))}</div>`;
+    case "users":
+      return `<div class="admin-section-intro"><div><h2>${adminText("Akkauntlarni boshqarish", "Управление аккаунтами", "Account management")}</h2><p>${adminText("Qidiruv, akkaunt holati va hisobni o‘chirish so‘rovlari.", "Поиск, статус аккаунта и запросы на удаление.", "Search, account status, and account deletion requests.")}</p></div></div><form id="user-search" class="admin-search-form"><label class="admin-search-box">${icon("search")}<input name="q" aria-label="${adminText("Email yoki ism bo‘yicha qidirish", "Поиск по email или имени", "Search by email or name")}" placeholder="${adminText("Email yoki ismni kiriting", "Введите email или имя", "Enter email or name")}"></label><button class="button-primary">${adminText("Qidirish", "Найти", "Search")}</button></form><div id="user-results" class="admin-user-results">${adminUserRows(users)}</div><div class="admin-subsection-heading"><div><span class="admin-eyebrow">${adminText("MAXFIYLIK SO‘ROVLARI", "ЗАПРОСЫ КОНФИДЕНЦИАЛЬНОСТИ", "PRIVACY REQUESTS")}</span><h2>${adminText("Hisobni o‘chirish navbati", "Очередь удаления аккаунтов", "Account deletion queue")}</h2></div><span class="admin-count-pill">${deletions.filter((d) => ["pending", "reviewing"].includes(d.status)).length}</span></div><div class="admin-record-list">${deletions.length ? deletions.map(adminDeletionCard).join("") : empty(adminText("O‘chirish so‘rovlari yo‘q.", "Запросов на удаление нет.", "No deletion requests."))}</div>`;
+    case "settings":
+      return `<div class="admin-section-intro"><div><h2>${adminText("Platforma sozlamalari", "Настройки платформы", "Platform settings")}</h2><p>${adminText("Savdo konfiguratsiyasidagi amallar audit jurnaliga yoziladi.", "Изменения торговых параметров записываются в журнал аудита.", "Changes to commerce settings are recorded in the audit log.")}</p></div></div><div class="admin-settings-grid"><article class="admin-panel admin-setting-card"><span class="admin-setting-icon">${icon("arrow-up-right")}</span><h3>${adminText("Platforma komissiyasi", "Комиссия платформы", "Platform commission")}</h3><p>${adminText("Yangi buyurtmalarga qo‘llanadigan stavkani belgilang. 100 bps = 1%. Eski buyurtmalardagi stavka o‘zgarmaydi.", "Установите ставку для новых заказов. 100 bps = 1%. Ставка существующих заказов не меняется.", "Set the rate for new orders. 100 bps = 1%. Existing orders keep their original rate.")}</p><form id="config-form" class="admin-config-form"><label for="commission-bps">${adminText("Komissiya (bazis punkt)", "Комиссия (базисные пункты)", "Commission (basis points)")}</label><div class="admin-config-input"><input id="commission-bps" name="commission_bps" type="number" min="0" max="3000" step="1" value="${esc(o.config.commission_bps || 0)}" required><span>bps</span></div><button class="button-primary">${adminText("Sozlamani saqlash", "Сохранить настройку", "Save setting")}</button></form><div class="admin-config-footnote">${adminText("Ruxsat etilgan oraliq: 0–3000 bps.", "Допустимый диапазон: 0–3000 bps.", "Allowed range: 0–3000 bps.")}</div></article><article class="admin-panel admin-setting-card admin-security-card"><span class="admin-setting-icon is-violet">${icon("shield")}</span><h3>${adminText("To‘lovlar va xavfsizlik", "Платежи и безопасность", "Payments & safety")}</h3><p>${adminText("Joriy muhitdagi savdo va to‘lov holati.", "Состояние торговли и платежей в текущей среде.", "Commerce and payment status for the current environment.")}</p><div class="admin-security-line"><span>${adminText("Server rejimi", "Режим сервера", "Server mode")}</span><b>${esc(mode)}</b></div><div class="admin-security-line"><span>${adminText("To‘lov provayderlari", "Платёжные провайдеры", "Payment providers")}</span><b>${mode === "PRODUCTION" ? adminText("Ulanmagan", "Не подключены", "Not connected") : adminText("Sinov", "Sandbox", "Sandbox")}</b></div><div class="admin-security-line"><span>${adminText("Audit jurnali", "Журнал аудита", "Audit log")}</span><b class="admin-enabled">${adminText("Faol", "Активен", "Active")}</b></div><div class="notice warn">${adminText("Haqiqiy to‘lov provayderi ulanmaguncha tizim real to‘lov yoki mablag‘ yechish bajarmaydi.", "Пока не подключён реальный платёжный провайдер, система не проводит реальные платежи и выплаты.", "The system will not process live payments or payouts until a production provider is configured.")}</div></article></div>`;
+    default:
+      return "";
+  }
+}
+function bindAdminForms(panel) {
+  $("#config-form", panel)?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      await api("/admin/config", {
+        method: "POST",
+        body: JSON.stringify({
+          commission_bps: Number(
+            new FormData(e.currentTarget).get("commission_bps"),
+          ),
+        }),
+      });
+      toast(
+        adminText(
+          "Komissiya yangilandi",
+          "Комиссия обновлена",
+          "Commission updated",
+        ),
+      );
+    } catch (x) {
+      toast(x.message, "error");
+    }
+  });
+  $("#user-search", panel)?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      const q = new URLSearchParams({
+        q: new FormData(e.currentTarget).get("q"),
+      });
+      const xs = await api("/admin/users?" + q);
+      $("#user-results", panel).innerHTML = adminUserRows(xs);
+    } catch (x) {
+      toast(x.message, "error");
+    }
+  });
+}
+let sellerVerificationAssets = null;
+function ensureSellerVerification() {
+  if (window.SellerVerification) return Promise.resolve();
+  if (!sellerVerificationAssets)
+    sellerVerificationAssets = new Promise((resolve, reject) => {
+      if (!document.querySelector("link[data-seller-verification-style]")) {
+        const style = document.createElement("link");
+        style.rel = "stylesheet";
+        style.href = "/static/seller-verification.css?v=4";
+        style.dataset.sellerVerificationStyle = "";
+        document.head.append(style);
+      }
+      const script = document.createElement("script");
+      script.src = "/static/seller-verification.js?v=10";
+      script.onload = () => resolve();
+      script.onerror = () => {
+        sellerVerificationAssets = null;
+        script.remove();
+        reject(new Error("Seller verification could not load. Please retry."));
+      };
+      document.head.append(script);
+    });
+  return sellerVerificationAssets;
+}
+const adminViewRequests = {
+  finance: [["o", "/admin/overview"]],
+  audit: [],
+  management: [],
+  overview: [["o", "/admin/overview"]],
+  listings: [["ls", "/admin/listings?summary=1"]],
+  orders: [["orders", "/admin/orders"]],
+  sellers: [["verification", "/admin/verification"]],
+  disputes: [["disputes", "/admin/disputes"]],
+  "account-reviews": [["accountReviews", "/admin/account-reviews"]],
+  reports: [["reports", "/admin/reports"]],
+  payouts: [["payouts", "/admin/payouts"]],
+  users: [
+    ["users", "/admin/users?q="],
+    ["deletions", "/admin/deletions"],
+  ],
+  settings: [["o", "/admin/overview"]],
+};
+function loadAdminView(name, retry = false) {
+  const page = adminPage,
+    panel = page?.root.querySelector(`[data-admin-view="${name}"]`);
+  if (!panel || !page.root.isConnected) return Promise.resolve();
+  if (page.pending.has(name)) return page.pending.get(name);
+  if (page.loaded.has(name) && !retry) return Promise.resolve();
+  panel.innerHTML = adminLoadingMarkup();
+  panel.setAttribute("aria-busy", "true");
+  const loading = (async () => {
+    try {
+      if (name === "sellers") await ensureSellerVerification();
+      await Promise.all(
+        (adminViewRequests[name] || []).map(async ([key, path]) => {
+          if (!page.resources.has(key) || retry)
+            page.resources.set(
+              key,
+              api(path).catch((error) => {
+                page.resources.delete(key);
+                throw error;
+              }),
+            );
+          page.data[key] = await page.resources.get(key);
+        }),
+      );
+      if (!page.root.isConnected || adminPage !== page) return;
+      if (["overview", "finance"].includes(name)) {
+        await window.AdminConsole.mountFinance(panel, page.data.o);
+      } else if (name === "audit") {
+        await window.AdminConsole.audit(panel);
+      } else if (name === "management") {
+        window.AdminConsole.management(panel);
+      } else if (name === "sellers") {
+        window.SellerVerification.mount(panel, {
+          api,
+          esc,
+          icon,
+          adminText,
+          toast,
+          initial: page.data.verification,
+        });
+      } else {
+        panel.innerHTML = adminViewMarkup(name, page.data);
+        bindAdminForms(panel);
+      }
+      page.loaded.add(name);
+      if (page.data.o) {
+        if (name === "sellers" && page.data.verification)
+          page.data.o.pending_sellers = page.data.verification.stats.pending;
+        for (const badge of page.root.querySelectorAll("[data-admin-count]")) {
+          const count = Number(page.data.o[badge.dataset.adminCount] || 0);
+          badge.textContent = count > 99 ? "99+" : String(count);
+          badge.title = String(count);
+          badge.hidden = count === 0;
+        }
+        for (const mode of page.root.querySelectorAll("[data-admin-mode]"))
+          mode.textContent = String(page.data.o.mode).toUpperCase();
+      }
+      localizeDOM();
+      window.OperationsUX?.enhance();
+      window.TradeUX?.enhance();
+      window.ExperienceUX?.enhance();
+    } catch (error) {
+      if (!page.root.isConnected || adminPage !== page) return;
+      panel.innerHTML = `<div class="notice error" role="alert">${esc(error.message)}</div><button type="button" class="button-secondary" data-admin-retry>${adminText("Qayta urinish", "Повторить", "Try again")}</button>`;
+      panel.querySelector("[data-admin-retry]").onclick = () =>
+        loadAdminView(name, true);
+    } finally {
+      panel.setAttribute("aria-busy", "false");
+      page.pending.delete(name);
+    }
+  })();
+  page.pending.set(name, loading);
+  return loading;
 }
 let adminConsoleAssets;
-function ensureAdminConsole(){
- if(window.AdminConsole)return Promise.resolve();
- if(!adminConsoleAssets)adminConsoleAssets=new Promise((resolve,reject)=>{
-  const script=document.createElement('script');script.src='/static/admin-console.js?v=rewards-1';
-  script.onload=resolve;script.onerror=()=>{adminConsoleAssets=null;script.remove();reject(new Error('Admin console could not load. Please retry.'))};document.head.append(script);
- });
- return adminConsoleAssets;
+function ensureAdminConsole() {
+  if (window.AdminConsole) return Promise.resolve();
+  if (!adminConsoleAssets)
+    adminConsoleAssets = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "/static/admin-console.js?v=rewards-1";
+      script.onload = resolve;
+      script.onerror = () => {
+        adminConsoleAssets = null;
+        script.remove();
+        reject(new Error("Admin console could not load. Please retry."));
+      };
+      document.head.append(script);
+    });
+  return adminConsoleAssets;
 }
-async function renderAdmin(){await ensureAdminConsole();if(!me){location.hash='login';return}if(!me.is_admin){app.innerHTML=`<section class="page">${pageTitle(adminText('Admin paneli','Панель администратора','Admin panel'))}<div class="notice error">${adminText('Administrator ruxsati yo‘q. Admin hisobini faqat seed.py orqali yarating.','Нет прав администратора. Создайте администратора через seed.py.','Administrator access required. Create an admin account through seed.py.')}</div></section>`;return}app.innerHTML=`<section class="admin-portal"><aside class="admin-sidebar"><div class="admin-brand"><span class="admin-brand-mark"><img src="https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-256.webp?v=1" alt=""></span><span><b>SENTRY<span>LOOT</span></b><small>${adminText('BOSHQARUV','УПРАВЛЕНИЕ','CONTROL')}</small></span></div><div class="admin-profile">${marketAvatarMarkup(me.display_name,me.avatar_url,'admin-avatar',me.id)}<div><b>${esc(me.display_name||'Administrator')}</b><small>${adminText('Administrator','Администратор','Administrator')}</small></div><span class="admin-online-dot"></span></div><a class="admin-nav-item" href="/#stripe-test">${icon('shield')}Stripe sandbox</a><a class="admin-nav-item" href="/#review-moderation">${icon('message')}${adminText('Sharh shikoyatlari','Жалобы на отзывы','Review reports')}</a><nav class="admin-nav" aria-label="${adminText('Admin bo‘limlari','Разделы админ-панели','Admin sections')}"><span class="admin-nav-label">${adminText('ISH STOLI','РАБОЧАЯ ОБЛАСТЬ','WORKSPACE')}</span><button class="admin-nav-item" data-admin-view-target="overview"><span>${icon('gamepad')}<b>${adminText('Umumiy ko‘rinish','Обзор','Overview')}</b></span></button><span class="admin-nav-label">${adminText('BOSHQARUV','УПРАВЛЕНИЕ','MANAGEMENT')}</span><button class="admin-nav-item" data-admin-view-target="listings"><span>${icon('box')}<b>${adminText('E’lonlar','Объявления','Listings')}</b></span><i data-admin-count="pending_listings" class="" hidden></i></button><button class="admin-nav-item" data-admin-view-target="orders"><span>${icon('cart')}<b>${adminText('Buyurtmalar','Заказы','Orders')}</b></span></button><button class="admin-nav-item" data-go="top-up-admin"><span>${icon('wallet')}<b>${adminText('Top Up','Пополнение','Top Up')}</b></span></button><button class="admin-nav-item" data-admin-view-target="sellers"><span>${icon('shield')}<b>${adminText('Sotuvchilar','Продавцы','Sellers')}</b></span><i data-admin-count="pending_sellers" class="" hidden></i></button><span class="admin-nav-label">${adminText('ISHONCH VA MOLIYA','ДОВЕРИЕ И ФИНАНСЫ','TRUST & FINANCE')}</span><button class="admin-nav-item" data-admin-view-target="disputes"><span>${icon('message')}<b>${adminText('Nizolar','Споры','Disputes')}</b></span><i data-admin-count="open_disputes" class="is-alert" hidden></i></button><button class="admin-nav-item" data-admin-view-target="account-reviews"><span>${icon('shield')}<b>${adminText('Akkaunt tasdiqlari','Проверка аккаунтов','Account reviews')}</b></span><i data-admin-count="pending_account_reviews" class="is-alert" hidden></i></button><button class="admin-nav-item" data-admin-view-target="reports"><span>${icon('bell')}<b>${adminText('Shikoyatlar','Жалобы','Reports')}</b></span><i data-admin-count="open_reports" class="" hidden></i></button><button class="admin-nav-item" data-admin-view-target="payouts"><span>${icon('arrow-up-right')}<b>${adminText('Mablag‘ yechishlar','Выплаты','Payouts')}</b></span><i data-admin-count="pending_payouts" class="" hidden></i></button><span class="admin-nav-label">${adminText('AKKAUNT','АККАУНТ','ACCOUNT')}</span><button class="admin-nav-item" data-admin-view-target="users"><span>${icon('users')}<b>${adminText('Foydalanuvchilar','Пользователи','Users')}</b></span></button><button class="admin-nav-item" data-admin-view-target="settings"><span>${icon('settings')}<b>${adminText('Sozlamalar','Настройки','Settings')}</b></span></button></nav><div class="admin-sidebar-foot"><span class="admin-mode-dot"></span><div><b><span data-admin-mode>…</span></b><small>${adminText('Server muhiti','Режим сервера','Server environment')}</small></div></div></aside><div class="admin-workspace"><header class="admin-topbar"><div><span class="admin-eyebrow">${adminText('SENTRYLOOT · ADMIN CONSOLE','SENTRYLOOT · АДМИН-ПАНЕЛЬ','SENTRYLOOT · ADMIN CONSOLE')}</span><h1 id="admin-page-title">${adminText('Umumiy ko‘rinish','Обзор','Overview')}</h1><p>${adminText('Do‘kon faoliyatini boshqaring va muhim navbatlarni ko‘rib chiqing.','Управляйте магазином и обрабатывайте важные задачи.','Monitor store activity and review the work queue.')}</p></div><div class="admin-top-actions"><a class="admin-store-link" href="#home">${adminText('Do‘konni ko‘rish','Открыть магазин','View storefront')} ${icon('arrow-up-right')}</a></div></header><div class="admin-views"><span hidden data-admin-heading="overview">${adminText('Umumiy ko‘rinish','Обзор','Overview')}</span><span hidden data-admin-heading="listings">${adminText('E’lonlar moderatsiyasi','Модерация объявлений','Listing moderation')}</span><span hidden data-admin-heading="orders">${adminText('Buyurtmalar','Заказы','Orders')}</span><span hidden data-admin-heading="sellers">${adminText('Sotuvchilarni tasdiqlash','Проверка продавцов','Seller verification')}</span><span hidden data-admin-heading="disputes">${adminText('Buyurtma nizolari','Споры по заказам','Order disputes')}</span><span hidden data-admin-heading="account-reviews">${adminText('Akkaunt xaridi tekshiruvi','Проверка купленных аккаунтов','Purchased account review')}</span><span hidden data-admin-heading="reports">${adminText('Shikoyatlarni ko‘rib chiqish','Рассмотрение жалоб','Report review')}</span><span hidden data-admin-heading="payouts">${adminText('Mablag‘ yechish so‘rovlari','Запросы на выплаты','Payout requests')}</span><span hidden data-admin-heading="users">${adminText('Foydalanuvchilar va xavfsizlik','Пользователи и безопасность','Users & safety')}</span><span hidden data-admin-heading="settings">${adminText('Platforma sozlamalari','Настройки платформы','Platform settings')}</span><section class="admin-view" data-admin-view="overview">${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="listings" hidden>${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="orders" hidden>${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="sellers" hidden>${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="disputes" hidden>${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="account-reviews" hidden>${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="reports" hidden>${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="payouts" hidden>${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="users" hidden>${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="settings" hidden>${adminLoadingMarkup()}</section></div></div></section>`;
- window.AdminConsole.shell(app.querySelector('.admin-portal'),{api,esc,icon,adminText,toast,fmt:(n,c)=>fmt(n,c,true),gameArt:Object.fromEntries(marketGameLinks.map(([slug,,image])=>[slug,image]))});
- adminPage={root:app.querySelector('.admin-portal'),data:{},loaded:new Set(),pending:new Map(),resources:new Map()};
- if(!adminViewRequests[adminActiveView])adminActiveView='overview';
- activateAdminView(adminActiveView);
- await loadAdminView(adminActiveView);
+async function renderAdmin() {
+  await ensureAdminConsole();
+  if (!me) {
+    location.hash = "login";
+    return;
+  }
+  if (!me.is_admin) {
+    app.innerHTML = `<section class="page">${pageTitle(adminText("Admin paneli", "Панель администратора", "Admin panel"))}<div class="notice error">${adminText("Administrator ruxsati yo‘q. Admin hisobini faqat seed.py orqali yarating.", "Нет прав администратора. Создайте администратора через seed.py.", "Administrator access required. Create an admin account through seed.py.")}</div></section>`;
+    return;
+  }
+  app.innerHTML = `<section class="admin-portal"><aside class="admin-sidebar"><div class="admin-brand"><span class="admin-brand-mark"><img src="https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-256.webp?v=1" alt=""></span><span><b>SENTRY<span>LOOT</span></b><small>${adminText("BOSHQARUV", "УПРАВЛЕНИЕ", "CONTROL")}</small></span></div><div class="admin-profile">${marketAvatarMarkup(me.display_name, me.avatar_url, "admin-avatar", me.id)}<div><b>${esc(me.display_name || "Administrator")}</b><small>${adminText("Administrator", "Администратор", "Administrator")}</small></div><span class="admin-online-dot"></span></div><a class="admin-nav-item" href="/#stripe-test">${icon("shield")}Stripe sandbox</a><a class="admin-nav-item" href="/#review-moderation">${icon("message")}${adminText("Sharh shikoyatlari", "Жалобы на отзывы", "Review reports")}</a><nav class="admin-nav" aria-label="${adminText("Admin bo‘limlari", "Разделы админ-панели", "Admin sections")}"><span class="admin-nav-label">${adminText("ISH STOLI", "РАБОЧАЯ ОБЛАСТЬ", "WORKSPACE")}</span><button class="admin-nav-item" data-admin-view-target="overview"><span>${icon("gamepad")}<b>${adminText("Umumiy ko‘rinish", "Обзор", "Overview")}</b></span></button><span class="admin-nav-label">${adminText("BOSHQARUV", "УПРАВЛЕНИЕ", "MANAGEMENT")}</span><button class="admin-nav-item" data-admin-view-target="listings"><span>${icon("box")}<b>${adminText("E’lonlar", "Объявления", "Listings")}</b></span><i data-admin-count="pending_listings" class="" hidden></i></button><button class="admin-nav-item" data-admin-view-target="orders"><span>${icon("cart")}<b>${adminText("Buyurtmalar", "Заказы", "Orders")}</b></span></button><button class="admin-nav-item" data-go="top-up-admin"><span>${icon("wallet")}<b>${adminText("Top Up", "Пополнение", "Top Up")}</b></span></button><button class="admin-nav-item" data-admin-view-target="sellers"><span>${icon("shield")}<b>${adminText("Sotuvchilar", "Продавцы", "Sellers")}</b></span><i data-admin-count="pending_sellers" class="" hidden></i></button><span class="admin-nav-label">${adminText("ISHONCH VA MOLIYA", "ДОВЕРИЕ И ФИНАНСЫ", "TRUST & FINANCE")}</span><button class="admin-nav-item" data-admin-view-target="disputes"><span>${icon("message")}<b>${adminText("Nizolar", "Споры", "Disputes")}</b></span><i data-admin-count="open_disputes" class="is-alert" hidden></i></button><button class="admin-nav-item" data-admin-view-target="account-reviews"><span>${icon("shield")}<b>${adminText("Akkaunt tasdiqlari", "Проверка аккаунтов", "Account reviews")}</b></span><i data-admin-count="pending_account_reviews" class="is-alert" hidden></i></button><button class="admin-nav-item" data-admin-view-target="reports"><span>${icon("bell")}<b>${adminText("Shikoyatlar", "Жалобы", "Reports")}</b></span><i data-admin-count="open_reports" class="" hidden></i></button><button class="admin-nav-item" data-admin-view-target="payouts"><span>${icon("arrow-up-right")}<b>${adminText("Mablag‘ yechishlar", "Выплаты", "Payouts")}</b></span><i data-admin-count="pending_payouts" class="" hidden></i></button><span class="admin-nav-label">${adminText("AKKAUNT", "АККАУНТ", "ACCOUNT")}</span><button class="admin-nav-item" data-admin-view-target="users"><span>${icon("users")}<b>${adminText("Foydalanuvchilar", "Пользователи", "Users")}</b></span></button><button class="admin-nav-item" data-admin-view-target="settings"><span>${icon("settings")}<b>${adminText("Sozlamalar", "Настройки", "Settings")}</b></span></button></nav><div class="admin-sidebar-foot"><span class="admin-mode-dot"></span><div><b><span data-admin-mode>…</span></b><small>${adminText("Server muhiti", "Режим сервера", "Server environment")}</small></div></div></aside><div class="admin-workspace"><header class="admin-topbar"><div><span class="admin-eyebrow">${adminText("SENTRYLOOT · ADMIN CONSOLE", "SENTRYLOOT · АДМИН-ПАНЕЛЬ", "SENTRYLOOT · ADMIN CONSOLE")}</span><h1 id="admin-page-title">${adminText("Umumiy ko‘rinish", "Обзор", "Overview")}</h1><p>${adminText("Do‘kon faoliyatini boshqaring va muhim navbatlarni ko‘rib chiqing.", "Управляйте магазином и обрабатывайте важные задачи.", "Monitor store activity and review the work queue.")}</p></div><div class="admin-top-actions"><a class="admin-store-link" href="#home">${adminText("Do‘konni ko‘rish", "Открыть магазин", "View storefront")} ${icon("arrow-up-right")}</a></div></header><div class="admin-views"><span hidden data-admin-heading="overview">${adminText("Umumiy ko‘rinish", "Обзор", "Overview")}</span><span hidden data-admin-heading="listings">${adminText("E’lonlar moderatsiyasi", "Модерация объявлений", "Listing moderation")}</span><span hidden data-admin-heading="orders">${adminText("Buyurtmalar", "Заказы", "Orders")}</span><span hidden data-admin-heading="sellers">${adminText("Sotuvchilarni tasdiqlash", "Проверка продавцов", "Seller verification")}</span><span hidden data-admin-heading="disputes">${adminText("Buyurtma nizolari", "Споры по заказам", "Order disputes")}</span><span hidden data-admin-heading="account-reviews">${adminText("Akkaunt xaridi tekshiruvi", "Проверка купленных аккаунтов", "Purchased account review")}</span><span hidden data-admin-heading="reports">${adminText("Shikoyatlarni ko‘rib chiqish", "Рассмотрение жалоб", "Report review")}</span><span hidden data-admin-heading="payouts">${adminText("Mablag‘ yechish so‘rovlari", "Запросы на выплаты", "Payout requests")}</span><span hidden data-admin-heading="users">${adminText("Foydalanuvchilar va xavfsizlik", "Пользователи и безопасность", "Users & safety")}</span><span hidden data-admin-heading="settings">${adminText("Platforma sozlamalari", "Настройки платформы", "Platform settings")}</span><section class="admin-view" data-admin-view="overview">${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="listings" hidden>${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="orders" hidden>${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="sellers" hidden>${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="disputes" hidden>${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="account-reviews" hidden>${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="reports" hidden>${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="payouts" hidden>${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="users" hidden>${adminLoadingMarkup()}</section><section class="admin-view" data-admin-view="settings" hidden>${adminLoadingMarkup()}</section></div></div></section>`;
+  window.AdminConsole.shell(app.querySelector(".admin-portal"), {
+    api,
+    esc,
+    icon,
+    adminText,
+    toast,
+    fmt: (n, c) => fmt(n, c, true),
+    gameArt: Object.fromEntries(
+      marketGameLinks.map(([slug, , image]) => [slug, image]),
+    ),
+  });
+  adminPage = {
+    root: app.querySelector(".admin-portal"),
+    data: {},
+    loaded: new Set(),
+    pending: new Map(),
+    resources: new Map(),
+  };
+  if (!adminViewRequests[adminActiveView]) adminActiveView = "overview";
+  activateAdminView(adminActiveView);
+  await loadAdminView(adminActiveView);
 }
-async function renderInfoPage(route){
- const infoPages=window.SENTRYLOOT_INFO_PAGES,locationBeforeLoad=location.href;
- const data=await infoPages.load(route);
- if(locationBeforeLoad!==location.href)return;
- const {page}=data;
- const text=copy=>copy[locale]||window.RegionPreferences?.translate(copy.en,locale)||copy.en;
- const helpAlias=location.pathname.replace(/\/+$/,'')==='/help';
- updateRouteMetadata(route,{title:text(page.metadataTitle||page.title)+' — SentryLoot',lead:text(page.lead),path:helpAlias?'/help':page.path});
- app.innerHTML=infoPages.render(data,locale);
- infoPages.activate(app);
- if(route!=='contact')return;
- const article=app.querySelector('.info-page .legal-copy');
- const profile=await api('/launch/profile').catch(()=>null);
- if(profile?.published&&article.isConnected)article.querySelector('.info-related').insertAdjacentHTML('beforebegin',LaunchUX.profileMarkup(profile));
+async function renderInfoPage(route) {
+  const infoPages = window.SENTRYLOOT_INFO_PAGES,
+    locationBeforeLoad = location.href;
+  const data = await infoPages.load(route);
+  if (locationBeforeLoad !== location.href) return;
+  const { page } = data;
+  const text = (copy) =>
+    copy[locale] ||
+    window.RegionPreferences?.translate(copy.en, locale) ||
+    copy.en;
+  const helpAlias = location.pathname.replace(/\/+$/, "") === "/help";
+  updateRouteMetadata(route, {
+    title: text(page.metadataTitle || page.title) + " — SentryLoot",
+    lead: text(page.lead),
+    path: helpAlias ? "/help" : page.path,
+  });
+  app.innerHTML = infoPages.render(data, locale);
+  infoPages.activate(app);
+  if (route !== "contact") return;
+  const article = app.querySelector(".info-page .legal-copy");
+  const profile = await api("/launch/profile").catch(() => null);
+  if (profile?.published && article.isConnected)
+    article
+      .querySelector(".info-related")
+      .insertAdjacentHTML("beforebegin", LaunchUX.profileMarkup(profile));
 }
-function renderPrivacyPolicy(){const copy=window.SENTRYLOOT_LEGAL_TRANSLATIONS?.privacy?.[locale];if(copy){app.innerHTML=`<section class="page">${pageTitle(copy.title,copy.lead)}<article class="legal-copy">${copy.body}</article></section>`;return}app.innerHTML=`<section class="page">${pageTitle('Privacy policy','How SentryLoot collects and uses account information.') }<article class="legal-copy"><p><strong>Effective date: October 8, 2026</strong></p><p>SentryLoot is operated by Asliddinov Shukhratjon. For privacy questions or requests, contact <a href="mailto:sentryloot@gamestorehub.com">sentryloot@gamestorehub.com</a>.</p><h3>Information we collect</h3><p>If you sign in with Facebook, Meta provides the information you approve, including your name, profile picture, primary email address, and Facebook account identifier. SentryLoot does not receive your Facebook password. We use this information to create and secure your account, sign you in, and prevent duplicate or fraudulent accounts.</p><p>When you use the marketplace, we also process the account profile information you provide, listings and messages you submit, and records of requests, orders, disputes, and account security events. For game-account purchases, a buyer may submit two screenshots showing access to the delivered account. We re-encode them to remove embedded image metadata and store them in a private bucket; only authorized moderators receive short-lived access links. Do not include passwords, OTPs, recovery codes, payment data, contact details, identity documents, or another person’s data. Screenshots show access at one time and do not prove that a seller cannot later recover the account.</p><h3>How information is used and shared</h3><p>We use account information to provide sign-in, marketplace features, customer support, fraud prevention, and dispute handling. Meta processes Facebook Login and returns the fields you approve. Service providers that host and operate SentryLoot may process data on our behalf to run the site and database. The Crisp support widget loads when you visit the site. If you use it, Crisp processes your chat messages and technical data needed to provide support. Review <a href="https://crisp.chat/en/privacy/" target="_blank" rel="noopener noreferrer">Crisp’s privacy policy</a> for its handling of chat data. Automated text checks run within SentryLoot to flag possible off-platform contact or credential requests for human review. They do not make account, listing, dispute, or payment decisions. We do not request access to your Facebook friends, posts, or other optional profile information.</p><h3>Community safety checks</h3><p>When you publish or edit a community post, its caption and resized images or sampled video frames are sent server-side to OpenAI for automated checks for violence, nudity, dangerous real-world acts and recreational drug content. Profile cover changes are checked too. Video frames are sampled approximately once per second; audio is not analysed. Flagged content is blocked, and inconclusive checks do not publish the post. Automated checks can make mistakes; authors can edit content or appeal through Safety &amp; rights. Account passwords, payment details and account email addresses are not included in these analysis requests. Draft posts are not sent for publication checks. See <a href="https://openai.com/policies/privacy-policy/">OpenAI’s privacy policy</a>.</p><h3>Retention and deletion</h3><p>We keep account information while the account is active. Direct account identifiers and user-authored content are deleted within 30 days after a verified request. Private purchase screenshots are deleted when a verified request is processed, or 30 days after a moderator resolves the review. Open evidence reviews are retained until resolved plus 30 days. Completed order and ledger records may remain only in anonymized form when needed for accounting, security, or dispute handling. Country-specific statutory retention periods have not yet been set with counsel; live paid sales remain disabled until that review is complete. See our <a href="#data-deletion">data deletion instructions</a>.</p><h3>Cookies and security</h3><p>SentryLoot uses a session cookie to keep you signed in and protect account actions. Passwords are stored as password hashes. Facebook access tokens are used server-side to retrieve the approved profile and are not stored as account credentials.</p><h3>Your choices</h3><p>You can update profile details in your account, request account deletion from the account page, or revoke SentryLoot's access in your Facebook settings. Deleting your SentryLoot account does not delete your Facebook account.</p><p>This notice describes the current service. Contact us at <a href="mailto:sentryloot@gamestorehub.com">sentryloot@gamestorehub.com</a> with privacy questions.</p></article></section>`}
+function renderPrivacyPolicy() {
+  const copy = window.SENTRYLOOT_LEGAL_TRANSLATIONS?.privacy?.[locale];
+  if (copy) {
+    app.innerHTML = `<section class="page">${pageTitle(copy.title, copy.lead)}<article class="legal-copy">${copy.body}</article></section>`;
+    return;
+  }
+  app.innerHTML = `<section class="page">${pageTitle("Privacy policy", "How SentryLoot collects and uses account information.")}<article class="legal-copy"><p><strong>Effective date: October 8, 2026</strong></p><p>SentryLoot is operated by Asliddinov Shukhratjon. For privacy questions or requests, contact <a href="mailto:sentryloot@gamestorehub.com">sentryloot@gamestorehub.com</a>.</p><h3>Information we collect</h3><p>If you sign in with Facebook, Meta provides the information you approve, including your name, profile picture, primary email address, and Facebook account identifier. SentryLoot does not receive your Facebook password. We use this information to create and secure your account, sign you in, and prevent duplicate or fraudulent accounts.</p><p>When you use the marketplace, we also process the account profile information you provide, listings and messages you submit, and records of requests, orders, disputes, and account security events. For game-account purchases, a buyer may submit two screenshots showing access to the delivered account. We re-encode them to remove embedded image metadata and store them in a private bucket; only authorized moderators receive short-lived access links. Do not include passwords, OTPs, recovery codes, payment data, contact details, identity documents, or another person’s data. Screenshots show access at one time and do not prove that a seller cannot later recover the account.</p><h3>How information is used and shared</h3><p>We use account information to provide sign-in, marketplace features, customer support, fraud prevention, and dispute handling. Meta processes Facebook Login and returns the fields you approve. Service providers that host and operate SentryLoot may process data on our behalf to run the site and database. The Crisp support widget loads when you visit the site. If you use it, Crisp processes your chat messages and technical data needed to provide support. Review <a href="https://crisp.chat/en/privacy/" target="_blank" rel="noopener noreferrer">Crisp’s privacy policy</a> for its handling of chat data. Automated text checks run within SentryLoot to flag possible off-platform contact or credential requests for human review. They do not make account, listing, dispute, or payment decisions. We do not request access to your Facebook friends, posts, or other optional profile information.</p><h3>Community safety checks</h3><p>When you publish or edit a community post, its caption and resized images or sampled video frames are sent server-side to OpenAI for automated checks for violence, nudity, dangerous real-world acts and recreational drug content. Profile cover changes are checked too. Video frames are sampled approximately once per second; audio is not analysed. Flagged content is blocked, and inconclusive checks do not publish the post. Automated checks can make mistakes; authors can edit content or appeal through Safety &amp; rights. Account passwords, payment details and account email addresses are not included in these analysis requests. Draft posts are not sent for publication checks. See <a href="https://openai.com/policies/privacy-policy/">OpenAI’s privacy policy</a>.</p><h3>Retention and deletion</h3><p>We keep account information while the account is active. Direct account identifiers and user-authored content are deleted within 30 days after a verified request. Private purchase screenshots are deleted when a verified request is processed, or 30 days after a moderator resolves the review. Open evidence reviews are retained until resolved plus 30 days. Completed order and ledger records may remain only in anonymized form when needed for accounting, security, or dispute handling. Country-specific statutory retention periods have not yet been set with counsel; live paid sales remain disabled until that review is complete. See our <a href="#data-deletion">data deletion instructions</a>.</p><h3>Cookies and security</h3><p>SentryLoot uses a session cookie to keep you signed in and protect account actions. Passwords are stored as password hashes. Facebook access tokens are used server-side to retrieve the approved profile and are not stored as account credentials.</p><h3>Your choices</h3><p>You can update profile details in your account, request account deletion from the account page, or revoke SentryLoot's access in your Facebook settings. Deleting your SentryLoot account does not delete your Facebook account.</p><p>This notice describes the current service. Contact us at <a href="mailto:sentryloot@gamestorehub.com">sentryloot@gamestorehub.com</a> with privacy questions.</p></article></section>`;
+}
 
-function renderDataDeletion(){const copy=window.SENTRYLOOT_LEGAL_TRANSLATIONS?.deletion?.[locale];if(copy){app.innerHTML=`<section class="page">${pageTitle(copy.title,copy.lead)}<article class="legal-copy">${copy.body}</article></section>`;return}app.innerHTML=`<section class="page">${pageTitle('Data deletion instructions','How to request deletion of SentryLoot account and Facebook Login data.') }<article class="legal-copy"><p>SentryLoot is operated by Asliddinov Shukhratjon. If you used Facebook Login, SentryLoot may hold your Facebook account identifier, name, profile picture, and primary email address.</p><h3>Request deletion while signed in</h3><ol><li>Sign in to SentryLoot and open your Account page.</li><li>Choose <strong>Request account deletion</strong>.</li><li>We verify and review the request, then erase direct account identifiers and Facebook Login data within 30 days.</li></ol><p>When an administrator marks a verified request as resolved, the account is disabled, its Facebook identity and direct profile data are erased, private account-purchase screenshots are deleted, and user-authored content is removed or anonymized. Completed order and ledger records may remain only in anonymized form when needed for accounting, security, or dispute handling. The exact statutory retention schedule depends on countries served and has not yet been approved by counsel; live paid sales remain disabled until this review is complete. Otherwise, reviewed account-purchase screenshots are deleted after 30 days.</p><h3>If you cannot access your account</h3><p>Email <a href="mailto:sentryloot@gamestorehub.com">sentryloot@gamestorehub.com</a> from the address associated with your account and ask for SentryLoot account and Facebook data deletion. Do not send your Facebook password.</p><p>Deleting SentryLoot data does not delete your Facebook account. You can also remove SentryLoot from the apps and websites connected to your Facebook account.</p><p>Read the full <a href="#privacy-policy">Maxfiylik siyosati</a>.</p></article></section>`}
-async function doAction(b){const a=b.dataset.action,id=b.dataset.id;try{if(a==='listing-details'){await showMarketListingDetails(id);return}else if(a==='dispute'){location.hash='dispute/'+encodeURIComponent(id);return}if(a==='link-facebook'){const result=await api('/oauth/start',{method:'POST',body:JSON.stringify({provider:'facebook',mode:'link',country:me?.country||'UZ'})});location.assign(result.authorization_url)}else if(a==='oauth-google'||a==='oauth-facebook'){if(!$('#auth-terms')?.checked){toast('Davom etish uchun shartlarni qabul qiling.');return}const provider=a==='oauth-google'?'google':'facebook';const result=await api('/oauth/start',{method:'POST',body:JSON.stringify({provider,accept_terms:true,country:$('#auth-country')?.value||window.RegionPreferences?.state.country||'US',language:locale})});location.assign(result.authorization_url)}else if(a==='read-all-notifications'){await api('/notifications/read-all',{method:'POST',body:'{}'});refreshNotifications();await renderNotifications()}else if(a==='mark-notification-read'){await api('/notifications/'+encodeURIComponent(id)+'/read',{method:'POST',body:'{}'});refreshNotifications();await renderNotifications()}else if(a==='open-notification'){await api('/notifications/'+encodeURIComponent(id)+'/read',{method:'POST',body:'{}'});refreshNotifications();location.hash=b.dataset.route||notificationRoute(b.getAttribute('href')?.slice(1))}else if(a==='seller-review'){const note=promptLocale('Sotuvchini tekshirganingiz va qaroringiz sababini kiriting (kamida 5 belgi):');if(!note||note.trim().length<5)return;await api('/admin/sellers/'+encodeURIComponent(id),{method:'POST',body:JSON.stringify({action:b.dataset.choice,note})});toast('Sotuvchi holati yangilandi');renderAdmin()}else if(a==='dispute-review'){const action=b.dataset.choice;const label=action==='refund_buyer'?'Sandbox qaytarimini qayd etasizmi? Bu haqiqiy pul o‘tkazmaydi.':action==='release_seller'?'Sotuvchi foydasiga sandbox buyurtmani yakunlayasizmi?':'Moderator qo‘shimcha dalil so‘raydi. Qarorni yozib davom etasizmi?';if(!confirmLocale(label))return;const note=promptLocale('Moderator qarori va dalillarni qisqacha yozing (kamida 5 belgi):');if(!note||note.trim().length<5)return;await api('/admin/disputes/'+encodeURIComponent(id),{method:'POST',body:JSON.stringify({action,note})});toast('Nizo holati yangilandi');renderAdmin()}else if(a==='account-review'){const note=$(`[data-account-review-note=\"${CSS.escape(id)}\"]`)?.value.trim()||'';if(note.length<5){toast(adminText('Izoh kamida 5 belgi bo‘lsin.','Комментарий должен содержать минимум 5 символов.','Add a moderator note of at least 5 characters.'));return}const message=aChoice=>aChoice==='approve'?'Ikki skrinshotni ko‘rdingizmi? Tasdiqlansa seller balansiga sandbox yozuvi qo‘shiladi; real pul o‘tkazilmaydi.':aChoice==='refund_buyer'?'Sandbox qaytarimini qayd etasizmi? Bu real pulni qaytarmaydi.':'Xaridordan maxfiy ma’lumotsiz qo‘shimcha dalil so‘raysizmi?';if(!confirmLocale(message(b.dataset.choice)))return;await api('/admin/account-reviews/'+encodeURIComponent(id),{method:'POST',body:JSON.stringify({action:b.dataset.choice,note})});toast(adminText('Akkaunt ko‘rigi yangilandi.','Проверка аккаунта обновлена.','Account review updated.'));renderAdmin()}else if(a==='respond-request'){const card=b.closest('.order-line');const form=card?.querySelector('[data-form="request-response"]');if(form){form.hidden=false;b.hidden=true;form.querySelector('textarea')?.focus()}return}else if(a==='cancel-request-response'){const form=b.closest('[data-form="request-response"]');form.hidden=true;const card=b.closest('.order-line');const trigger=card?.querySelector('[data-action="respond-request"]');if(trigger)trigger.hidden=false;return}else if(a==='compare-listing'||a==='compare-remove'){if(a==='compare-remove')comparisonIds=comparisonIds.filter(x=>x!==id);else if(!comparisonIds.includes(id)){if(comparisonIds.length>=3){toast(adminText('Uchta e’longacha tanlash mumkin.','Можно выбрать не более трёх объявлений.','You can compare up to three listings.'));return}comparisonIds.push(id)}localStorage.setItem('sentryloot_compare',JSON.stringify(comparisonIds));await ExperienceUX.saveCompare();location.hash='compare';return}else if(a==='buy-now'){if(!me){location.hash='login';return}await api('/cart',{method:'POST',body:JSON.stringify({listing_id:id,quantity:ExperienceUX.quantity(),mode:'set'})});await refreshCart();location.hash='cart'}else if(a==='add-cart'){await api('/cart',{method:'POST',body:JSON.stringify({listing_id:id,quantity:ExperienceUX.quantity()})});toast('Savatchaga qo‘shildi');refreshCart()}else if(a==='favorite'){if(!me){location.hash='login';return}const x=await api('/favorites/'+id,{method:b.dataset.saved==='1'?'DELETE':'POST',body:'{}'});toast(x.saved?'Saqlanganlarga qo‘shildi':'Olib tashlandi');navigate()}else if(a==='contact-seller'){if(!me){location.hash='login';return}const x=await api('/conversations',{method:'POST',body:JSON.stringify({listing_id:id})});location.hash='conversation/'+encodeURIComponent(x.id)}else if(a==='share'){if(window.DesktopShare?.open({anchor:b,title:b.dataset.shareTitle||document.title,url:b.dataset.sharePath?new URL(b.dataset.sharePath,location.origin).href:location.href}))return;await navigator.clipboard.writeText(location.href);toast('Havola nusxalandi')}else if(a==='remove-cart'){await api('/cart/'+id,{method:'DELETE'});renderCart();refreshCart()}else if(a==='checkout'){if(!$('#checkout-terms')?.checked){toast('Davom etish uchun shartlarni qabul qiling.');return}const accountRisk=$('#checkout-account-risk');if(accountRisk&&!accountRisk.checked){toast('Davom etishdan oldin akkaunt savdosi xavflarini qabul qiling.');return}const x=await api('/checkout',{method:'POST',body:JSON.stringify({accept_terms:true,accept_account_risk:accountRisk?accountRisk.checked:false,buyer_details:TradeUX.checkoutDetails(),buyer_context:ExperienceUX.checkoutContext(),coupon_code:LaunchUX.checkoutCoupon()})});location.hash='order/'+encodeURIComponent(x.id);if(x.mode==='stripe_test'){const payment=await api('/orders/'+encodeURIComponent(x.id)+'/stripe-checkout',{method:'POST',body:'{}'});location.assign(payment.checkout_url)}else{toast('Sinov buyurtmasi yaratildi; haqiqiy pul yechilmadi.')}}else if(a==='stripe-test-refresh'){await renderOrder(id)}else if(a==='stripe-test-pay'){b.disabled=true;try{const payment=await api('/orders/'+encodeURIComponent(id)+'/stripe-checkout',{method:'POST',body:'{}'});location.assign(payment.checkout_url)}catch(error){if(error.status===409)await renderOrder(id);throw error}finally{b.disabled=false}}else if(a==='sandbox-pay'){b.disabled=true;try{const outcome=b.dataset.outcome==='decline'?'decline':'approve';const result=await api('/orders/'+id+'/sandbox-complete',{method:'POST',body:JSON.stringify({outcome})});toast(result.status==='declined'?adminText('Sinov to‘lovi rad etildi; qayta urinishingiz mumkin.','Тестовый платёж отклонён; можно повторить.','Test payment declined; you can retry.'):adminText('Sinov to‘lovi tasdiqlandi.','Тестовый платёж подтверждён.','Test payment approved.'));if(result.status==='paid')renderOrder(id)}finally{b.disabled=false}}else if(a==='complete-order'){await api('/orders/'+id+'/complete',{method:'POST',body:'{}'});toast('Buyurtma yakunlandi');renderOrder(id)}else if(a==='dispute'){const details=promptLocale('Muammoni qisqacha tushuntiring (kamida 10 belgi):');if(details){const evidence_url=promptLocale('Dalil uchun HTTPS havola (ixtiyoriy). Maxfiy parol yoki shaxsiy ma’lumot joylamang:')||'';await api('/orders/'+id+'/dispute',{method:'POST',body:JSON.stringify({details,evidence_url})});toast('Nizo moderatorga yuborildi');renderOrder(id)}}else if(a==='logout'){await LaunchUX.clearDevicePush().catch(()=>{});await api('/logout',{method:'POST',body:'{}'});window.SpinWin?.resetHomePopup(me?.id);me=null;csrf='';toast('Tizimdan chiqdingiz');location.hash='home';bootstrap()}else if(a==='resend-verification'){const x=await api('/verification/resend',{method:'POST',body:JSON.stringify({email:b.dataset.email||''})});$('#auth-message').innerHTML=`<div class="notice">${esc(x.message)}${x.verification_token?`<div class="field" style="margin-top:12px"><label>Development tasdiqlash tokeni</label><input id="verify-token" value="${esc(x.verification_token)}" readonly><button type="button" class="button-secondary" data-action="verify">Emailni tasdiqlash</button></div>`:''}</div>`}else if(a==='verify'){const token=$('#verify-token')?.value;if(!token)return;const x=await api('/verify',{method:'POST',body:JSON.stringify({token})});me=x.user;csrf=x.csrf;toast('Email tasdiqlandi');location.hash='account';bootstrap()}else if(a==='delete-account'){const reason=promptLocale('Hisobni o‘chirish so‘roviga izoh (ixtiyoriy):')||'';const x=await api('/account/deletion-request',{method:'POST',body:JSON.stringify({reason})});toast('Hisob o‘chirish so‘rovi yuborildi: '+x.status)}else if(a==='deletion-review'){await api('/admin/deletions/'+id,{method:'POST',body:JSON.stringify({action:b.dataset.choice})});toast('O‘chirish so‘rovi yangilandi');renderAdmin()}else if(a==='suspend-user'){const reason=promptLocale('Amal sababini kiriting:');if(!reason)return;await api('/admin/users/'+id,{method:'POST',body:JSON.stringify({action:b.dataset.choice,reason})});toast('Hisob holati yangilandi');renderAdmin()}else if(a==='moderate'){const riskReminder=b.dataset.choice==='approve'&&b.dataset.riskFlags?`Xavf belgilarini tekshirdingizmi: ${b.dataset.riskFlags}? E’lonni tasdiqlaysizmi?`:b.dataset.choice==='approve'?adminText('E’lonni tasdiqlaysizmi? Ko‘rinishi joriy sinov yoki savdo rejimiga bog‘liq.','Одобрить объявление? Показ зависит от текущего тестового или торгового режима.','Approve this listing? Visibility follows the current testing or sales mode.'):'E’lonni rad etasizmi?';const qualityReminder=b.dataset.choice==='approve'?adminText('Rasmlar, mahsulot nomi, tavsif, egalik/vakolat, hudud va yetkazish shartlarini tekshirdim.','Я проверил фото, название, описание, право продажи, регион и условия доставки.','I checked the photos, exact product, description, ownership or authorization, region, and delivery terms.')+'\n\n':'';if(!confirmLocale(qualityReminder+riskReminder))return;let note='';if(b.dataset.choice==='reject'){note=promptLocale('Rad etish sababi (sotuvchiga ko‘rinadi):');if(note===null)return;if(note.trim().length<5){toast(adminText('Rad etish sababini kamida 5 belgi bilan yozing.','Укажите причину отказа не короче 5 символов.','Enter a rejection reason of at least 5 characters.'));return}}await api('/admin/listings/'+id,{method:'POST',body:JSON.stringify({action:b.dataset.choice,note:note.trim(),quality_confirmed:b.dataset.choice==='approve'})});toast('E’lon holati yangilandi');renderAdmin()}else if(a==='report-update'){const status=$('#report-'+id).value,resolution=$('#resolution-'+id).value;await api('/admin/reports/'+id,{method:'POST',body:JSON.stringify({status,resolution})});toast('Shikoyat yangilandi');renderAdmin()}else if(a==='payout'){const choice=b.dataset.choice;if(choice==='mark_paid'){const external_reference=promptLocale('Tashqi to‘lov provayderi bergan o‘tkazma ID sini kiriting:');if(!external_reference||external_reference.trim().length<3)return;await api('/admin/payouts/'+id,{method:'POST',body:JSON.stringify({action:choice,external_reference})})}else{if(!confirmLocale(choice==='approve'?'So‘rovni ma’qullaysizmi? Pulni provayderda alohida o‘tkazing.':'Payout so‘rovini rad etasizmi?'))return;const note=promptLocale('Izoh (ixtiyoriy):')||'';await api('/admin/payouts/'+id,{method:'POST',body:JSON.stringify({action:choice,note})})}toast('Payout so‘rovi yangilandi');renderAdmin()}else if(a==='submit-listing'){await api('/listings/'+id+'/submit',{method:'POST',body:'{}'});location.hash='listing-review/'+encodeURIComponent(id)}else if(a==='pause-listing'){await api('/listings/'+id+'/state',{method:'POST',body:JSON.stringify({action:'pause'})});toast('E’lon vaqtincha yashirildi');renderSeller()}else if(a==='resume-listing'){await api('/listings/'+id+'/state',{method:'POST',body:JSON.stringify({action:'reopen'})});location.hash='listing-review/'+encodeURIComponent(id)}else if(a==='archive-listing'){if(confirmLocale('E’lonni arxivlaysizmi?')){await api('/listings/'+id+'/state',{method:'POST',body:JSON.stringify({action:'archive'})});toast('E’lon arxivlandi');renderSeller()}}else if(a==='report-listing'){if(!me){location.hash='login';return}const details=promptLocale('Nima uchun xabar bermoqchisiz?');if(details)await api('/reports',{method:'POST',body:JSON.stringify({listing_id:id,reason:'suspicious_listing',details})});toast('Moderatorga yuborildi')}else if(a==='contact-request'){const x=await api('/conversations',{method:'POST',body:JSON.stringify({request_id:id,seller_id:b.dataset.seller})});location.hash='conversation/'+encodeURIComponent(x.id)}}catch(e){toast(e.message,'error')}finally{refreshNotifications()}}
-document.addEventListener('click',e=>{
- const categoryToggle=e.target.closest('[data-category-toggle]');
- if(categoryToggle){const box=categoryToggle.closest('[data-category-select]'),menu=$('.sort-menu',box),wasOpen=categoryToggle.getAttribute('aria-expanded')==='true';$$('[data-sort-toggle]').forEach(toggle=>{toggle.setAttribute('aria-expanded','false');const otherMenu=$('.sort-menu',toggle.closest('[data-sort-select]'));if(otherMenu)otherMenu.hidden=true});$$('[data-category-toggle]').forEach(toggle=>{if(toggle!==categoryToggle){toggle.setAttribute('aria-expanded','false');const otherMenu=$('.sort-menu',toggle.closest('[data-category-select]'));if(otherMenu)otherMenu.hidden=true}});categoryToggle.setAttribute('aria-expanded',String(!wasOpen));menu.hidden=wasOpen;return}
- const categoryOption=e.target.closest('[data-category-option]');
- if(categoryOption){const box=categoryOption.closest('[data-category-select]'),toggle=$('[data-category-toggle]',box),menu=$('.sort-menu',box);$('[name=category]',box).value=categoryOption.dataset.categoryOption;$('[data-category-label]',box).textContent=categoryOption.textContent.trim();$$('[data-category-option]',box).forEach(item=>item.setAttribute('aria-selected',String(item===categoryOption)));toggle.setAttribute('aria-expanded','false');menu.hidden=true;toggle.focus();return}
- const sortToggle=e.target.closest('[data-sort-toggle]');
- if(sortToggle){const box=sortToggle.closest('[data-sort-select]'),menu=$('.sort-menu',box),wasOpen=sortToggle.getAttribute('aria-expanded')==='true';$$('[data-category-toggle]').forEach(toggle=>{toggle.setAttribute('aria-expanded','false');const otherMenu=$('.sort-menu',toggle.closest('[data-category-select]'));if(otherMenu)otherMenu.hidden=true});$$('[data-sort-toggle]').forEach(toggle=>{if(toggle!==sortToggle){toggle.setAttribute('aria-expanded','false');const otherMenu=$('.sort-menu',toggle.closest('[data-sort-select]'));if(otherMenu)otherMenu.hidden=true}});sortToggle.setAttribute('aria-expanded',String(!wasOpen));menu.hidden=wasOpen;return}
- const sortOption=e.target.closest('[data-sort-option]');
- if(sortOption){const box=sortOption.closest('[data-sort-select]'),toggle=$('[data-sort-toggle]',box),menu=$('.sort-menu',box);$('[name=sort]',box).value=sortOption.dataset.sortOption;$('[data-sort-label]',box).textContent=sortOption.textContent.trim();$$('[data-sort-option]',box).forEach(item=>item.setAttribute('aria-selected',String(item===sortOption)));toggle.setAttribute('aria-expanded','false');menu.hidden=true;toggle.focus();return}
- if(!e.target.closest('[data-sort-select]'))$$('[data-sort-toggle]').forEach(toggle=>{toggle.setAttribute('aria-expanded','false');const menu=$('.sort-menu',toggle.closest('[data-sort-select]'));if(menu)menu.hidden=true});
- if(!e.target.closest('[data-category-select]'))$$('[data-category-toggle]').forEach(toggle=>{toggle.setAttribute('aria-expanded','false');const menu=$('.sort-menu',toggle.closest('[data-category-select]'));if(menu)menu.hidden=true});
+function renderDataDeletion() {
+  const copy = window.SENTRYLOOT_LEGAL_TRANSLATIONS?.deletion?.[locale];
+  if (copy) {
+    app.innerHTML = `<section class="page">${pageTitle(copy.title, copy.lead)}<article class="legal-copy">${copy.body}</article></section>`;
+    return;
+  }
+  app.innerHTML = `<section class="page">${pageTitle("Data deletion instructions", "How to request deletion of SentryLoot account and Facebook Login data.")}<article class="legal-copy"><p>SentryLoot is operated by Asliddinov Shukhratjon. If you used Facebook Login, SentryLoot may hold your Facebook account identifier, name, profile picture, and primary email address.</p><h3>Request deletion while signed in</h3><ol><li>Sign in to SentryLoot and open your Account page.</li><li>Choose <strong>Request account deletion</strong>.</li><li>We verify and review the request, then erase direct account identifiers and Facebook Login data within 30 days.</li></ol><p>When an administrator marks a verified request as resolved, the account is disabled, its Facebook identity and direct profile data are erased, private account-purchase screenshots are deleted, and user-authored content is removed or anonymized. Completed order and ledger records may remain only in anonymized form when needed for accounting, security, or dispute handling. The exact statutory retention schedule depends on countries served and has not yet been approved by counsel; live paid sales remain disabled until this review is complete. Otherwise, reviewed account-purchase screenshots are deleted after 30 days.</p><h3>If you cannot access your account</h3><p>Email <a href="mailto:sentryloot@gamestorehub.com">sentryloot@gamestorehub.com</a> from the address associated with your account and ask for SentryLoot account and Facebook data deletion. Do not send your Facebook password.</p><p>Deleting SentryLoot data does not delete your Facebook account. You can also remove SentryLoot from the apps and websites connected to your Facebook account.</p><p>Read the full <a href="#privacy-policy">Maxfiylik siyosati</a>.</p></article></section>`;
+}
+async function doAction(b) {
+  const a = b.dataset.action,
+    id = b.dataset.id;
+  try {
+    if (a === "listing-details") {
+      await showMarketListingDetails(id);
+      return;
+    } else if (a === "dispute") {
+      location.hash = "dispute/" + encodeURIComponent(id);
+      return;
+    }
+    if (a === "link-facebook") {
+      const result = await api("/oauth/start", {
+        method: "POST",
+        body: JSON.stringify({
+          provider: "facebook",
+          mode: "link",
+          country: me?.country || "UZ",
+        }),
+      });
+      location.assign(result.authorization_url);
+    } else if (a === "oauth-google" || a === "oauth-facebook") {
+      if (!$("#auth-terms")?.checked) {
+        toast("Davom etish uchun shartlarni qabul qiling.");
+        return;
+      }
+      const provider = a === "oauth-google" ? "google" : "facebook";
+      const result = await api("/oauth/start", {
+        method: "POST",
+        body: JSON.stringify({
+          provider,
+          accept_terms: true,
+          country:
+            $("#auth-country")?.value ||
+            window.RegionPreferences?.state.country ||
+            "US",
+          language: locale,
+        }),
+      });
+      location.assign(result.authorization_url);
+    } else if (a === "read-all-notifications") {
+      await api("/notifications/read-all", { method: "POST", body: "{}" });
+      refreshNotifications();
+      await renderNotifications();
+    } else if (a === "mark-notification-read") {
+      await api("/notifications/" + encodeURIComponent(id) + "/read", {
+        method: "POST",
+        body: "{}",
+      });
+      refreshNotifications();
+      await renderNotifications();
+    } else if (a === "open-notification") {
+      await api("/notifications/" + encodeURIComponent(id) + "/read", {
+        method: "POST",
+        body: "{}",
+      });
+      refreshNotifications();
+      location.hash =
+        b.dataset.route || notificationRoute(b.getAttribute("href")?.slice(1));
+    } else if (a === "seller-review") {
+      const note = promptLocale(
+        "Sotuvchini tekshirganingiz va qaroringiz sababini kiriting (kamida 5 belgi):",
+      );
+      if (!note || note.trim().length < 5) return;
+      await api("/admin/sellers/" + encodeURIComponent(id), {
+        method: "POST",
+        body: JSON.stringify({ action: b.dataset.choice, note }),
+      });
+      toast("Sotuvchi holati yangilandi");
+      renderAdmin();
+    } else if (a === "dispute-review") {
+      const action = b.dataset.choice;
+      const label =
+        action === "refund_buyer"
+          ? "Sandbox qaytarimini qayd etasizmi? Bu haqiqiy pul o‘tkazmaydi."
+          : action === "release_seller"
+            ? "Sotuvchi foydasiga sandbox buyurtmani yakunlayasizmi?"
+            : "Moderator qo‘shimcha dalil so‘raydi. Qarorni yozib davom etasizmi?";
+      if (!confirmLocale(label)) return;
+      const note = promptLocale(
+        "Moderator qarori va dalillarni qisqacha yozing (kamida 5 belgi):",
+      );
+      if (!note || note.trim().length < 5) return;
+      await api("/admin/disputes/" + encodeURIComponent(id), {
+        method: "POST",
+        body: JSON.stringify({ action, note }),
+      });
+      toast("Nizo holati yangilandi");
+      renderAdmin();
+    } else if (a === "account-review") {
+      const note =
+        $(`[data-account-review-note=\"${CSS.escape(id)}\"]`)?.value.trim() ||
+        "";
+      if (note.length < 5) {
+        toast(
+          adminText(
+            "Izoh kamida 5 belgi bo‘lsin.",
+            "Комментарий должен содержать минимум 5 символов.",
+            "Add a moderator note of at least 5 characters.",
+          ),
+        );
+        return;
+      }
+      const message = (aChoice) =>
+        aChoice === "approve"
+          ? "Ikki skrinshotni ko‘rdingizmi? Tasdiqlansa seller balansiga sandbox yozuvi qo‘shiladi; real pul o‘tkazilmaydi."
+          : aChoice === "refund_buyer"
+            ? "Sandbox qaytarimini qayd etasizmi? Bu real pulni qaytarmaydi."
+            : "Xaridordan maxfiy ma’lumotsiz qo‘shimcha dalil so‘raysizmi?";
+      if (!confirmLocale(message(b.dataset.choice))) return;
+      await api("/admin/account-reviews/" + encodeURIComponent(id), {
+        method: "POST",
+        body: JSON.stringify({ action: b.dataset.choice, note }),
+      });
+      toast(
+        adminText(
+          "Akkaunt ko‘rigi yangilandi.",
+          "Проверка аккаунта обновлена.",
+          "Account review updated.",
+        ),
+      );
+      renderAdmin();
+    } else if (a === "respond-request") {
+      const card = b.closest(".order-line");
+      const form = card?.querySelector('[data-form="request-response"]');
+      if (form) {
+        form.hidden = false;
+        b.hidden = true;
+        form.querySelector("textarea")?.focus();
+      }
+      return;
+    } else if (a === "cancel-request-response") {
+      const form = b.closest('[data-form="request-response"]');
+      form.hidden = true;
+      const card = b.closest(".order-line");
+      const trigger = card?.querySelector('[data-action="respond-request"]');
+      if (trigger) trigger.hidden = false;
+      return;
+    } else if (a === "compare-listing" || a === "compare-remove") {
+      if (a === "compare-remove")
+        comparisonIds = comparisonIds.filter((x) => x !== id);
+      else if (!comparisonIds.includes(id)) {
+        if (comparisonIds.length >= 3) {
+          toast(
+            adminText(
+              "Uchta e’longacha tanlash mumkin.",
+              "Можно выбрать не более трёх объявлений.",
+              "You can compare up to three listings.",
+            ),
+          );
+          return;
+        }
+        comparisonIds.push(id);
+      }
+      localStorage.setItem("sentryloot_compare", JSON.stringify(comparisonIds));
+      await ExperienceUX.saveCompare();
+      location.hash = "compare";
+      return;
+    } else if (a === "buy-now") {
+      if (!me) {
+        location.hash = "login";
+        return;
+      }
+      await api("/cart", {
+        method: "POST",
+        body: JSON.stringify({
+          listing_id: id,
+          quantity: ExperienceUX.quantity(),
+          mode: "set",
+        }),
+      });
+      await refreshCart();
+      location.hash = "cart";
+    } else if (a === "add-cart") {
+      await api("/cart", {
+        method: "POST",
+        body: JSON.stringify({
+          listing_id: id,
+          quantity: ExperienceUX.quantity(),
+        }),
+      });
+      toast("Savatchaga qo‘shildi");
+      refreshCart();
+    } else if (a === "favorite") {
+      if (!me) {
+        location.hash = "login";
+        return;
+      }
+      const x = await api("/favorites/" + id, {
+        method: b.dataset.saved === "1" ? "DELETE" : "POST",
+        body: "{}",
+      });
+      toast(x.saved ? "Saqlanganlarga qo‘shildi" : "Olib tashlandi");
+      navigate();
+    } else if (a === "contact-seller") {
+      if (!me) {
+        location.hash = "login";
+        return;
+      }
+      const x = await api("/conversations", {
+        method: "POST",
+        body: JSON.stringify({ listing_id: id }),
+      });
+      location.hash = "conversation/" + encodeURIComponent(x.id);
+    } else if (a === "share") {
+      if (
+        window.DesktopShare?.open({
+          anchor: b,
+          title: b.dataset.shareTitle || document.title,
+          url: b.dataset.sharePath
+            ? new URL(b.dataset.sharePath, location.origin).href
+            : location.href,
+        })
+      )
+        return;
+      await navigator.clipboard.writeText(location.href);
+      toast("Havola nusxalandi");
+    } else if (a === "remove-cart") {
+      await api("/cart/" + id, { method: "DELETE" });
+      renderCart();
+      refreshCart();
+    } else if (a === "checkout") {
+      if (!$("#checkout-terms")?.checked) {
+        toast("Davom etish uchun shartlarni qabul qiling.");
+        return;
+      }
+      const accountRisk = $("#checkout-account-risk");
+      if (accountRisk && !accountRisk.checked) {
+        toast("Davom etishdan oldin akkaunt savdosi xavflarini qabul qiling.");
+        return;
+      }
+      const x = await api("/checkout", {
+        method: "POST",
+        body: JSON.stringify({
+          accept_terms: true,
+          accept_account_risk: accountRisk ? accountRisk.checked : false,
+          buyer_details: TradeUX.checkoutDetails(),
+          buyer_context: ExperienceUX.checkoutContext(),
+          coupon_code: LaunchUX.checkoutCoupon(),
+        }),
+      });
+      location.hash = "order/" + encodeURIComponent(x.id);
+      if (x.mode === "stripe_test") {
+        const payment = await api(
+          "/orders/" + encodeURIComponent(x.id) + "/stripe-checkout",
+          { method: "POST", body: "{}" },
+        );
+        location.assign(payment.checkout_url);
+      } else {
+        toast("Sinov buyurtmasi yaratildi; haqiqiy pul yechilmadi.");
+      }
+    } else if (a === "stripe-test-refresh") {
+      await renderOrder(id);
+    } else if (a === "stripe-test-pay") {
+      b.disabled = true;
+      try {
+        const payment = await api(
+          "/orders/" + encodeURIComponent(id) + "/stripe-checkout",
+          { method: "POST", body: "{}" },
+        );
+        location.assign(payment.checkout_url);
+      } catch (error) {
+        if (error.status === 409) await renderOrder(id);
+        throw error;
+      } finally {
+        b.disabled = false;
+      }
+    } else if (a === "sandbox-pay") {
+      b.disabled = true;
+      try {
+        const outcome = b.dataset.outcome === "decline" ? "decline" : "approve";
+        const result = await api("/orders/" + id + "/sandbox-complete", {
+          method: "POST",
+          body: JSON.stringify({ outcome }),
+        });
+        toast(
+          result.status === "declined"
+            ? adminText(
+                "Sinov to‘lovi rad etildi; qayta urinishingiz mumkin.",
+                "Тестовый платёж отклонён; можно повторить.",
+                "Test payment declined; you can retry.",
+              )
+            : adminText(
+                "Sinov to‘lovi tasdiqlandi.",
+                "Тестовый платёж подтверждён.",
+                "Test payment approved.",
+              ),
+        );
+        if (result.status === "paid") renderOrder(id);
+      } finally {
+        b.disabled = false;
+      }
+    } else if (a === "complete-order") {
+      await api("/orders/" + id + "/complete", { method: "POST", body: "{}" });
+      toast("Buyurtma yakunlandi");
+      renderOrder(id);
+    } else if (a === "dispute") {
+      const details = promptLocale(
+        "Muammoni qisqacha tushuntiring (kamida 10 belgi):",
+      );
+      if (details) {
+        const evidence_url =
+          promptLocale(
+            "Dalil uchun HTTPS havola (ixtiyoriy). Maxfiy parol yoki shaxsiy ma’lumot joylamang:",
+          ) || "";
+        await api("/orders/" + id + "/dispute", {
+          method: "POST",
+          body: JSON.stringify({ details, evidence_url }),
+        });
+        toast("Nizo moderatorga yuborildi");
+        renderOrder(id);
+      }
+    } else if (a === "logout") {
+      await LaunchUX.clearDevicePush().catch(() => {});
+      await api("/logout", { method: "POST", body: "{}" });
+      window.SpinWin?.resetHomePopup(me?.id);
+      me = null;
+      csrf = "";
+      toast("Tizimdan chiqdingiz");
+      location.hash = "home";
+      bootstrap();
+    } else if (a === "resend-verification") {
+      const x = await api("/verification/resend", {
+        method: "POST",
+        body: JSON.stringify({ email: b.dataset.email || "" }),
+      });
+      $("#auth-message").innerHTML =
+        `<div class="notice">${esc(x.message)}${x.verification_token ? `<div class="field" style="margin-top:12px"><label>Development tasdiqlash tokeni</label><input id="verify-token" value="${esc(x.verification_token)}" readonly><button type="button" class="button-secondary" data-action="verify">Emailni tasdiqlash</button></div>` : ""}</div>`;
+    } else if (a === "verify") {
+      const token = $("#verify-token")?.value;
+      if (!token) return;
+      const x = await api("/verify", {
+        method: "POST",
+        body: JSON.stringify({ token }),
+      });
+      me = x.user;
+      csrf = x.csrf;
+      toast("Email tasdiqlandi");
+      location.hash = "account";
+      bootstrap();
+    } else if (a === "delete-account") {
+      const reason =
+        promptLocale("Hisobni o‘chirish so‘roviga izoh (ixtiyoriy):") || "";
+      const x = await api("/account/deletion-request", {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      });
+      toast("Hisob o‘chirish so‘rovi yuborildi: " + x.status);
+    } else if (a === "deletion-review") {
+      await api("/admin/deletions/" + id, {
+        method: "POST",
+        body: JSON.stringify({ action: b.dataset.choice }),
+      });
+      toast("O‘chirish so‘rovi yangilandi");
+      renderAdmin();
+    } else if (a === "suspend-user") {
+      const reason = promptLocale("Amal sababini kiriting:");
+      if (!reason) return;
+      await api("/admin/users/" + id, {
+        method: "POST",
+        body: JSON.stringify({ action: b.dataset.choice, reason }),
+      });
+      toast("Hisob holati yangilandi");
+      renderAdmin();
+    } else if (a === "moderate") {
+      const riskReminder =
+        b.dataset.choice === "approve" && b.dataset.riskFlags
+          ? `Xavf belgilarini tekshirdingizmi: ${b.dataset.riskFlags}? E’lonni tasdiqlaysizmi?`
+          : b.dataset.choice === "approve"
+            ? adminText(
+                "E’lonni tasdiqlaysizmi? Ko‘rinishi joriy sinov yoki savdo rejimiga bog‘liq.",
+                "Одобрить объявление? Показ зависит от текущего тестового или торгового режима.",
+                "Approve this listing? Visibility follows the current testing or sales mode.",
+              )
+            : "E’lonni rad etasizmi?";
+      const qualityReminder =
+        b.dataset.choice === "approve"
+          ? adminText(
+              "Rasmlar, mahsulot nomi, tavsif, egalik/vakolat, hudud va yetkazish shartlarini tekshirdim.",
+              "Я проверил фото, название, описание, право продажи, регион и условия доставки.",
+              "I checked the photos, exact product, description, ownership or authorization, region, and delivery terms.",
+            ) + "\n\n"
+          : "";
+      if (!confirmLocale(qualityReminder + riskReminder)) return;
+      let note = "";
+      if (b.dataset.choice === "reject") {
+        note = promptLocale("Rad etish sababi (sotuvchiga ko‘rinadi):");
+        if (note === null) return;
+        if (note.trim().length < 5) {
+          toast(
+            adminText(
+              "Rad etish sababini kamida 5 belgi bilan yozing.",
+              "Укажите причину отказа не короче 5 символов.",
+              "Enter a rejection reason of at least 5 characters.",
+            ),
+          );
+          return;
+        }
+      }
+      await api("/admin/listings/" + id, {
+        method: "POST",
+        body: JSON.stringify({
+          action: b.dataset.choice,
+          note: note.trim(),
+          quality_confirmed: b.dataset.choice === "approve",
+        }),
+      });
+      toast("E’lon holati yangilandi");
+      renderAdmin();
+    } else if (a === "report-update") {
+      const status = $("#report-" + id).value,
+        resolution = $("#resolution-" + id).value;
+      await api("/admin/reports/" + id, {
+        method: "POST",
+        body: JSON.stringify({ status, resolution }),
+      });
+      toast("Shikoyat yangilandi");
+      renderAdmin();
+    } else if (a === "payout") {
+      const choice = b.dataset.choice;
+      if (choice === "mark_paid") {
+        const external_reference = promptLocale(
+          "Tashqi to‘lov provayderi bergan o‘tkazma ID sini kiriting:",
+        );
+        if (!external_reference || external_reference.trim().length < 3) return;
+        await api("/admin/payouts/" + id, {
+          method: "POST",
+          body: JSON.stringify({ action: choice, external_reference }),
+        });
+      } else {
+        if (
+          !confirmLocale(
+            choice === "approve"
+              ? "So‘rovni ma’qullaysizmi? Pulni provayderda alohida o‘tkazing."
+              : "Payout so‘rovini rad etasizmi?",
+          )
+        )
+          return;
+        const note = promptLocale("Izoh (ixtiyoriy):") || "";
+        await api("/admin/payouts/" + id, {
+          method: "POST",
+          body: JSON.stringify({ action: choice, note }),
+        });
+      }
+      toast("Payout so‘rovi yangilandi");
+      renderAdmin();
+    } else if (a === "submit-listing") {
+      await api("/listings/" + id + "/submit", { method: "POST", body: "{}" });
+      location.hash = "listing-review/" + encodeURIComponent(id);
+    } else if (a === "pause-listing") {
+      await api("/listings/" + id + "/state", {
+        method: "POST",
+        body: JSON.stringify({ action: "pause" }),
+      });
+      toast("E’lon vaqtincha yashirildi");
+      renderSeller();
+    } else if (a === "resume-listing") {
+      await api("/listings/" + id + "/state", {
+        method: "POST",
+        body: JSON.stringify({ action: "reopen" }),
+      });
+      location.hash = "listing-review/" + encodeURIComponent(id);
+    } else if (a === "archive-listing") {
+      if (confirmLocale("E’lonni arxivlaysizmi?")) {
+        await api("/listings/" + id + "/state", {
+          method: "POST",
+          body: JSON.stringify({ action: "archive" }),
+        });
+        toast("E’lon arxivlandi");
+        renderSeller();
+      }
+    } else if (a === "report-listing") {
+      if (!me) {
+        location.hash = "login";
+        return;
+      }
+      const details = promptLocale("Nima uchun xabar bermoqchisiz?");
+      if (details)
+        await api("/reports", {
+          method: "POST",
+          body: JSON.stringify({
+            listing_id: id,
+            reason: "suspicious_listing",
+            details,
+          }),
+        });
+      toast("Moderatorga yuborildi");
+    } else if (a === "contact-request") {
+      const x = await api("/conversations", {
+        method: "POST",
+        body: JSON.stringify({ request_id: id, seller_id: b.dataset.seller }),
+      });
+      location.hash = "conversation/" + encodeURIComponent(x.id);
+    }
+  } catch (e) {
+    toast(e.message, "error");
+  } finally {
+    refreshNotifications();
+  }
+}
+document.addEventListener("click", (e) => {
+  const categoryToggle = e.target.closest("[data-category-toggle]");
+  if (categoryToggle) {
+    const box = categoryToggle.closest("[data-category-select]"),
+      menu = $(".sort-menu", box),
+      wasOpen = categoryToggle.getAttribute("aria-expanded") === "true";
+    $$("[data-sort-toggle]").forEach((toggle) => {
+      toggle.setAttribute("aria-expanded", "false");
+      const otherMenu = $(".sort-menu", toggle.closest("[data-sort-select]"));
+      if (otherMenu) otherMenu.hidden = true;
+    });
+    $$("[data-category-toggle]").forEach((toggle) => {
+      if (toggle !== categoryToggle) {
+        toggle.setAttribute("aria-expanded", "false");
+        const otherMenu = $(
+          ".sort-menu",
+          toggle.closest("[data-category-select]"),
+        );
+        if (otherMenu) otherMenu.hidden = true;
+      }
+    });
+    categoryToggle.setAttribute("aria-expanded", String(!wasOpen));
+    menu.hidden = wasOpen;
+    return;
+  }
+  const categoryOption = e.target.closest("[data-category-option]");
+  if (categoryOption) {
+    const box = categoryOption.closest("[data-category-select]"),
+      toggle = $("[data-category-toggle]", box),
+      menu = $(".sort-menu", box);
+    $("[name=category]", box).value = categoryOption.dataset.categoryOption;
+    $("[data-category-label]", box).textContent =
+      categoryOption.textContent.trim();
+    $$("[data-category-option]", box).forEach((item) =>
+      item.setAttribute("aria-selected", String(item === categoryOption)),
+    );
+    toggle.setAttribute("aria-expanded", "false");
+    menu.hidden = true;
+    toggle.focus();
+    return;
+  }
+  const sortToggle = e.target.closest("[data-sort-toggle]");
+  if (sortToggle) {
+    const box = sortToggle.closest("[data-sort-select]"),
+      menu = $(".sort-menu", box),
+      wasOpen = sortToggle.getAttribute("aria-expanded") === "true";
+    $$("[data-category-toggle]").forEach((toggle) => {
+      toggle.setAttribute("aria-expanded", "false");
+      const otherMenu = $(
+        ".sort-menu",
+        toggle.closest("[data-category-select]"),
+      );
+      if (otherMenu) otherMenu.hidden = true;
+    });
+    $$("[data-sort-toggle]").forEach((toggle) => {
+      if (toggle !== sortToggle) {
+        toggle.setAttribute("aria-expanded", "false");
+        const otherMenu = $(".sort-menu", toggle.closest("[data-sort-select]"));
+        if (otherMenu) otherMenu.hidden = true;
+      }
+    });
+    sortToggle.setAttribute("aria-expanded", String(!wasOpen));
+    menu.hidden = wasOpen;
+    return;
+  }
+  const sortOption = e.target.closest("[data-sort-option]");
+  if (sortOption) {
+    const box = sortOption.closest("[data-sort-select]"),
+      toggle = $("[data-sort-toggle]", box),
+      menu = $(".sort-menu", box);
+    $("[name=sort]", box).value = sortOption.dataset.sortOption;
+    $("[data-sort-label]", box).textContent = sortOption.textContent.trim();
+    $$("[data-sort-option]", box).forEach((item) =>
+      item.setAttribute("aria-selected", String(item === sortOption)),
+    );
+    toggle.setAttribute("aria-expanded", "false");
+    menu.hidden = true;
+    toggle.focus();
+    return;
+  }
+  if (!e.target.closest("[data-sort-select]"))
+    $$("[data-sort-toggle]").forEach((toggle) => {
+      toggle.setAttribute("aria-expanded", "false");
+      const menu = $(".sort-menu", toggle.closest("[data-sort-select]"));
+      if (menu) menu.hidden = true;
+    });
+  if (!e.target.closest("[data-category-select]"))
+    $$("[data-category-toggle]").forEach((toggle) => {
+      toggle.setAttribute("aria-expanded", "false");
+      const menu = $(".sort-menu", toggle.closest("[data-category-select]"));
+      if (menu) menu.hidden = true;
+    });
 });
-document.addEventListener('keydown',e=>{const box=e.target.closest('[data-sort-select], [data-category-select]');if(!box)return;const category=box.matches('[data-category-select]'),toggle=category?$('[data-category-toggle]',box):$('[data-sort-toggle]',box),menu=$('.sort-menu',box),options=$$('[role="option"]',box),isOpen=toggle.getAttribute('aria-expanded')==='true';if(e.key==='Escape'&&isOpen){toggle.setAttribute('aria-expanded','false');menu.hidden=true;toggle.focus();e.preventDefault();return}if(e.target===toggle&&(e.key==='ArrowDown'||e.key==='ArrowUp')){toggle.setAttribute('aria-expanded','true');menu.hidden=false;(options.find(option=>option.getAttribute('aria-selected')==='true')||options[0])?.focus();e.preventDefault();return}if(e.target.matches('[role="option"]')){const index=options.indexOf(e.target);if(e.key==='ArrowDown'||e.key==='ArrowUp'||e.key==='Home'||e.key==='End'){const next=e.key==='Home'?0:e.key==='End'?options.length-1:(index+(e.key==='ArrowDown'?1:-1)+options.length)%options.length;options[next]?.focus();e.preventDefault()}}});
-app.addEventListener('click',e=>{const nav=e.target.closest('[data-admin-view-target]');if(nav){e.preventDefault();activateAdminView(nav.dataset.adminViewTarget,true);return}const b=e.target.closest('[data-action]');if(b){e.preventDefault();doAction(b)}});
-app.addEventListener('submit',async e=>{const form=e.target;if(form.dataset.form==='account-evidence'){e.preventDefault();const files=[form.elements.evidence_1.files?.[0],form.elements.evidence_2.files?.[0]],button=form.querySelector('button[type=submit]');if(files.some(file=>!file)){toast(adminText('Ikkita skrinshotni tanlang.','Выберите оба скриншота.','Choose both screenshots.'));return}if(files.some(file=>file.size>5*1024*1024||!['image/jpeg','image/png','image/webp'].includes(file.type))){toast(adminText('Har bir fayl 5 MB dan kichik JPG, PNG yoki WebP bo‘lsin.','Каждый файл должен быть JPG, PNG или WebP размером до 5 МБ.','Each file must be JPG, PNG, or WebP and under 5 MB.'));return}if(!form.elements.confirm_privacy.checked){toast(adminText('Avval rasmlarda maxfiy ma’lumot yo‘qligini tasdiqlang.','Подтвердите, что на изображениях нет секретных данных.','Confirm the screenshots contain no sensitive data.'));return}if(button)button.disabled=true;try{for(let n=0;n<2;n++){if(button)button.textContent=adminText(`Skrinshot ${n+1}/2 yuklanmoqda…`,`Загрузка скриншота ${n+1}/2…`,`Uploading screenshot ${n+1}/2…`);const response=await fetch(`/api/orders/${encodeURIComponent(form.dataset.order)}/account-evidence/${n+1}`,{method:'POST',headers:{'Content-Type':files[n].type,'X-CSRF-Token':csrf},body:files[n]});const result=await response.json().catch(()=>({error:'Server javobi o‘qilmadi'}));if(!response.ok)throw Error(localized(result.error||`Xatolik ${response.status}`))}await api('/orders/'+encodeURIComponent(form.dataset.order)+'/account-verification/submit',{method:'POST',body:JSON.stringify({confirm_privacy:true})});toast(adminText('Skrinshotlar maxfiy admin ko‘rigiga yuborildi.','Скриншоты отправлены на закрытую проверку.','Screenshots submitted for private moderator review.'));await renderOrder(form.dataset.order)}catch(error){toast(error.message,'error')}finally{if(button)button.disabled=false}}else if(form.dataset.form==='request-response'){e.preventDefault();try{await api('/requests/'+encodeURIComponent(form.dataset.request)+'/respond',{method:'POST',body:JSON.stringify({message:new FormData(form).get('message')})});toast('Javob yuborildi');await renderRequests()}catch(x){toast(x.message,'error')}}else if(form.id==='seller-form'){e.preventDefault();try{await api('/seller',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(form)))});const x=await api('/me');me=x.user;csrf=x.csrf;toast(adminText('Sotuvchi profili yaratildi','Профиль продавца создан','Seller profile created'));renderSeller()}catch(x){toast(x.message,'error')}}else if(form.dataset.form==='edit-listing'){e.preventDefault();const formData=new FormData(form),d=Object.fromEntries(formData);const photoFiles=formData.getAll('listing_photos').filter(file=>file instanceof File&&file.size);delete d.listing_photos;d.linked_accounts=formData.getAll('linked_accounts');d.price_minor=Number(d.price_minor);d.stock=Number(d.stock);d.attributes={};if(d.rank!==undefined)d.attributes.rank=d.rank;delete d.rank;d.attributes.server=String(d.server||'').trim();delete d.server;for(const [key,value] of formData.entries())if(key.startsWith('game_attr_'))d.attributes[key.slice(10)]=String(value).trim();try{if(photoFiles.length){if(photoFiles.length>4)throw Error(adminText('Ko‘pi bilan 4 ta rasm tanlang.','Выберите не более 4 фотографий.','Choose no more than 4 photos.'));const uploaded=[];for(const [index,file] of photoFiles.entries()){toast(adminText(`Rasm yuklanmoqda (${index+1}/${photoFiles.length})`,`Загрузка фото (${index+1}/${photoFiles.length})`,`Uploading photo (${index+1}/${photoFiles.length})`),'info');uploaded.push(await uploadListingPhoto(file))}d.images=uploaded}await api('/listings/'+encodeURIComponent(form.dataset.id),{method:'PATCH',body:JSON.stringify(d)});toast(adminText('E’lon saqlandi; kerak bo‘lsa moderator qayta tekshiradi','Объявление сохранено; при необходимости модератор проверит его снова','Listing saved; it may be reviewed again'));await renderSeller()}catch(x){toast(x.message,'error')}}else if(form.dataset.form==='deliver'){e.preventDefault();try{await api('/orders/'+form.dataset.order+'/deliver',{method:'POST',body:JSON.stringify({item_id:form.dataset.item,delivery:new FormData(form).get('delivery')})});toast('Yetkazish yuborildi');renderOrder(form.dataset.order)}catch(x){toast(x.message,'error')}}else if(form.dataset.form==='review'){e.preventDefault();try{await api('/reviews',{method:'POST',body:JSON.stringify({item_id:form.dataset.item,rating:Number(new FormData(form).get('rating')),body:new FormData(form).get('body')})});toast('Sharh saqlandi');form.remove()}catch(x){toast(x.message,'error')}}});
-document.addEventListener('submit',e=>{const form=e.target;if(form.id!=='browse-search-form'&&form.id!=='search-form')return;e.preventDefault();openBrowse({q:new FormData(form).get('q')})});
-function syncLanguageMenu(){window.MobileHeader?.syncLabels();const toggle=$('#language-toggle');if(!toggle)return;toggle.setAttribute('aria-expanded',String(!!document.querySelector('.region-preferences-dialog')));toggle.setAttribute('aria-haspopup','dialog');toggle.setAttribute('aria-controls','region-preferences-dialog');toggle.setAttribute('aria-label',adminText('Region sozlamalari','Региональные настройки','Regional preferences'))}
-function closeLanguageMenu(){const menu=$('#language-menu');if(menu)menu.hidden=true;syncLanguageMenu()}
-async function setLanguage(language){if(bootstrapSessionReady)await bootstrapSessionReady;const region=window.RegionPreferences;if(!region||!supportedLocales.has(language))return;try{await region.save({...region.state,language})}catch(err){toast(err.message,'error')}}
-async function openRegionPreferences(){if(bootstrapSessionReady)await bootstrapSessionReady;window.RegionPreferences?.open()}
-$('#language-toggle').onclick=openRegionPreferences;document.addEventListener('click',e=>{if(!e.target.closest('.language-control'))closeLanguageMenu()});
-$('#account-button').addEventListener('click',()=>{if(!me){location.hash='login';return}if($('#profile-dropdown'))closeProfileMenu();else openProfileMenu()});document.body.addEventListener('click',e=>{const a=e.target.closest('[data-go]');if(a)location.hash=a.dataset.go});const profileRoot=$('#profile-menu-root');profileRoot.addEventListener('click',e=>{if(e.target.closest('[data-profile-close]')){closeProfileMenu();return}const action=e.target.closest('[data-action]');if(action){e.preventDefault();doAction(action)}});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#profile-dropdown')){closeProfileMenu();$('#account-button')?.focus()}});
-document.addEventListener('click',event=>{if(!event.target.closest('[data-skip-to-content]'))return;event.preventDefault();app.focus();app.scrollIntoView()});
-let historyRouteQueued=false;
-function scheduleHistoryRoute(){if(historyRouteQueued)return;historyRouteQueued=true;requestAnimationFrame(()=>{historyRouteQueued=false;closeProfileMenu();const anchor=currentPageAnchor();if(anchor&&document.getElementById(anchor)){scrollToPageAnchor(anchor);return}navigate().then(()=>localizeDOM());refreshNotifications();});}
-window.addEventListener('popstate',scheduleHistoryRoute);
-window.addEventListener('hashchange',scheduleHistoryRoute);
-document.addEventListener('submit',async e=>{if(e.target.id==='profile-form'){e.preventDefault();const d=Object.fromEntries(new FormData(e.target));try{const x=await api('/profile',{method:'POST',body:JSON.stringify(d)});me=x.user;window.RegionPreferences?.apply(null,me);locale=supportedLocales.has(me.language)?me.language:locale;localStorage.setItem(localeKey,locale);document.documentElement.lang=locale;document.documentElement.dir=locale==='ar'?'rtl':'ltr';syncLanguageMenu();syncSellItemButton();syncProfileTrigger();renderSupportWidget();toast('Profil yangilandi');if($('#profile-dropdown'))openProfileMenu();else await navigate()}catch(x){toast(x.message,'error')}}});
+document.addEventListener("keydown", (e) => {
+  const box = e.target.closest("[data-sort-select], [data-category-select]");
+  if (!box) return;
+  const category = box.matches("[data-category-select]"),
+    toggle = category
+      ? $("[data-category-toggle]", box)
+      : $("[data-sort-toggle]", box),
+    menu = $(".sort-menu", box),
+    options = $$('[role="option"]', box),
+    isOpen = toggle.getAttribute("aria-expanded") === "true";
+  if (e.key === "Escape" && isOpen) {
+    toggle.setAttribute("aria-expanded", "false");
+    menu.hidden = true;
+    toggle.focus();
+    e.preventDefault();
+    return;
+  }
+  if (e.target === toggle && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+    toggle.setAttribute("aria-expanded", "true");
+    menu.hidden = false;
+    (
+      options.find(
+        (option) => option.getAttribute("aria-selected") === "true",
+      ) || options[0]
+    )?.focus();
+    e.preventDefault();
+    return;
+  }
+  if (e.target.matches('[role="option"]')) {
+    const index = options.indexOf(e.target);
+    if (
+      e.key === "ArrowDown" ||
+      e.key === "ArrowUp" ||
+      e.key === "Home" ||
+      e.key === "End"
+    ) {
+      const next =
+        e.key === "Home"
+          ? 0
+          : e.key === "End"
+            ? options.length - 1
+            : (index + (e.key === "ArrowDown" ? 1 : -1) + options.length) %
+              options.length;
+      options[next]?.focus();
+      e.preventDefault();
+    }
+  }
+});
+app.addEventListener("click", (e) => {
+  const nav = e.target.closest("[data-admin-view-target]");
+  if (nav) {
+    e.preventDefault();
+    activateAdminView(nav.dataset.adminViewTarget, true);
+    return;
+  }
+  const b = e.target.closest("[data-action]");
+  if (b) {
+    e.preventDefault();
+    doAction(b);
+  }
+});
+app.addEventListener("submit", async (e) => {
+  const form = e.target;
+  if (form.dataset.form === "account-evidence") {
+    e.preventDefault();
+    const files = [
+        form.elements.evidence_1.files?.[0],
+        form.elements.evidence_2.files?.[0],
+      ],
+      button = form.querySelector("button[type=submit]");
+    if (files.some((file) => !file)) {
+      toast(
+        adminText(
+          "Ikkita skrinshotni tanlang.",
+          "Выберите оба скриншота.",
+          "Choose both screenshots.",
+        ),
+      );
+      return;
+    }
+    if (
+      files.some(
+        (file) =>
+          file.size > 5 * 1024 * 1024 ||
+          !["image/jpeg", "image/png", "image/webp"].includes(file.type),
+      )
+    ) {
+      toast(
+        adminText(
+          "Har bir fayl 5 MB dan kichik JPG, PNG yoki WebP bo‘lsin.",
+          "Каждый файл должен быть JPG, PNG или WebP размером до 5 МБ.",
+          "Each file must be JPG, PNG, or WebP and under 5 MB.",
+        ),
+      );
+      return;
+    }
+    if (!form.elements.confirm_privacy.checked) {
+      toast(
+        adminText(
+          "Avval rasmlarda maxfiy ma’lumot yo‘qligini tasdiqlang.",
+          "Подтвердите, что на изображениях нет секретных данных.",
+          "Confirm the screenshots contain no sensitive data.",
+        ),
+      );
+      return;
+    }
+    if (button) button.disabled = true;
+    try {
+      for (let n = 0; n < 2; n++) {
+        if (button)
+          button.textContent = adminText(
+            `Skrinshot ${n + 1}/2 yuklanmoqda…`,
+            `Загрузка скриншота ${n + 1}/2…`,
+            `Uploading screenshot ${n + 1}/2…`,
+          );
+        const response = await fetch(
+          `/api/orders/${encodeURIComponent(form.dataset.order)}/account-evidence/${n + 1}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": files[n].type, "X-CSRF-Token": csrf },
+            body: files[n],
+          },
+        );
+        const result = await response
+          .json()
+          .catch(() => ({ error: "Server javobi o‘qilmadi" }));
+        if (!response.ok)
+          throw Error(localized(result.error || `Xatolik ${response.status}`));
+      }
+      await api(
+        "/orders/" +
+          encodeURIComponent(form.dataset.order) +
+          "/account-verification/submit",
+        { method: "POST", body: JSON.stringify({ confirm_privacy: true }) },
+      );
+      toast(
+        adminText(
+          "Skrinshotlar maxfiy admin ko‘rigiga yuborildi.",
+          "Скриншоты отправлены на закрытую проверку.",
+          "Screenshots submitted for private moderator review.",
+        ),
+      );
+      await renderOrder(form.dataset.order);
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      if (button) button.disabled = false;
+    }
+  } else if (form.dataset.form === "request-response") {
+    e.preventDefault();
+    try {
+      await api(
+        "/requests/" + encodeURIComponent(form.dataset.request) + "/respond",
+        {
+          method: "POST",
+          body: JSON.stringify({ message: new FormData(form).get("message") }),
+        },
+      );
+      toast("Javob yuborildi");
+      await renderRequests();
+    } catch (x) {
+      toast(x.message, "error");
+    }
+  } else if (form.id === "seller-form") {
+    e.preventDefault();
+    try {
+      await api("/seller", {
+        method: "POST",
+        body: JSON.stringify(Object.fromEntries(new FormData(form))),
+      });
+      const x = await api("/me");
+      me = x.user;
+      csrf = x.csrf;
+      toast(
+        adminText(
+          "Sotuvchi profili yaratildi",
+          "Профиль продавца создан",
+          "Seller profile created",
+        ),
+      );
+      renderSeller();
+    } catch (x) {
+      toast(x.message, "error");
+    }
+  } else if (form.dataset.form === "edit-listing") {
+    e.preventDefault();
+    const formData = new FormData(form),
+      d = Object.fromEntries(formData);
+    const photoFiles = formData
+      .getAll("listing_photos")
+      .filter((file) => file instanceof File && file.size);
+    delete d.listing_photos;
+    d.linked_accounts = formData.getAll("linked_accounts");
+    d.price_minor = Number(d.price_minor);
+    d.stock = Number(d.stock);
+    d.attributes = {};
+    if (d.rank !== undefined) d.attributes.rank = d.rank;
+    delete d.rank;
+    d.attributes.server = String(d.server || "").trim();
+    delete d.server;
+    for (const [key, value] of formData.entries())
+      if (key.startsWith("game_attr_"))
+        d.attributes[key.slice(10)] = String(value).trim();
+    try {
+      if (photoFiles.length) {
+        if (photoFiles.length > 4)
+          throw Error(
+            adminText(
+              "Ko‘pi bilan 4 ta rasm tanlang.",
+              "Выберите не более 4 фотографий.",
+              "Choose no more than 4 photos.",
+            ),
+          );
+        const uploaded = [];
+        for (const [index, file] of photoFiles.entries()) {
+          toast(
+            adminText(
+              `Rasm yuklanmoqda (${index + 1}/${photoFiles.length})`,
+              `Загрузка фото (${index + 1}/${photoFiles.length})`,
+              `Uploading photo (${index + 1}/${photoFiles.length})`,
+            ),
+            "info",
+          );
+          uploaded.push(await uploadListingPhoto(file));
+        }
+        d.images = uploaded;
+      }
+      await api("/listings/" + encodeURIComponent(form.dataset.id), {
+        method: "PATCH",
+        body: JSON.stringify(d),
+      });
+      toast(
+        adminText(
+          "E’lon saqlandi; kerak bo‘lsa moderator qayta tekshiradi",
+          "Объявление сохранено; при необходимости модератор проверит его снова",
+          "Listing saved; it may be reviewed again",
+        ),
+      );
+      await renderSeller();
+    } catch (x) {
+      toast(x.message, "error");
+    }
+  } else if (form.dataset.form === "deliver") {
+    e.preventDefault();
+    try {
+      await api("/orders/" + form.dataset.order + "/deliver", {
+        method: "POST",
+        body: JSON.stringify({
+          item_id: form.dataset.item,
+          delivery: new FormData(form).get("delivery"),
+        }),
+      });
+      toast("Yetkazish yuborildi");
+      renderOrder(form.dataset.order);
+    } catch (x) {
+      toast(x.message, "error");
+    }
+  } else if (form.dataset.form === "review") {
+    e.preventDefault();
+    try {
+      await api("/reviews", {
+        method: "POST",
+        body: JSON.stringify({
+          item_id: form.dataset.item,
+          rating: Number(new FormData(form).get("rating")),
+          body: new FormData(form).get("body"),
+        }),
+      });
+      toast("Sharh saqlandi");
+      form.remove();
+    } catch (x) {
+      toast(x.message, "error");
+    }
+  }
+});
+document.addEventListener("submit", (e) => {
+  const form = e.target;
+  if (form.id !== "browse-search-form" && form.id !== "search-form") return;
+  e.preventDefault();
+  openBrowse({ q: new FormData(form).get("q") });
+});
+function syncLanguageMenu() {
+  window.MobileHeader?.syncLabels();
+  const toggle = $("#language-toggle");
+  if (!toggle) return;
+  toggle.setAttribute(
+    "aria-expanded",
+    String(!!document.querySelector(".region-preferences-dialog")),
+  );
+  toggle.setAttribute("aria-haspopup", "dialog");
+  toggle.setAttribute("aria-controls", "region-preferences-dialog");
+  toggle.setAttribute(
+    "aria-label",
+    adminText(
+      "Region sozlamalari",
+      "Региональные настройки",
+      "Regional preferences",
+    ),
+  );
+}
+function closeLanguageMenu() {
+  const menu = $("#language-menu");
+  if (menu) menu.hidden = true;
+  syncLanguageMenu();
+}
+async function setLanguage(language) {
+  if (bootstrapSessionReady) await bootstrapSessionReady;
+  const region = window.RegionPreferences;
+  if (!region || !supportedLocales.has(language)) return;
+  try {
+    await region.save({ ...region.state, language });
+  } catch (err) {
+    toast(err.message, "error");
+  }
+}
+async function openRegionPreferences() {
+  if (bootstrapSessionReady) await bootstrapSessionReady;
+  window.RegionPreferences?.open();
+}
+$("#language-toggle").onclick = openRegionPreferences;
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".language-control")) closeLanguageMenu();
+});
+$("#account-button").addEventListener("click", () => {
+  if (!me) {
+    location.hash = "login";
+    return;
+  }
+  if ($("#profile-dropdown")) closeProfileMenu();
+  else openProfileMenu();
+});
+document.body.addEventListener("click", (e) => {
+  const a = e.target.closest("[data-go]");
+  if (a) location.hash = a.dataset.go;
+});
+const profileRoot = $("#profile-menu-root");
+profileRoot.addEventListener("click", (e) => {
+  if (e.target.closest("[data-profile-close]")) {
+    closeProfileMenu();
+    return;
+  }
+  const action = e.target.closest("[data-action]");
+  if (action) {
+    e.preventDefault();
+    doAction(action);
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $("#profile-dropdown")) {
+    closeProfileMenu();
+    $("#account-button")?.focus();
+  }
+});
+document.addEventListener("click", (event) => {
+  if (!event.target.closest("[data-skip-to-content]")) return;
+  event.preventDefault();
+  app.focus();
+  app.scrollIntoView();
+});
+let historyRouteQueued = false;
+function scheduleHistoryRoute() {
+  if (historyRouteQueued) return;
+  historyRouteQueued = true;
+  requestAnimationFrame(() => {
+    historyRouteQueued = false;
+    closeProfileMenu();
+    const anchor = currentPageAnchor();
+    if (anchor && document.getElementById(anchor)) {
+      scrollToPageAnchor(anchor);
+      return;
+    }
+    navigate().then(() => localizeDOM());
+    refreshNotifications();
+  });
+}
+window.addEventListener("popstate", scheduleHistoryRoute);
+window.addEventListener("hashchange", scheduleHistoryRoute);
+document.addEventListener("submit", async (e) => {
+  if (e.target.id === "profile-form") {
+    e.preventDefault();
+    const d = Object.fromEntries(new FormData(e.target));
+    try {
+      const x = await api("/profile", {
+        method: "POST",
+        body: JSON.stringify(d),
+      });
+      me = x.user;
+      window.RegionPreferences?.apply(null, me);
+      locale = supportedLocales.has(me.language) ? me.language : locale;
+      localStorage.setItem(localeKey, locale);
+      document.documentElement.lang = locale;
+      document.documentElement.dir = locale === "ar" ? "rtl" : "ltr";
+      syncLanguageMenu();
+      syncSellItemButton();
+      syncProfileTrigger();
+      renderSupportWidget();
+      toast("Profil yangilandi");
+      if ($("#profile-dropdown")) openProfileMenu();
+      else await navigate();
+    } catch (x) {
+      toast(x.message, "error");
+    }
+  }
+});
 MarketUX.init();
 setupMarketSidebarToggle();
 
@@ -886,29 +5838,141 @@ window.MobileHeader?.init();
 window.MobileSite?.init();
 bootstrap();
 
-async function renderStripeTestAdmin(){
- if(!me){location.hash='login';return;}
- const data=await api('/admin/payments/stripe-test');
- app.innerHTML=`<section class="page ops-account">${pageTitle('Stripe',adminText('Sinov to‘lovlari va yetkazishdan keyingi hisob-kitob','Тестовые платежи и расчёты после доставки','Test payments and settlement after delivery'))}<div class="notice ${data.configured?'':'warn'}">${data.configured?'Stripe test configured · no real money.':'Stripe test credentials or webhook are not configured yet. Live payments remain disabled.'}</div><section class="panel"><h2>Settlement queue</h2><p class="help">Seller transfers are held until the order is completed. Refunds reverse existing test transfers before returning the test charge.</p><div class="actions"><button class="button-primary" data-stripe-process ${data.configured?'':'disabled'}>Process test queue</button><button class="button-secondary" data-stripe-refresh>Refresh</button></div>${data.jobs.length?data.jobs.map(job=>`<div class="order-line"><div class="order-head"><a href="#${job.kind==='topup_refund'?'topup-order/':'order/'}${encodeURIComponent(job.order_id)}">${esc(job.order_id)}</a><b>${esc(job.kind)} · ${esc(job.status)}</b></div>${job.error?`<p class="help">${esc(job.error)}</p>`:''}</div>`).join(''):'<p class="empty">No pending test settlements.</p>'}</section><section class="panel"><h2>Seller test Connect accounts</h2><a class="button-secondary" href="#stripe-test-connect">Open my seller test setup</a><p class="help">Link only an active test account controlled by this Stripe sandbox. No bank payout is enabled here.</p>${data.sellers.map(seller=>`<form class="order-line" data-stripe-seller="${esc(seller.user_id)}"><div class="field"><label>${esc(seller.shop_name)}</label><input name="account_id" placeholder="acct_…" value="${esc(seller.account_id)}" required pattern="acct_[A-Za-z0-9]+" ${seller.account_id?'readonly':''}></div><button class="button-secondary" ${data.configured?'':'disabled'}>Link test account</button></form>`).join('')}</section><section class="panel"><h2>Top Up test delivery</h2><p class="help">These actions simulate delivery only. They never call the supplier or send UC.</p>${data.topups.length?data.topups.map(order=>`<div class="order-line"><div class="order-head"><b>${esc(order.reference)} · ${esc(order.game_name)} × ${order.quantity}</b><span>${esc(order.status)}</span></div><div class="actions">${order.status==='paid_test'?`<button class="button-secondary" data-stripe-topup="${esc(order.id)}" data-choice="deliver">Simulate delivery</button>`:''}${['paid_test','delivered_test','completed'].includes(order.status)?`<button class="button-secondary" data-stripe-topup="${esc(order.id)}" data-choice="refund">Request test refund</button>`:''}</div></div>`).join(''):'<p class="empty">No test Top Up orders yet.</p>'}</section></section>`;
- app.querySelector('[data-stripe-refresh]').onclick=()=>renderStripeTestAdmin();
- app.querySelector('[data-stripe-process]').onclick=async event=>{event.currentTarget.disabled=true;try{await api('/admin/payments/stripe-test/process',{method:'POST',body:'{}'});await renderStripeTestAdmin()}catch(error){toast(error.message,'error');event.currentTarget.disabled=false}};
- app.querySelectorAll('[data-stripe-seller]').forEach(form=>form.onsubmit=async event=>{event.preventDefault();const button=form.querySelector('button');button.disabled=true;try{await api('/admin/payments/stripe-test/sellers/'+encodeURIComponent(form.dataset.stripeSeller),{method:'POST',body:JSON.stringify({account_id:new FormData(form).get('account_id')})});await renderStripeTestAdmin()}catch(error){toast(error.message,'error');button.disabled=false}});
- app.querySelectorAll('[data-stripe-topup]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{await api('/admin/payments/stripe-test/topups/'+encodeURIComponent(button.dataset.stripeTopup)+'/'+button.dataset.choice,{method:'POST',body:'{}'});await renderStripeTestAdmin()}catch(error){toast(error.message,'error');button.disabled=false}});
- window.OperationsUX?.enhance();
+async function renderStripeTestAdmin() {
+  if (!me) {
+    location.hash = "login";
+    return;
+  }
+  const data = await api("/admin/payments/stripe-test");
+  app.innerHTML = `<section class="page ops-account">${pageTitle("Stripe", adminText("Sinov to‘lovlari va yetkazishdan keyingi hisob-kitob", "Тестовые платежи и расчёты после доставки", "Test payments and settlement after delivery"))}<div class="notice ${data.configured ? "" : "warn"}">${data.configured ? "Stripe test configured · no real money." : "Stripe test credentials or webhook are not configured yet. Live payments remain disabled."}</div><section class="panel"><h2>Settlement queue</h2><p class="help">Seller transfers are held until the order is completed. Refunds reverse existing test transfers before returning the test charge.</p><div class="actions"><button class="button-primary" data-stripe-process ${data.configured ? "" : "disabled"}>Process test queue</button><button class="button-secondary" data-stripe-refresh>Refresh</button></div>${data.jobs.length ? data.jobs.map((job) => `<div class="order-line"><div class="order-head"><a href="#${job.kind === "topup_refund" ? "topup-order/" : "order/"}${encodeURIComponent(job.order_id)}">${esc(job.order_id)}</a><b>${esc(job.kind)} · ${esc(job.status)}</b></div>${job.error ? `<p class="help">${esc(job.error)}</p>` : ""}</div>`).join("") : '<p class="empty">No pending test settlements.</p>'}</section><section class="panel"><h2>Seller test Connect accounts</h2><a class="button-secondary" href="#stripe-test-connect">Open my seller test setup</a><p class="help">Link only an active test account controlled by this Stripe sandbox. No bank payout is enabled here.</p>${data.sellers.map((seller) => `<form class="order-line" data-stripe-seller="${esc(seller.user_id)}"><div class="field"><label>${esc(seller.shop_name)}</label><input name="account_id" placeholder="acct_…" value="${esc(seller.account_id)}" required pattern="acct_[A-Za-z0-9]+" ${seller.account_id ? "readonly" : ""}></div><button class="button-secondary" ${data.configured ? "" : "disabled"}>Link test account</button></form>`).join("")}</section><section class="panel"><h2>Top Up test delivery</h2><p class="help">These actions simulate delivery only. They never call the supplier or send UC.</p>${data.topups.length ? data.topups.map((order) => `<div class="order-line"><div class="order-head"><b>${esc(order.reference)} · ${esc(order.game_name)} × ${order.quantity}</b><span>${esc(order.status)}</span></div><div class="actions">${order.status === "paid_test" ? `<button class="button-secondary" data-stripe-topup="${esc(order.id)}" data-choice="deliver">Simulate delivery</button>` : ""}${["paid_test", "delivered_test", "completed"].includes(order.status) ? `<button class="button-secondary" data-stripe-topup="${esc(order.id)}" data-choice="refund">Request test refund</button>` : ""}</div></div>`).join("") : '<p class="empty">No test Top Up orders yet.</p>'}</section></section>`;
+  app.querySelector("[data-stripe-refresh]").onclick = () =>
+    renderStripeTestAdmin();
+  app.querySelector("[data-stripe-process]").onclick = async (event) => {
+    event.currentTarget.disabled = true;
+    try {
+      await api("/admin/payments/stripe-test/process", {
+        method: "POST",
+        body: "{}",
+      });
+      await renderStripeTestAdmin();
+    } catch (error) {
+      toast(error.message, "error");
+      event.currentTarget.disabled = false;
+    }
+  };
+  app.querySelectorAll("[data-stripe-seller]").forEach(
+    (form) =>
+      (form.onsubmit = async (event) => {
+        event.preventDefault();
+        const button = form.querySelector("button");
+        button.disabled = true;
+        try {
+          await api(
+            "/admin/payments/stripe-test/sellers/" +
+              encodeURIComponent(form.dataset.stripeSeller),
+            {
+              method: "POST",
+              body: JSON.stringify({
+                account_id: new FormData(form).get("account_id"),
+              }),
+            },
+          );
+          await renderStripeTestAdmin();
+        } catch (error) {
+          toast(error.message, "error");
+          button.disabled = false;
+        }
+      }),
+  );
+  app.querySelectorAll("[data-stripe-topup]").forEach(
+    (button) =>
+      (button.onclick = async () => {
+        button.disabled = true;
+        try {
+          await api(
+            "/admin/payments/stripe-test/topups/" +
+              encodeURIComponent(button.dataset.stripeTopup) +
+              "/" +
+              button.dataset.choice,
+            { method: "POST", body: "{}" },
+          );
+          await renderStripeTestAdmin();
+        } catch (error) {
+          toast(error.message, "error");
+          button.disabled = false;
+        }
+      }),
+  );
+  window.OperationsUX?.enhance();
 }
 
-async function renderStripeTestConnect(){
- if(!me){location.hash='login';return;}
- const data=await api('/seller/stripe-test/connect');
- app.innerHTML=`<section class="page ops-account">${pageTitle('Stripe · Seller setup','Test accounts and simulated payouts only.')}<section class="panel"><p class="notice warn">No real funds or bank payouts are enabled. Use Stripe sandbox test information only. Complete any Stripe agreement yourself.</p><p>${data.connected?esc(data.account_id)+' · '+(data.transfers_active?'Transfers active':'Onboarding required'):'No test Connect account linked yet.'}</p><button class="button-primary" data-stripe-onboard>${data.connected?'Continue test onboarding':'Set up test Connect account'}</button></section><section class="panel"><h2>Available test balance</h2>${data.balances.length?data.balances.map(balance=>`<div class="order-line"><b>${fmt(balance.amount,balance.currency.toUpperCase())}</b>${data.payouts_enabled&&balance.amount>0?`<button class="button-secondary" data-test-payout-amount="${balance.amount}" data-currency="${esc(balance.currency.toUpperCase())}">Simulate payout</button>`:''}</div>`).join(''):'<p class="empty">No available test balance yet. A completed test order and seller transfer must come first.</p>'}</section></section>`;
- app.querySelector('[data-stripe-onboard]').onclick=async event=>{const button=event.currentTarget;button.disabled=true;try{const result=await api('/seller/stripe-test/connect',{method:'POST',body:JSON.stringify({test_only:true})});location.assign(result.onboarding_url)}catch(error){toast(error.message,'error');button.disabled=false}};
- app.querySelectorAll('[data-test-payout-amount]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{const result=await api('/seller/stripe-test/payout',{method:'POST',body:JSON.stringify({amount_minor:Number(button.dataset.testPayoutAmount),currency:button.dataset.currency,request_key:crypto.randomUUID(),test_only:true})});toast('Stripe TEST payout · '+result.status);await renderStripeTestConnect()}catch(error){toast(error.message,'error');button.disabled=false}});
+async function renderStripeTestConnect() {
+  if (!me) {
+    location.hash = "login";
+    return;
+  }
+  const data = await api("/seller/stripe-test/connect");
+  app.innerHTML = `<section class="page ops-account">${pageTitle("Stripe · Seller setup", "Test accounts and simulated payouts only.")}<section class="panel"><p class="notice warn">No real funds or bank payouts are enabled. Use Stripe sandbox test information only. Complete any Stripe agreement yourself.</p><p>${data.connected ? esc(data.account_id) + " · " + (data.transfers_active ? "Transfers active" : "Onboarding required") : "No test Connect account linked yet."}</p><button class="button-primary" data-stripe-onboard>${data.connected ? "Continue test onboarding" : "Set up test Connect account"}</button></section><section class="panel"><h2>Available test balance</h2>${data.balances.length ? data.balances.map((balance) => `<div class="order-line"><b>${fmt(balance.amount, balance.currency.toUpperCase())}</b>${data.payouts_enabled && balance.amount > 0 ? `<button class="button-secondary" data-test-payout-amount="${balance.amount}" data-currency="${esc(balance.currency.toUpperCase())}">Simulate payout</button>` : ""}</div>`).join("") : '<p class="empty">No available test balance yet. A completed test order and seller transfer must come first.</p>'}</section></section>`;
+  app.querySelector("[data-stripe-onboard]").onclick = async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const result = await api("/seller/stripe-test/connect", {
+        method: "POST",
+        body: JSON.stringify({ test_only: true }),
+      });
+      location.assign(result.onboarding_url);
+    } catch (error) {
+      toast(error.message, "error");
+      button.disabled = false;
+    }
+  };
+  app.querySelectorAll("[data-test-payout-amount]").forEach(
+    (button) =>
+      (button.onclick = async () => {
+        button.disabled = true;
+        try {
+          const result = await api("/seller/stripe-test/payout", {
+            method: "POST",
+            body: JSON.stringify({
+              amount_minor: Number(button.dataset.testPayoutAmount),
+              currency: button.dataset.currency,
+              request_key: crypto.randomUUID(),
+              test_only: true,
+            }),
+          });
+          toast("Stripe TEST payout · " + result.status);
+          await renderStripeTestConnect();
+        } catch (error) {
+          toast(error.message, "error");
+          button.disabled = false;
+        }
+      }),
+  );
 }
 
 // Refresh the canonical identity after edits in another SentryLoot tab or bfcache return.
-async function refreshSharedAccountIdentity(){
- if(document.visibilityState!=='visible')return;
- try{const result=await api('/me');if(result.user?.id!==me?.id){await bootstrap();return}if(result.user){me=result.user;csrf=result.csrf||csrf;updateProfileAvatar(me.avatar_url);if($('#profile-dropdown')){const root=$('#profile-menu-root');root.innerHTML=profileMenuMarkup();void refreshProfileBonusBalance()}}}catch{}
+async function refreshSharedAccountIdentity() {
+  if (document.visibilityState !== "visible") return;
+  try {
+    const result = await api("/me");
+    if (result.user?.id !== me?.id) {
+      await bootstrap();
+      return;
+    }
+    if (result.user) {
+      me = result.user;
+      csrf = result.csrf || csrf;
+      updateProfileAvatar(me.avatar_url);
+      if ($("#profile-dropdown")) {
+        const root = $("#profile-menu-root");
+        root.innerHTML = profileMenuMarkup();
+        void refreshProfileBonusBalance();
+      }
+    }
+  } catch {}
 }
-document.addEventListener('visibilitychange',refreshSharedAccountIdentity);
-window.addEventListener('pageshow',event=>{if(event.persisted)void refreshSharedAccountIdentity()});
+document.addEventListener("visibilitychange", refreshSharedAccountIdentity);
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) void refreshSharedAccountIdentity();
+});

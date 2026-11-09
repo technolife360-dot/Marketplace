@@ -24,12 +24,12 @@ def metrics(samples, elapsed):
     times = sorted(sample['ms'] for sample in samples)
     percentile = lambda p: round(times[max(0, min(len(times)-1, int(len(times)*p+.999)-1))], 2)
     return {'requests': len(samples), 'seconds': round(elapsed, 3),
-            'max_response_bytes': max((sample.get('bytes', 0) for sample in samples), default=0),
-            'requests_per_second': round(len(samples)/elapsed, 2),
-            'failed': sum(sample['status'] != 200 for sample in samples),
-            'status_counts': dict(Counter(str(sample['status']) for sample in samples)),
-            'latency_ms': {'p50': round(statistics.median(times), 2),
-                           'p95': percentile(.95), 'p99': percentile(.99), 'max': round(max(times), 2)}}
+        'max_response_bytes': max((sample.get('bytes', 0) for sample in samples), default=0),
+        'requests_per_second': round(len(samples)/elapsed, 2),
+        'failed': sum(sample['status'] != 200 for sample in samples),
+        'status_counts': dict(Counter(str(sample['status']) for sample in samples)),
+        'latency_ms': {'p50': round(statistics.median(times), 2),
+            'p95': percentile(.95), 'p99': percentile(.99), 'max': round(max(times), 2)}}
 
 
 def ramp(worker, levels, requests, *, pause=.2):
@@ -55,7 +55,7 @@ def ramp(worker, levels, requests, *, pause=.2):
 def local(registered_users, soak_seconds):
     # Set these before app/test imports. Never fall back to developer credentials.
     os.environ.update(SENTRYLOOT_ENV_FILE='/dev/null', DATABASE_URL='',
-                      MARKETPLACE_MODE='development', PAYMENT_PROVIDER='sandbox', EMAIL_PROVIDER='disabled')
+        MARKETPLACE_MODE='development', PAYMENT_PROVIDER='sandbox', EMAIL_PROVIDER='disabled')
     import app
     from tests.test_order_history import OrderHistory
     fixture = OrderHistory()
@@ -70,7 +70,7 @@ def local(registered_users, soak_seconds):
             SELECT 1 UNION ALL SELECT n+1 FROM numbers WHERE n<?
         ) INSERT INTO users(id,email,password_hash,display_name,email_verified)
             SELECT 'capacity_user_'||n,'capacity_'||n||'@example.invalid',
-                   'unused','Synthetic capacity user',1 FROM numbers''', (registered_users-4,))
+                'unused','Synthetic capacity user',1 FROM numbers''', (registered_users-4,))
         fixture.db.execute('COMMIT')
         seeded_users = fixture.db.execute('SELECT COUNT(*) n FROM users').fetchone()['n']
         cookies = {'purchases': [], 'sales': []}
@@ -89,8 +89,8 @@ def local(registered_users, soak_seconds):
         thread.start()
         base = 'http://127.0.0.1:'+str(server.server_address[1])
         paths = ['/api/me', '/api/listings?limit=12',
-                 '/api/orders?paged=1&role=purchases&limit=20',
-                 '/api/orders?paged=1&role=sales&limit=20', '/api/categories', '/api/catalogue/facets']
+                '/api/orders?paged=1&role=purchases&limit=20',
+                '/api/orders?paged=1&role=sales&limit=20', '/api/categories', '/api/catalogue/facets']
 
         def request(i):
             path = paths[i % len(paths)]
@@ -134,7 +134,7 @@ def local(registered_users, soak_seconds):
             with ThreadPoolExecutor(max_workers=16) as executor:
                 samples=[sample for group in executor.map(continuous,range(16)) for sample in group]
             soak={'concurrency':16,'target_seconds':soak_seconds,
-                  'stopped_early':stop.is_set(),**metrics(samples,time.perf_counter()-started)}
+                'stopped_early':stop.is_set(),**metrics(samples,time.perf_counter()-started)}
             print(json.dumps({'soak':soak}),flush=True)
         server.shutdown(); server.server_close(); thread.join(timeout=3); server = None
 
@@ -143,7 +143,7 @@ def local(registered_users, soak_seconds):
         for i in range(8):
             uid = 'race_buyer_'+str(i)
             fixture.db.execute('INSERT INTO users(id,email,password_hash,display_name,email_verified) VALUES(?,?,?,?,1)',
-                               (uid, uid+'@example.invalid', 'unused', 'Synthetic buyer'))
+                (uid, uid+'@example.invalid', 'unused', 'Synthetic buyer'))
             fixture.db.execute('INSERT INTO carts(user_id,listing_id,quantity) VALUES(?,?,1)', (uid, fixture.listing))
             buyers.append(uid)
         barrier = threading.Barrier(8)

@@ -1096,10 +1096,7 @@
                 "ru": "Оплата кредитной или дебетовой картой через Stripe Checkout.",
                 "en": "Use a credit or debit card through Stripe Checkout."
               },
-              "brands": [
-                "Visa",
-                "Mastercard"
-              ]
+              "brands": ["Visa", "Mastercard"]
             },
             {
               "icon": "device",
@@ -1113,9 +1110,7 @@
                 "ru": "Оплата картой из Wallet на совместимом устройстве Apple.",
                 "en": "Use a card saved in Wallet on a compatible Apple device."
               },
-              "brands": [
-                "Apple Pay"
-              ]
+              "brands": ["Apple Pay"]
             },
             {
               "icon": "google",
@@ -1129,9 +1124,7 @@
                 "ru": "Оплата сохранённой картой Google на совместимом устройстве или в браузере.",
                 "en": "Use a saved card on a compatible device or browser."
               },
-              "brands": [
-                "Google Pay"
-              ]
+              "brands": ["Google Pay"]
             },
             {
               "icon": "bank",
@@ -1145,9 +1138,7 @@
                 "ru": "Подтвердите платёж в MYR через интернет-банк Малайзии с FPX.",
                 "en": "Confirm a MYR payment with a Malaysian bank through FPX."
               },
-              "brands": [
-                "FPX"
-              ]
+              "brands": ["FPX"]
             },
             {
               "icon": "wallet",
@@ -1161,9 +1152,7 @@
                 "ru": "GrabPay доступен для подходящих местных платежей в Малайзии и Сингапуре.",
                 "en": "GrabPay is available for eligible domestic payments in Malaysia and Singapore."
               },
-              "brands": [
-                "GrabPay"
-              ]
+              "brands": ["GrabPay"]
             },
             {
               "icon": "link",
@@ -1177,9 +1166,7 @@
                 "ru": "Быстрая оплата с сохранёнными данными в Link.",
                 "en": "Check out faster with your saved payment details in Link."
               },
-              "brands": [
-                "Link"
-              ]
+              "brands": ["Link"]
             }
           ]
         },

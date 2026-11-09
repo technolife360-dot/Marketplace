@@ -14,7 +14,5 @@
       "schedule": "7 3 * * *"
     }
   ],
-  "regions": [
-    "icn1"
-  ]
+  "regions": ["icn1"]
 }

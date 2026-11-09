@@ -60,7 +60,7 @@ def collect_findings(connection):
             FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
             JOIN pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname='public' AND c.relkind IN ('r','p')
-              AND a.attnum>0 AND NOT a.attisdropped""").fetchall()
+            AND a.attnum>0 AND NOT a.attisdropped""").fetchall()
         actual_columns = {}
         for row in columns:
             actual_columns.setdefault(row['table_name'], set()).add(row['column_name'])

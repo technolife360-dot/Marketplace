@@ -1,99 +1,493 @@
 /* Verified purchase feedback; all writes use the app's session and CSRF API. */
-window.ReviewHub=(()=>{
- const t=(uz,ru,en)=>adminText(uz,ru,en),s=v=>esc(v),enc=encodeURIComponent;
- const endpoint=(kind,id)=>kind==='topup'?'/top-up/reviews'+(id?'/'+enc(id):''):'/reviews'+(id?'/'+enc(id):'');
- const stars=n=>`<span class="pr-stars" aria-label="${Number(n)} / 5">${'★'.repeat(Number(n))}${'☆'.repeat(5-Number(n))}</span>`;
- const formMarkup=(purchase,kind)=>`<form class="pr-editor" data-pr-editor data-kind="${kind}" data-purchase="${s(purchase.purchase_id)}" data-review="${s(purchase.review_id||'')}"><h3>${purchase.review_id?t('Sharhni tahrirlash','Редактировать отзыв','Edit review'):t('Xaridingizni baholang','Оцените покупку','Rate your purchase')}</h3><small>${s(purchase.reference||'')} · ${s(purchase.label||'')}</small><label>${t('Baho','Оценка','Rating')}<select name="rating" required><option value="">${t('Bahoni tanlang','Выберите оценку','Choose a rating')}</option>${[5,4,3,2,1].map(n=>`<option value="${n}" ${Number(purchase.rating)===n?'selected':''}>${n} ${'★'.repeat(n)}</option>`).join('')}</select></label><label>${t('Izohingiz','Ваш отзыв','Your review')}<textarea name="body" required minlength="5" maxlength="1500" rows="3">${s(purchase.body||'')}</textarea></label><label>${t('Sharh tili','Язык отзыва','Review language')}<select name="language">${[['uz','O‘zbekcha'],['ru','Русский'],['en','English']].map(([v,label])=>`<option value="${v}" ${(purchase.language||document.documentElement.lang)===v?'selected':''}>${label}</option>`).join('')}</select></label><p class="pr-error" role="alert" hidden></p><div class="pr-actions"><button type="submit">${t('Saqlash','Сохранить','Save review')}</button><button type="button" data-pr-cancel>${t('Bekor qilish','Отмена','Cancel')}</button></div></form>`;
- function bindEditor(form,refresh){
-  form.querySelector('[data-pr-cancel]').onclick=()=>form.remove();
-  form.onsubmit=async event=>{event.preventDefault();if(!form.reportValidity())return;const button=form.querySelector('[type=submit]'),error=form.querySelector('.pr-error');button.disabled=true;error.hidden=true;const data=new FormData(form),kind=form.dataset.kind,id=form.dataset.review;
-   try{await api(endpoint(kind,id),{method:id?'PATCH':'POST',body:JSON.stringify({rating:Number(data.get('rating')),body:data.get('body'),language:data.get('language'),[kind==='topup'?'order_id':'item_id']:form.dataset.purchase})});toast(t('Sharh saqlandi','Отзыв сохранён','Review saved'));await refresh()}
-   catch(e){error.textContent=e.message;error.hidden=false;button.disabled=false}
-  };
- }
- function insertEditor(host,purchase,kind,refresh){host.querySelector('[data-pr-editor]')?.remove();host.insertAdjacentHTML('afterbegin',formMarkup(purchase,kind));const form=host.querySelector('[data-pr-editor]');bindEditor(form,refresh);form.scrollIntoView({block:'nearest'});}
- function mobileListingReviews(section,result){
-  if(!window.MobileSite?.isMobile())return;
-  const productPage=section.closest('.listing-redesign,.topup-product-page');if(!productPage)return;
-  section.classList.add('sim-buyer-reviews');const heading=section.querySelector('.pr-heading h2');if(heading)heading.textContent=t('Xaridorlar sharhlari','Отзывы покупателей','Buyer reviews');
-  if(productPage.classList.contains('topup-product-page')){
-    let open=productPage.querySelector('.mobile-topup-reviews-open');if(!open){open=document.createElement('button');open.type='button';open.className='mobile-topup-reviews-open';(productPage.querySelector('.mobile-topup-product-heading>div')||section.parentElement).append(open);}
-    open.textContent=t('Xaridorlar sharhlari →','Отзывы покупателей →','Buyer reviews →');open.onclick=()=>window.MobileSite.topupReviews();
+window.ReviewHub = (() => {
+  const t = (uz, ru, en) => adminText(uz, ru, en),
+    s = (v) => esc(v),
+    enc = encodeURIComponent;
+  const endpoint = (kind, id) =>
+    kind === "topup"
+      ? "/top-up/reviews" + (id ? "/" + enc(id) : "")
+      : "/reviews" + (id ? "/" + enc(id) : "");
+  const stars = (n) =>
+    `<span class="pr-stars" aria-label="${Number(n)} / 5">${"★".repeat(Number(n))}${"☆".repeat(5 - Number(n))}</span>`;
+  const formMarkup = (purchase, kind) =>
+    `<form class="pr-editor" data-pr-editor data-kind="${kind}" data-purchase="${s(purchase.purchase_id)}" data-review="${s(purchase.review_id || "")}"><h3>${purchase.review_id ? t("Sharhni tahrirlash", "Редактировать отзыв", "Edit review") : t("Xaridingizni baholang", "Оцените покупку", "Rate your purchase")}</h3><small>${s(purchase.reference || "")} · ${s(purchase.label || "")}</small><label>${t("Baho", "Оценка", "Rating")}<select name="rating" required><option value="">${t("Bahoni tanlang", "Выберите оценку", "Choose a rating")}</option>${[5, 4, 3, 2, 1].map((n) => `<option value="${n}" ${Number(purchase.rating) === n ? "selected" : ""}>${n} ${"★".repeat(n)}</option>`).join("")}</select></label><label>${t("Izohingiz", "Ваш отзыв", "Your review")}<textarea name="body" required minlength="5" maxlength="1500" rows="3">${s(purchase.body || "")}</textarea></label><label>${t("Sharh tili", "Язык отзыва", "Review language")}<select name="language">${[
+      ["uz", "O‘zbekcha"],
+      ["ru", "Русский"],
+      ["en", "English"],
+    ]
+      .map(
+        ([v, label]) =>
+          `<option value="${v}" ${(purchase.language || document.documentElement.lang) === v ? "selected" : ""}>${label}</option>`,
+      )
+      .join(
+        "",
+      )}</select></label><p class="pr-error" role="alert" hidden></p><div class="pr-actions"><button type="submit">${t("Saqlash", "Сохранить", "Save review")}</button><button type="button" data-pr-cancel>${t("Bekor qilish", "Отмена", "Cancel")}</button></div></form>`;
+  function bindEditor(form, refresh) {
+    form.querySelector("[data-pr-cancel]").onclick = () => form.remove();
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      const button = form.querySelector("[type=submit]"),
+        error = form.querySelector(".pr-error");
+      button.disabled = true;
+      error.hidden = true;
+      const data = new FormData(form),
+        kind = form.dataset.kind,
+        id = form.dataset.review;
+      try {
+        await api(endpoint(kind, id), {
+          method: id ? "PATCH" : "POST",
+          body: JSON.stringify({
+            rating: Number(data.get("rating")),
+            body: data.get("body"),
+            language: data.get("language"),
+            [kind === "topup" ? "order_id" : "item_id"]: form.dataset.purchase,
+          }),
+        });
+        toast(t("Sharh saqlandi", "Отзыв сохранён", "Review saved"));
+        await refresh();
+      } catch (e) {
+        error.textContent = e.message;
+        error.hidden = false;
+        button.disabled = false;
+      }
+    };
   }
-  let overview=section.querySelector('.pr-overview');
-  if(!overview){overview=document.createElement('div');overview.className='pr-overview';section.querySelector('.pr-heading').after(overview);}
-  let score=overview.querySelector('.pr-score');if(!score){score=document.createElement('div');score.className='pr-score';overview.prepend(score);}
-  const count=Number(result.count)||0,rating=count?Number(result.rating):null;
-  score.innerHTML=`<strong>${rating===null?'—':rating.toFixed(1)}</strong><div>${rating===null?'':stars(Math.round(rating))}<p>${count} ${t('ta tasdiqlangan sharh','подтверждённых отзывов','verified reviews')}</p></div>`;
-  const filters=overview.querySelector('.pr-language-filter');if(filters)filters.prepend(filters.querySelector('[data-pr-language=""]'));
-  const gameLink=productPage.querySelector('.listing-breadcrumbs a:nth-of-type(2)'),gameSlug=gameLink?new URL(gameLink.href,location.href).searchParams.get('game'):location.pathname.split('/')[2]||'';
-  const game=typeof marketGameLinks==='undefined'?null:marketGameLinks.find(g=>g[0]===gameSlug);
-  const product=productPage.querySelector('.listing-item-meta')?.textContent||productPage.querySelector('.mobile-topup-product-heading h1')?.textContent||gameLink?.textContent||'';
-  for(const review of result.items){
-    const card=section.querySelector(`[data-pr-id="${CSS.escape(String(review.id))}"]`);if(!card)continue;
-    const main=card.querySelector('.pr-review-main'),avatar=card.querySelector('.pr-avatar'),name=card.querySelector('.pr-person b'),rating=card.querySelector('.pr-stars'),date=card.querySelector('time');
-    const header=document.createElement('header');header.className='sim-review-person';
-    const person=document.createElement('div');person.className='sim-review-identity';
-    const label=document.createElement('div');label.className='sim-review-name';if(name)label.append(name);
-    if(review.verified_purchase){label.insertAdjacentHTML('beforeend','<svg class="sim-review-verified" viewBox="0 0 24 24" aria-label="Verified purchase"><path d="m12 2 8 3v6c0 5-5 9-8 11-3-2-8-6-8-11V5l8-3Z"/><path d="m8 11 3 3 5-5"/></svg>');}
-    const meta=document.createElement('small');meta.textContent=(review.verified_purchase?t('Tasdiqlangan xarid','Подтверждённая покупка','Verified purchase'):t('Xarid sharhi','Отзыв о покупке','Purchase review'))+' · '+(date?.textContent||'');person.append(label,meta);if(avatar)header.append(avatar);header.append(person);if(rating)header.append(rating);
-    main.querySelector('header')?.remove();date?.remove();main.querySelector('.pr-purchased')?.remove();card.prepend(header);
-    if(game?.[2]){const context=document.createElement('div');context.className='sim-review-product';context.innerHTML=`<img src="${s(game[2])}" alt="" width="32" height="32" loading="lazy"><span>${s(product)}</span>`;main.querySelector('.pr-body')?.after(context);}
+  function insertEditor(host, purchase, kind, refresh) {
+    host.querySelector("[data-pr-editor]")?.remove();
+    host.insertAdjacentHTML("afterbegin", formMarkup(purchase, kind));
+    const form = host.querySelector("[data-pr-editor]");
+    bindEditor(form, refresh);
+    form.scrollIntoView({ block: "nearest" });
   }
- }
- async function mount(host,kind,target){
-  if(!host||!host.isConnected)return;
-  const section=document.createElement('section');section.className='purchase-reviews';section.id='purchase-reviews-'+kind+'-'+target;section.setAttribute('aria-label',t('Xaridorlar sharhlari','Отзывы покупателей','Customer reviews'));host.append(section);
-  let page=1,request=0,language='';
-  async function draw(){const token=++request;try{
-   const result=await api('/review-hub/'+kind+'/'+enc(target)+'?page='+page+(language?'&language='+enc(language):''));if(!section.isConnected||token!==request)return;
-   const summary=result.count?`${Number(result.rating).toFixed(1)} / 5 · ${result.count} ${result.count===1?t('sharh','отзыв','review'):t('sharh','отзывов','reviews')}`:t('Hali sharh yo‘q','Отзывов пока нет','No reviews yet');
-   const jump=app.querySelector('[data-topup-review-summary]');if(jump){jump.innerHTML=(result.count?stars(Math.round(result.rating))+' ':'')+s(summary);jump.onclick=e=>{e.preventDefault();if(window.MobileSite?.isMobile()&&host.closest('.topup-product-page')){window.MobileSite.topupReviews();return;}section.scrollIntoView({block:'start',behavior:'smooth'})};}
-   const lang=document.documentElement.lang||'en';
-   const flag=code=>/^[A-Z]{2}$/.test(code||'')?[...code].map(c=>String.fromCodePoint(127397+c.charCodeAt(0))).join(''):'';
-   section.innerHTML=`<header class="pr-heading"><h2>${t('Sharhlar','Отзывы','Reviews')}</h2></header>
-    <div class="pr-overview"><div class="pr-score"><div><strong>${result.count?Number(result.rating).toFixed(1):'—'}</strong>${result.count?`<span class="pr-star-meter" aria-hidden="true"><span>★★★★★</span><span style="width:${Number(result.rating)/5*100}%">★★★★★</span></span>`:''}</div><p>${result.count?t(`${result.count} ta haqiqiy sharh asosida`,`На основе ${result.count} отзывов`,`Based on ${result.count} ${result.count===1?'review':'reviews'}`):t('Hali sharh yo‘q','Отзывов пока нет','No reviews yet')}</p></div><div class="pr-language-filter" role="group" aria-label="${t('Sharh tili','Язык отзывов','Review language')}"><button type="button" data-pr-language="${s(lang)}" aria-pressed="${language===lang}">${t('Joriy til','Текущий язык','Current language')}</button><button type="button" data-pr-language="" aria-pressed="${!language}">${t('Barcha tillar','Все языки','All languages')}</button></div></div>
-    <div class="pr-write-host"></div>${result.eligible.length?`<div class="pr-purchases">${result.eligible.map((p,i)=>`<div><span>${s(p.reference)} · ${s(p.label||[p.amount,p.currency].join(' '))}</span>${p.hidden?`<small>${t('Moderator tomonidan yashirilgan','Скрыт модератором','Hidden by a moderator')}</small>`:`<button type="button" data-pr-write="${i}">${p.review_id?t('Tahrirlash','Изменить','Edit review'):t('Sharh yozish','Оставить отзыв','Write a review')}</button>`}</div>`).join('')}</div>`:''}
-    <div class="pr-list">${result.items.map(r=>`<article class="pr-review pr-review-detailed" data-pr-id="${s(r.id)}">${marketAvatarMarkup(r.reviewer_name,r.avatar_url,'pr-avatar')}<div class="pr-review-main"><header><div class="pr-person"><b>${s(r.reviewer_name)}</b>${r.country_code?`<span class="pr-country" aria-label="${s(r.country_code)}">${flag(r.country_code)}</span>`:''}${r.language?`<span class="pr-language">${s(r.language.toUpperCase())}</span>`:''}</div><button type="button" class="pr-helpful" data-pr-helpful aria-pressed="${r.helpful}" ${r.can_edit?'disabled':''} aria-label="${t('Foydali sharh','Полезный отзыв','Helpful review')}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true"><path d="M7 10H3v11h4m0-11 5-8 1 1v6h5a3 3 0 0 1 3 4l-2 6a3 3 0 0 1-3 2H7V10Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>${r.helpful_count?`<span>${r.helpful_count}</span>`:''}</button></header>${stars(r.rating)}<time>${parseServerDate(r.created_at).toLocaleDateString(localeTag(),{year:'numeric',month:'short',day:'numeric'})}</time><div class="pr-purchased"><span aria-hidden="true"><svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M4 7h12l1 10H3L4 7Zm3 0V5a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.5"/></svg></span><small>${t('Xarid qilingan','Куплено','Purchased')}</small><b>${s(r.package_name||'')}</b></div><p class="pr-body">${s(r.body)}</p>${r.reply?`<div class="pr-reply"><b>${t('Sotuvchi javobi','Ответ продавца','Seller response')}</b><p>${s(r.reply)}</p></div>`:''}<div class="pr-actions">${r.can_reply?`<button type="button" data-pr-reply>${t('Javob yozish','Ответить','Reply')}</button>`:''}${r.can_report?`<button type="button" data-pr-report>${t('Shikoyat qilish','Пожаловаться','Report')}</button>`:''}</div><div class="pr-action-host"></div></div></article>`).join('')||`<p class="pr-empty">${language?t('Bu tilda hali sharh yo‘q. Barcha tillarni tanlang.','На этом языке пока нет отзывов. Выберите все языки.','No reviews in this language yet. Try all languages.'):t('Haqiqiy yakunlangan xaridlar sharhlari shu yerda chiqadi.','Здесь появятся отзывы о завершённых покупках.','Reviews from completed purchases will appear here.')}</p>`}</div>${page>1||result.has_more?`<nav class="pr-pagination" aria-label="${t('Sharh sahifalari','Страницы отзывов','Review pages')}"><button type="button" data-pr-page="${page-1}" ${page===1?'disabled':''}>←</button><span>${page}</span><button type="button" data-pr-page="${page+1}" ${!result.has_more?'disabled':''}>→</button></nav>`:''}`;
-   if(host.closest('.listing-redesign')){
-    section.querySelector('.pr-heading').innerHTML=`<div><h2>${t('Xaridorlar sharhlari','Отзывы покупателей','Buyer reviews')}<span class="pr-count-badge">${Number(result.count)||0}</span></h2><p>${t('Faqat yakunlangan xaridlardan keyingi fikrlar.','Отзывы только после завершённых покупок.','Feedback from completed purchases.')}</p></div>`;
-    if(!result.count&&!language&&!window.MobileSite?.isMobile()){section.querySelector('.pr-overview').remove();section.querySelector('.pr-list').innerHTML=`<div class="pr-empty-detail"><span class="pr-empty-symbol" aria-hidden="true">${icon('star')}</span><div><h3>${t('Hozircha sharh yo‘q','Пока нет отзывов','No reviews yet')}</h3><p>${t('Ushbu mahsulotni xarid qilganlar o‘z fikrlarini shu yerda qoldirishi mumkin.','После покупки этого товара покупатели смогут оставить здесь свой отзыв.','Buyers can share their experience here after completing a purchase.')}</p></div></div>`;}
-   }
-   mobileListingReviews(section,result);
-   section.querySelectorAll('[data-pr-language]').forEach(b=>b.onclick=()=>{language=b.dataset.prLanguage;page=1;draw()});
-   section.querySelectorAll('[data-pr-helpful]').forEach(b=>b.onclick=async()=>{if(!me){toast(t('Ovoz berish uchun hisobga kiring.','Войдите, чтобы проголосовать.','Sign in to mark a review as helpful.'));return}b.disabled=true;try{await api(endpoint(kind,b.closest('[data-pr-id]').dataset.prId)+'/helpful',{method:b.getAttribute('aria-pressed')==='true'?'DELETE':'POST'});await draw()}catch(e){toast(e.message,'error');b.disabled=false}});
-   section.querySelectorAll('[data-pr-write]').forEach(b=>b.onclick=()=>insertEditor(section.querySelector('.pr-write-host'),result.eligible[Number(b.dataset.prWrite)],kind,draw));
-   section.querySelectorAll('[data-pr-page]').forEach(b=>b.onclick=()=>{page=Number(b.dataset.prPage);draw()});
-   section.querySelectorAll('[data-pr-reply],[data-pr-report]').forEach(button=>button.onclick=()=>{
-    const card=button.closest('[data-pr-id]'),reply=button.hasAttribute('data-pr-reply'),host=card.querySelector('.pr-action-host');
-    host.innerHTML=`<form class="pr-action-form"><label>${reply?t('Javob','Ответ','Reply'):t('Shikoyat sababi','Причина жалобы','Reason for reporting')}<textarea name="body" required minlength="${reply?2:5}" maxlength="${reply?1500:1000}" rows="3"></textarea></label><p class="pr-error" role="alert" hidden></p><div class="pr-actions"><button type="submit">${t('Yuborish','Отправить','Submit')}</button><button type="button" data-cancel>${t('Bekor qilish','Отмена','Cancel')}</button></div></form>`;
-    const f=host.querySelector('form');f.querySelector('[data-cancel]').onclick=()=>host.replaceChildren();f.onsubmit=async e=>{e.preventDefault();if(!f.reportValidity())return;const submit=f.querySelector('[type=submit]');submit.disabled=true;try{await api(endpoint(kind,card.dataset.prId)+(reply?'/reply':'/report'),{method:'POST',body:JSON.stringify({[reply?'body':'reason']:new FormData(f).get('body')})});if(reply)await draw();else{host.replaceChildren();toast(t('Shikoyat moderatorga yuborildi','Жалоба отправлена модератору','Report sent to a moderator'))}}catch(err){const error=f.querySelector('.pr-error');error.textContent=err.message;error.hidden=false;submit.disabled=false}};
-   });
-  }catch(error){if(!section.isConnected)return;section.innerHTML=`<p class="pr-error">${s(error.message)}</p><button type="button" data-pr-retry>${t('Qayta urinish','Повторить','Try again')}</button>`;section.querySelector('button').onclick=draw}}
-  await draw();
- }
- async function mine(){if(!me){location.hash='login';return}const items=await api('/review-hub/mine');app.innerHTML=`<section class="page pr-mine">${pageTitle(t('Sharhlarim','Мои отзывы','My reviews'),t('Yakunlangan xaridlaringizni baholang yoki sharhingizni tahrirlang.','Оцените завершённые покупки или измените свой отзыв.','Rate completed purchases or edit your feedback.'))}<div class="pr-write-host"></div><div class="pr-purchases">${items.map((p,i)=>`<article><div><a href="${p.kind==='topup'?'/top-up/':'/listing/'}${enc(p.target)}">${s(p.label)}</a><small>${s(p.reference)}</small>${p.rating?stars(p.rating):''}${p.body?`<p class="pr-body">${s(p.body)}</p>`:''}</div>${p.hidden?`<span>${t('Moderator tomonidan yashirilgan','Скрыт модератором','Hidden by a moderator')}</span>`:`<button type="button" data-pr-write="${i}">${p.review_id?t('Tahrirlash','Изменить','Edit review'):t('Sharh yozish','Оставить отзыв','Write a review')}</button>`}</article>`).join('')||`<p class="pr-empty">${t('Yakunlangan xariddan keyin shu yerda baho qoldirishingiz mumkin.','После завершения покупки здесь можно оставить отзыв.','Your completed purchases will appear here for review.')}</p>`}</div></section>`;app.querySelectorAll('[data-pr-write]').forEach(b=>b.onclick=()=>{const p=items[Number(b.dataset.prWrite)];insertEditor(app.querySelector('.pr-write-host'),p,p.kind,mine)})}
- async function moderate(){if(!me?.is_admin){app.innerHTML=`<section class="page"><p>${t('Administrator ruxsati kerak.','Нужны права администратора.','Administrator access required.')}</p></section>`;return}const rows=await api('/admin/review-reports');app.innerHTML=`<section class="page">${pageTitle(t('Sharh shikoyatlari','Жалобы на отзывы','Review reports'),' ',``)}<div class="pr-moderation">${rows.map(r=>`<article class="purchase-reviews"><b>${s(r.reporter_name)}</b><p>${s(r.reason)}</p><blockquote class="pr-body">${s(r.review?.body||'')}</blockquote><form data-report="${s(r.id)}"><label>${t('Moderator izohi','Комментарий модератора','Moderator note')}<textarea name="note" required minlength="5" maxlength="1000"></textarea></label><div class="pr-actions"><button name="action" value="dismiss">${t('Shikoyatni yopish','Отклонить жалобу','Dismiss report')}</button><button name="action" value="remove">${t('Sharhni yashirish','Скрыть отзыв','Hide review')}</button></div><p class="pr-error" hidden></p></form></article>`).join('')||`<p>${t('Ochiq shikoyat yo‘q','Открытых жалоб нет','No open review reports')}</p>`}</div></section>`;app.querySelectorAll('form[data-report]').forEach(f=>f.onsubmit=async e=>{e.preventDefault();if(!f.reportValidity())return;const action=e.submitter.value;e.submitter.disabled=true;try{await api('/admin/review-reports/'+enc(f.dataset.report),{method:'POST',body:JSON.stringify({action,note:new FormData(f).get('note')})});await moderate()}catch(err){const el=f.querySelector('.pr-error');el.hidden=false;el.textContent=err.message;e.submitter.disabled=false}})}
- async function home(host){
-  if(!host?.isConnected)return;
-  const heading=(controls=true)=>`<div class="home-reviews-heading"><h2>${t('Xaridorlar sharhlari','Отзывы покупателей','Buyer reviews')}<span data-home-review-score></span></h2>${controls?`<div class="home-review-arrows"><button type="button" data-review-prev aria-label="${t('Oldingi sharhlar','Предыдущие отзывы','Previous reviews')}">←</button><button type="button" data-review-next aria-label="${t('Keyingi sharhlar','Следующие отзывы','Next reviews')}">→</button></div>`:''}</div>`;
-  host.className='home-buyer-reviews';host.setAttribute('aria-label',t('Xaridorlar sharhlari','Отзывы покупателей','Buyer reviews'));
-  host.innerHTML=heading(false)+`<p class="home-review-empty" role="status">${t('Sharhlar yuklanmoqda…','Загрузка отзывов…','Loading reviews…')}</p>`;
-  try{
-   const result=await api('/review-hub/home');if(!host.isConnected)return;
-   host.setAttribute('data-empty',String(!result.items.length));
-   if(!result.items.length){host.innerHTML=heading(false)+`<p class="home-review-empty">${t('Hozircha sharh yo‘q. Yakunlangan xaridlar haqidagi fikrlar shu yerda chiqadi.','Пока нет отзывов. Здесь появятся отзывы о завершённых покупках.','No reviews yet. Feedback from completed purchases will appear here.')}</p>`;return;}
-   const privateNotice=result.items.some(r=>r.private_preview)
-    ? `<p class="home-review-empty">${t('Test xaridlaringiz sharhlari · faqat sizga ko‘rinadi','Отзывы о ваших тестовых покупках · видны только вам','Your test purchase reviews · only visible to you')}</p>`
-    : '';
-   host.innerHTML=heading()+privateNotice+`<div class="home-review-rail" tabindex="0" aria-label="${t('Xaridorlar sharhlari','Отзывы покупателей','Buyer reviews')}">${result.items.map((r,index)=>`<article class="home-review-card"><header class="home-review-person">${marketAvatarMarkup(r.reviewer_name,r.avatar_url,'home-review-avatar')}<div><b>${s(r.reviewer_name)}${!r.test_only?`<span class="mobile-home-review-check" aria-hidden="true">${icon('shield')}</span>`:''}</b><time datetime="${s(r.created_at)}">${parseServerDate(r.created_at).toLocaleDateString(localeTag(),{month:'short',day:'numeric'})}</time><small class="mobile-home-review-meta">${r.test_only?t('Xarid','Покупка','Purchase'):t('Tasdiqlangan xarid','Подтверждённая покупка','Verified purchase')} · ${parseServerDate(r.created_at).toLocaleDateString(localeTag(),{year:'numeric',month:'short',day:'numeric'})}</small></div>${stars(r.rating)}</header><div class="home-review-copy"><p class="home-review-body" data-user-content>${s(r.body)}</p><button type="button" class="home-review-more" data-review-open="${index}">${t('To‘liq o‘qish','Читать полностью','View more')}</button></div><div class="home-review-product">${r.game_image_url?`<img src="${s(r.game_image_url)}" alt="${s(r.game_name||'')}" width="24" height="24" loading="lazy" decoding="async">`:`<span class="home-review-game-initials" aria-hidden="true">${s((r.game_name||'?').slice(0,2))}</span>`}<span data-user-content title="${s(r.product_title)}">${s(r.product_title)}</span><span class="mobile-home-review-product-name" title="${s(r.product_title)}">${s(r.game_name||r.product_title)}</span><span class="home-review-badge ${r.test_only?'is-test':''}">${r.test_only?t('Test sharhi','Тестовый отзыв','Test review'):t('Tasdiqlangan','Подтверждено','Verified')}</span></div></article>`).join('')}</div>`+(!result.items.length?`<p class="home-review-empty">${t('Hozircha sharh yo‘q.','Отзывов пока нет.','No reviews yet.')}</p>`:'');
-   if(result.count)host.querySelector('[data-home-review-score]').innerHTML=`${icon('star')} ${Number(result.rating).toFixed(1)} <small>(${Number(result.count)})</small>`;
-   const rail=host.querySelector('.home-review-rail'),prev=host.querySelector('[data-review-prev]'),next=host.querySelector('[data-review-next]');
-   const sync=()=>{const overflow=rail.scrollWidth>rail.clientWidth+2;prev.hidden=next.hidden=!overflow;prev.disabled=rail.scrollLeft<2;next.disabled=rail.scrollLeft+rail.clientWidth>=rail.scrollWidth-2;};
-   prev.onclick=()=>rail.scrollBy({left:-rail.clientWidth,behavior:'smooth'});next.onclick=()=>rail.scrollBy({left:rail.clientWidth,behavior:'smooth'});rail.addEventListener('scroll',sync,{passive:true});
-   const observer=new ResizeObserver(()=>{if(!host.isConnected){observer.disconnect();return}sync()});observer.observe(rail);sync();
-   host.querySelectorAll('[data-review-open]').forEach(button=>button.onclick=()=>{const r=result.items[Number(button.dataset.reviewOpen)],dialog=document.createElement('dialog');dialog.className='home-review-dialog';dialog.setAttribute('aria-label',t('Xaridor sharhi','Отзыв покупателя','Buyer review'));dialog.innerHTML=`<button type="button" class="home-review-close" aria-label="${t('Yopish','Закрыть','Close')}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 18 18M21 3 3 21"/></svg></button><h3>${s(r.reviewer_name)}</h3>${stars(r.rating)}${r.test_only?`<small class="home-review-badge is-test">${t('Test sharhi','Тестовый отзыв','Test review')}</small>`:''}<p data-user-content>${s(r.body)}</p><small data-user-content>${s(r.product_title)}</small>`;dialog.querySelector('button').onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove());host.append(dialog);dialog.showModal()});
-  }catch{if(!host.isConnected)return;host.innerHTML=heading(false)+`<button class="text-link" type="button">${t('Sharhlarni qayta yuklash','Загрузить отзывы снова','Reload reviews')}</button>`;host.querySelector('button').onclick=()=>home(host)}
- }
- return {mount,mine,moderate,home};
+  function mobileListingReviews(section, result) {
+    if (!window.MobileSite?.isMobile()) return;
+    const productPage = section.closest(
+      ".listing-redesign,.topup-product-page",
+    );
+    if (!productPage) return;
+    section.classList.add("sim-buyer-reviews");
+    const heading = section.querySelector(".pr-heading h2");
+    if (heading)
+      heading.textContent = t(
+        "Xaridorlar sharhlari",
+        "Отзывы покупателей",
+        "Buyer reviews",
+      );
+    if (productPage.classList.contains("topup-product-page")) {
+      let open = productPage.querySelector(".mobile-topup-reviews-open");
+      if (!open) {
+        open = document.createElement("button");
+        open.type = "button";
+        open.className = "mobile-topup-reviews-open";
+        (
+          productPage.querySelector(".mobile-topup-product-heading>div") ||
+          section.parentElement
+        ).append(open);
+      }
+      open.textContent = t(
+        "Xaridorlar sharhlari →",
+        "Отзывы покупателей →",
+        "Buyer reviews →",
+      );
+      open.onclick = () => window.MobileSite.topupReviews();
+    }
+    let overview = section.querySelector(".pr-overview");
+    if (!overview) {
+      overview = document.createElement("div");
+      overview.className = "pr-overview";
+      section.querySelector(".pr-heading").after(overview);
+    }
+    let score = overview.querySelector(".pr-score");
+    if (!score) {
+      score = document.createElement("div");
+      score.className = "pr-score";
+      overview.prepend(score);
+    }
+    const count = Number(result.count) || 0,
+      rating = count ? Number(result.rating) : null;
+    score.innerHTML = `<strong>${rating === null ? "—" : rating.toFixed(1)}</strong><div>${rating === null ? "" : stars(Math.round(rating))}<p>${count} ${t("ta tasdiqlangan sharh", "подтверждённых отзывов", "verified reviews")}</p></div>`;
+    const filters = overview.querySelector(".pr-language-filter");
+    if (filters)
+      filters.prepend(filters.querySelector('[data-pr-language=""]'));
+    const gameLink = productPage.querySelector(
+        ".listing-breadcrumbs a:nth-of-type(2)",
+      ),
+      gameSlug = gameLink
+        ? new URL(gameLink.href, location.href).searchParams.get("game")
+        : location.pathname.split("/")[2] || "";
+    const game =
+      typeof marketGameLinks === "undefined"
+        ? null
+        : marketGameLinks.find((g) => g[0] === gameSlug);
+    const product =
+      productPage.querySelector(".listing-item-meta")?.textContent ||
+      productPage.querySelector(".mobile-topup-product-heading h1")
+        ?.textContent ||
+      gameLink?.textContent ||
+      "";
+    for (const review of result.items) {
+      const card = section.querySelector(
+        `[data-pr-id="${CSS.escape(String(review.id))}"]`,
+      );
+      if (!card) continue;
+      const main = card.querySelector(".pr-review-main"),
+        avatar = card.querySelector(".pr-avatar"),
+        name = card.querySelector(".pr-person b"),
+        rating = card.querySelector(".pr-stars"),
+        date = card.querySelector("time");
+      const header = document.createElement("header");
+      header.className = "sim-review-person";
+      const person = document.createElement("div");
+      person.className = "sim-review-identity";
+      const label = document.createElement("div");
+      label.className = "sim-review-name";
+      if (name) label.append(name);
+      if (review.verified_purchase) {
+        label.insertAdjacentHTML(
+          "beforeend",
+          '<svg class="sim-review-verified" viewBox="0 0 24 24" aria-label="Verified purchase"><path d="m12 2 8 3v6c0 5-5 9-8 11-3-2-8-6-8-11V5l8-3Z"/><path d="m8 11 3 3 5-5"/></svg>',
+        );
+      }
+      const meta = document.createElement("small");
+      meta.textContent =
+        (review.verified_purchase
+          ? t(
+              "Tasdiqlangan xarid",
+              "Подтверждённая покупка",
+              "Verified purchase",
+            )
+          : t("Xarid sharhi", "Отзыв о покупке", "Purchase review")) +
+        " · " +
+        (date?.textContent || "");
+      person.append(label, meta);
+      if (avatar) header.append(avatar);
+      header.append(person);
+      if (rating) header.append(rating);
+      main.querySelector("header")?.remove();
+      date?.remove();
+      main.querySelector(".pr-purchased")?.remove();
+      card.prepend(header);
+      if (game?.[2]) {
+        const context = document.createElement("div");
+        context.className = "sim-review-product";
+        context.innerHTML = `<img src="${s(game[2])}" alt="" width="32" height="32" loading="lazy"><span>${s(product)}</span>`;
+        main.querySelector(".pr-body")?.after(context);
+      }
+    }
+  }
+  async function mount(host, kind, target) {
+    if (!host || !host.isConnected) return;
+    const section = document.createElement("section");
+    section.className = "purchase-reviews";
+    section.id = "purchase-reviews-" + kind + "-" + target;
+    section.setAttribute(
+      "aria-label",
+      t("Xaridorlar sharhlari", "Отзывы покупателей", "Customer reviews"),
+    );
+    host.append(section);
+    let page = 1,
+      request = 0,
+      language = "";
+    async function draw() {
+      const token = ++request;
+      try {
+        const result = await api(
+          "/review-hub/" +
+            kind +
+            "/" +
+            enc(target) +
+            "?page=" +
+            page +
+            (language ? "&language=" + enc(language) : ""),
+        );
+        if (!section.isConnected || token !== request) return;
+        const summary = result.count
+          ? `${Number(result.rating).toFixed(1)} / 5 · ${result.count} ${result.count === 1 ? t("sharh", "отзыв", "review") : t("sharh", "отзывов", "reviews")}`
+          : t("Hali sharh yo‘q", "Отзывов пока нет", "No reviews yet");
+        const jump = app.querySelector("[data-topup-review-summary]");
+        if (jump) {
+          jump.innerHTML =
+            (result.count ? stars(Math.round(result.rating)) + " " : "") +
+            s(summary);
+          jump.onclick = (e) => {
+            e.preventDefault();
+            if (
+              window.MobileSite?.isMobile() &&
+              host.closest(".topup-product-page")
+            ) {
+              window.MobileSite.topupReviews();
+              return;
+            }
+            section.scrollIntoView({ block: "start", behavior: "smooth" });
+          };
+        }
+        const lang = document.documentElement.lang || "en";
+        const flag = (code) =>
+          /^[A-Z]{2}$/.test(code || "")
+            ? [...code]
+                .map((c) => String.fromCodePoint(127397 + c.charCodeAt(0)))
+                .join("")
+            : "";
+        section.innerHTML = `<header class="pr-heading"><h2>${t("Sharhlar", "Отзывы", "Reviews")}</h2></header>
+    <div class="pr-overview"><div class="pr-score"><div><strong>${result.count ? Number(result.rating).toFixed(1) : "—"}</strong>${result.count ? `<span class="pr-star-meter" aria-hidden="true"><span>★★★★★</span><span style="width:${(Number(result.rating) / 5) * 100}%">★★★★★</span></span>` : ""}</div><p>${result.count ? t(`${result.count} ta haqiqiy sharh asosida`, `На основе ${result.count} отзывов`, `Based on ${result.count} ${result.count === 1 ? "review" : "reviews"}`) : t("Hali sharh yo‘q", "Отзывов пока нет", "No reviews yet")}</p></div><div class="pr-language-filter" role="group" aria-label="${t("Sharh tili", "Язык отзывов", "Review language")}"><button type="button" data-pr-language="${s(lang)}" aria-pressed="${language === lang}">${t("Joriy til", "Текущий язык", "Current language")}</button><button type="button" data-pr-language="" aria-pressed="${!language}">${t("Barcha tillar", "Все языки", "All languages")}</button></div></div>
+    <div class="pr-write-host"></div>${result.eligible.length ? `<div class="pr-purchases">${result.eligible.map((p, i) => `<div><span>${s(p.reference)} · ${s(p.label || [p.amount, p.currency].join(" "))}</span>${p.hidden ? `<small>${t("Moderator tomonidan yashirilgan", "Скрыт модератором", "Hidden by a moderator")}</small>` : `<button type="button" data-pr-write="${i}">${p.review_id ? t("Tahrirlash", "Изменить", "Edit review") : t("Sharh yozish", "Оставить отзыв", "Write a review")}</button>`}</div>`).join("")}</div>` : ""}
+    <div class="pr-list">${result.items.map((r) => `<article class="pr-review pr-review-detailed" data-pr-id="${s(r.id)}">${marketAvatarMarkup(r.reviewer_name, r.avatar_url, "pr-avatar")}<div class="pr-review-main"><header><div class="pr-person"><b>${s(r.reviewer_name)}</b>${r.country_code ? `<span class="pr-country" aria-label="${s(r.country_code)}">${flag(r.country_code)}</span>` : ""}${r.language ? `<span class="pr-language">${s(r.language.toUpperCase())}</span>` : ""}</div><button type="button" class="pr-helpful" data-pr-helpful aria-pressed="${r.helpful}" ${r.can_edit ? "disabled" : ""} aria-label="${t("Foydali sharh", "Полезный отзыв", "Helpful review")}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true"><path d="M7 10H3v11h4m0-11 5-8 1 1v6h5a3 3 0 0 1 3 4l-2 6a3 3 0 0 1-3 2H7V10Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>${r.helpful_count ? `<span>${r.helpful_count}</span>` : ""}</button></header>${stars(r.rating)}<time>${parseServerDate(r.created_at).toLocaleDateString(localeTag(), { year: "numeric", month: "short", day: "numeric" })}</time><div class="pr-purchased"><span aria-hidden="true"><svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M4 7h12l1 10H3L4 7Zm3 0V5a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.5"/></svg></span><small>${t("Xarid qilingan", "Куплено", "Purchased")}</small><b>${s(r.package_name || "")}</b></div><p class="pr-body">${s(r.body)}</p>${r.reply ? `<div class="pr-reply"><b>${t("Sotuvchi javobi", "Ответ продавца", "Seller response")}</b><p>${s(r.reply)}</p></div>` : ""}<div class="pr-actions">${r.can_reply ? `<button type="button" data-pr-reply>${t("Javob yozish", "Ответить", "Reply")}</button>` : ""}${r.can_report ? `<button type="button" data-pr-report>${t("Shikoyat qilish", "Пожаловаться", "Report")}</button>` : ""}</div><div class="pr-action-host"></div></div></article>`).join("") || `<p class="pr-empty">${language ? t("Bu tilda hali sharh yo‘q. Barcha tillarni tanlang.", "На этом языке пока нет отзывов. Выберите все языки.", "No reviews in this language yet. Try all languages.") : t("Haqiqiy yakunlangan xaridlar sharhlari shu yerda chiqadi.", "Здесь появятся отзывы о завершённых покупках.", "Reviews from completed purchases will appear here.")}</p>`}</div>${page > 1 || result.has_more ? `<nav class="pr-pagination" aria-label="${t("Sharh sahifalari", "Страницы отзывов", "Review pages")}"><button type="button" data-pr-page="${page - 1}" ${page === 1 ? "disabled" : ""}>←</button><span>${page}</span><button type="button" data-pr-page="${page + 1}" ${!result.has_more ? "disabled" : ""}>→</button></nav>` : ""}`;
+        if (host.closest(".listing-redesign")) {
+          section.querySelector(".pr-heading").innerHTML =
+            `<div><h2>${t("Xaridorlar sharhlari", "Отзывы покупателей", "Buyer reviews")}<span class="pr-count-badge">${Number(result.count) || 0}</span></h2><p>${t("Faqat yakunlangan xaridlardan keyingi fikrlar.", "Отзывы только после завершённых покупок.", "Feedback from completed purchases.")}</p></div>`;
+          if (!result.count && !language && !window.MobileSite?.isMobile()) {
+            section.querySelector(".pr-overview").remove();
+            section.querySelector(".pr-list").innerHTML =
+              `<div class="pr-empty-detail"><span class="pr-empty-symbol" aria-hidden="true">${icon("star")}</span><div><h3>${t("Hozircha sharh yo‘q", "Пока нет отзывов", "No reviews yet")}</h3><p>${t("Ushbu mahsulotni xarid qilganlar o‘z fikrlarini shu yerda qoldirishi mumkin.", "После покупки этого товара покупатели смогут оставить здесь свой отзыв.", "Buyers can share their experience here after completing a purchase.")}</p></div></div>`;
+          }
+        }
+        mobileListingReviews(section, result);
+        section.querySelectorAll("[data-pr-language]").forEach(
+          (b) =>
+            (b.onclick = () => {
+              language = b.dataset.prLanguage;
+              page = 1;
+              draw();
+            }),
+        );
+        section.querySelectorAll("[data-pr-helpful]").forEach(
+          (b) =>
+            (b.onclick = async () => {
+              if (!me) {
+                toast(
+                  t(
+                    "Ovoz berish uchun hisobga kiring.",
+                    "Войдите, чтобы проголосовать.",
+                    "Sign in to mark a review as helpful.",
+                  ),
+                );
+                return;
+              }
+              b.disabled = true;
+              try {
+                await api(
+                  endpoint(kind, b.closest("[data-pr-id]").dataset.prId) +
+                    "/helpful",
+                  {
+                    method:
+                      b.getAttribute("aria-pressed") === "true"
+                        ? "DELETE"
+                        : "POST",
+                  },
+                );
+                await draw();
+              } catch (e) {
+                toast(e.message, "error");
+                b.disabled = false;
+              }
+            }),
+        );
+        section
+          .querySelectorAll("[data-pr-write]")
+          .forEach(
+            (b) =>
+              (b.onclick = () =>
+                insertEditor(
+                  section.querySelector(".pr-write-host"),
+                  result.eligible[Number(b.dataset.prWrite)],
+                  kind,
+                  draw,
+                )),
+          );
+        section.querySelectorAll("[data-pr-page]").forEach(
+          (b) =>
+            (b.onclick = () => {
+              page = Number(b.dataset.prPage);
+              draw();
+            }),
+        );
+        section.querySelectorAll("[data-pr-reply],[data-pr-report]").forEach(
+          (button) =>
+            (button.onclick = () => {
+              const card = button.closest("[data-pr-id]"),
+                reply = button.hasAttribute("data-pr-reply"),
+                host = card.querySelector(".pr-action-host");
+              host.innerHTML = `<form class="pr-action-form"><label>${reply ? t("Javob", "Ответ", "Reply") : t("Shikoyat sababi", "Причина жалобы", "Reason for reporting")}<textarea name="body" required minlength="${reply ? 2 : 5}" maxlength="${reply ? 1500 : 1000}" rows="3"></textarea></label><p class="pr-error" role="alert" hidden></p><div class="pr-actions"><button type="submit">${t("Yuborish", "Отправить", "Submit")}</button><button type="button" data-cancel>${t("Bekor qilish", "Отмена", "Cancel")}</button></div></form>`;
+              const f = host.querySelector("form");
+              f.querySelector("[data-cancel]").onclick = () =>
+                host.replaceChildren();
+              f.onsubmit = async (e) => {
+                e.preventDefault();
+                if (!f.reportValidity()) return;
+                const submit = f.querySelector("[type=submit]");
+                submit.disabled = true;
+                try {
+                  await api(
+                    endpoint(kind, card.dataset.prId) +
+                      (reply ? "/reply" : "/report"),
+                    {
+                      method: "POST",
+                      body: JSON.stringify({
+                        [reply ? "body" : "reason"]: new FormData(f).get(
+                          "body",
+                        ),
+                      }),
+                    },
+                  );
+                  if (reply) await draw();
+                  else {
+                    host.replaceChildren();
+                    toast(
+                      t(
+                        "Shikoyat moderatorga yuborildi",
+                        "Жалоба отправлена модератору",
+                        "Report sent to a moderator",
+                      ),
+                    );
+                  }
+                } catch (err) {
+                  const error = f.querySelector(".pr-error");
+                  error.textContent = err.message;
+                  error.hidden = false;
+                  submit.disabled = false;
+                }
+              };
+            }),
+        );
+      } catch (error) {
+        if (!section.isConnected) return;
+        section.innerHTML = `<p class="pr-error">${s(error.message)}</p><button type="button" data-pr-retry>${t("Qayta urinish", "Повторить", "Try again")}</button>`;
+        section.querySelector("button").onclick = draw;
+      }
+    }
+    await draw();
+  }
+  async function mine() {
+    if (!me) {
+      location.hash = "login";
+      return;
+    }
+    const items = await api("/review-hub/mine");
+    app.innerHTML = `<section class="page pr-mine">${pageTitle(t("Sharhlarim", "Мои отзывы", "My reviews"), t("Yakunlangan xaridlaringizni baholang yoki sharhingizni tahrirlang.", "Оцените завершённые покупки или измените свой отзыв.", "Rate completed purchases or edit your feedback."))}<div class="pr-write-host"></div><div class="pr-purchases">${items.map((p, i) => `<article><div><a href="${p.kind === "topup" ? "/top-up/" : "/listing/"}${enc(p.target)}">${s(p.label)}</a><small>${s(p.reference)}</small>${p.rating ? stars(p.rating) : ""}${p.body ? `<p class="pr-body">${s(p.body)}</p>` : ""}</div>${p.hidden ? `<span>${t("Moderator tomonidan yashirilgan", "Скрыт модератором", "Hidden by a moderator")}</span>` : `<button type="button" data-pr-write="${i}">${p.review_id ? t("Tahrirlash", "Изменить", "Edit review") : t("Sharh yozish", "Оставить отзыв", "Write a review")}</button>`}</article>`).join("") || `<p class="pr-empty">${t("Yakunlangan xariddan keyin shu yerda baho qoldirishingiz mumkin.", "После завершения покупки здесь можно оставить отзыв.", "Your completed purchases will appear here for review.")}</p>`}</div></section>`;
+    app.querySelectorAll("[data-pr-write]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          const p = items[Number(b.dataset.prWrite)];
+          insertEditor(app.querySelector(".pr-write-host"), p, p.kind, mine);
+        }),
+    );
+  }
+  async function moderate() {
+    if (!me?.is_admin) {
+      app.innerHTML = `<section class="page"><p>${t("Administrator ruxsati kerak.", "Нужны права администратора.", "Administrator access required.")}</p></section>`;
+      return;
+    }
+    const rows = await api("/admin/review-reports");
+    app.innerHTML = `<section class="page">${pageTitle(t("Sharh shikoyatlari", "Жалобы на отзывы", "Review reports"), " ", ``)}<div class="pr-moderation">${rows.map((r) => `<article class="purchase-reviews"><b>${s(r.reporter_name)}</b><p>${s(r.reason)}</p><blockquote class="pr-body">${s(r.review?.body || "")}</blockquote><form data-report="${s(r.id)}"><label>${t("Moderator izohi", "Комментарий модератора", "Moderator note")}<textarea name="note" required minlength="5" maxlength="1000"></textarea></label><div class="pr-actions"><button name="action" value="dismiss">${t("Shikoyatni yopish", "Отклонить жалобу", "Dismiss report")}</button><button name="action" value="remove">${t("Sharhni yashirish", "Скрыть отзыв", "Hide review")}</button></div><p class="pr-error" hidden></p></form></article>`).join("") || `<p>${t("Ochiq shikoyat yo‘q", "Открытых жалоб нет", "No open review reports")}</p>`}</div></section>`;
+    app.querySelectorAll("form[data-report]").forEach(
+      (f) =>
+        (f.onsubmit = async (e) => {
+          e.preventDefault();
+          if (!f.reportValidity()) return;
+          const action = e.submitter.value;
+          e.submitter.disabled = true;
+          try {
+            await api("/admin/review-reports/" + enc(f.dataset.report), {
+              method: "POST",
+              body: JSON.stringify({
+                action,
+                note: new FormData(f).get("note"),
+              }),
+            });
+            await moderate();
+          } catch (err) {
+            const el = f.querySelector(".pr-error");
+            el.hidden = false;
+            el.textContent = err.message;
+            e.submitter.disabled = false;
+          }
+        }),
+    );
+  }
+  async function home(host) {
+    if (!host?.isConnected) return;
+    const heading = (controls = true) =>
+      `<div class="home-reviews-heading"><h2>${t("Xaridorlar sharhlari", "Отзывы покупателей", "Buyer reviews")}<span data-home-review-score></span></h2>${controls ? `<div class="home-review-arrows"><button type="button" data-review-prev aria-label="${t("Oldingi sharhlar", "Предыдущие отзывы", "Previous reviews")}">←</button><button type="button" data-review-next aria-label="${t("Keyingi sharhlar", "Следующие отзывы", "Next reviews")}">→</button></div>` : ""}</div>`;
+    host.className = "home-buyer-reviews";
+    host.setAttribute(
+      "aria-label",
+      t("Xaridorlar sharhlari", "Отзывы покупателей", "Buyer reviews"),
+    );
+    host.innerHTML =
+      heading(false) +
+      `<p class="home-review-empty" role="status">${t("Sharhlar yuklanmoqda…", "Загрузка отзывов…", "Loading reviews…")}</p>`;
+    try {
+      const result = await api("/review-hub/home");
+      if (!host.isConnected) return;
+      host.setAttribute("data-empty", String(!result.items.length));
+      if (!result.items.length) {
+        host.innerHTML =
+          heading(false) +
+          `<p class="home-review-empty">${t("Hozircha sharh yo‘q. Yakunlangan xaridlar haqidagi fikrlar shu yerda chiqadi.", "Пока нет отзывов. Здесь появятся отзывы о завершённых покупках.", "No reviews yet. Feedback from completed purchases will appear here.")}</p>`;
+        return;
+      }
+      const privateNotice = result.items.some((r) => r.private_preview)
+        ? `<p class="home-review-empty">${t("Test xaridlaringiz sharhlari · faqat sizga ko‘rinadi", "Отзывы о ваших тестовых покупках · видны только вам", "Your test purchase reviews · only visible to you")}</p>`
+        : "";
+      host.innerHTML =
+        heading() +
+        privateNotice +
+        `<div class="home-review-rail" tabindex="0" aria-label="${t("Xaridorlar sharhlari", "Отзывы покупателей", "Buyer reviews")}">${result.items.map((r, index) => `<article class="home-review-card"><header class="home-review-person">${marketAvatarMarkup(r.reviewer_name, r.avatar_url, "home-review-avatar")}<div><b>${s(r.reviewer_name)}${!r.test_only ? `<span class="mobile-home-review-check" aria-hidden="true">${icon("shield")}</span>` : ""}</b><time datetime="${s(r.created_at)}">${parseServerDate(r.created_at).toLocaleDateString(localeTag(), { month: "short", day: "numeric" })}</time><small class="mobile-home-review-meta">${r.test_only ? t("Xarid", "Покупка", "Purchase") : t("Tasdiqlangan xarid", "Подтверждённая покупка", "Verified purchase")} · ${parseServerDate(r.created_at).toLocaleDateString(localeTag(), { year: "numeric", month: "short", day: "numeric" })}</small></div>${stars(r.rating)}</header><div class="home-review-copy"><p class="home-review-body" data-user-content>${s(r.body)}</p><button type="button" class="home-review-more" data-review-open="${index}">${t("To‘liq o‘qish", "Читать полностью", "View more")}</button></div><div class="home-review-product">${r.game_image_url ? `<img src="${s(r.game_image_url)}" alt="${s(r.game_name || "")}" width="24" height="24" loading="lazy" decoding="async">` : `<span class="home-review-game-initials" aria-hidden="true">${s((r.game_name || "?").slice(0, 2))}</span>`}<span data-user-content title="${s(r.product_title)}">${s(r.product_title)}</span><span class="mobile-home-review-product-name" title="${s(r.product_title)}">${s(r.game_name || r.product_title)}</span><span class="home-review-badge ${r.test_only ? "is-test" : ""}">${r.test_only ? t("Test sharhi", "Тестовый отзыв", "Test review") : t("Tasdiqlangan", "Подтверждено", "Verified")}</span></div></article>`).join("")}</div>` +
+        (!result.items.length
+          ? `<p class="home-review-empty">${t("Hozircha sharh yo‘q.", "Отзывов пока нет.", "No reviews yet.")}</p>`
+          : "");
+      if (result.count)
+        host.querySelector("[data-home-review-score]").innerHTML =
+          `${icon("star")} ${Number(result.rating).toFixed(1)} <small>(${Number(result.count)})</small>`;
+      const rail = host.querySelector(".home-review-rail"),
+        prev = host.querySelector("[data-review-prev]"),
+        next = host.querySelector("[data-review-next]");
+      const sync = () => {
+        const overflow = rail.scrollWidth > rail.clientWidth + 2;
+        prev.hidden = next.hidden = !overflow;
+        prev.disabled = rail.scrollLeft < 2;
+        next.disabled =
+          rail.scrollLeft + rail.clientWidth >= rail.scrollWidth - 2;
+      };
+      prev.onclick = () =>
+        rail.scrollBy({ left: -rail.clientWidth, behavior: "smooth" });
+      next.onclick = () =>
+        rail.scrollBy({ left: rail.clientWidth, behavior: "smooth" });
+      rail.addEventListener("scroll", sync, { passive: true });
+      const observer = new ResizeObserver(() => {
+        if (!host.isConnected) {
+          observer.disconnect();
+          return;
+        }
+        sync();
+      });
+      observer.observe(rail);
+      sync();
+      host.querySelectorAll("[data-review-open]").forEach(
+        (button) =>
+          (button.onclick = () => {
+            const r = result.items[Number(button.dataset.reviewOpen)],
+              dialog = document.createElement("dialog");
+            dialog.className = "home-review-dialog";
+            dialog.setAttribute(
+              "aria-label",
+              t("Xaridor sharhi", "Отзыв покупателя", "Buyer review"),
+            );
+            dialog.innerHTML = `<button type="button" class="home-review-close" aria-label="${t("Yopish", "Закрыть", "Close")}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 18 18M21 3 3 21"/></svg></button><h3>${s(r.reviewer_name)}</h3>${stars(r.rating)}${r.test_only ? `<small class="home-review-badge is-test">${t("Test sharhi", "Тестовый отзыв", "Test review")}</small>` : ""}<p data-user-content>${s(r.body)}</p><small data-user-content>${s(r.product_title)}</small>`;
+            dialog.querySelector("button").onclick = () => dialog.close();
+            dialog.addEventListener("close", () => dialog.remove());
+            host.append(dialog);
+            dialog.showModal();
+          }),
+      );
+    } catch {
+      if (!host.isConnected) return;
+      host.innerHTML =
+        heading(false) +
+        `<button class="text-link" type="button">${t("Sharhlarni qayta yuklash", "Загрузить отзывы снова", "Reload reviews")}</button>`;
+      host.querySelector("button").onclick = () => home(host);
+    }
+  }
+  return { mount, mine, moderate, home };
 })();

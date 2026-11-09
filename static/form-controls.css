@@ -1,42 +1,166 @@
 /* One visible field boundary. Native values, validation and select-menu.js stay intact. */
 @layer sentryloot-controls, admin-premium, sentryloot-premium, sentryloot-icons, sentryloot-theme;
 @layer sentryloot-controls {
- /* Search-filtered options must stay hidden despite later flex layout rules. */
- body .site-select-popup [hidden] { display:none!important; }
- body :is(#app,#profile-menu-root,.region-preferences-dialog) :is(.field-control,.auth-password-control,.site-select) {
-  border:0!important; outline:0!important; box-shadow:none!important;
- }
- body :is(#app,#profile-menu-root,.region-preferences-dialog) :is(.field-control,.auth-password-control,.site-select)::before,
- body :is(#app,#profile-menu-root,.region-preferences-dialog) :is(.field-control,.auth-password-control,.site-select)::after {
-  box-shadow:none!important;
- }
- /* Compound fields own the border; their nested input must not add another. */
- body #app :is(.admin-search-box,.admin-config-input,.topup-admin-search,.topup-admin-filter) {
-  border:1px solid #353535!important; border-radius:8px!important; box-shadow:none!important; outline:0!important;
- }
- body #app :is(.admin-search-box,.admin-config-input,.topup-admin-search,.topup-admin-filter) :is(input,select,.site-select-trigger) {
-  border:0!important; outline:0!important; box-shadow:none!important;
- }
- /* Focus changes the existing boundary instead of drawing a second outer ring. */
- body :is(#app,#profile-menu-root,.region-preferences-dialog) :where(input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),textarea,.site-select-trigger):focus,
- body :is(#app,#profile-menu-root,.region-preferences-dialog) .site-select-trigger[aria-expanded=true] {
-  border-color:#ff9b42!important; outline:0!important; box-shadow:none!important;
- }
- body #app :is(.admin-search-box,.admin-config-input,.topup-admin-search,.topup-admin-filter):focus-within {
-  border-color:#ff9b42!important; outline:0!important; box-shadow:none!important;
- }
- /* Select popups and their search fields are separate surfaces, not nested field borders. */
- body :is(#app,#profile-menu-root,.region-preferences-dialog) .site-select-native { border:0!important; box-shadow:none!important; outline:0!important; }
+  /* Search-filtered options must stay hidden despite later flex layout rules. */
+  body .site-select-popup [hidden] {
+    display: none !important;
+  }
+  body
+    :is(#app, #profile-menu-root, .region-preferences-dialog)
+    :is(.field-control, .auth-password-control, .site-select) {
+    border: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+  }
+  body
+    :is(#app, #profile-menu-root, .region-preferences-dialog)
+    :is(.field-control, .auth-password-control, .site-select)::before,
+  body
+    :is(#app, #profile-menu-root, .region-preferences-dialog)
+    :is(.field-control, .auth-password-control, .site-select)::after {
+    box-shadow: none !important;
+  }
+  /* Compound fields own the border; their nested input must not add another. */
+  body
+    #app
+    :is(
+      .admin-search-box,
+      .admin-config-input,
+      .topup-admin-search,
+      .topup-admin-filter
+    ) {
+    border: 1px solid #353535 !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+    outline: 0 !important;
+  }
+  body
+    #app
+    :is(
+      .admin-search-box,
+      .admin-config-input,
+      .topup-admin-search,
+      .topup-admin-filter
+    )
+    :is(input, select, .site-select-trigger) {
+    border: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+  }
+  /* Focus changes the existing boundary instead of drawing a second outer ring. */
+  body
+    :is(#app, #profile-menu-root, .region-preferences-dialog)
+    :where(
+      input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not(
+          [type="range"]
+        ):not([type="file"]),
+      textarea,
+      .site-select-trigger
+    ):focus,
+  body
+    :is(#app, #profile-menu-root, .region-preferences-dialog)
+    .site-select-trigger[aria-expanded="true"] {
+    border-color: #ff9b42 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+  }
+  body
+    #app
+    :is(
+      .admin-search-box,
+      .admin-config-input,
+      .topup-admin-search,
+      .topup-admin-filter
+    ):focus-within {
+    border-color: #ff9b42 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+  }
+  /* Select popups and their search fields are separate surfaces, not nested field borders. */
+  body
+    :is(#app, #profile-menu-root, .region-preferences-dialog)
+    .site-select-native {
+    border: 0 !important;
+    box-shadow: none !important;
+    outline: 0 !important;
+  }
 }
 /* Shared popup layout also serves standalone pages without monochrome-theme.css. */
-body .site-select-popup {position:fixed;inset:auto;box-sizing:border-box;margin:0;padding:6px;border:1px solid #566069;border-radius:8px;background:#20272d;color:#eceef1;box-shadow:0 12px 35px #0006;overflow:hidden;}
-body .site-select-popup .site-select-list {display:grid;gap:2px;max-height:180px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;}
-body .site-select-popup .site-select-list>button {display:flex;align-items:center;justify-content:space-between;gap:12px;flex:none;box-sizing:border-box;width:100%;min-height:36px;margin:0;padding:8px 10px;border:0;border-radius:5px;background:transparent;color:#d8dee3;font:inherit;font-size:13px;line-height:20px;text-align:start;white-space:normal;overflow-wrap:anywhere;cursor:pointer;}
-body .site-select-popup .site-select-list>button:hover,
-body .site-select-popup .site-select-list>button:focus-visible,
-body .site-select-popup .site-select-list>button[aria-selected=true] {background:#ffb95122;color:#ffcf83;}
-body .site-select-popup .site-select-list>button:focus-visible {outline:2px solid #ffb951;outline-offset:-2px;}
-body .site-select-popup .site-select-list>button:disabled {opacity:.45;cursor:not-allowed;}
-body .site-select-popup .site-select-check {flex:none;visibility:hidden;}
-body .site-select-popup [aria-selected=true]>.site-select-check {visibility:visible;}
-body .site-select-popup .site-select-search {box-sizing:border-box;width:100%;height:36px;margin:0 0 6px;padding:8px;border:1px solid #434b50;border-radius:5px;background:#14191d;color:#fff;font:inherit;font-size:13px;}
+body .site-select-popup {
+  position: fixed;
+  inset: auto;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid #566069;
+  border-radius: 8px;
+  background: #20272d;
+  color: #eceef1;
+  box-shadow: 0 12px 35px #0006;
+  overflow: hidden;
+}
+body .site-select-popup .site-select-list {
+  display: grid;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+body .site-select-popup .site-select-list > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #d8dee3;
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+body .site-select-popup .site-select-list > button:hover,
+body .site-select-popup .site-select-list > button:focus-visible,
+body .site-select-popup .site-select-list > button[aria-selected="true"] {
+  background: #ffb95122;
+  color: #ffcf83;
+}
+body .site-select-popup .site-select-list > button:focus-visible {
+  outline: 2px solid #ffb951;
+  outline-offset: -2px;
+}
+body .site-select-popup .site-select-list > button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+body .site-select-popup .site-select-check {
+  flex: none;
+  visibility: hidden;
+}
+body .site-select-popup [aria-selected="true"] > .site-select-check {
+  visibility: visible;
+}
+body .site-select-popup .site-select-search {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  margin: 0 0 6px;
+  padding: 8px;
+  border: 1px solid #434b50;
+  border-radius: 5px;
+  background: #14191d;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+}

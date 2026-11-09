@@ -1,114 +1,1182 @@
 /* Marketplace interactions share the existing session, router and design system. */
-window.MarketUX=(()=>{
- const tr=(uz,ru,en)=>adminText(uz,ru,en), safe=value=>esc(value), enc=encodeURIComponent;
- let chatTimer=0,chatEpoch=0,searchTimer=0,searchEpoch=0,badgeBusy=false,initialized=false;
- const read=key=>{try{return JSON.parse(localStorage.getItem(key)||'[]')}catch{return []}};
- const write=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value))}catch{}};
- const recentKey=()=>`sentryloot_recent_${me?.id||'guest'}`;
- const sortOptions=()=>[['recommended',tr('Tavsiya etilgan','Рекомендуемые','Recommended')],['newest',tr('Eng yangi','Сначала новые','Newest')],['price_asc',tr('Eng arzon','Самые низкие цены','Lowest prices')],['price_desc',tr('Qimmatroq','Дороже','Price: high to low')],['rating',tr('Yuqori reyting','Высокий рейтинг','Highest rated')],['delivery',tr('Tez yetkazish','Быстрая доставка','Fastest delivery')],['popular',tr('Eng ko‘p sotilgan','Популярные','Most sold')]];
- function filterMarkup(filters={}){
-  const priceCurrency=filters.currency||'UZS',priceUnit=priceCurrency==='MYR'?'RM':priceCurrency;
-  const labels={min:tr('Narx dan','Цена от','Min price')+' ('+priceUnit+')',max:tr('Narx gacha','Цена до','Max price')+' ('+priceUnit+')',platform:tr('Platforma','Платформа','Platform'),region:tr('Hudud','Регион','Region'),server:tr('Server','Сервер','Server'),rank:tr('Rank / daraja','Ранг / уровень','Rank / level'),item_type:tr('Buyum turi','Тип предмета','Item type'),condition:tr('Holati','Состояние','Condition'),item_variant:tr('Variant','Вариант','Variant'),float_min:tr('Float dan','Float от','Float from'),float_max:tr('Float gacha','Float до','Float to')};
-  const chipLabels={...labels,min_major:labels.min,max_major:labels.max,currency:tr('Valyuta','Валюта','Currency'),q:tr('Qidiruv','Поиск','Search'),game:tr('O‘yin','Игра','Game'),category:tr('Kategoriya','Категория','Category'),online:tr('Online sotuvchi','Продавец в сети','Seller online'),verified:tr('Shaxsi tasdiqlangan','Личность подтверждена','Identity verified'),delivery:tr('Yetkazish','Доставка','Delivery'),sort:tr('Saralash','Сортировка','Sort')};
-  const chipValue=(key,value)=>key==='sort'?(sortOptions().find(([k])=>k===value)?.[1]||value):['online','verified'].includes(key)?tr('Ha','Да','Yes'):key==='delivery'?value+' min':key==='game'?(marketGameLinks.find(([slug])=>slug===value)?.[1]||value):value;
-  return `<details class="ux-filters" ${Object.keys(filters).some(k=>labels[k]||['online','delivery','verified'].includes(k))?'open':''}><summary>${icon('filter')} ${tr('Filtrlar va saralash','Фильтры и сортировка','Filters & sorting')}<span>${Object.keys(filters).filter(k=>labels[k]||['online','delivery','verified'].includes(k)).length||''}</span></summary><form class="ux-filter-form">${filters.currency?`<input type="hidden" name="currency" value="${safe(filters.currency)}">`:''}<div class="ux-filter-grid">${Object.entries(labels).map(([key,label])=>`<label>${label}<input name="${filters.currency&&['min','max'].includes(key)?key+'_major':key}" ${key.startsWith('float_')?'type="number" min="0" max="1" step="any"':['min','max'].includes(key)?`type="number" min="0" step="${filters.currency==='MYR'?'0.01':'1'}"`:'type="text" maxlength="80"'} value="${safe(filters.currency&&['min','max'].includes(key)?(filters[key+'_major']||(filters[key]?String(Number(filters[key])/(filters.currency==='MYR'?100:1)):'')):(filters[key]||''))}" placeholder="${['min','max'].includes(key)?'0':tr('Barchasi','Все','Any')}"></label>`).join('')}<label>${tr('Yetkazish muddati','Срок доставки','Delivery within')}<select name="delivery"><option value="">${tr('Barchasi','Все','Any time')}</option>${[[5,'5 min'],[15,'15 min'],[60,'1 h'],[360,'6 h'],[1440,'24 h']].map(([v,l])=>`<option value="${v}" ${String(v)===filters.delivery?'selected':''}>${l}</option>`).join('')}</select></label><label>${tr('Saralash','Сортировка','Sort by')}<select name="sort">${sortOptions().map(([v,l])=>`<option value="${v}" ${(filters.sort||'recommended')===v?'selected':''}>${l}</option>`).join('')}</select></label></div><div class="ux-filter-bottom"><label><input type="checkbox" name="online" value="1" ${filters.online==='1'?'checked':''}> ${tr('Online sotuvchi','Продавец в сети','Seller online')}</label><label><input type="checkbox" name="verified" value="1" ${filters.verified==='1'?'checked':''}> ${tr('Shaxsi tasdiqlangan','Личность подтверждена','Identity verified')}</label><button class="button-primary">${tr('Qo‘llash','Применить','Apply filters')}</button></div></form></details><div class="ux-filter-chips">${Object.entries(filters).filter(([k,v])=>v&&k!=='page'&&k!=='seller').map(([key,value])=>`<button class="ux-chip" data-remove-filter="${safe(key)}" aria-label="${safe(tr('Filtrni olib tashlash','Убрать фильтр','Remove filter'))}: ${safe(key)}">${safe(chipLabels[key]||key)}: ${safe(chipValue(key,value))} <span>×</span></button>`).join('')}${Object.keys(filters).filter(k=>k!=='seller').length?`<button class="ux-clear-filters">${tr('Tozalash','Сбросить','Clear all')}</button>`:''}</div>`;
- }
- function bindFilters(root,filters,callback){
-  const quickSort=root.querySelector('[data-mobile-sort]');
-  quickSort?.addEventListener('change',()=>{const next={...filters,sort:quickSort.value};delete next.page;callback(next)});
-  root.querySelector('.ux-filter-form')?.addEventListener('submit',e=>{e.preventDefault();const next={...filters};for(const key of ['category','game'])if(e.currentTarget.elements.namedItem(key))delete next[key];for(const k of ['float_min','float_max','min','max','min_major','max_major','currency','platform','region','server','rank','item_type','condition','item_variant','delivery','sort','online','verified','account_level','redemption_region','code_kind','unit'])delete next[k];for(const [k,v]of new FormData(e.currentTarget)){if(String(v).trim())next[k]=String(v).trim()}if(!next.min_major&&!next.max_major&&!filters.currency)delete next.currency;if((next.min&&next.max&&Number(next.min)>Number(next.max))||(next.min_major&&next.max_major&&Number(next.min_major)>Number(next.max_major))){toast(tr('Narx oralig‘ini tekshiring','Проверьте диапазон цен','Check the price range'));return}delete next.page;callback(next)});
-  root.querySelectorAll('[data-remove-filter]').forEach(b=>b.onclick=()=>{const next={...filters};delete next[b.dataset.removeFilter];callback(next)});
-  root.querySelector('.ux-clear-filters')?.addEventListener('click',()=>callback(filters.seller?{seller:filters.seller}:{}));
- }
- function browse(filters){const heading=app.querySelector('.market-browse-heading');if(!heading)return;heading.insertAdjacentHTML('afterend',`<div id="ux-browse-filters"><label class="mobile-browse-sort">${tr('Saralash','Сортировка','Sort by')}<select data-mobile-sort>${sortOptions().map(([value,label])=>`<option value="${value}" ${(filters.sort||'recommended')===value?'selected':''}>${safe(label)}</option>`).join('')}</select></label>${filterMarkup(filters)}</div>`);bindFilters($('#ux-browse-filters'),filters,next=>{history.pushState({},'','/browse?'+new URLSearchParams(next));navigate()});const emptyBox=app.querySelector('.market-empty');if(emptyBox&&filters.q)api('/search/suggestions?q='+enc(filters.q)).then(r=>{if(emptyBox.isConnected)emptyBox.insertAdjacentHTML('beforeend',`<div class="ux-suggestions-inline">${r.games.map(g=>`<a class="ux-chip" href="/browse?game=${enc(g.slug)}">${safe(g.name)} →</a>`).join('')}</div>`)}).catch(()=>{});TradeUX.browse(filters);const facetRoot=$('#ux-browse-filters');ExperienceUX.browse(filters).catch(()=>{}).finally(()=>{if(facetRoot?.isConnected){facetRoot.dataset.facetsReady='1';facetRoot.dispatchEvent(new Event('catalogue-facets-ready'))}})}
- async function store(id,filters={}){
-  const [s,result]=await Promise.all([api('/stores/'+enc(id)),api('/listings?'+new URLSearchParams({...filters,seller:id}))]);
-  app.innerHTML=`<section class="page ux-store"><header class="ux-store-header panel">${marketAvatarMarkup(s.display_name||s.shop_name,s.avatar_url,'ux-store-avatar',s.id)}<div class="ux-store-intro"><span class="ux-eyebrow">${tr('SOTUVCHI DO‘KONI','МАГАЗИН ПРОДАВЦА','SELLER STORE')}</span><h1>${safe(s.shop_name)}</h1><p>${s.online?'🟢 '+tr('Online','В сети','Online'):tr('Hozir offline','Сейчас не в сети','Currently offline')} · ${tr('A’zo','На сайте с','Member since')} ${parseServerDate(s.created_at).getFullYear()} ${s.identity_verified?' · '+tr('Shaxsi tasdiqlangan','Личность подтверждена','Identity verified'):''}</p></div>${!s.is_owner?`<button class="button-secondary" id="ux-follow">${s.following?'✓ ':''}${s.following?tr('Kuzatilmoqda','Вы подписаны','Following'):tr('Kuzatish','Подписаться','Follow store')}</button>`:''}<div class="ux-store-stats"><div><b>${s.rating?Number(s.rating).toFixed(1):'—'} <small>★</small></b><span>${s.review_count} ${tr('sharh','отзывов','reviews')}</span></div><div><b>${s.completed_sales}</b><span>${tr('yakunlangan savdo','завершённых продаж','completed sales')}</span></div><div><b>${s.positive_percent===null?'—':s.positive_percent+'%'}</b><span>${tr('ijobiy sharh','положительных отзывов','positive reviews')}</span></div><div><b>${s.avg_reply_seconds===null?'—':s.avg_reply_seconds<60?'<1 min':Math.round(s.avg_reply_seconds/60)+' min'}</b><span>${tr('o‘rtacha javob','среднее время ответа','average reply')}</span></div></div>${s.availability?.vacation?`<p class="notice warn">${tr('Sotuvchi vaqtincha yangi buyurtma olmayapti','Продавец временно не принимает новые заказы','Seller is temporarily not accepting new orders')}</p>`:''}${s.availability?.hours?.length?`<p class="help">${tr('Ish vaqti','Часы работы','Working hours')}: ${s.availability.hours.map(h=>`${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][h.day]} ${h.start}–${h.end}`).join(' · ')} · ${safe(s.availability.timezone)}</p>`:''}<p class="ux-store-bio" data-user-content>${safe(s.bio||tr('Sotuvchi hali tavsif kiritmagan.','Продавец ещё не добавил описание.','This seller has not added a description yet.'))}</p></header><nav class="ux-tabs"><a href="#ux-store-listings">${tr('E’lonlar','Объявления','Listings')} (${result.total_count})</a><a href="#ux-store-reviews">${tr('Sharhlar','Отзывы','Reviews')} (${s.review_count})</a></nav><section id="ux-store-listings"><div id="ux-store-filters">${filterMarkup(filters)}</div><div class="product-grid" id="ux-store-cards">${result.items.map(marketCard).join('')||empty(tr('Mos e’lonlar yo‘q','Нет подходящих объявлений','No matching listings'))}</div>${result.has_more?`<button class="button-secondary" id="ux-store-more">${tr('Yana ko‘rish','Показать ещё','Show more')}</button>`:''}</section>${s.sales_history?.length?`<section class="panel ux-sales-history"><h2>${tr('Yakunlangan savdolar','Завершённые продажи','Completed sales')}</h2>${s.sales_history.map(h=>`<div><b>${safe(h.game_name)}</b><span>${h.quantity} ${tr('ta mahsulot','товаров','items')} · ${tr('Oxirgi savdo','Последняя продажа','Last sale')} ${parseServerDate(h.last_sale_at).toLocaleDateString(localeTag())}</span></div>`).join('')}</section>`:''}<section class="panel ux-reviews" id="ux-store-reviews"><h2>${tr('Xaridorlar sharhlari','Отзывы покупателей','Buyer reviews')}</h2><div id="ux-review-root"></div></section></section>`;
-  const back=document.getElementById('route-back');if(back)back.hidden=true;document.title=s.shop_name+' | SentryLoot';
-  // Section links stay inside the page instead of entering the application router.
-  app.querySelectorAll('.ux-tabs a').forEach(a=>a.onclick=e=>{e.preventDefault();document.getElementById(a.getAttribute('href').slice(1))?.scrollIntoView({behavior:'smooth'})});
-  bindFilters($('#ux-store-filters'),filters,next=>store(id,next).catch(e=>toast(e.message,'error')));
-  $('#ux-follow')?.addEventListener('click',async()=>{if(!me){location.hash='login';return}const b=$('#ux-follow');b.disabled=true;try{await api('/stores/'+enc(id)+'/follow',{method:s.following?'DELETE':'POST',body:'{}'});await store(id,filters)}catch(e){toast(e.message,'error');b.disabled=false}});
-  let page=1;$('#ux-store-more')?.addEventListener('click',async e=>{const b=e.currentTarget;b.disabled=true;try{const next=await api('/listings?'+new URLSearchParams({...filters,seller:id,page:page+1}));$('#ux-store-cards').insertAdjacentHTML('beforeend',next.items.map(marketCard).join(''));page++;if(!next.has_more)b.remove();else b.disabled=false}catch(error){toast(error.message,'error');b.disabled=false}});
-  await reviews($('#ux-review-root'),id);
- }
- async function reviews(root,sid,filters={}){
-  if(!root)return;const r=await api('/stores/'+enc(sid)+'/reviews?'+new URLSearchParams(filters));if(!root.isConnected)return;
-  root.innerHTML=`<form class="ux-review-filters"><select name="sentiment" aria-label="${tr('Sharh turi','Тип отзыва','Review type')}">${[['',tr('Barcha sharhlar','Все отзывы','All reviews')],['positive',tr('Ijobiy · 4–5 ★','Положительные · 4–5 ★','Positive · 4–5 ★')],['negative',tr('Tanqidiy · 1–3 ★','Критические · 1–3 ★','Critical · 1–3 ★')]].map(([v,l])=>`<option value="${v}" ${filters.sentiment===v?'selected':''}>${l}</option>`).join('')}</select><select name="product_type" aria-label="${tr('Mahsulot turi','Тип товара','Product type')}"><option value="">${tr('Barcha mahsulotlar','Все товары','All product types')}</option>${(r.types||[]).map(v=>`<option value="${safe(v.product_type)}" ${filters.product_type===v.product_type?'selected':''}>${safe(v.product_type)} · ${Number(v.rating).toFixed(1)} ★ (${v.count})</option>`).join('')}</select><select name="game" aria-label="${tr('O‘yin','Игра','Game')}"><option value="">${tr('Barcha o‘yinlar','Все игры','All games')}</option>${r.games.map(g=>`<option value="${safe(g.slug)}" ${filters.game===g.slug?'selected':''}>${safe(g.name)}</option>`).join('')}</select><select name="sort" aria-label="${tr('Saralash','Сортировка','Sort reviews')}">${[['newest',tr('Eng yangi','Новые','Newest')],['oldest',tr('Eng avvalgi','Старые','Oldest')],['rating_desc',tr('Yuqori baho','Высокая оценка','Highest rating')],['rating_asc',tr('Past baho','Низкая оценка','Lowest rating')]].map(([v,l])=>`<option value="${v}" ${(filters.sort||'newest')===v?'selected':''}>${l}</option>`).join('')}</select></form><p class="help">${r.total_count} ${tr('ta sharh','отзывов','reviews')}</p><div class="ux-review-list">${r.items.map(v=>`<article class="ux-review"><header><b>${safe(v.reviewer_name)}</b><span class="ux-review-stars">${'★'.repeat(v.rating)}${'☆'.repeat(5-v.rating)}</span></header><small>${safe(v.game_name)} · ${parseServerDate(v.created_at).toLocaleDateString(localeTag())} · ${tr('Tasdiqlangan xarid','Подтверждённая покупка','Verified purchase')}</small><p data-user-content>${safe(v.body)}</p>${v.reply?`<blockquote><b>${tr('Sotuvchi javobi','Ответ продавца','Seller reply')}</b><p data-user-content>${safe(v.reply)}</p></blockquote>`:''}${r.can_reply?`<form class="ux-reply" data-review="${safe(v.id)}"><textarea name="body" minlength="2" maxlength="1500" required placeholder="${tr('Sharhga javob','Ответ на отзыв','Reply to this review')}">${safe(v.reply||'')}</textarea><button class="button-secondary">${tr('Javobni saqlash','Сохранить ответ','Save reply')}</button></form>`:''}</article>`).join('')||empty(tr('Hozircha sharhlar yo‘q','Отзывов пока нет','No reviews yet'))}</div><div class="actions">${r.page>1?`<button class="button-secondary" data-review-page="${r.page-1}">← ${tr('Oldingi','Назад','Previous')}</button>`:''}${r.has_more?`<button class="button-secondary" data-review-page="${r.page+1}">${tr('Keyingi','Далее','Next')} →</button>`:''}</div>`;
-  root.querySelector('form').onchange=e=>reviews(root,sid,Object.fromEntries(new FormData(e.currentTarget))).catch(e=>toast(e.message,'error'));root.querySelectorAll('[data-review-page]').forEach(b=>b.onclick=()=>reviews(root,sid,{...filters,page:b.dataset.reviewPage}).catch(e=>toast(e.message,'error')));
-  root.querySelectorAll('.ux-reply').forEach(f=>f.onsubmit=async e=>{e.preventDefault();try{await api('/reviews/'+enc(f.dataset.review)+'/reply',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(f)))});await reviews(root,sid,filters)}catch(error){toast(error.message,'error')}});
- }
- function remember(it){if(it.status!=='published')return;const values=read(recentKey()).filter(v=>v.id!==it.id);values.unshift({id:it.id});write(recentKey(),values.slice(0,20));ExperienceUX.remember(it)}
-
- async function favorites(){if(!me){location.hash='login';return}const [items,following]=await Promise.all([api('/favorites'),api('/following')]);app.innerHTML=`<section class="page">${pageTitle(tr('Saqlanganlar','Избранное','Saved listings'),tr('Narx o‘zgarganda yoki mahsulot qayta mavjud bo‘lganda bildirishnoma olasiz.','Уведомим о изменении цены или возвращении товара.','We’ll notify you when a saved listing changes in price or is back in stock.'))}<div class="product-grid">${items.filter(Boolean).map(marketCard).join('')||empty(tr('Hali hech narsa saqlanmagan','Вы ещё ничего не сохранили','Nothing saved yet'))}</div><section class="panel ux-following"><div class="ux-following-heading"><h2>${tr('Kuzatilayotgan do‘konlar','Ваши подписки','Stores you follow')}${following.length?`<span class="ux-following-count">${following.length}</span>`:''}</h2><p class="help">${tr('Yoqtirgan sotuvchilaringizni bir joyda saqlang va yangi e’lonlaridan xabardor bo‘ling.','Сохраняйте любимых продавцов и узнавайте об их новых предложениях.','Keep your favourite sellers close and hear about their latest listings.')}</p></div>${following.map(s=>`<a class="ux-following-store" href="/store/${enc(s.id)}">${marketAvatarMarkup(s.display_name||s.shop_name,s.avatar_url,'ux-small-avatar',s.id)}<b>${safe(s.shop_name)}</b><span>${s.rating?Number(s.rating).toFixed(1)+' ★':'—'}</span><span>→</span></a>`).join('')||`<div class="ux-following-empty"><span class="ux-following-empty-icon" aria-hidden="true">${icon('heart')}</span><div class="ux-following-empty-copy"><h3>${tr('Yangi do‘konlarni kashf eting','Откройте для себя новые магазины','Discover your next favourite store')}</h3><p>${tr('E’londan sotuvchining do‘koniga kiring va “Kuzatish”ni bosing. Yangi e’lonlari haqida bildirishnoma olasiz.','Откройте магазин продавца из объявления и нажмите «Подписаться». О новых предложениях сообщим в уведомлениях.','Open a seller’s store from any listing and choose Follow. We’ll notify you when they add something new.')}</p></div><a class="ux-following-discover" href="/browse">${tr('E’lonlarni ko‘rish','Смотреть объявления','Explore listings')} <span aria-hidden="true">→</span></a></div>`}</section></section>`}
- function stop(){clearTimeout(chatTimer);chatEpoch++;if(window.MobileSite)window.MobileSite.syncNavigation();else{document.querySelector('.ux-mobile-nav')?.remove();mobile()}}
- async function messages(id){return ExperienceUX.messages(id)}
- function mobile(){if(window.MobileSite){window.MobileSite.syncNavigation();return}if(document.querySelector('.ux-mobile-nav'))return;const route=location.hash.slice(1)||location.pathname.slice(1)||'home';const nav=document.createElement('nav');nav.className='ux-mobile-nav';nav.setAttribute('aria-label',tr('Asosiy menyu','Главное меню','Main navigation'));nav.innerHTML=[['/browse','gamepad',tr('Bozor','Маркет','Market'),'browse'],['/#favorites','heart',tr('Saqlangan','Избранное','Saved'),'favorites'],['/#seller','upload',tr('Sotish','Продать','Sell'),'seller'],['/#messages','message',tr('Xabarlar','Чаты','Messages'),'messages'],['/#account','user',tr('Profil','Профиль','Profile'),'account']].map(([href,ico,label,key])=>`<a href="${href}" ${route===key||key==='messages'&&route.startsWith('conversation/')?'aria-current="page"':''}>${icon(ico)}<span>${label}</span>${key==='messages'?'<i id="ux-unread" hidden></i>':''}</a>`).join('');document.body.append(nav);updateBadges()}
- async function updateBadges(){if(!me||badgeBusy||document.visibilityState!=='visible')return;badgeBusy=true;try{const rows=await api('/conversations'),n=rows.reduce((sum,c)=>sum+Number(c.unread||0),0),badge=$('#ux-unread');document.querySelectorAll('.ux-messages .conversation-item').forEach(link=>{const c=rows.find(r=>link.hash==='#conversation/'+enc(r.id));if(!c)return;const p=link.querySelector('p');if(p)p.textContent=c.last_message||c.listing_title||'';let count=link.querySelector('.status');if(c.unread){if(!count){count=document.createElement('span');count.className='status';link.append(count)}count.textContent=c.unread}else count?.remove()});if(badge){badge.hidden=!n;badge.textContent=n>99?'99+':n}}catch{}finally{badgeBusy=false}}
- function listing(it){remember(it);const trigger=app.querySelector('[data-seller-profile]');if(trigger){const link=document.createElement('a');link.className=trigger.className;link.href='/store/'+enc(it.store_id);link.textContent=tr('Do‘konni ko‘rish →','Открыть магазин →','View store →');trigger.replaceWith(link)}const pane=app.querySelector('[data-listing-panel="reviews"]');if(pane){pane.innerHTML='<div id="ux-listing-reviews"></div>';window.ReviewHub?.mount($('#ux-listing-reviews'),'listing',it.id)}}
- function order(o){
-  const root=app.querySelector('.page');if(!root)return;
-  const buyer=o.buyer_id===me.id;
-  const labels=[tr('To‘lov','Оплата','Payment'),tr('Yetkazish','Доставка','Delivery'),tr('Tekshirish','Проверка','Review'),tr('Yakunlash','Завершение','Complete')];
-  const statusCopy={
-   pending_payment:[tr('To‘lov bosqichi','Этап оплаты','Payment step'),buyer?tr('Avval buyurtma summasi va mahsulotlarni tekshiring, keyin to‘lovini yakunlang.','Сначала проверьте сумму и товары, затем завершите оплату.','Check the order total and items, then complete the payment.'):tr('Xaridor to‘lovini yakunlashi kutilmoqda.','Ожидается оплата покупателя.','Waiting for the buyer to complete the payment.'),0],
-   paid:[tr('To‘lov tasdiqlandi','Оплата подтверждена','Payment confirmed'),buyer?tr('Hozir sotuvchi navbati. Yetkazish ma’lumoti shu sahifada paydo bo‘ladi.','Сейчас очередь продавца. Данные о доставке появятся здесь.','It is the seller’s turn. Delivery details will appear here when ready.'):tr('Keyingi qadam sizda: mahsulotni buyurtma ichidagi forma orqali yetkazing.','Следующий шаг за вами: передайте товар через форму заказа.','Your next step: deliver the item using the form in this order.'),1],
-   awaiting_delivery:[tr('Yetkazish bosqichi','Этап доставки','Delivery step'),buyer?tr('Sotuvchi mahsulotni yetkazmoqda. Hozircha kutishingiz mumkin; yangilanish shu buyurtmada ko‘rinadi.','Продавец доставляет товар. Пока можно подождать — обновления появятся здесь.','The seller is delivering the item. You can wait; updates will appear here.'):tr('Mahsulotni qisman yoki to‘liq yetkazib, natijani buyurtmada qayd eting.','Передайте часть или весь товар и зафиксируйте результат в заказе.','Deliver some or all of the item and record the result in this order.'),1],
-   delivered:[tr('Mahsulotni tekshirish','Проверка товара','Check the delivery'),buyer?tr('Yetkazilgan mahsulot va sonini tekshiring. Hammasi to‘g‘ri bo‘lsa buyurtmani yakunlang; muammo bo‘lsa nizo oching.','Проверьте товар и количество. Если всё верно, завершите заказ; при проблеме откройте спор.','Check the delivered item and quantity. Complete the order if correct, or open a dispute if something is wrong.'):tr('Xaridor yetkazmani tekshirib, qabul qilishini kuting.','Ожидайте, пока покупатель проверит и подтвердит получение.','Wait for the buyer to check and confirm the delivery.'),2],
-   under_review:[tr('Tekshiruv davom etmoqda','Идёт проверка','Review in progress'),tr('Moderator dalillarni ko‘rib chiqmoqda. Qaror chiqqanda buyurtma holati yangilanadi.','Модератор проверяет доказательства. Статус заказа обновится после решения.','A moderator is reviewing the evidence. The order updates when a decision is made.'),2],
-   disputed:[tr('Nizo ko‘rib chiqilmoqda','Спор рассматривается','Dispute under review'),tr('Moderator qarorini shu buyurtma va nizolar bo‘limida kuzating.','Следите за решением модератора в заказе и разделе споров.','Follow the moderator’s decision in this order and the disputes section.'),2],
-   cancelled:[tr('Buyurtma bekor qilindi','Заказ отменён','Order cancelled'),tr('Bu buyurtmada davom etadigan qadam yo‘q. To‘lov holatini tekshiring; bekor qilish kutilmagan bo‘lsa, buyurtma raqami bilan yordam xizmatiga yozing.','Для этого заказа дальнейших шагов нет. Проверьте оплату; если отмена была неожиданной, обратитесь в поддержку и укажите номер заказа.','There are no further steps for this order. Check its payment status; if the cancellation was unexpected, contact support with the order reference.'),4],
-   completed:[tr('Buyurtma yakunlandi','Заказ завершён','Order complete'),buyer?tr('Savdo yakunlangan. Xohlasangiz xarid tajribangiz haqida sharh qoldiring.','Заказ завершён. При желании оставьте отзыв о покупке.','The order is complete. You can leave a review about your experience.'):tr('Buyurtma yakunlandi.','Заказ завершён.','The order is complete.'),4],
-   refunded:[tr('Buyurtma yopildi','Заказ закрыт','Order closed'),tr('qaytarimi qayd qilingan. Haqiqiy pul o‘tkazilmagan.','возврат зарегистрирован. Реальные деньги не переводились.','A refund was recorded. No real money was moved.'),4]
+window.MarketUX = (() => {
+  const tr = (uz, ru, en) => adminText(uz, ru, en),
+    safe = (value) => esc(value),
+    enc = encodeURIComponent;
+  let chatTimer = 0,
+    chatEpoch = 0,
+    searchTimer = 0,
+    searchEpoch = 0,
+    badgeBusy = false,
+    initialized = false;
+  const read = (key) => {
+    try {
+      return JSON.parse(localStorage.getItem(key) || "[]");
+    } catch {
+      return [];
+    }
   };
-  const [title,description,step]=statusCopy[o.status]||[tr('Buyurtma holati','Статус заказа','Order status'),tr('Batafsil holatni quyida ko‘ring yoki yordam xizmatiga murojaat qiling.','Подробности статуса указаны ниже или обратитесь в поддержку.','See the status details below or contact support.'),0];
-  const terminal=['cancelled','refunded'].includes(o.status),moderation=['disputed','under_review'].includes(o.status);
-  // The button belongs only to the person who can take the next real action.
-  const continueAvailable=(buyer&&['pending_payment','delivered'].includes(o.status))||(!buyer&&['paid','awaiting_delivery'].includes(o.status));
-  const continueLabel=o.status==='pending_payment'?tr('To‘lov bosqichini ochish','Перейти к оплате','Continue to payment'):o.status==='delivered'?tr('Tekshiruv bosqichini ochish','Перейти к проверке','Continue to review'):tr('Yetkazish bosqichini ochish','Перейти к доставке','Continue to delivery');
-  const waitingForOther=buyer&&['paid','awaiting_delivery'].includes(o.status);
-  const sellers=[...new Set(o.items.map(i=>i.store_id).filter(Boolean))];
-  root.querySelector('.page-header')?.insertAdjacentHTML('afterend',`<section class="panel ux-order-guide ${terminal?'is-terminal':''} ${moderation?'is-waiting':''}"><div class="ux-eyebrow">${tr('BUYURTMA JARAYONI','ПРОЦЕСС ЗАКАЗА','ORDER PROGRESS')}</div><h2>${title}</h2><p>${description}</p>${!terminal?`<ol class="ux-order-steps">${labels.map((label,i)=>`<li class="${i<step?'done':''} ${i===step?'current':''}"><span>${i<step?'✓':i+1}</span>${label}</li>`).join('')}</ol>`:''}${continueAvailable?`<button class="button-primary ux-order-continue" type="button" data-order-continue>${continueLabel} ${icon('arrow-right')}</button>`:''}${waitingForOther?`<div class="ux-order-waiting" role="status"><span aria-hidden="true">${icon('clock')}</span><b>${tr('Hozircha kutish kerak','Сейчас нужно подождать','Nothing you need to do right now')}</b></div>`:''}<div class="actions">${sellers.map(s=>`<button class="button-secondary" data-order-chat="${safe(s)}">${icon('message')} ${buyer?tr('Sotuvchiga yozish','Написать продавцу','Message seller'):tr('Xaridorga yozish','Написать покупателю','Message buyer')}</button>`).join('')}</div><div id="ux-delivery-deadlines"></div></section>`);
-  app.querySelectorAll('[data-order-chat]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{const r=await api('/conversations',{method:'POST',body:JSON.stringify({order_id:o.id,seller_id:b.dataset.orderChat})});location.hash='conversation/'+enc(r.id)}catch(e){toast(e.message,'error');b.disabled=false}});
-  app.querySelector('[data-order-continue]')?.addEventListener('click',event=>{
-   let target;
-   if(o.status==='pending_payment')target=app.querySelector('.test-payment-panel');
-   else if(['paid','awaiting_delivery'].includes(o.status))target=app.querySelector(buyer?'.trade-buyer-details':' .trade-delivery')?.closest('.trade-section')||app.querySelector('#trade-order');
-   else if(o.status==='delivered'&&buyer)target=app.querySelector('.account-review-upload')||app.querySelector('[data-action="complete-order"]')?.closest('.panel');
-   if(!target)return;const gated=target.closest('.ux-order-step-gated');if(gated?.hidden||target.hidden){app.querySelectorAll('.ux-order-step-gated[hidden]').forEach(stage=>{stage.hidden=false;stage.classList.add('ux-order-step-revealed')});event.currentTarget.hidden=true}target.closest('details')?.setAttribute('open','');target.scrollIntoView({behavior:'smooth',block:'center'});target.querySelector('input,textarea,button')?.focus({preventScroll:true});
-  });
-  const box=$('#ux-delivery-deadlines');if(box)box.innerHTML=o.items.map(item=>`<p class="help">${safe(item.title)} · ${tr('Yetkazish','Доставка','Delivery')}: ${safe(item.delivery_eta||'—')}${item.delivery_due_at?` · ${tr('Belgilangan muddat','Установленный срок','Delivery deadline')}: ${parseServerDate(item.delivery_due_at).toLocaleString(localeTag())}`:''}${item.snapshot?.legacy?` · ${tr('Eski buyurtma: xarid vaqtidagi barcha shartlar saqlanmagan.','Старый заказ: не все исходные условия были сохранены.','Legacy order: the original terms were not fully recorded.')}`:''}</p>`).join('');
-  if(box)box.insertAdjacentHTML('beforeend',o.items.filter(i=>i.snapshot).map(item=>{const v=item.snapshot;return `<details class="ops-snapshot"><summary>${tr('Saqlangan e’lon shartlari','Сохранённые условия объявления','Saved listing terms')} · ${safe(item.title)}</summary><p class="detail-desc" data-user-content>${safe(v.description||'—')}</p><p>${safe(v.platform||'—')} · ${safe(v.region||'—')} · ${safe(v.delivery_eta||'—')}</p><p class="detail-desc" data-user-content>${safe(v.requirements||'—')}</p>${Object.entries(v.attributes||{}).filter(([k,value])=>k!=='images'&&value!==''&&value!=null).map(([k,value])=>`<p class="help"><b>${safe(k.replaceAll('_',' '))}</b>: ${safe(Array.isArray(value)?value.join(', '):value)}</p>`).join('')}${v.image_url?`<a class="text-link" href="${safe(v.image_url)}" target="_blank" rel="noopener noreferrer">${tr('Saqlangan mahsulot rasmi','Сохранённое фото товара','Saved product photo')} ↗</a>`:''}</details>`}).join(''));
- }
- function duration(value){const s=String(value||'').toLowerCase();if(/instant|darhol|мгнов/.test(s))return 1;const matches=[...s.matchAll(/(\d+(?:\.\d+)?)\s*(minutes?|mins?|minut|daq|мин|hours?|hrs?|soat|час|days?|kun|дн)/g)];return matches.length?Math.max(...matches.map(m=>Number(m[1])*(/^(day|kun|дн)/.test(m[2])?1440:/^(hour|hr|soat|час)/.test(m[2])?60:1))):null}
- function setupSearch(inputSelector='#global-search',formSelector='#search-form'){const input=$(inputSelector),form=$(formSelector);if(!input||form.dataset.ux)return;form.dataset.ux='1';const box=document.createElement('div');box.className='ux-search-suggestions';box.id='ux-search-suggestions-'+input.id;box.hidden=true;box.setAttribute('role','listbox');form.append(box);input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-controls',box.id);input.setAttribute('aria-expanded','false');let active=-1;
-  const close=()=>{box.hidden=true;input.setAttribute('aria-expanded','false');active=-1;input.removeAttribute('aria-activedescendant')};
-  input.addEventListener('input',()=>{clearTimeout(searchTimer);const epoch=++searchEpoch,q=input.value.trim();if(q.length<2){close();return}searchTimer=setTimeout(async()=>{try{const r=await api('/search/suggestions?q='+enc(q));if(epoch!==searchEpoch||document.activeElement!==input)return;box.innerHTML=[...r.games.map(g=>({href:'/browse?game='+enc(g.slug),title:g.name,sub:tr('O‘yin','Игра','Game')})),...r.items.map(i=>({href:'/listing/'+enc(i.id),title:i.title,sub:fmt(i.price_minor,i.currency)}))].map((v,i)=>`<a role="option" aria-selected="false" id="${box.id}-${i}" href="${v.href}"><span>${safe(v.title)}</span><small>${safe(v.sub)}</small></a>`).join('');box.hidden=!box.childElementCount;input.setAttribute('aria-expanded',String(!box.hidden));active=-1}catch{close()}},220)});
-  input.addEventListener('keydown',e=>{const items=[...box.querySelectorAll('a')];if(e.key==='Escape'){close();return}if(box.hidden)return;if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();active=(active+(e.key==='ArrowDown'?1:-1)+items.length)%items.length;items.forEach((a,i)=>a.setAttribute('aria-selected',String(i===active)));input.setAttribute('aria-activedescendant',items[active].id)}if(e.key==='Enter'&&active>=0){e.preventDefault();location.assign(items[active].href)}});input.addEventListener('blur',()=>requestAnimationFrame(()=>{if(!form.contains(document.activeElement))close()}));form.addEventListener('submit',close)
- }
- function init(){if(initialized)return;initialized=true;mobile();setupSearch();setInterval(updateBadges,20000)}
- function seller(own){
-  const sellerRoot=$('#my-listings');if(sellerRoot?.dataset.sellerEnhanced)return;if(sellerRoot)sellerRoot.dataset.sellerEnhanced='1';
-  const form=$('#listing-form');if(form&&!form.hasAttribute('data-offer-wizard')){const key='sentryloot_draft_'+me.id;let timer;
-  const collect=()=>{const values={};for(const input of form.querySelectorAll('input,textarea,select')){if(!input.name||input.type==='file'||input.name==='accept_account_terms')continue;if(input.type==='checkbox'){if(input.checked)(values[input.name]??=[]).push(input.value)}else if(!input.disabled)values[input.name]=input.value}return values};
-  const tools=document.createElement('div');tools.className='ux-draft-tools';tools.innerHTML=`<small id="ux-draft-status">${tr('Qoralama shu brauzerda saqlanadi','Черновик сохраняется в этом браузере','Draft saved in this browser')}</small><div class="actions"><button type="button" class="button-secondary" data-draft-save>${tr('Qoralamani saqlash','Сохранить черновик','Save draft')}</button><button type="button" class="button-secondary" data-draft-preview>${icon('eye')} ${tr('Oldindan ko‘rish','Предпросмотр','Preview')}</button><button type="button" class="ux-text-button" data-draft-clear>${tr('Qoralamani tozalash','Очистить черновик','Clear draft')}</button></div>`;form.prepend(tools);
-  const saved=read(key);if(saved&&typeof saved==='object'&&!Array.isArray(saved)){for(const name of ['game_name','category_id']){const input=form.elements.namedItem(name);if(input&&saved[name]){input.value=saved[name];input.dispatchEvent(new Event('change',{bubbles:true}))}}for(const input of form.querySelectorAll('input,textarea,select')){if(!(input.name in saved)||input.type==='file'||input.name==='accept_account_terms')continue;if(input.type==='checkbox')input.checked=Array.isArray(saved[input.name])&&saved[input.name].includes(input.value);else input.value=saved[input.name]}$('#ux-draft-status').textContent=tr('Qoralama tiklandi. Rasmlarni qayta tanlang.','Черновик восстановлен. Выберите фото заново.','Draft restored. Please reselect your photos.')}
-  form.addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(()=>{if(!form.isConnected)return;write(key,collect());$('#ux-draft-status').textContent=tr('Qoralama saqlandi · ','Черновик сохранён · ','Draft saved · ')+new Date().toLocaleTimeString(localeTag(),{hour:'2-digit',minute:'2-digit'})},500)});
-  form.querySelector('[data-draft-clear]').onclick=()=>{clearTimeout(timer);localStorage.removeItem(key);renderSeller()};
-  form.querySelector('[data-draft-save]').onclick=async e=>{const d=collect(),attributes={};for(const [k,v]of Object.entries(d))if(k.startsWith('game_attr_'))attributes[k.slice(10)]=v;attributes.server=d.server||'';if(d.rank)attributes.rank=d.rank;const button=e.currentTarget;button.disabled=true;try{const images=[];for(const input of form.querySelectorAll('[data-listing-photos]'))if(input.files[0])images.push(await uploadListingPhoto(input.files[0]));const r=await api('/listings',{method:'POST',body:JSON.stringify({...d,images,attributes,price_minor:Number(d.price_minor),stock:Number(d.stock||1),linked_accounts:d.linked_accounts||[],accept_account_terms:form.elements.accept_account_terms?.checked===true,submit_for_review:false})});localStorage.removeItem(key);toast(tr('Qoralama hisobingizga saqlandi','Черновик сохранён в аккаунте','Draft saved to your account'));await renderSeller();document.querySelector(`[data-id="${CSS.escape(r.id)}"]`)?.scrollIntoView()}catch(error){toast(error.message,'error');button.disabled=false}};
-  form.querySelector('[data-draft-preview]').onclick=()=>{const d=collect(),files=[...form.querySelectorAll('[data-listing-photos]')].map(i=>i.files[0]).filter(Boolean),urls=files.map(f=>URL.createObjectURL(f));const dialog=document.createElement('dialog');dialog.className='ux-preview-dialog';dialog.innerHTML=`<header><h2>${tr('E’lon ko‘rinishi','Предпросмотр объявления','Listing preview')}</h2><button type="button" class="button-secondary" data-close>${tr('Yopish','Закрыть','Close')} ×</button></header><p class="help">${tr('Bu faqat oldindan ko‘rish. E’lon hali joylanmadi.','Это предпросмотр. Объявление ещё не опубликовано.','Preview only. This listing has not been published.')}</p>${urls[0]?`<img class="ux-preview-main" src="${urls[0]}" alt="">`:''}<h2>${safe(d.title||tr('Sarlavha','Заголовок','Listing title'))}</h2><b class="price">${fmt(Number(d.price_minor||0))}</b><p class="detail-desc">${safe(d.description||'')}</p><div class="ux-preview-facts">${Object.entries(d).filter(([k,v])=>v&&['platform','region','server','rank','delivery_eta','stock'].includes(k)||k.startsWith('game_attr_')&&v).map(([k,v])=>`<span>${safe(k.replace('game_attr_','').replaceAll('_',' '))}: <b>${safe(v)}</b></span>`).join('')}</div>`;document.body.append(dialog);dialog.showModal();dialog.querySelector('[data-close]').onclick=()=>dialog.close();dialog.onclose=()=>{urls.forEach(URL.revokeObjectURL);dialog.remove()}};
-  app.querySelectorAll('.listing-upload-grid').forEach(grid=>{const controls=document.createElement('div');controls.className='ux-photo-reorder';controls.innerHTML=`<p class="help">${tr('Rasmlar tartibi: chapdagi rasm asosiy bo‘ladi.','Порядок фото: первое фото будет главным.','Photo order: the first photo becomes the cover.')}</p><div class="actions">${[0,1,2].map(i=>`<button type="button" class="ux-chip" data-swap-photo="${i}">${i+1} ⇄ ${i+2}</button>`).join('')}</div>`;grid.after(controls);controls.querySelectorAll('button').forEach(b=>b.onclick=()=>{const slots=[...grid.children],i=Number(b.dataset.swapPhoto);grid.insertBefore(slots[i+1],slots[i]);[...grid.querySelectorAll('input[type=file]')].forEach((input,index)=>input.required=form.id==='listing-form'&&index===0);[...grid.querySelectorAll('.listing-upload-title')].forEach((label,index)=>label.textContent=(index+1)+' · '+(index===0?tr('Asosiy rasm','Главное фото','Cover photo'):tr('Rasm','Фото','Photo')))})});
+  const write = (key, value) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {}
+  };
+  const recentKey = () => `sentryloot_recent_${me?.id || "guest"}`;
+  const sortOptions = () => [
+    ["recommended", tr("Tavsiya etilgan", "Рекомендуемые", "Recommended")],
+    ["newest", tr("Eng yangi", "Сначала новые", "Newest")],
+    ["price_asc", tr("Eng arzon", "Самые низкие цены", "Lowest prices")],
+    ["price_desc", tr("Qimmatroq", "Дороже", "Price: high to low")],
+    ["rating", tr("Yuqori reyting", "Высокий рейтинг", "Highest rated")],
+    ["delivery", tr("Tez yetkazish", "Быстрая доставка", "Fastest delivery")],
+    ["popular", tr("Eng ko‘p sotilgan", "Популярные", "Most sold")],
+  ];
+  function filterMarkup(filters = {}) {
+    const priceCurrency = filters.currency || "UZS",
+      priceUnit = priceCurrency === "MYR" ? "RM" : priceCurrency;
+    const labels = {
+      min: tr("Narx dan", "Цена от", "Min price") + " (" + priceUnit + ")",
+      max: tr("Narx gacha", "Цена до", "Max price") + " (" + priceUnit + ")",
+      platform: tr("Platforma", "Платформа", "Platform"),
+      region: tr("Hudud", "Регион", "Region"),
+      server: tr("Server", "Сервер", "Server"),
+      rank: tr("Rank / daraja", "Ранг / уровень", "Rank / level"),
+      item_type: tr("Buyum turi", "Тип предмета", "Item type"),
+      condition: tr("Holati", "Состояние", "Condition"),
+      item_variant: tr("Variant", "Вариант", "Variant"),
+      float_min: tr("Float dan", "Float от", "Float from"),
+      float_max: tr("Float gacha", "Float до", "Float to"),
+    };
+    const chipLabels = {
+      ...labels,
+      min_major: labels.min,
+      max_major: labels.max,
+      currency: tr("Valyuta", "Валюта", "Currency"),
+      q: tr("Qidiruv", "Поиск", "Search"),
+      game: tr("O‘yin", "Игра", "Game"),
+      category: tr("Kategoriya", "Категория", "Category"),
+      online: tr("Online sotuvchi", "Продавец в сети", "Seller online"),
+      verified: tr(
+        "Shaxsi tasdiqlangan",
+        "Личность подтверждена",
+        "Identity verified",
+      ),
+      delivery: tr("Yetkazish", "Доставка", "Delivery"),
+      sort: tr("Saralash", "Сортировка", "Sort"),
+    };
+    const chipValue = (key, value) =>
+      key === "sort"
+        ? sortOptions().find(([k]) => k === value)?.[1] || value
+        : ["online", "verified"].includes(key)
+          ? tr("Ha", "Да", "Yes")
+          : key === "delivery"
+            ? value + " min"
+            : key === "game"
+              ? marketGameLinks.find(([slug]) => slug === value)?.[1] || value
+              : value;
+    return `<details class="ux-filters" ${Object.keys(filters).some((k) => labels[k] || ["online", "delivery", "verified"].includes(k)) ? "open" : ""}><summary>${icon("filter")} ${tr("Filtrlar va saralash", "Фильтры и сортировка", "Filters & sorting")}<span>${Object.keys(filters).filter((k) => labels[k] || ["online", "delivery", "verified"].includes(k)).length || ""}</span></summary><form class="ux-filter-form">${filters.currency ? `<input type="hidden" name="currency" value="${safe(filters.currency)}">` : ""}<div class="ux-filter-grid">${Object.entries(
+      labels,
+    )
+      .map(
+        ([key, label]) =>
+          `<label>${label}<input name="${filters.currency && ["min", "max"].includes(key) ? key + "_major" : key}" ${key.startsWith("float_") ? 'type="number" min="0" max="1" step="any"' : ["min", "max"].includes(key) ? `type="number" min="0" step="${filters.currency === "MYR" ? "0.01" : "1"}"` : 'type="text" maxlength="80"'} value="${safe(filters.currency && ["min", "max"].includes(key) ? filters[key + "_major"] || (filters[key] ? String(Number(filters[key]) / (filters.currency === "MYR" ? 100 : 1)) : "") : filters[key] || "")}" placeholder="${["min", "max"].includes(key) ? "0" : tr("Barchasi", "Все", "Any")}"></label>`,
+      )
+      .join(
+        "",
+      )}<label>${tr("Yetkazish muddati", "Срок доставки", "Delivery within")}<select name="delivery"><option value="">${tr("Barchasi", "Все", "Any time")}</option>${[
+      [5, "5 min"],
+      [15, "15 min"],
+      [60, "1 h"],
+      [360, "6 h"],
+      [1440, "24 h"],
+    ]
+      .map(
+        ([v, l]) =>
+          `<option value="${v}" ${String(v) === filters.delivery ? "selected" : ""}>${l}</option>`,
+      )
+      .join(
+        "",
+      )}</select></label><label>${tr("Saralash", "Сортировка", "Sort by")}<select name="sort">${sortOptions()
+      .map(
+        ([v, l]) =>
+          `<option value="${v}" ${(filters.sort || "recommended") === v ? "selected" : ""}>${l}</option>`,
+      )
+      .join(
+        "",
+      )}</select></label></div><div class="ux-filter-bottom"><label><input type="checkbox" name="online" value="1" ${filters.online === "1" ? "checked" : ""}> ${tr("Online sotuvchi", "Продавец в сети", "Seller online")}</label><label><input type="checkbox" name="verified" value="1" ${filters.verified === "1" ? "checked" : ""}> ${tr("Shaxsi tasdiqlangan", "Личность подтверждена", "Identity verified")}</label><button class="button-primary">${tr("Qo‘llash", "Применить", "Apply filters")}</button></div></form></details><div class="ux-filter-chips">${Object.entries(
+      filters,
+    )
+      .filter(([k, v]) => v && k !== "page" && k !== "seller")
+      .map(
+        ([key, value]) =>
+          `<button class="ux-chip" data-remove-filter="${safe(key)}" aria-label="${safe(tr("Filtrni olib tashlash", "Убрать фильтр", "Remove filter"))}: ${safe(key)}">${safe(chipLabels[key] || key)}: ${safe(chipValue(key, value))} <span>×</span></button>`,
+      )
+      .join(
+        "",
+      )}${Object.keys(filters).filter((k) => k !== "seller").length ? `<button class="ux-clear-filters">${tr("Tozalash", "Сбросить", "Clear all")}</button>` : ""}</div>`;
   }
-  // Existing images can be reordered without uploading replacements.
-  app.querySelectorAll('form[data-form="edit-listing"]').forEach(f=>{const listing=own.find(l=>l.id===f.dataset.id);if(!listing)return;let images=listingGalleryImages(listing);if(images.length<2)return;const box=document.createElement('div');box.className='ux-current-photo-order';const draw=()=>{box.innerHTML=`<p class="help">${tr('Joriy rasmlar tartibi','Порядок текущих фото','Current photo order')}</p><div class="actions">${images.map((url,i)=>`<button type="button" class="ux-chip" data-move="${i}">${i+1}${i?' ↑':` · ${tr('asosiy','главное','cover')}`}</button>`).join('')}<button type="button" class="button-secondary" data-save-order>${tr('Tartibni saqlash','Сохранить порядок','Save order')}</button></div>`;box.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>{const i=Number(b.dataset.move);if(!i)return;[images[i-1],images[i]]=[images[i],images[i-1]];draw()});box.querySelector('[data-save-order]').onclick=async e=>{e.currentTarget.disabled=true;try{await api('/listings/'+enc(listing.id),{method:'PATCH',body:JSON.stringify({images})});toast(tr('Tartib saqlandi. E’lon tekshiruvga yuborildi.','Порядок сохранён. Объявление отправлено на проверку.','Order saved. Listing submitted for review.'));await renderSeller()}catch(error){toast(error.message,'error');e.currentTarget.disabled=false}}};draw();f.querySelector('.listing-image-fields')?.prepend(box)});
-  const list=$('#my-listings');if(!list)return;const toolbar=document.createElement('div');toolbar.className='ux-bulk-tools';toolbar.innerHTML=`<label><input type="checkbox" data-select-all> ${tr('Barchasini tanlash','Выбрать все','Select all')}</label><button class="button-secondary" data-bulk-pause>${tr('Tanlanganlarni pauza qilish','Приостановить выбранные','Pause selected')}</button><a class="text-link" href="/store/${enc(me.id)}">${tr('Do‘konim →','Мой магазин →','My store →')}</a>`;list.before(toolbar);
-  [...list.children].forEach((row,i)=>{const l=own[i];if(!l)return;row.insertAdjacentHTML('afterbegin',`${['published','paused'].includes(l.status)?`<label class="ux-bulk-check"><input type="checkbox" data-bulk-id="${safe(l.id)}"> ${tr('Tanlash','Выбрать','Select')}</label>`:''}<button type="button" class="ux-text-button ux-duplicate" data-duplicate="${safe(l.id)}">${tr('Nusxa yaratish','Создать копию','Duplicate')}</button>`)});
-  toolbar.querySelector('[data-select-all]').onchange=e=>list.querySelectorAll('[data-bulk-id]').forEach(c=>c.checked=e.target.checked);toolbar.querySelector('[data-bulk-pause]').onclick=async e=>{const ids=[...list.querySelectorAll('[data-bulk-id]:checked')].map(c=>c.dataset.bulkId);if(!ids.length){toast(tr('E’lonlarni tanlang','Выберите объявления','Select listings first'));return}e.currentTarget.disabled=true;try{await api('/seller/listings/bulk-pause',{method:'POST',body:JSON.stringify({ids})});await renderSeller()}catch(error){toast(error.message,'error');e.currentTarget.disabled=false}};
-  list.querySelectorAll('[data-duplicate]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await api('/listings/'+enc(b.dataset.duplicate)+'/duplicate',{method:'POST',body:'{}'});toast(tr('Nusxa qoralama sifatida yaratildi','Копия создана как черновик','Copy created as a draft'));await renderSeller()}catch(error){toast(error.message,'error');b.disabled=false}});
-  window.ExperienceUX?.seller(own).catch(error=>toast(error.message,'error'));
-  window.OperationsUX?.seller(own).catch(error=>toast(error.message,'error'));
- }
+  function bindFilters(root, filters, callback) {
+    const quickSort = root.querySelector("[data-mobile-sort]");
+    quickSort?.addEventListener("change", () => {
+      const next = { ...filters, sort: quickSort.value };
+      delete next.page;
+      callback(next);
+    });
+    root.querySelector(".ux-filter-form")?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const next = { ...filters };
+      for (const key of ["category", "game"])
+        if (e.currentTarget.elements.namedItem(key)) delete next[key];
+      for (const k of [
+        "float_min",
+        "float_max",
+        "min",
+        "max",
+        "min_major",
+        "max_major",
+        "currency",
+        "platform",
+        "region",
+        "server",
+        "rank",
+        "item_type",
+        "condition",
+        "item_variant",
+        "delivery",
+        "sort",
+        "online",
+        "verified",
+        "account_level",
+        "redemption_region",
+        "code_kind",
+        "unit",
+      ])
+        delete next[k];
+      for (const [k, v] of new FormData(e.currentTarget)) {
+        if (String(v).trim()) next[k] = String(v).trim();
+      }
+      if (!next.min_major && !next.max_major && !filters.currency)
+        delete next.currency;
+      if (
+        (next.min && next.max && Number(next.min) > Number(next.max)) ||
+        (next.min_major &&
+          next.max_major &&
+          Number(next.min_major) > Number(next.max_major))
+      ) {
+        toast(
+          tr(
+            "Narx oralig‘ini tekshiring",
+            "Проверьте диапазон цен",
+            "Check the price range",
+          ),
+        );
+        return;
+      }
+      delete next.page;
+      callback(next);
+    });
+    root.querySelectorAll("[data-remove-filter]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          const next = { ...filters };
+          delete next[b.dataset.removeFilter];
+          callback(next);
+        }),
+    );
+    root
+      .querySelector(".ux-clear-filters")
+      ?.addEventListener("click", () =>
+        callback(filters.seller ? { seller: filters.seller } : {}),
+      );
+  }
+  function browse(filters) {
+    const heading = app.querySelector(".market-browse-heading");
+    if (!heading) return;
+    heading.insertAdjacentHTML(
+      "afterend",
+      `<div id="ux-browse-filters"><label class="mobile-browse-sort">${tr("Saralash", "Сортировка", "Sort by")}<select data-mobile-sort>${sortOptions()
+        .map(
+          ([value, label]) =>
+            `<option value="${value}" ${(filters.sort || "recommended") === value ? "selected" : ""}>${safe(label)}</option>`,
+        )
+        .join("")}</select></label>${filterMarkup(filters)}</div>`,
+    );
+    bindFilters($("#ux-browse-filters"), filters, (next) => {
+      history.pushState({}, "", "/browse?" + new URLSearchParams(next));
+      navigate();
+    });
+    const emptyBox = app.querySelector(".market-empty");
+    if (emptyBox && filters.q)
+      api("/search/suggestions?q=" + enc(filters.q))
+        .then((r) => {
+          if (emptyBox.isConnected)
+            emptyBox.insertAdjacentHTML(
+              "beforeend",
+              `<div class="ux-suggestions-inline">${r.games.map((g) => `<a class="ux-chip" href="/browse?game=${enc(g.slug)}">${safe(g.name)} →</a>`).join("")}</div>`,
+            );
+        })
+        .catch(() => {});
+    TradeUX.browse(filters);
+    const facetRoot = $("#ux-browse-filters");
+    ExperienceUX.browse(filters)
+      .catch(() => {})
+      .finally(() => {
+        if (facetRoot?.isConnected) {
+          facetRoot.dataset.facetsReady = "1";
+          facetRoot.dispatchEvent(new Event("catalogue-facets-ready"));
+        }
+      });
+  }
+  async function store(id, filters = {}) {
+    const [s, result] = await Promise.all([
+      api("/stores/" + enc(id)),
+      api("/listings?" + new URLSearchParams({ ...filters, seller: id })),
+    ]);
+    app.innerHTML = `<section class="page ux-store"><header class="ux-store-header panel">${marketAvatarMarkup(s.display_name || s.shop_name, s.avatar_url, "ux-store-avatar", s.id)}<div class="ux-store-intro"><span class="ux-eyebrow">${tr("SOTUVCHI DO‘KONI", "МАГАЗИН ПРОДАВЦА", "SELLER STORE")}</span><h1>${safe(s.shop_name)}</h1><p>${s.online ? "🟢 " + tr("Online", "В сети", "Online") : tr("Hozir offline", "Сейчас не в сети", "Currently offline")} · ${tr("A’zo", "На сайте с", "Member since")} ${parseServerDate(s.created_at).getFullYear()} ${s.identity_verified ? " · " + tr("Shaxsi tasdiqlangan", "Личность подтверждена", "Identity verified") : ""}</p></div>${!s.is_owner ? `<button class="button-secondary" id="ux-follow">${s.following ? "✓ " : ""}${s.following ? tr("Kuzatilmoqda", "Вы подписаны", "Following") : tr("Kuzatish", "Подписаться", "Follow store")}</button>` : ""}<div class="ux-store-stats"><div><b>${s.rating ? Number(s.rating).toFixed(1) : "—"} <small>★</small></b><span>${s.review_count} ${tr("sharh", "отзывов", "reviews")}</span></div><div><b>${s.completed_sales}</b><span>${tr("yakunlangan savdo", "завершённых продаж", "completed sales")}</span></div><div><b>${s.positive_percent === null ? "—" : s.positive_percent + "%"}</b><span>${tr("ijobiy sharh", "положительных отзывов", "positive reviews")}</span></div><div><b>${s.avg_reply_seconds === null ? "—" : s.avg_reply_seconds < 60 ? "<1 min" : Math.round(s.avg_reply_seconds / 60) + " min"}</b><span>${tr("o‘rtacha javob", "среднее время ответа", "average reply")}</span></div></div>${s.availability?.vacation ? `<p class="notice warn">${tr("Sotuvchi vaqtincha yangi buyurtma olmayapti", "Продавец временно не принимает новые заказы", "Seller is temporarily not accepting new orders")}</p>` : ""}${s.availability?.hours?.length ? `<p class="help">${tr("Ish vaqti", "Часы работы", "Working hours")}: ${s.availability.hours.map((h) => `${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][h.day]} ${h.start}–${h.end}`).join(" · ")} · ${safe(s.availability.timezone)}</p>` : ""}<p class="ux-store-bio" data-user-content>${safe(s.bio || tr("Sotuvchi hali tavsif kiritmagan.", "Продавец ещё не добавил описание.", "This seller has not added a description yet."))}</p></header><nav class="ux-tabs"><a href="#ux-store-listings">${tr("E’lonlar", "Объявления", "Listings")} (${result.total_count})</a><a href="#ux-store-reviews">${tr("Sharhlar", "Отзывы", "Reviews")} (${s.review_count})</a></nav><section id="ux-store-listings"><div id="ux-store-filters">${filterMarkup(filters)}</div><div class="product-grid" id="ux-store-cards">${result.items.map(marketCard).join("") || empty(tr("Mos e’lonlar yo‘q", "Нет подходящих объявлений", "No matching listings"))}</div>${result.has_more ? `<button class="button-secondary" id="ux-store-more">${tr("Yana ko‘rish", "Показать ещё", "Show more")}</button>` : ""}</section>${s.sales_history?.length ? `<section class="panel ux-sales-history"><h2>${tr("Yakunlangan savdolar", "Завершённые продажи", "Completed sales")}</h2>${s.sales_history.map((h) => `<div><b>${safe(h.game_name)}</b><span>${h.quantity} ${tr("ta mahsulot", "товаров", "items")} · ${tr("Oxirgi savdo", "Последняя продажа", "Last sale")} ${parseServerDate(h.last_sale_at).toLocaleDateString(localeTag())}</span></div>`).join("")}</section>` : ""}<section class="panel ux-reviews" id="ux-store-reviews"><h2>${tr("Xaridorlar sharhlari", "Отзывы покупателей", "Buyer reviews")}</h2><div id="ux-review-root"></div></section></section>`;
+    const back = document.getElementById("route-back");
+    if (back) back.hidden = true;
+    document.title = s.shop_name + " | SentryLoot";
+    // Section links stay inside the page instead of entering the application router.
+    app.querySelectorAll(".ux-tabs a").forEach(
+      (a) =>
+        (a.onclick = (e) => {
+          e.preventDefault();
+          document
+            .getElementById(a.getAttribute("href").slice(1))
+            ?.scrollIntoView({ behavior: "smooth" });
+        }),
+    );
+    bindFilters($("#ux-store-filters"), filters, (next) =>
+      store(id, next).catch((e) => toast(e.message, "error")),
+    );
+    $("#ux-follow")?.addEventListener("click", async () => {
+      if (!me) {
+        location.hash = "login";
+        return;
+      }
+      const b = $("#ux-follow");
+      b.disabled = true;
+      try {
+        await api("/stores/" + enc(id) + "/follow", {
+          method: s.following ? "DELETE" : "POST",
+          body: "{}",
+        });
+        await store(id, filters);
+      } catch (e) {
+        toast(e.message, "error");
+        b.disabled = false;
+      }
+    });
+    let page = 1;
+    $("#ux-store-more")?.addEventListener("click", async (e) => {
+      const b = e.currentTarget;
+      b.disabled = true;
+      try {
+        const next = await api(
+          "/listings?" +
+            new URLSearchParams({ ...filters, seller: id, page: page + 1 }),
+        );
+        $("#ux-store-cards").insertAdjacentHTML(
+          "beforeend",
+          next.items.map(marketCard).join(""),
+        );
+        page++;
+        if (!next.has_more) b.remove();
+        else b.disabled = false;
+      } catch (error) {
+        toast(error.message, "error");
+        b.disabled = false;
+      }
+    });
+    await reviews($("#ux-review-root"), id);
+  }
+  async function reviews(root, sid, filters = {}) {
+    if (!root) return;
+    const r = await api(
+      "/stores/" + enc(sid) + "/reviews?" + new URLSearchParams(filters),
+    );
+    if (!root.isConnected) return;
+    root.innerHTML = `<form class="ux-review-filters"><select name="sentiment" aria-label="${tr("Sharh turi", "Тип отзыва", "Review type")}">${[
+      ["", tr("Barcha sharhlar", "Все отзывы", "All reviews")],
+      [
+        "positive",
+        tr("Ijobiy · 4–5 ★", "Положительные · 4–5 ★", "Positive · 4–5 ★"),
+      ],
+      [
+        "negative",
+        tr("Tanqidiy · 1–3 ★", "Критические · 1–3 ★", "Critical · 1–3 ★"),
+      ],
+    ]
+      .map(
+        ([v, l]) =>
+          `<option value="${v}" ${filters.sentiment === v ? "selected" : ""}>${l}</option>`,
+      )
+      .join(
+        "",
+      )}</select><select name="product_type" aria-label="${tr("Mahsulot turi", "Тип товара", "Product type")}"><option value="">${tr("Barcha mahsulotlar", "Все товары", "All product types")}</option>${(r.types || []).map((v) => `<option value="${safe(v.product_type)}" ${filters.product_type === v.product_type ? "selected" : ""}>${safe(v.product_type)} · ${Number(v.rating).toFixed(1)} ★ (${v.count})</option>`).join("")}</select><select name="game" aria-label="${tr("O‘yin", "Игра", "Game")}"><option value="">${tr("Barcha o‘yinlar", "Все игры", "All games")}</option>${r.games.map((g) => `<option value="${safe(g.slug)}" ${filters.game === g.slug ? "selected" : ""}>${safe(g.name)}</option>`).join("")}</select><select name="sort" aria-label="${tr("Saralash", "Сортировка", "Sort reviews")}">${[
+      ["newest", tr("Eng yangi", "Новые", "Newest")],
+      ["oldest", tr("Eng avvalgi", "Старые", "Oldest")],
+      ["rating_desc", tr("Yuqori baho", "Высокая оценка", "Highest rating")],
+      ["rating_asc", tr("Past baho", "Низкая оценка", "Lowest rating")],
+    ]
+      .map(
+        ([v, l]) =>
+          `<option value="${v}" ${(filters.sort || "newest") === v ? "selected" : ""}>${l}</option>`,
+      )
+      .join(
+        "",
+      )}</select></form><p class="help">${r.total_count} ${tr("ta sharh", "отзывов", "reviews")}</p><div class="ux-review-list">${r.items.map((v) => `<article class="ux-review"><header><b>${safe(v.reviewer_name)}</b><span class="ux-review-stars">${"★".repeat(v.rating)}${"☆".repeat(5 - v.rating)}</span></header><small>${safe(v.game_name)} · ${parseServerDate(v.created_at).toLocaleDateString(localeTag())} · ${tr("Tasdiqlangan xarid", "Подтверждённая покупка", "Verified purchase")}</small><p data-user-content>${safe(v.body)}</p>${v.reply ? `<blockquote><b>${tr("Sotuvchi javobi", "Ответ продавца", "Seller reply")}</b><p data-user-content>${safe(v.reply)}</p></blockquote>` : ""}${r.can_reply ? `<form class="ux-reply" data-review="${safe(v.id)}"><textarea name="body" minlength="2" maxlength="1500" required placeholder="${tr("Sharhga javob", "Ответ на отзыв", "Reply to this review")}">${safe(v.reply || "")}</textarea><button class="button-secondary">${tr("Javobni saqlash", "Сохранить ответ", "Save reply")}</button></form>` : ""}</article>`).join("") || empty(tr("Hozircha sharhlar yo‘q", "Отзывов пока нет", "No reviews yet"))}</div><div class="actions">${r.page > 1 ? `<button class="button-secondary" data-review-page="${r.page - 1}">← ${tr("Oldingi", "Назад", "Previous")}</button>` : ""}${r.has_more ? `<button class="button-secondary" data-review-page="${r.page + 1}">${tr("Keyingi", "Далее", "Next")} →</button>` : ""}</div>`;
+    root.querySelector("form").onchange = (e) =>
+      reviews(
+        root,
+        sid,
+        Object.fromEntries(new FormData(e.currentTarget)),
+      ).catch((e) => toast(e.message, "error"));
+    root.querySelectorAll("[data-review-page]").forEach(
+      (b) =>
+        (b.onclick = () =>
+          reviews(root, sid, {
+            ...filters,
+            page: b.dataset.reviewPage,
+          }).catch((e) => toast(e.message, "error"))),
+    );
+    root.querySelectorAll(".ux-reply").forEach(
+      (f) =>
+        (f.onsubmit = async (e) => {
+          e.preventDefault();
+          try {
+            await api("/reviews/" + enc(f.dataset.review) + "/reply", {
+              method: "POST",
+              body: JSON.stringify(Object.fromEntries(new FormData(f))),
+            });
+            await reviews(root, sid, filters);
+          } catch (error) {
+            toast(error.message, "error");
+          }
+        }),
+    );
+  }
+  function remember(it) {
+    if (it.status !== "published") return;
+    const values = read(recentKey()).filter((v) => v.id !== it.id);
+    values.unshift({ id: it.id });
+    write(recentKey(), values.slice(0, 20));
+    ExperienceUX.remember(it);
+  }
 
- function home(){setupSearch('#hero-search-input','#hero-search-form')}
- return {home,seller,browse,store,reviews,favorites,messages,mobile,listing,order,stop,init,duration,filterMarkup};
+  async function favorites() {
+    if (!me) {
+      location.hash = "login";
+      return;
+    }
+    const [items, following] = await Promise.all([
+      api("/favorites"),
+      api("/following"),
+    ]);
+    app.innerHTML = `<section class="page">${pageTitle(tr("Saqlanganlar", "Избранное", "Saved listings"), tr("Narx o‘zgarganda yoki mahsulot qayta mavjud bo‘lganda bildirishnoma olasiz.", "Уведомим о изменении цены или возвращении товара.", "We’ll notify you when a saved listing changes in price or is back in stock."))}<div class="product-grid">${items.filter(Boolean).map(marketCard).join("") || empty(tr("Hali hech narsa saqlanmagan", "Вы ещё ничего не сохранили", "Nothing saved yet"))}</div><section class="panel ux-following"><div class="ux-following-heading"><h2>${tr("Kuzatilayotgan do‘konlar", "Ваши подписки", "Stores you follow")}${following.length ? `<span class="ux-following-count">${following.length}</span>` : ""}</h2><p class="help">${tr("Yoqtirgan sotuvchilaringizni bir joyda saqlang va yangi e’lonlaridan xabardor bo‘ling.", "Сохраняйте любимых продавцов и узнавайте об их новых предложениях.", "Keep your favourite sellers close and hear about their latest listings.")}</p></div>${following.map((s) => `<a class="ux-following-store" href="/store/${enc(s.id)}">${marketAvatarMarkup(s.display_name || s.shop_name, s.avatar_url, "ux-small-avatar", s.id)}<b>${safe(s.shop_name)}</b><span>${s.rating ? Number(s.rating).toFixed(1) + " ★" : "—"}</span><span>→</span></a>`).join("") || `<div class="ux-following-empty"><span class="ux-following-empty-icon" aria-hidden="true">${icon("heart")}</span><div class="ux-following-empty-copy"><h3>${tr("Yangi do‘konlarni kashf eting", "Откройте для себя новые магазины", "Discover your next favourite store")}</h3><p>${tr("E’londan sotuvchining do‘koniga kiring va “Kuzatish”ni bosing. Yangi e’lonlari haqida bildirishnoma olasiz.", "Откройте магазин продавца из объявления и нажмите «Подписаться». О новых предложениях сообщим в уведомлениях.", "Open a seller’s store from any listing and choose Follow. We’ll notify you when they add something new.")}</p></div><a class="ux-following-discover" href="/browse">${tr("E’lonlarni ko‘rish", "Смотреть объявления", "Explore listings")} <span aria-hidden="true">→</span></a></div>`}</section></section>`;
+  }
+  function stop() {
+    clearTimeout(chatTimer);
+    chatEpoch++;
+    if (window.MobileSite) window.MobileSite.syncNavigation();
+    else {
+      document.querySelector(".ux-mobile-nav")?.remove();
+      mobile();
+    }
+  }
+  async function messages(id) {
+    return ExperienceUX.messages(id);
+  }
+  function mobile() {
+    if (window.MobileSite) {
+      window.MobileSite.syncNavigation();
+      return;
+    }
+    if (document.querySelector(".ux-mobile-nav")) return;
+    const route =
+      location.hash.slice(1) || location.pathname.slice(1) || "home";
+    const nav = document.createElement("nav");
+    nav.className = "ux-mobile-nav";
+    nav.setAttribute(
+      "aria-label",
+      tr("Asosiy menyu", "Главное меню", "Main navigation"),
+    );
+    nav.innerHTML = [
+      ["/browse", "gamepad", tr("Bozor", "Маркет", "Market"), "browse"],
+      [
+        "/#favorites",
+        "heart",
+        tr("Saqlangan", "Избранное", "Saved"),
+        "favorites",
+      ],
+      ["/#seller", "upload", tr("Sotish", "Продать", "Sell"), "seller"],
+      ["/#messages", "message", tr("Xabarlar", "Чаты", "Messages"), "messages"],
+      ["/#account", "user", tr("Profil", "Профиль", "Profile"), "account"],
+    ]
+      .map(
+        ([href, ico, label, key]) =>
+          `<a href="${href}" ${route === key || (key === "messages" && route.startsWith("conversation/")) ? 'aria-current="page"' : ""}>${icon(ico)}<span>${label}</span>${key === "messages" ? '<i id="ux-unread" hidden></i>' : ""}</a>`,
+      )
+      .join("");
+    document.body.append(nav);
+    updateBadges();
+  }
+  async function updateBadges() {
+    if (!me || badgeBusy || document.visibilityState !== "visible") return;
+    badgeBusy = true;
+    try {
+      const rows = await api("/conversations"),
+        n = rows.reduce((sum, c) => sum + Number(c.unread || 0), 0),
+        badge = $("#ux-unread");
+      document
+        .querySelectorAll(".ux-messages .conversation-item")
+        .forEach((link) => {
+          const c = rows.find(
+            (r) => link.hash === "#conversation/" + enc(r.id),
+          );
+          if (!c) return;
+          const p = link.querySelector("p");
+          if (p) p.textContent = c.last_message || c.listing_title || "";
+          let count = link.querySelector(".status");
+          if (c.unread) {
+            if (!count) {
+              count = document.createElement("span");
+              count.className = "status";
+              link.append(count);
+            }
+            count.textContent = c.unread;
+          } else count?.remove();
+        });
+      if (badge) {
+        badge.hidden = !n;
+        badge.textContent = n > 99 ? "99+" : n;
+      }
+    } catch {
+    } finally {
+      badgeBusy = false;
+    }
+  }
+  function listing(it) {
+    remember(it);
+    const trigger = app.querySelector("[data-seller-profile]");
+    if (trigger) {
+      const link = document.createElement("a");
+      link.className = trigger.className;
+      link.href = "/store/" + enc(it.store_id);
+      link.textContent = tr(
+        "Do‘konni ko‘rish →",
+        "Открыть магазин →",
+        "View store →",
+      );
+      trigger.replaceWith(link);
+    }
+    const pane = app.querySelector('[data-listing-panel="reviews"]');
+    if (pane) {
+      pane.innerHTML = '<div id="ux-listing-reviews"></div>';
+      window.ReviewHub?.mount($("#ux-listing-reviews"), "listing", it.id);
+    }
+  }
+  function order(o) {
+    const root = app.querySelector(".page");
+    if (!root) return;
+    const buyer = o.buyer_id === me.id;
+    const labels = [
+      tr("To‘lov", "Оплата", "Payment"),
+      tr("Yetkazish", "Доставка", "Delivery"),
+      tr("Tekshirish", "Проверка", "Review"),
+      tr("Yakunlash", "Завершение", "Complete"),
+    ];
+    const statusCopy = {
+      pending_payment: [
+        tr("To‘lov bosqichi", "Этап оплаты", "Payment step"),
+        buyer
+          ? tr(
+              "Avval buyurtma summasi va mahsulotlarni tekshiring, keyin to‘lovini yakunlang.",
+              "Сначала проверьте сумму и товары, затем завершите оплату.",
+              "Check the order total and items, then complete the payment.",
+            )
+          : tr(
+              "Xaridor to‘lovini yakunlashi kutilmoqda.",
+              "Ожидается оплата покупателя.",
+              "Waiting for the buyer to complete the payment.",
+            ),
+        0,
+      ],
+      paid: [
+        tr("To‘lov tasdiqlandi", "Оплата подтверждена", "Payment confirmed"),
+        buyer
+          ? tr(
+              "Hozir sotuvchi navbati. Yetkazish ma’lumoti shu sahifada paydo bo‘ladi.",
+              "Сейчас очередь продавца. Данные о доставке появятся здесь.",
+              "It is the seller’s turn. Delivery details will appear here when ready.",
+            )
+          : tr(
+              "Keyingi qadam sizda: mahsulotni buyurtma ichidagi forma orqali yetkazing.",
+              "Следующий шаг за вами: передайте товар через форму заказа.",
+              "Your next step: deliver the item using the form in this order.",
+            ),
+        1,
+      ],
+      awaiting_delivery: [
+        tr("Yetkazish bosqichi", "Этап доставки", "Delivery step"),
+        buyer
+          ? tr(
+              "Sotuvchi mahsulotni yetkazmoqda. Hozircha kutishingiz mumkin; yangilanish shu buyurtmada ko‘rinadi.",
+              "Продавец доставляет товар. Пока можно подождать — обновления появятся здесь.",
+              "The seller is delivering the item. You can wait; updates will appear here.",
+            )
+          : tr(
+              "Mahsulotni qisman yoki to‘liq yetkazib, natijani buyurtmada qayd eting.",
+              "Передайте часть или весь товар и зафиксируйте результат в заказе.",
+              "Deliver some or all of the item and record the result in this order.",
+            ),
+        1,
+      ],
+      delivered: [
+        tr("Mahsulotni tekshirish", "Проверка товара", "Check the delivery"),
+        buyer
+          ? tr(
+              "Yetkazilgan mahsulot va sonini tekshiring. Hammasi to‘g‘ri bo‘lsa buyurtmani yakunlang; muammo bo‘lsa nizo oching.",
+              "Проверьте товар и количество. Если всё верно, завершите заказ; при проблеме откройте спор.",
+              "Check the delivered item and quantity. Complete the order if correct, or open a dispute if something is wrong.",
+            )
+          : tr(
+              "Xaridor yetkazmani tekshirib, qabul qilishini kuting.",
+              "Ожидайте, пока покупатель проверит и подтвердит получение.",
+              "Wait for the buyer to check and confirm the delivery.",
+            ),
+        2,
+      ],
+      under_review: [
+        tr("Tekshiruv davom etmoqda", "Идёт проверка", "Review in progress"),
+        tr(
+          "Moderator dalillarni ko‘rib chiqmoqda. Qaror chiqqanda buyurtma holati yangilanadi.",
+          "Модератор проверяет доказательства. Статус заказа обновится после решения.",
+          "A moderator is reviewing the evidence. The order updates when a decision is made.",
+        ),
+        2,
+      ],
+      disputed: [
+        tr(
+          "Nizo ko‘rib chiqilmoqda",
+          "Спор рассматривается",
+          "Dispute under review",
+        ),
+        tr(
+          "Moderator qarorini shu buyurtma va nizolar bo‘limida kuzating.",
+          "Следите за решением модератора в заказе и разделе споров.",
+          "Follow the moderator’s decision in this order and the disputes section.",
+        ),
+        2,
+      ],
+      cancelled: [
+        tr("Buyurtma bekor qilindi", "Заказ отменён", "Order cancelled"),
+        tr(
+          "Bu buyurtmada davom etadigan qadam yo‘q. To‘lov holatini tekshiring; bekor qilish kutilmagan bo‘lsa, buyurtma raqami bilan yordam xizmatiga yozing.",
+          "Для этого заказа дальнейших шагов нет. Проверьте оплату; если отмена была неожиданной, обратитесь в поддержку и укажите номер заказа.",
+          "There are no further steps for this order. Check its payment status; if the cancellation was unexpected, contact support with the order reference.",
+        ),
+        4,
+      ],
+      completed: [
+        tr("Buyurtma yakunlandi", "Заказ завершён", "Order complete"),
+        buyer
+          ? tr(
+              "Savdo yakunlangan. Xohlasangiz xarid tajribangiz haqida sharh qoldiring.",
+              "Заказ завершён. При желании оставьте отзыв о покупке.",
+              "The order is complete. You can leave a review about your experience.",
+            )
+          : tr(
+              "Buyurtma yakunlandi.",
+              "Заказ завершён.",
+              "The order is complete.",
+            ),
+        4,
+      ],
+      refunded: [
+        tr("Buyurtma yopildi", "Заказ закрыт", "Order closed"),
+        tr(
+          "qaytarimi qayd qilingan. Haqiqiy pul o‘tkazilmagan.",
+          "возврат зарегистрирован. Реальные деньги не переводились.",
+          "A refund was recorded. No real money was moved.",
+        ),
+        4,
+      ],
+    };
+    const [title, description, step] = statusCopy[o.status] || [
+      tr("Buyurtma holati", "Статус заказа", "Order status"),
+      tr(
+        "Batafsil holatni quyida ko‘ring yoki yordam xizmatiga murojaat qiling.",
+        "Подробности статуса указаны ниже или обратитесь в поддержку.",
+        "See the status details below or contact support.",
+      ),
+      0,
+    ];
+    const terminal = ["cancelled", "refunded"].includes(o.status),
+      moderation = ["disputed", "under_review"].includes(o.status);
+    // The button belongs only to the person who can take the next real action.
+    const continueAvailable =
+      (buyer && ["pending_payment", "delivered"].includes(o.status)) ||
+      (!buyer && ["paid", "awaiting_delivery"].includes(o.status));
+    const continueLabel =
+      o.status === "pending_payment"
+        ? tr(
+            "To‘lov bosqichini ochish",
+            "Перейти к оплате",
+            "Continue to payment",
+          )
+        : o.status === "delivered"
+          ? tr(
+              "Tekshiruv bosqichini ochish",
+              "Перейти к проверке",
+              "Continue to review",
+            )
+          : tr(
+              "Yetkazish bosqichini ochish",
+              "Перейти к доставке",
+              "Continue to delivery",
+            );
+    const waitingForOther =
+      buyer && ["paid", "awaiting_delivery"].includes(o.status);
+    const sellers = [
+      ...new Set(o.items.map((i) => i.store_id).filter(Boolean)),
+    ];
+    root
+      .querySelector(".page-header")
+      ?.insertAdjacentHTML(
+        "afterend",
+        `<section class="panel ux-order-guide ${terminal ? "is-terminal" : ""} ${moderation ? "is-waiting" : ""}"><div class="ux-eyebrow">${tr("BUYURTMA JARAYONI", "ПРОЦЕСС ЗАКАЗА", "ORDER PROGRESS")}</div><h2>${title}</h2><p>${description}</p>${!terminal ? `<ol class="ux-order-steps">${labels.map((label, i) => `<li class="${i < step ? "done" : ""} ${i === step ? "current" : ""}"><span>${i < step ? "✓" : i + 1}</span>${label}</li>`).join("")}</ol>` : ""}${continueAvailable ? `<button class="button-primary ux-order-continue" type="button" data-order-continue>${continueLabel} ${icon("arrow-right")}</button>` : ""}${waitingForOther ? `<div class="ux-order-waiting" role="status"><span aria-hidden="true">${icon("clock")}</span><b>${tr("Hozircha kutish kerak", "Сейчас нужно подождать", "Nothing you need to do right now")}</b></div>` : ""}<div class="actions">${sellers.map((s) => `<button class="button-secondary" data-order-chat="${safe(s)}">${icon("message")} ${buyer ? tr("Sotuvchiga yozish", "Написать продавцу", "Message seller") : tr("Xaridorga yozish", "Написать покупателю", "Message buyer")}</button>`).join("")}</div><div id="ux-delivery-deadlines"></div></section>`,
+      );
+    app.querySelectorAll("[data-order-chat]").forEach(
+      (b) =>
+        (b.onclick = async () => {
+          b.disabled = true;
+          try {
+            const r = await api("/conversations", {
+              method: "POST",
+              body: JSON.stringify({
+                order_id: o.id,
+                seller_id: b.dataset.orderChat,
+              }),
+            });
+            location.hash = "conversation/" + enc(r.id);
+          } catch (e) {
+            toast(e.message, "error");
+            b.disabled = false;
+          }
+        }),
+    );
+    app
+      .querySelector("[data-order-continue]")
+      ?.addEventListener("click", (event) => {
+        let target;
+        if (o.status === "pending_payment")
+          target = app.querySelector(".test-payment-panel");
+        else if (["paid", "awaiting_delivery"].includes(o.status))
+          target =
+            app
+              .querySelector(
+                buyer ? ".trade-buyer-details" : " .trade-delivery",
+              )
+              ?.closest(".trade-section") || app.querySelector("#trade-order");
+        else if (o.status === "delivered" && buyer)
+          target =
+            app.querySelector(".account-review-upload") ||
+            app
+              .querySelector('[data-action="complete-order"]')
+              ?.closest(".panel");
+        if (!target) return;
+        const gated = target.closest(".ux-order-step-gated");
+        if (gated?.hidden || target.hidden) {
+          app
+            .querySelectorAll(".ux-order-step-gated[hidden]")
+            .forEach((stage) => {
+              stage.hidden = false;
+              stage.classList.add("ux-order-step-revealed");
+            });
+          event.currentTarget.hidden = true;
+        }
+        target.closest("details")?.setAttribute("open", "");
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        target
+          .querySelector("input,textarea,button")
+          ?.focus({ preventScroll: true });
+      });
+    const box = $("#ux-delivery-deadlines");
+    if (box)
+      box.innerHTML = o.items
+        .map(
+          (item) =>
+            `<p class="help">${safe(item.title)} · ${tr("Yetkazish", "Доставка", "Delivery")}: ${safe(item.delivery_eta || "—")}${item.delivery_due_at ? ` · ${tr("Belgilangan muddat", "Установленный срок", "Delivery deadline")}: ${parseServerDate(item.delivery_due_at).toLocaleString(localeTag())}` : ""}${item.snapshot?.legacy ? ` · ${tr("Eski buyurtma: xarid vaqtidagi barcha shartlar saqlanmagan.", "Старый заказ: не все исходные условия были сохранены.", "Legacy order: the original terms were not fully recorded.")}` : ""}</p>`,
+        )
+        .join("");
+    if (box)
+      box.insertAdjacentHTML(
+        "beforeend",
+        o.items
+          .filter((i) => i.snapshot)
+          .map((item) => {
+            const v = item.snapshot;
+            return `<details class="ops-snapshot"><summary>${tr("Saqlangan e’lon shartlari", "Сохранённые условия объявления", "Saved listing terms")} · ${safe(item.title)}</summary><p class="detail-desc" data-user-content>${safe(v.description || "—")}</p><p>${safe(v.platform || "—")} · ${safe(v.region || "—")} · ${safe(v.delivery_eta || "—")}</p><p class="detail-desc" data-user-content>${safe(v.requirements || "—")}</p>${Object.entries(
+              v.attributes || {},
+            )
+              .filter(
+                ([k, value]) => k !== "images" && value !== "" && value != null,
+              )
+              .map(
+                ([k, value]) =>
+                  `<p class="help"><b>${safe(k.replaceAll("_", " "))}</b>: ${safe(Array.isArray(value) ? value.join(", ") : value)}</p>`,
+              )
+              .join(
+                "",
+              )}${v.image_url ? `<a class="text-link" href="${safe(v.image_url)}" target="_blank" rel="noopener noreferrer">${tr("Saqlangan mahsulot rasmi", "Сохранённое фото товара", "Saved product photo")} ↗</a>` : ""}</details>`;
+          })
+          .join(""),
+      );
+  }
+  function duration(value) {
+    const s = String(value || "").toLowerCase();
+    if (/instant|darhol|мгнов/.test(s)) return 1;
+    const matches = [
+      ...s.matchAll(
+        /(\d+(?:\.\d+)?)\s*(minutes?|mins?|minut|daq|мин|hours?|hrs?|soat|час|days?|kun|дн)/g,
+      ),
+    ];
+    return matches.length
+      ? Math.max(
+          ...matches.map(
+            (m) =>
+              Number(m[1]) *
+              (/^(day|kun|дн)/.test(m[2])
+                ? 1440
+                : /^(hour|hr|soat|час)/.test(m[2])
+                  ? 60
+                  : 1),
+          ),
+        )
+      : null;
+  }
+  function setupSearch(
+    inputSelector = "#global-search",
+    formSelector = "#search-form",
+  ) {
+    const input = $(inputSelector),
+      form = $(formSelector);
+    if (!input || form.dataset.ux) return;
+    form.dataset.ux = "1";
+    const box = document.createElement("div");
+    box.className = "ux-search-suggestions";
+    box.id = "ux-search-suggestions-" + input.id;
+    box.hidden = true;
+    box.setAttribute("role", "listbox");
+    form.append(box);
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-autocomplete", "list");
+    input.setAttribute("aria-controls", box.id);
+    input.setAttribute("aria-expanded", "false");
+    let active = -1;
+    const close = () => {
+      box.hidden = true;
+      input.setAttribute("aria-expanded", "false");
+      active = -1;
+      input.removeAttribute("aria-activedescendant");
+    };
+    input.addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      const epoch = ++searchEpoch,
+        q = input.value.trim();
+      if (q.length < 2) {
+        close();
+        return;
+      }
+      searchTimer = setTimeout(async () => {
+        try {
+          const r = await api("/search/suggestions?q=" + enc(q));
+          if (epoch !== searchEpoch || document.activeElement !== input) return;
+          box.innerHTML = [
+            ...r.games.map((g) => ({
+              href: "/browse?game=" + enc(g.slug),
+              title: g.name,
+              sub: tr("O‘yin", "Игра", "Game"),
+            })),
+            ...r.items.map((i) => ({
+              href: "/listing/" + enc(i.id),
+              title: i.title,
+              sub: fmt(i.price_minor, i.currency),
+            })),
+          ]
+            .map(
+              (v, i) =>
+                `<a role="option" aria-selected="false" id="${box.id}-${i}" href="${v.href}"><span>${safe(v.title)}</span><small>${safe(v.sub)}</small></a>`,
+            )
+            .join("");
+          box.hidden = !box.childElementCount;
+          input.setAttribute("aria-expanded", String(!box.hidden));
+          active = -1;
+        } catch {
+          close();
+        }
+      }, 220);
+    });
+    input.addEventListener("keydown", (e) => {
+      const items = [...box.querySelectorAll("a")];
+      if (e.key === "Escape") {
+        close();
+        return;
+      }
+      if (box.hidden) return;
+      if (["ArrowDown", "ArrowUp"].includes(e.key)) {
+        e.preventDefault();
+        active =
+          (active + (e.key === "ArrowDown" ? 1 : -1) + items.length) %
+          items.length;
+        items.forEach((a, i) =>
+          a.setAttribute("aria-selected", String(i === active)),
+        );
+        input.setAttribute("aria-activedescendant", items[active].id);
+      }
+      if (e.key === "Enter" && active >= 0) {
+        e.preventDefault();
+        location.assign(items[active].href);
+      }
+    });
+    input.addEventListener("blur", () =>
+      requestAnimationFrame(() => {
+        if (!form.contains(document.activeElement)) close();
+      }),
+    );
+    form.addEventListener("submit", close);
+  }
+  function init() {
+    if (initialized) return;
+    initialized = true;
+    mobile();
+    setupSearch();
+    setInterval(updateBadges, 20000);
+  }
+  function seller(own) {
+    const sellerRoot = $("#my-listings");
+    if (sellerRoot?.dataset.sellerEnhanced) return;
+    if (sellerRoot) sellerRoot.dataset.sellerEnhanced = "1";
+    const form = $("#listing-form");
+    if (form && !form.hasAttribute("data-offer-wizard")) {
+      const key = "sentryloot_draft_" + me.id;
+      let timer;
+      const collect = () => {
+        const values = {};
+        for (const input of form.querySelectorAll("input,textarea,select")) {
+          if (
+            !input.name ||
+            input.type === "file" ||
+            input.name === "accept_account_terms"
+          )
+            continue;
+          if (input.type === "checkbox") {
+            if (input.checked) (values[input.name] ??= []).push(input.value);
+          } else if (!input.disabled) values[input.name] = input.value;
+        }
+        return values;
+      };
+      const tools = document.createElement("div");
+      tools.className = "ux-draft-tools";
+      tools.innerHTML = `<small id="ux-draft-status">${tr("Qoralama shu brauzerda saqlanadi", "Черновик сохраняется в этом браузере", "Draft saved in this browser")}</small><div class="actions"><button type="button" class="button-secondary" data-draft-save>${tr("Qoralamani saqlash", "Сохранить черновик", "Save draft")}</button><button type="button" class="button-secondary" data-draft-preview>${icon("eye")} ${tr("Oldindan ko‘rish", "Предпросмотр", "Preview")}</button><button type="button" class="ux-text-button" data-draft-clear>${tr("Qoralamani tozalash", "Очистить черновик", "Clear draft")}</button></div>`;
+      form.prepend(tools);
+      const saved = read(key);
+      if (saved && typeof saved === "object" && !Array.isArray(saved)) {
+        for (const name of ["game_name", "category_id"]) {
+          const input = form.elements.namedItem(name);
+          if (input && saved[name]) {
+            input.value = saved[name];
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+        }
+        for (const input of form.querySelectorAll("input,textarea,select")) {
+          if (
+            !(input.name in saved) ||
+            input.type === "file" ||
+            input.name === "accept_account_terms"
+          )
+            continue;
+          if (input.type === "checkbox")
+            input.checked =
+              Array.isArray(saved[input.name]) &&
+              saved[input.name].includes(input.value);
+          else input.value = saved[input.name];
+        }
+        $("#ux-draft-status").textContent = tr(
+          "Qoralama tiklandi. Rasmlarni qayta tanlang.",
+          "Черновик восстановлен. Выберите фото заново.",
+          "Draft restored. Please reselect your photos.",
+        );
+      }
+      form.addEventListener("input", () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          if (!form.isConnected) return;
+          write(key, collect());
+          $("#ux-draft-status").textContent =
+            tr(
+              "Qoralama saqlandi · ",
+              "Черновик сохранён · ",
+              "Draft saved · ",
+            ) +
+            new Date().toLocaleTimeString(localeTag(), {
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+        }, 500);
+      });
+      form.querySelector("[data-draft-clear]").onclick = () => {
+        clearTimeout(timer);
+        localStorage.removeItem(key);
+        renderSeller();
+      };
+      form.querySelector("[data-draft-save]").onclick = async (e) => {
+        const d = collect(),
+          attributes = {};
+        for (const [k, v] of Object.entries(d))
+          if (k.startsWith("game_attr_")) attributes[k.slice(10)] = v;
+        attributes.server = d.server || "";
+        if (d.rank) attributes.rank = d.rank;
+        const button = e.currentTarget;
+        button.disabled = true;
+        try {
+          const images = [];
+          for (const input of form.querySelectorAll("[data-listing-photos]"))
+            if (input.files[0])
+              images.push(await uploadListingPhoto(input.files[0]));
+          const r = await api("/listings", {
+            method: "POST",
+            body: JSON.stringify({
+              ...d,
+              images,
+              attributes,
+              price_minor: Number(d.price_minor),
+              stock: Number(d.stock || 1),
+              linked_accounts: d.linked_accounts || [],
+              accept_account_terms:
+                form.elements.accept_account_terms?.checked === true,
+              submit_for_review: false,
+            }),
+          });
+          localStorage.removeItem(key);
+          toast(
+            tr(
+              "Qoralama hisobingizga saqlandi",
+              "Черновик сохранён в аккаунте",
+              "Draft saved to your account",
+            ),
+          );
+          await renderSeller();
+          document
+            .querySelector(`[data-id="${CSS.escape(r.id)}"]`)
+            ?.scrollIntoView();
+        } catch (error) {
+          toast(error.message, "error");
+          button.disabled = false;
+        }
+      };
+      form.querySelector("[data-draft-preview]").onclick = () => {
+        const d = collect(),
+          files = [...form.querySelectorAll("[data-listing-photos]")]
+            .map((i) => i.files[0])
+            .filter(Boolean),
+          urls = files.map((f) => URL.createObjectURL(f));
+        const dialog = document.createElement("dialog");
+        dialog.className = "ux-preview-dialog";
+        dialog.innerHTML = `<header><h2>${tr("E’lon ko‘rinishi", "Предпросмотр объявления", "Listing preview")}</h2><button type="button" class="button-secondary" data-close>${tr("Yopish", "Закрыть", "Close")} ×</button></header><p class="help">${tr("Bu faqat oldindan ko‘rish. E’lon hali joylanmadi.", "Это предпросмотр. Объявление ещё не опубликовано.", "Preview only. This listing has not been published.")}</p>${urls[0] ? `<img class="ux-preview-main" src="${urls[0]}" alt="">` : ""}<h2>${safe(d.title || tr("Sarlavha", "Заголовок", "Listing title"))}</h2><b class="price">${fmt(Number(d.price_minor || 0))}</b><p class="detail-desc">${safe(d.description || "")}</p><div class="ux-preview-facts">${Object.entries(
+          d,
+        )
+          .filter(
+            ([k, v]) =>
+              (v &&
+                [
+                  "platform",
+                  "region",
+                  "server",
+                  "rank",
+                  "delivery_eta",
+                  "stock",
+                ].includes(k)) ||
+              (k.startsWith("game_attr_") && v),
+          )
+          .map(
+            ([k, v]) =>
+              `<span>${safe(k.replace("game_attr_", "").replaceAll("_", " "))}: <b>${safe(v)}</b></span>`,
+          )
+          .join("")}</div>`;
+        document.body.append(dialog);
+        dialog.showModal();
+        dialog.querySelector("[data-close]").onclick = () => dialog.close();
+        dialog.onclose = () => {
+          urls.forEach(URL.revokeObjectURL);
+          dialog.remove();
+        };
+      };
+      app.querySelectorAll(".listing-upload-grid").forEach((grid) => {
+        const controls = document.createElement("div");
+        controls.className = "ux-photo-reorder";
+        controls.innerHTML = `<p class="help">${tr("Rasmlar tartibi: chapdagi rasm asosiy bo‘ladi.", "Порядок фото: первое фото будет главным.", "Photo order: the first photo becomes the cover.")}</p><div class="actions">${[0, 1, 2].map((i) => `<button type="button" class="ux-chip" data-swap-photo="${i}">${i + 1} ⇄ ${i + 2}</button>`).join("")}</div>`;
+        grid.after(controls);
+        controls.querySelectorAll("button").forEach(
+          (b) =>
+            (b.onclick = () => {
+              const slots = [...grid.children],
+                i = Number(b.dataset.swapPhoto);
+              grid.insertBefore(slots[i + 1], slots[i]);
+              [...grid.querySelectorAll("input[type=file]")].forEach(
+                (input, index) =>
+                  (input.required = form.id === "listing-form" && index === 0),
+              );
+              [...grid.querySelectorAll(".listing-upload-title")].forEach(
+                (label, index) =>
+                  (label.textContent =
+                    index +
+                    1 +
+                    " · " +
+                    (index === 0
+                      ? tr("Asosiy rasm", "Главное фото", "Cover photo")
+                      : tr("Rasm", "Фото", "Photo"))),
+              );
+            }),
+        );
+      });
+    }
+    // Existing images can be reordered without uploading replacements.
+    app.querySelectorAll('form[data-form="edit-listing"]').forEach((f) => {
+      const listing = own.find((l) => l.id === f.dataset.id);
+      if (!listing) return;
+      let images = listingGalleryImages(listing);
+      if (images.length < 2) return;
+      const box = document.createElement("div");
+      box.className = "ux-current-photo-order";
+      const draw = () => {
+        box.innerHTML = `<p class="help">${tr("Joriy rasmlar tartibi", "Порядок текущих фото", "Current photo order")}</p><div class="actions">${images.map((url, i) => `<button type="button" class="ux-chip" data-move="${i}">${i + 1}${i ? " ↑" : ` · ${tr("asosiy", "главное", "cover")}`}</button>`).join("")}<button type="button" class="button-secondary" data-save-order>${tr("Tartibni saqlash", "Сохранить порядок", "Save order")}</button></div>`;
+        box.querySelectorAll("[data-move]").forEach(
+          (b) =>
+            (b.onclick = () => {
+              const i = Number(b.dataset.move);
+              if (!i) return;
+              [images[i - 1], images[i]] = [images[i], images[i - 1]];
+              draw();
+            }),
+        );
+        box.querySelector("[data-save-order]").onclick = async (e) => {
+          e.currentTarget.disabled = true;
+          try {
+            await api("/listings/" + enc(listing.id), {
+              method: "PATCH",
+              body: JSON.stringify({ images }),
+            });
+            toast(
+              tr(
+                "Tartib saqlandi. E’lon tekshiruvga yuborildi.",
+                "Порядок сохранён. Объявление отправлено на проверку.",
+                "Order saved. Listing submitted for review.",
+              ),
+            );
+            await renderSeller();
+          } catch (error) {
+            toast(error.message, "error");
+            e.currentTarget.disabled = false;
+          }
+        };
+      };
+      draw();
+      f.querySelector(".listing-image-fields")?.prepend(box);
+    });
+    const list = $("#my-listings");
+    if (!list) return;
+    const toolbar = document.createElement("div");
+    toolbar.className = "ux-bulk-tools";
+    toolbar.innerHTML = `<label><input type="checkbox" data-select-all> ${tr("Barchasini tanlash", "Выбрать все", "Select all")}</label><button class="button-secondary" data-bulk-pause>${tr("Tanlanganlarni pauza qilish", "Приостановить выбранные", "Pause selected")}</button><a class="text-link" href="/store/${enc(me.id)}">${tr("Do‘konim →", "Мой магазин →", "My store →")}</a>`;
+    list.before(toolbar);
+    [...list.children].forEach((row, i) => {
+      const l = own[i];
+      if (!l) return;
+      row.insertAdjacentHTML(
+        "afterbegin",
+        `${["published", "paused"].includes(l.status) ? `<label class="ux-bulk-check"><input type="checkbox" data-bulk-id="${safe(l.id)}"> ${tr("Tanlash", "Выбрать", "Select")}</label>` : ""}<button type="button" class="ux-text-button ux-duplicate" data-duplicate="${safe(l.id)}">${tr("Nusxa yaratish", "Создать копию", "Duplicate")}</button>`,
+      );
+    });
+    toolbar.querySelector("[data-select-all]").onchange = (e) =>
+      list
+        .querySelectorAll("[data-bulk-id]")
+        .forEach((c) => (c.checked = e.target.checked));
+    toolbar.querySelector("[data-bulk-pause]").onclick = async (e) => {
+      const ids = [...list.querySelectorAll("[data-bulk-id]:checked")].map(
+        (c) => c.dataset.bulkId,
+      );
+      if (!ids.length) {
+        toast(
+          tr(
+            "E’lonlarni tanlang",
+            "Выберите объявления",
+            "Select listings first",
+          ),
+        );
+        return;
+      }
+      e.currentTarget.disabled = true;
+      try {
+        await api("/seller/listings/bulk-pause", {
+          method: "POST",
+          body: JSON.stringify({ ids }),
+        });
+        await renderSeller();
+      } catch (error) {
+        toast(error.message, "error");
+        e.currentTarget.disabled = false;
+      }
+    };
+    list.querySelectorAll("[data-duplicate]").forEach(
+      (b) =>
+        (b.onclick = async () => {
+          b.disabled = true;
+          try {
+            await api("/listings/" + enc(b.dataset.duplicate) + "/duplicate", {
+              method: "POST",
+              body: "{}",
+            });
+            toast(
+              tr(
+                "Nusxa qoralama sifatida yaratildi",
+                "Копия создана как черновик",
+                "Copy created as a draft",
+              ),
+            );
+            await renderSeller();
+          } catch (error) {
+            toast(error.message, "error");
+            b.disabled = false;
+          }
+        }),
+    );
+    window.ExperienceUX?.seller(own).catch((error) =>
+      toast(error.message, "error"),
+    );
+    window.OperationsUX?.seller(own).catch((error) =>
+      toast(error.message, "error"),
+    );
+  }
+
+  function home() {
+    setupSearch("#hero-search-input", "#hero-search-form");
+  }
+  return {
+    home,
+    seller,
+    browse,
+    store,
+    reviews,
+    favorites,
+    messages,
+    mobile,
+    listing,
+    order,
+    stop,
+    init,
+    duration,
+    filterMarkup,
+  };
 })();
