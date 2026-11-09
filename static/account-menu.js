@@ -26,5 +26,24 @@ function menu(me,{t,icon,created}){
   </div></div></aside>`;
 }
 
+function positionMenu(root){
+ if(root.hidden)return;
+ const avatar=document.querySelector('#account-button .account-avatar');
+ if(!avatar?.getClientRects().length){
+  root.style.removeProperty('--profile-menu-top');
+  root.style.removeProperty('--profile-menu-right');
+  return;
+ }
+ const rect=avatar.getBoundingClientRect();
+ root.style.setProperty('--profile-menu-top',`${rect.bottom+8}px`);
+ root.style.setProperty('--profile-menu-right',`${Math.max(0,root.clientWidth-rect.right)}px`);
+}
+
+if(window.ResizeObserver){
+ const root=document.getElementById('profile-menu-root');
+ if(root)new ResizeObserver(()=>{
+  if(!root.hidden)requestAnimationFrame(()=>positionMenu(root));
+ }).observe(root);
+}
 window.SentryLootAccount=Object.freeze({avatar:marketAvatarMarkup,menu});
 })();

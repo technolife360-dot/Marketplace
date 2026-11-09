@@ -100,7 +100,6 @@
     body .site-header #search-form>button { display:grid !important; place-items:center !important; flex:0 0 40px !important; width:40px !important; min-width:40px !important; height:42px !important; min-height:0 !important; padding:0 !important; border:0 !important; background:transparent !important; }
     body .site-header :is(#cart-button, #notifications-button) .count { top:1px !important; right:1px !important; min-width:18px !important; height:18px !important; padding:0 4px !important; border:2px solid #000000 !important; font-size:10px !important; line-height:1 !important; pointer-events:none !important; }
     body #market-sidebar, body #market-sidebar-handle { display:none !important; }
-    body #profile-menu-root .profile-dropdown { top:64px !important; right:12px !important; width:min(350px, calc(100vw - 24px)) !important; max-height:calc(100dvh - 80px) !important; }
   }
 }
 
