@@ -426,3 +426,104 @@ def send_signin_alert(
 
     except URLError:
         raise RuntimeError('Resend API connection failed') from None
+
+
+def send_order_confirmation(
+    address: str,
+    display_name: str,
+    order_id: str,
+    product_name: str,
+    total_amount: str,
+    order_status: str,
+    order_url: str,
+) -> None:
+    """Send the published Resend Order Confirmation template."""
+
+    if not is_configured():
+        raise RuntimeError('Transactional email is not configured')
+
+    if os.environ.get('EMAIL_PROVIDER', '').strip().lower() != 'resend':
+        raise RuntimeError('Order template requires Resend')
+
+    api_key = (
+        os.environ.get('RESEND_API_KEY')
+        or os.environ.get('EMAIL_API_KEY')
+        or ''
+    ).strip()
+
+    template_id = os.environ.get(
+        'RESEND_ORDER_TEMPLATE_ID', ''
+    ).strip()
+
+    if not api_key or not template_id:
+        raise RuntimeError('Resend order template configuration is missing')
+
+    recipient = parseaddr(address)[1].strip()
+    if not recipient or '@' not in recipient:
+        raise ValueError('Invalid recipient email')
+
+    base_url = os.environ.get(
+        'PUBLIC_BASE_URL', 'https://gamestorehub.com'
+    ).strip().rstrip('/')
+
+    parsed_base = urlsplit(base_url)
+    parsed_order = urlsplit(order_url)
+
+    if (
+        parsed_base.scheme != 'https'
+        or not parsed_base.netloc
+        or parsed_order.scheme != 'https'
+        or parsed_order.netloc != parsed_base.netloc
+    ):
+        raise ValueError('Order URL must use the trusted HTTPS site domain')
+
+    payload = {
+        'from': _from_address(),
+        'to': [recipient],
+        'template': {
+            'id': template_id,
+            'variables': {
+                'FIRST_NAME': display_name.strip() or 'there',
+                'ORDER_ID': str(order_id),
+                'PRODUCT_NAME': str(product_name),
+                'TOTAL_AMOUNT': str(total_amount),
+                'ORDER_STATUS': str(order_status),
+                'ORDER_URL': order_url,
+                'SUPPORT_EMAIL': os.environ.get(
+                    'SUPPORT_EMAIL',
+                    'sentryloot@gamestorehub.com'
+                ).strip(),
+            },
+        },
+    }
+
+    req = Request(
+        'https://api.resend.com/emails',
+        data=json.dumps(payload).encode('utf-8'),
+        headers={
+            'Authorization': 'Bearer ' + api_key,
+            'Content-Type': 'application/json',
+            'User-Agent': 'SentryLoot/1.0',
+        },
+        method='POST',
+    )
+
+    # Prevent duplicate confirmations if the same order event is retried.
+    req.add_header(
+        'Idempotency-Key',
+        'order-confirmation-' + str(order_id)
+    )
+
+    try:
+        with urlopen(req, timeout=12) as response:
+            response.read(4096)
+            if not 200 <= response.status < 300:
+                raise RuntimeError('Resend rejected order confirmation')
+
+    except HTTPError as exc:
+        raise RuntimeError(
+            f'Resend order template returned HTTP {exc.code}'
+        ) from None
+
+    except URLError:
+        raise RuntimeError('Resend API connection failed') from None

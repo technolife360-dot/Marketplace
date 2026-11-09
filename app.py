@@ -1462,8 +1462,78 @@ def checkout(db,uid,accept_terms=False,accept_account_risk=False,buyer_details=N
         db.execute('INSERT INTO payments(id,order_id,provider,amount_minor,currency,status,idempotency_key) VALUES(?,?,?,?,?,?,?)',(ident(),oid,intent.provider,intent.amount_minor,intent.currency,'pending',intent.idempotency_key))
         if coupon_code:db.execute('INSERT INTO platform_config(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',('coupon_use:'+coupon_code+':'+uid,oid))
         db.execute('DELETE FROM carts WHERE user_id=?',(uid,)); event(db,oid,uid,None,'pending_payment','Sinov to‘lovi yaratildi' if intent.provider=='sandbox' else 'To‘lov yaratildi')
-        if request_record: db.execute('INSERT INTO platform_config(key,value) VALUES(?,?)',(request_record,json.dumps({'order_id':oid,'fingerprint':fingerprint})))
-        db.execute('COMMIT'); return {'id':oid,'reference':reference,'status':'pending_payment','total_minor':total,'currency':currency,'mode':intent.provider,'checkout_url':intent.checkout_url}
+        
+        if request_record:
+            db.execute(
+                'INSERT INTO platform_config(key,value) VALUES(?,?)',
+                (request_record,json.dumps({
+                    'order_id':oid,
+                    'fingerprint':fingerprint
+                }))
+            )
+
+        # Get customer information
+        buyer = db.execute(
+            'SELECT email,display_name FROM users WHERE id=?',
+            (uid,)
+        ).fetchone()
+
+        # Format order amount
+        if currency == 'UZS':
+            formatted_total = f'UZS {total:,}'
+        elif currency in ('MYR', 'USD'):
+            formatted_total = f'{currency} {total // 100:,}.{total % 100:02d}'
+        else:
+            formatted_total = f'{currency} {total:,}'
+
+        # Combine purchased products
+        product_names = ', '.join(
+            f"{line['title']} × {line['quantity']}"
+            for line in lines
+        )[:500]
+
+        # Save order before sending email
+        db.execute('COMMIT')
+
+        # Send Order Confirmation through Resend
+        if (
+            buyer
+            and email_service.is_configured()
+            and os.environ.get('EMAIL_PROVIDER', '').strip().lower() == 'resend'
+        ):
+            try:
+                site_url = os.environ.get(
+                    'PUBLIC_BASE_URL',
+                    'https://gamestorehub.com'
+                ).strip().rstrip('/')
+
+                email_service.send_order_confirmation(
+                    address=buyer['email'],
+                    display_name=buyer['display_name'],
+                    order_id=reference,
+                    product_name=product_names,
+                    total_amount=formatted_total,
+                    order_status='Pending payment',
+                    order_url=site_url + '/#orders'
+                )
+
+                print('SentryLoot Order Confirmation sent successfully.')
+
+            except Exception as exc:
+                print(
+                    'Order Confirmation email failed:',
+                    type(exc).__name__
+                )
+
+        return {
+            'id':oid,
+            'reference':reference,
+            'status':'pending_payment',
+            'total_minor':total,
+            'currency':currency,
+            'mode':intent.provider,
+            'checkout_url':intent.checkout_url
+        }
     except Exception:
         db.execute('ROLLBACK'); raise
 
@@ -1980,9 +2050,7 @@ class Handler(BaseHTTPRequestHandler):
                             display_name=oauth_user['display_name'],
                             user_id=str(user_id)
                         )
-
                         print('Google Welcome Email sent successfully.')
-
                     else:
                         # Returning Google user: Security Alert
                         email_service.send_signin_alert(
@@ -1990,20 +2058,16 @@ class Handler(BaseHTTPRequestHandler):
                             display_name=oauth_user['display_name'],
                             login_method='Google'
                         )
-
                         print('Google sign-in alert sent successfully.')
-
                 except Exception as exc:
                     print(
                         'Google email notification failed:',
                         type(exc).__name__
                     )
-
             return 302, {'ok': True}, {
                 'Location': '/#contact-details' if account_contacts.enabled() and not account_contacts.verified(db, user_id) else '/#home',
                 'Set-Cookie': [clear]
             }
-
             # Send Welcome Email only for a newly created Google account
             if new_oauth_user and provider == 'google':
                 try:
