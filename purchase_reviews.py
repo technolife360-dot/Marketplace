@@ -110,8 +110,9 @@ def feedback(db,kind,rid):
 def route(db,ctx,method,path,qs,data,core):
     uid=ctx['uid']; error=core['HttpError']; text=core['clean_text']
     if path=='/api/review-hub/home' and method=='GET':
+        market_joins="FROM reviews r JOIN order_items i ON i.id=r.order_item_id JOIN orders o ON o.id=i.order_id JOIN users u ON u.id=r.reviewer_id LEFT JOIN platform_config av ON av.key='public_avatar:'||u.id JOIN listings l ON l.id=i.listing_id JOIN games g ON g.id=l.game_id"
         sources=[
-            (f"FROM reviews r JOIN order_items i ON i.id=r.order_item_id JOIN orders o ON o.id=i.order_id JOIN users u ON u.id=r.reviewer_id LEFT JOIN platform_config av ON av.key='public_avatar:'||u.id JOIN listings l ON l.id=i.listing_id JOIN games g ON g.id=l.game_id WHERE r.hidden=0 AND {MARKET_REAL}", 'i.title', "'/listing/'||i.listing_id", 'g.slug'),
+            (f"{market_joins} WHERE r.hidden=0 AND {MARKET_REAL}", 'i.title', "'/listing/'||i.listing_id", 'g.slug'),
             (f"FROM topup_reviews r JOIN topup_orders o ON o.id=r.order_id JOIN topup_packages p ON p.id=o.package_id JOIN users u ON u.id=r.reviewer_id LEFT JOIN platform_config av ON av.key='public_avatar:'||u.id WHERE r.hidden=0 AND {TOPUP_REAL}", 'p.game_name', "'/top-up/'||p.game_slug", 'p.game_slug')]
         items=[];count=0;total=0
         for joins,label,link,game in sources:
@@ -131,6 +132,16 @@ def route(db,ctx,method,path,qs,data,core):
                 review=json.loads(row['value'])
                 if review.get('public') is not True:continue
                 items.append({'rating':review['rating'],'body':review['body'],'created_at':review.get('updated_at') or row['created_at'],'reviewer_name':row['reviewer_name'],'avatar_url':row['avatar_url'],'product_title':row['product_title'],'product_url':None,'game_slug':row['game_slug'],'test_only':True})
+        if uid and not items:
+            # Owners can see their own test feedback when the public feed is empty.
+            # Neither the public feed nor its verified purchase score includes it.
+            items.extend({**dict(row),'test_only':True,'private_preview':True} for row in db.execute(f"""
+                SELECT r.rating,r.body,r.created_at,u.display_name reviewer_name,av.value avatar_url,
+                       i.title product_title,NULL product_url,g.slug game_slug
+                {market_joins}
+                WHERE r.hidden=0 AND r.reviewer_id=? AND o.buyer_id=?
+                  AND o.status='completed' AND o.payment_mode IN ('sandbox','stripe_test')
+                ORDER BY r.created_at DESC,r.id DESC LIMIT 6""",(uid,uid)))
         for item in items:
             game=core['seller_catalog'].find(item.pop('game_slug', ''))
             item['game_name']=game['name'] if game else ''

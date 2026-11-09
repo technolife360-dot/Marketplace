@@ -84,6 +84,23 @@ class PurchaseReviewFlows(unittest.TestCase):
         review=self.route(self.buyer,'POST','/api/reviews',{'item_id':iid,'rating':5,'body':'Hidden by moderation.'})
         self.db.execute('UPDATE reviews SET hidden=1 WHERE id=?',(review['id'],))
         self.assertEqual(self.route(None,'GET','/api/review-hub/home')['items'],[])
+
+    def test_home_test_review_is_visible_only_to_its_buyer_and_excluded_from_score(self):
+        from unittest.mock import patch
+        _,item=self.market_order(mode='stripe_test')
+        review=self.route(self.buyer,'POST','/api/reviews',{'item_id':item,'rating':5,'body':'My test purchase feedback.'})
+        with patch.object(app,'MODE','production'):
+            feed=self.route(self.buyer,'GET','/api/review-hub/home')
+            self.assertEqual((feed['count'],feed['rating']),(0,None))
+            self.assertEqual(len(feed['items']),1)
+            self.assertEqual(feed['items'][0]['body'],'My test purchase feedback.')
+            self.assertTrue(feed['items'][0]['test_only'])
+            self.assertTrue(feed['items'][0]['private_preview'])
+            for viewer in (None,self.other,self.seller):
+                self.assertEqual(self.route(viewer,'GET','/api/review-hub/home')['items'],[])
+            self.db.execute('UPDATE reviews SET hidden=1 WHERE id=?',(review['id'],))
+            self.assertEqual(self.route(self.buyer,'GET','/api/review-hub/home')['items'],[])
+
     def test_marketplace_edit_duplicate_and_product_scores_exclude_sandbox(self):
         oid,iid=self.market_order();r=self.route(self.buyer,'POST','/api/reviews',{'item_id':iid,'rating':4,'body':'Matches the description.'})
         with self.assertRaises(app.HttpError):self.route(self.other,'PATCH','/api/reviews/'+r['id'],{'rating':1,'body':'Unauthorized edit.'})
