@@ -1985,11 +1985,10 @@ class Handler(BaseHTTPRequestHandler):
 
                     else:
                         # Returning Google user: Security Alert
-                        email_service.send_security_update(
+                        email_service.send_signin_alert(
                             address=oauth_user['email'],
                             display_name=oauth_user['display_name'],
-                            description='Your SentryLoot account was successfully signed in with Google.',
-                            language=oauth_user['language']
+                            login_method='Google'
                         )
 
                         print('Google sign-in alert sent successfully.')
@@ -2201,11 +2200,10 @@ class Handler(BaseHTTPRequestHandler):
 
             # Notify user after successful login
             try:
-                email_service.send_security_update(
+                email_service.send_signin_alert(
                     address=row['email'],
                     display_name=row['display_name'],
-                    description='Your SentryLoot account was successfully signed in.',
-                    language=row['language']
+                    login_method='Email & Password'
                 )
             except Exception as exc:
                 print('Sign-in notification failed:', type(exc).__name__)

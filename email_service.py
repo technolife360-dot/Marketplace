@@ -341,3 +341,88 @@ def send_welcome_email(
 
     except URLError:
         raise RuntimeError('Resend API connection failed') from None
+
+
+def send_signin_alert(
+    address: str,
+    display_name: str,
+    login_method: str
+) -> None:
+    """Send the published Resend sign-in security template."""
+
+    if not is_configured():
+        raise RuntimeError('Transactional email is not configured')
+
+    if os.environ.get('EMAIL_PROVIDER', '').strip().lower() != 'resend':
+        raise RuntimeError('Sign-in template requires Resend')
+
+    template_id = os.environ.get(
+        'RESEND_SIGNIN_TEMPLATE_ID', ''
+    ).strip()
+
+    api_key = (
+        os.environ.get('RESEND_API_KEY')
+        or os.environ.get('EMAIL_API_KEY')
+        or ''
+    ).strip()
+
+    if not template_id:
+        raise RuntimeError('Sign-in template ID is missing')
+
+    if not api_key:
+        raise RuntimeError('Resend API key is missing')
+
+    recipient = parseaddr(address)[1].strip()
+
+    if not recipient or '@' not in recipient:
+        raise ValueError('Invalid recipient email')
+
+    site_url = os.environ.get(
+        'PUBLIC_BASE_URL', 'https://gamestorehub.com'
+    ).strip().rstrip('/')
+
+    support_email = os.environ.get(
+        'SUPPORT_EMAIL',
+        'sentryloot@gamestorehub.com'
+    ).strip()
+
+    payload = {
+        'from': _from_address(),
+        'to': [recipient],
+        'template': {
+            'id': template_id,
+            'variables': {
+                'FIRST_NAME': display_name.strip() or 'there',
+                'LOGIN_METHOD': login_method,
+                'ACCOUNT_EMAIL': recipient,
+                'SITE_URL': site_url,
+                'SUPPORT_EMAIL': support_email,
+            },
+        },
+    }
+
+    req = Request(
+        'https://api.resend.com/emails',
+        data=json.dumps(payload).encode('utf-8'),
+        headers={
+            'Authorization': 'Bearer ' + api_key,
+            'Content-Type': 'application/json',
+            'User-Agent': 'SentryLoot/1.0',
+        },
+        method='POST',
+    )
+
+    try:
+        with urlopen(req, timeout=12) as response:
+            response.read(4096)
+
+            if not 200 <= response.status < 300:
+                raise RuntimeError('Resend rejected sign-in email')
+
+    except HTTPError as exc:
+        raise RuntimeError(
+            f'Resend sign-in template returned HTTP {exc.code}'
+        ) from None
+
+    except URLError:
+        raise RuntimeError('Resend API connection failed') from None
