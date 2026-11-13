@@ -1599,15 +1599,7 @@ async function renderTopUpCatalog(selectedGame, selectedProduct) {
     return;
   } else {
     body =
-      '<div class="topup-catalog-tools"><label class="topup-catalog-search"><span class="sr-only">' +
-      adminText("Mahsulotlarni qidirish", "Поиск товаров", "Search products") +
-      '</span><input type="search" data-topup-search placeholder="' +
-      adminText(
-        "Mahsulotlarni qidirish…",
-        "Поиск товаров…",
-        "Search products…",
-      ) +
-      '" autocomplete="off"></label></div><div id="topup-catalog-products"><p class="topup-category-empty" data-topup-category-empty role="status" hidden></p><div class="topup-games-grid">' +
+      '<div id="topup-catalog-products"><p class="topup-category-empty" data-topup-category-empty role="status" hidden></p><div class="topup-games-grid">' +
       rows.map(topupCatalogCard).join("") +
       '</div></div><div class="topup-catalog-more"><button type="button" class="button-secondary" data-topup-load-more>' +
       adminText("Ko‘proq ko‘rsatish", "Показать ещё", "Show more") +
@@ -1632,13 +1624,21 @@ async function renderTopUpCatalog(selectedGame, selectedProduct) {
         "</button>",
     ).join("") +
     "</nav>";
+  const catalogTools =
+    '<div class="topup-catalog-tools">' +
+    categoryNavigation +
+    '<label class="topup-catalog-search"><span class="sr-only">' +
+    adminText("Mahsulotlarni qidirish", "Поиск товаров", "Search products") +
+    '</span><input type="search" data-topup-search placeholder="' +
+    adminText("Mahsulotlarni qidirish…", "Поиск товаров…", "Search products…") +
+    '" autocomplete="off"></label></div>';
   const catalogContent =
     '<div class="topup-hero topup-hero-image"><nav class="topup-breadcrumb topup-hero-back" aria-label="Breadcrumb"></nav><img class="topup-hero-background" src="https://images.gamestorehub.com/site-assets/topup-hero.jpg" alt="" fetchpriority="high"><div class="topup-hero-overlay"></div><div class="topup-hero-content"><div class="topup-hero-brand"><b>Sentry<span class="brand-dot">Loot</span></b></div><h1>' +
     esc(words.feature) +
     "</h1><p>" +
     words.intro +
     "</p></div></div>" +
-    categoryNavigation +
+    catalogTools +
     body +
     '<aside class="topup-safe-note">' +
     icon("shield") +
