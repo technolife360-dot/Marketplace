@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import app
 import web_push
 import video_evidence
@@ -40,18 +40,23 @@ class PushAndVideo(unittest.TestCase):
         sub=self.subscription();self.route(self.buyer,'POST','/api/push/setup',{})
         self.route(self.buyer,'POST','/api/push/subscriptions',{'consent':True,'subscription':sub})
         app.notify(self.db,self.buyer,'message','Private chat title','Private chat contents','/conversation/private')
-        with patch('pywebpush.webpush') as send:
-            result=web_push.dispatch(self.db,vars(app),send=send)
-            self.assertEqual(result['sent'],1)
-            payload=send.call_args.kwargs['data']
-            self.assertNotIn('Private chat',payload);self.assertNotIn('/conversation/',payload)
-            self.assertEqual(web_push.dispatch(self.db,vars(app),send=send)['sent'],0)
+        self.db.execute("UPDATE users SET language='uz' WHERE id=?",(self.buyer,))
+        send=Mock()
+        result=web_push.dispatch(self.db,vars(app),send=send)
+        self.assertEqual(result['sent'],1)
+        payload=send.call_args.kwargs['data']
+        self.assertNotIn('Private chat',payload);self.assertNotIn('/conversation/',payload)
+        notice=json.loads(payload)
+        self.assertEqual(notice['language'],'uz')
+        self.assertEqual(notice['body']['uz'],'Hisobingizda yangi bildirishnoma bor.')
+        self.assertEqual(set(notice['body']),set(app.SUPPORTED_LANGUAGES))
+        self.assertEqual(web_push.dispatch(self.db,vars(app),send=send)['sent'],0)
         self.route(self.other,'DELETE','/api/push/subscriptions',{'endpoint':sub['endpoint']})
         app.notify(self.db,self.buyer,'message','Another title','Another body')
-        with patch('pywebpush.webpush') as send:self.assertEqual(web_push.dispatch(self.db,vars(app),send=send)['sent'],1)
+        self.assertEqual(web_push.dispatch(self.db,vars(app),send=send)['sent'],1)
         self.route(self.buyer,'DELETE','/api/push/subscriptions',{'endpoint':sub['endpoint']})
         app.notify(self.db,self.buyer,'message','After unsubscribe','Not sent')
-        with patch('pywebpush.webpush') as send:self.assertEqual(web_push.dispatch(self.db,vars(app),send=send)['sent'],0)
+        self.assertEqual(web_push.dispatch(self.db,vars(app),send=send)['sent'],0)
 
     def test_dispatch_token_is_scoped_and_never_uses_raw_cron_secret(self):
         with patch.dict(os.environ,{'PUSH_DISPATCH_TOKEN':'scoped-only-token-'*3,'CRON_SECRET':'original-cron-secret-'*3}):

@@ -361,7 +361,7 @@ window.MobileSite = (() => {
         ? ""
         : route === "cart" || route === "orders"
           ? t("Buyurtma ma’lumotlari", "Детали заказа", "Order details")
-          : accountRoute || route === "notifications"
+          : accountRoute
             ? t("Hisobingiz", "Ваш аккаунт", "Your account")
             : route === "menu"
               ? t("Menyu", "Меню", "Menu")
@@ -1814,67 +1814,6 @@ window.MobileSite = (() => {
     if (/review/.test(kind)) return "star";
     return "bell";
   }
-  function notificationAge(value, now = Date.now()) {
-    const date = parseServerDate(value),
-      minutes = Math.floor((now - date.getTime()) / 60000);
-    if (!Number.isFinite(minutes)) return "";
-    if (minutes < 1) return t("Hozirgina", "Только что", "Just now");
-    if (minutes < 60)
-      return t(
-        minutes + " daqiqa oldin",
-        minutes + " мин назад",
-        minutes + "m ago",
-      );
-    if (minutes < 1440) {
-      const hours = Math.floor(minutes / 60);
-      return t(hours + " soat oldin", hours + " ч назад", hours + "h ago");
-    }
-    if (minutes < 10080) {
-      const days = Math.floor(minutes / 1440);
-      return t(days + " kun oldin", days + " дн назад", days + "d ago");
-    }
-    return date.toLocaleDateString(localeTag(), {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  }
-  function notifications(items, active = "all") {
-    const visible =
-      active === "unread" ? items.filter((item) => !item.read_at) : items;
-    app.innerHTML = `<section class="page mobile-notifications-page"><h1>${t("Bildirishnomalar", "Уведомления", "Notifications")}</h1><div class="mobile-notification-tabs" role="tablist" aria-label="${t("Bildirishnomalar filtri", "Фильтр уведомлений", "Notification filter")}">${[
-      ["all", t("Barchasi", "Все", "All")],
-      ["unread", t("O‘qilmagan", "Непрочитанные", "Unread")],
-    ]
-      .map(
-        ([key, label]) =>
-          `<button type="button" id="notification-tab-${key}" role="tab" aria-selected="${key === active}" aria-controls="mobile-notification-list" tabindex="${key === active ? "0" : "-1"}" data-notification-tab="${key}">${label}</button>`,
-      )
-      .join(
-        "",
-      )}</div><div id="mobile-notification-list" class="mobile-notification-list" role="tabpanel" aria-labelledby="notification-tab-${active}">${visible.map((item) => `<a class="mobile-notification-row" href="#${esc(notificationRoute(item.href))}" data-action="open-notification" data-route="${esc(notificationRoute(item.href))}" data-id="${esc(item.id)}">${designIcon(notificationGlyph(item))}<div><h3>${esc(localized(item.title))}</h3><p>${esc(localized(item.body))}</p><time datetime="${esc(item.created_at)}">${esc(notificationAge(item.created_at))}</time></div>${!item.read_at ? `<i class="mobile-notification-dot" aria-label="${t("O‘qilmagan", "Непрочитанное", "Unread")}"></i>` : ""}</a>`).join("") || `<p class="mobile-notifications-empty" role="status">${active === "unread" ? t("O‘qilmagan bildirishnomalar yo‘q.", "Нет непрочитанных уведомлений.", "No unread notifications.") : t("Hozircha bildirishnomalar yo‘q.", "Пока нет уведомлений.", "No notifications yet.")}</p>`}</div></section>`;
-    app.querySelectorAll("[data-notification-tab]").forEach((button) => {
-      const choose = (key) => {
-        notifications(items, key);
-        app.querySelector('[data-notification-tab="' + key + '"]').focus();
-      };
-      button.onclick = () => choose(button.dataset.notificationTab);
-      button.onkeydown = (event) => {
-        if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
-          event.preventDefault();
-          choose(
-            event.key === "Home"
-              ? "all"
-              : event.key === "End"
-                ? "unread"
-                : button.dataset.notificationTab === "all"
-                  ? "unread"
-                  : "all",
-          );
-        }
-      };
-    });
-  }
   function enhanceMessages() {
     const route = routeFromLocation();
     if (!/^(messages|conversation\/)/.test(route)) return;
@@ -2036,7 +1975,7 @@ window.MobileSite = (() => {
       }
       if (
         sessionResolved &&
-        /^(?:account(?:\/.*)?|browse|search|notifications|orders|listing\/.*)$/.test(
+        /^(?:account(?:\/.*)?|browse|search|orders|listing\/.*)$/.test(
           routeFromLocation().split("?")[0],
         )
       )
@@ -2088,9 +2027,7 @@ window.MobileSite = (() => {
     orders,
     purchaseGroup,
     purchaseDate,
-    notifications,
     notificationGlyph,
-    notificationAge,
     registrationSubmitted,
     emailCheck,
     maskVerificationEmail,

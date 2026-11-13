@@ -1681,38 +1681,6 @@ textarea:focus {
 .game-choices .chip {
   gap: 10px;
 }
-.notification-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 24px;
-  align-items: start;
-}
-.notification {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 22px 12px;
-  border-bottom: 1px solid #323b41;
-  font-size: 13px;
-}
-.notification.unread {
-  background: #ffb95106;
-}
-.notification > .icon {
-  margin-left: auto;
-  width: 18px;
-  color: #8b969f;
-}
-.notification small {
-  display: block;
-  margin-top: 5px;
-}
-.notification strong {
-  font-weight: 650;
-}
-.notification-list {
-  padding: 10px;
-}
 .layout-editor {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
@@ -2055,12 +2023,6 @@ dialog[open] {
   .settings-layout {
     grid-template-columns: 180px 1fr;
     gap: 20px;
-  }
-  .notification-layout {
-    grid-template-columns: 1fr;
-  }
-  .notification-layout > aside {
-    display: none;
   }
   .layout-editor {
     grid-template-columns: 1fr;
@@ -2617,24 +2579,6 @@ dialog[open] {
   }
   .settings-layout {
     gap: 16px;
-  }
-  .notification-layout {
-    gap: 0;
-  }
-  .notification {
-    padding: 18px 10px;
-    gap: 10px;
-    font-size: 12px;
-  }
-  .notification .avatar.large {
-    width: 42px;
-    height: 42px;
-  }
-  .notification .icon {
-    width: 14px;
-  }
-  .notification small {
-    font-size: 10px;
   }
   .players-grid {
     grid-template-columns: 1fr;

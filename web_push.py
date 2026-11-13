@@ -9,8 +9,14 @@ from datetime import datetime,timezone
 from urllib.parse import urlparse
 import launch_readiness as launch
 import marketplace_operations as ops
+import regional_preferences
 
 PROVIDERS={'fcm.googleapis.com','updates.push.services.mozilla.com','web.push.apple.com'}
+PUSH_MESSAGE = 'You have a new account notification.'
+PUSH_COPY = {'en': PUSH_MESSAGE, **{
+    language: messages[PUSH_MESSAGE]
+    for language, messages in regional_preferences.LANGUAGE_DATA['notificationMessages'].items()
+}}
 
 def b64(value):return base64.urlsafe_b64encode(value).rstrip(b'=').decode()
 def decode(value):return base64.urlsafe_b64decode(value+'='*((4-len(value)%4)%4))
@@ -64,7 +70,7 @@ def dispatch(db,core,send=None,limit=3):
         launch.put_config(db,'webpush_cursor',account['user_id'])
         uid=account['user_id'];prefs=json.loads(account['settings_json'])
         if not prefs.get('browser'):continue
-        user=db.execute('SELECT suspended,email_verified FROM users WHERE id=?',(uid,)).fetchone()
+        user=db.execute('SELECT suspended,email_verified,language FROM users WHERE id=?',(uid,)).fetchone()
         if not user or user['suspended'] or not user['email_verified']:continue
         devices=prefs.get('push_devices',[]);cursor_device=prefs.get('push_device_cursor','')
         devices=sorted(devices,key=lambda d:(d['id']<=cursor_device,d['id']))
@@ -77,7 +83,7 @@ def dispatch(db,core,send=None,limit=3):
             attempted+=1
             ids=[r['id'] for r in unread]
             try:
-                send(subscription_info=subscription,data=json.dumps({'title':'SentryLoot','body':{'uz':'Hisobingizda yangi bildirishnoma bor.','ru':'В вашем аккаунте новое уведомление.','en':'You have a new account notification.'},'tag':ids[0]}),vapid_private_key=private,vapid_claims={'sub':'mailto:sentryloot@gamestorehub.com'},ttl=300,timeout=2)
+                send(subscription_info=subscription,data=json.dumps({'title':'SentryLoot','body':PUSH_COPY,'language':user['language'],'tag':ids[0]},ensure_ascii=False),vapid_private_key=private,vapid_claims={'sub':'mailto:sentryloot@gamestorehub.com'},ttl=300,timeout=2)
             except Exception as exc:
                 response=getattr(exc,'response',None);status=getattr(response,'status_code',None) if response is not None else getattr(exc,'status_code',None)
                 if status in (404,410):

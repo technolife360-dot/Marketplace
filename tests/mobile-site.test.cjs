@@ -101,29 +101,9 @@ test('mobile search finds catalogue aliases and normalizes spaces and accents wi
   assert.equal(games[0].id,'fc-mobile');
 });
 
-test('mobile notifications preserve real links and read state, and filter without mutating API data',()=>{
-  const h=harness(),ctx=h.context;
-  ctx.localized=String;ctx.notificationRoute=href=>href.replace(/^\/?#?/,'');ctx.parseServerDate=value=>new Date(value);ctx.localeTag=()=> 'en-US';
-  ctx.esc=value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
-  const items=[{id:'unread-real',kind:'delivery',title:'Actual delivery',body:'<script>unsafe</script>',href:'/order/actual-order',created_at:'2026-10-26T00:00:00Z',read_at:null},{id:'read-real',kind:'verification',title:'Actual decision',body:'Reviewed documents',href:'/#seller',created_at:'2026-10-25T00:00:00Z',read_at:'2026-10-26T00:01:00Z'}],before=JSON.stringify(items);
-  h.site.notifications(items);
-  assert.match(ctx.app.innerHTML,/data-route="order\/actual-order"/);
-  assert.match(ctx.app.innerHTML,/data-id="unread-real"/);
-  assert.match(ctx.app.innerHTML,/&lt;script&gt;unsafe&lt;\/script&gt;/);
-  assert.equal((ctx.app.innerHTML.match(/class="mobile-notification-dot"/g)||[]).length,1);
-  h.site.notifications(items,'unread');
-  assert.match(ctx.app.innerHTML,/Actual delivery/);assert.doesNotMatch(ctx.app.innerHTML,/Actual decision/);
-  assert.match(ctx.app.innerHTML,/id="notification-tab-unread" role="tab" aria-selected="true"/);
-  assert.equal(JSON.stringify(items),before);
-  h.site.notifications(items.filter(item=>item.read_at),'unread');assert.match(ctx.app.innerHTML,/No unread notifications/);
-  assert.equal(h.site.navHidden('notifications'),true);
-});
-
-test('mobile notification icons and ages follow real notification metadata',()=>{
-  const h=harness();h.context.parseServerDate=value=>new Date(value);h.context.localeTag=()=> 'en-US';
+test('notification icons follow real notification metadata',()=>{
+  const h=harness();
   for(const [kind,glyph] of [['verification','shield'],['listing','box'],['delivery','truck'],['wallet','wallet'],['message','chat'],['review','star'],['unknown','bell']])assert.equal(h.site.notificationGlyph({kind}),glyph);
-  assert.equal(h.site.notificationAge('2026-10-26T00:00:00Z',Date.parse('2026-10-26T02:00:00Z')),'2h ago');
-  assert.equal(h.site.notificationAge('invalid date'),'');
 });
 
 test('purchase cards filter the buyer orders by real status and retain item snapshots and totals',()=>{

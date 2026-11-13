@@ -16,17 +16,13 @@
 
 .notification-panel[hidden] { display: none; }
 
-.notification-panel-header,
-.notification-panel-footer {
-  flex: 0 0 auto;
-  padding: 8px 14px;
-}
-
 .notification-panel-header {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--notification-border);
 }
 
@@ -165,8 +161,6 @@
   animation: notification-panel-spin 750ms linear infinite;
 }
 
-.notification-panel-footer { border-top: 1px solid var(--notification-border); padding-block: 4px; }
-.notification-panel-footer a,
 .notification-panel-state :is(a, button) {
   display: flex;
   align-items: center;
@@ -183,8 +177,6 @@
   cursor: pointer;
 }
 
-.notification-panel-footer .notification-panel-glyph { inline-size: 16px; block-size: 16px; }
-.notification-panel:dir(rtl) .notification-panel-footer .notification-panel-glyph { transform: scaleX(-1); }
 .notification-panel :is(a, button):hover { background: #ffffff12; }
 .notification-panel :is(a, button):focus-visible { outline: 2px solid #91c5ff; outline-offset: -3px; }
 

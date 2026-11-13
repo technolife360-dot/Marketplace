@@ -439,7 +439,7 @@ test('admin loads only the requested section and deduplicates pending requests',
 
 test('notification routes normalize stored hash links without accepting external targets',()=>{
  const context={};vm.createContext(context);
- vm.runInContext(source.slice(source.indexOf('function notificationRoute('),source.indexOf('\nasync function renderNotifications(')),context);
+ vm.runInContext(source.slice(source.indexOf('function notificationRoute('),source.indexOf('\nasync function readNotification(')),context);
  for(const href of ['/#my-reviews','/my-reviews','#my-reviews'])assert.equal(context.notificationRoute(href),'my-reviews');
  assert.equal(context.notificationRoute('/order/real-order'),'order/real-order');
  assert.equal(context.notificationRoute('https://example.com/'),'account');

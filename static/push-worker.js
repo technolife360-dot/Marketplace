@@ -7,7 +7,7 @@ self.addEventListener("push", (event) => {
     return;
   }
   if (!value) return;
-  const language = (self.navigator.language || "en").slice(0, 2);
+  const language = value.language || (self.navigator.language || "en").split("-")[0];
   event.waitUntil(
     self.registration.showNotification("SentryLoot", {
       body:

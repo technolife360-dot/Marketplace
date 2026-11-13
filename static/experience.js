@@ -1518,12 +1518,9 @@ window.ExperienceUX = (() => {
     for (const r of rows
       .filter((r) => !r.read_at && !shown.includes(r.id))
       .slice(0, 3)) {
-      const n = new Notification(localized(r.title), {
-        body: t(
-          "Tafsilotlar SentryLoot hisobingizda.",
-          "Подробности в аккаунте SentryLoot.",
-          "See details in your SentryLoot account.",
-        ),
+      const panel = window.NotificationPanel;
+      const n = new Notification(panel?.marketplaceCopy(r, locale).title ?? localized(r.title), {
+        body: panel?.translate("See details in your SentryLoot account.", locale) ?? "See details in your SentryLoot account.",
         icon: "https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-512.png?v=1",
         tag: r.id,
       });

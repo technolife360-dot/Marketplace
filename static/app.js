@@ -321,7 +321,7 @@ const CRISP_DIRECT_CHAT_URL =
 function localizeDOM(root = document.body) {
   if (!root) return;
   const skip =
-    ".product-title,.detail-desc,.bubble,.conversation-item,.seller-mini,.product-cover strong,.product-game,[data-user-content],#language-menu,.region-preferences-dialog,.crisp-client,#qa-vitals";
+    ".product-title,.detail-desc,.bubble,.conversation-item,.seller-mini,.product-cover strong,.product-game,[data-user-content],#language-menu,.region-preferences-dialog,.crisp-client,#qa-vitals,#notification-panel";
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let node;
   while ((node = walker.nextNode())) {
@@ -2306,7 +2306,7 @@ function updateRouteMetadata(route, infoPage) {
       ],
     };
   const privateRoute =
-      /^(notification-settings|saved-searches|order-case|admin|account|security-unlock|support-ticket|support-tickets|dispute(?:\/|$)|email-change|catalog-readiness|spin-win|rewards|bonuses|seller|cart|orders|wallet|messages|notifications|favorites|payout-options|admin-blog|top-up-admin|login|register|password-reset|conversation\/|order\/|listing-review\/)/.test(
+      /^(notification-settings|saved-searches|order-case|admin|account|security-unlock|support-ticket|support-tickets|dispute(?:\/|$)|email-change|catalog-readiness|spin-win|rewards|bonuses|seller|cart|orders|wallet|messages|favorites|payout-options|admin-blog|top-up-admin|login|register|password-reset|conversation\/|order\/|listing-review\/)/.test(
         route,
       ),
     [title, description, path] = infoPage
@@ -2446,6 +2446,11 @@ async function navigate() {
   window.ExperienceUX?.stop();
   window.SENTRYLOOT_INFO_PAGES?.stop();
   if (typeof closeProfileMenu === "function") closeProfileMenu();
+  const openNotifications = location.hash === "#notifications";
+  if (openNotifications) {
+    history.replaceState(history.state, "", location.pathname + location.search);
+  }
+  const notificationPageLocation = location.href;
   const pageAnchor = currentPageAnchor();
   let hashRoute = pageAnchor ? "" : location.hash.slice(1);
   if (hashRoute && location.pathname !== "/") {
@@ -2523,7 +2528,7 @@ async function navigate() {
       return;
     }
     if (route === "top-up-admin") return await renderTopUpAdmin();
-    if (route === "home") return await renderHome();
+    if (route === "home") return await renderHome({}, { showSpin: !openNotifications });
     if (route === "search")
       return window.MobileSite?.isMobile()
         ? await window.MobileSite.search()
@@ -2591,7 +2596,6 @@ async function navigate() {
       return await renderListingReview(
         decodeURIComponent(route.slice("listing-review/".length)),
       );
-    if (route === "notifications") return await renderNotifications();
     if (route === "account")
       return window.MobileSite?.isMobile()
         ? await window.MobileSite.account()
@@ -2645,6 +2649,8 @@ async function navigate() {
     window.PremiumMotion?.mount(app);
     app.dataset.routeReady = route;
     app.setAttribute("aria-busy", "false");
+    if (openNotifications && location.href === notificationPageLocation)
+      window.NotificationPanel?.open($("#notifications-button"), marketplaceNotificationPanel);
   }
 }
 function renderNotFound() {
@@ -3040,7 +3046,7 @@ function startHeroVisualCanvas() {
   };
   resize();
 }
-async function renderHome(filters = {}) {
+async function renderHome(filters = {}, { showSpin = true } = {}) {
   const t = (uz, ru, en) => adminText(uz, ru, en),
     categories = [];
   const dataReady = Promise.allSettled([
@@ -3124,8 +3130,10 @@ async function renderHome(filters = {}) {
     if (root.isConnected)
       window.SpinWin?.home(root.querySelector("[data-home-spin]"));
   };
-  if (bootstrapSessionReady) bootstrapSessionReady.then(mountSpin);
-  else mountSpin();
+  if (showSpin) {
+    if (bootstrapSessionReady) bootstrapSessionReady.then(mountSpin);
+    else mountSpin();
+  }
   const [listingResult, categoryResult] = await dataReady;
   if (!root.isConnected) return;
   // Public catalogue content need not wait for the profile request.
@@ -3802,25 +3810,17 @@ async function readNotification(id) {
 }
 function marketplaceNotificationPanel() {
   const user = me?.id;
-  const regionCopy = adminText;
+  const language = locale;
+  const panel = window.NotificationPanel;
+  const t = (key) => panel.translate(key, language);
+  const showError = () => toast(t("Could not update notifications."), "error");
   return {
-    copy: {
-      title: regionCopy("Bildirishnomalar", "Уведомления", "Notifications"),
-      settings: regionCopy("Bildirishnoma sozlamalari", "Настройки уведомлений", "Notification settings"),
-      markAll: regionCopy("Hammasini o‘qilgan deb belgilash", "Отметить всё как прочитанное", "Mark all as read"),
-      empty: regionCopy("Hozircha bildirishnoma yo‘q.", "Пока нет уведомлений.", "No notifications yet."),
-      error: regionCopy("Sahifa yuklanmadi. Yangilab qayta urinib ko‘ring.", "Страница не загрузилась. Обновите её и повторите.", "This page could not be loaded. Refresh and try again."),
-      retry: regionCopy("Qayta urinish", "Повторить", "Try again"),
-      loading: regionCopy("Yuklanmoqda…", "Загрузка…", "Loading…"),
-      viewAll: regionCopy("Barchasini ko‘rish", "Посмотреть все", "View all"),
-      unread: regionCopy("O‘qilmagan", "Непрочитанное", "Unread"),
-    },
-    allHref: "/#notifications",
+    copy: panel.copy(language),
     settingsHref: "/#notification-settings",
     guest: !user && {
       href: "/#login",
-      message: regionCopy("Davom etish uchun tizimga kiring.", "Войдите, чтобы продолжить.", "Sign in to continue."),
-      label: regionCopy("Kirish", "Войти", "Sign in"),
+      message: t("Sign in to see your notifications."),
+      label: t("Sign in"),
     },
     list: async (signal) => {
       const items = await api("/notifications", { signal });
@@ -3830,12 +3830,11 @@ function marketplaceNotificationPanel() {
         const glyph = window.MobileSite?.notificationGlyph(item);
         return {
           id: item.id,
-          title: localized(item.title),
-          body: localized(item.body),
+          ...panel.marketplaceCopy(item, language),
           href: "/#" + notificationRoute(item.href),
           unread: !item.read_at,
           icon: { truck: "cart", chat: "message" }[glyph] || glyph,
-          ...window.NotificationPanel.timestamp(item.created_at, localeTag()),
+          ...panel.timestamp(item.created_at, language),
         };
       });
     },
@@ -3844,29 +3843,14 @@ function marketplaceNotificationPanel() {
       const current = location.href;
       try {
         await readNotification(item.id);
-      } catch (error) {
-        toast(error.message, "error");
+      } catch {
+        showError();
         return;
       }
       if (location.href === current && me?.id === user) location.assign(item.href);
     },
-    onError: (error) => toast(error.message, "error"),
+    onError: showError,
   };
-}
-async function renderNotifications() {
-  if (!me) {
-    location.hash = "login";
-    return;
-  }
-  const items = await api("/notifications"),
-    unread = items.filter((x) => !x.read_at).length;
-  if (window.MobileSite?.isMobile()) {
-    MobileSite.notifications(items);
-    refreshNotifications();
-    return;
-  }
-  app.innerHTML = `<section class="page">${pageTitle("Bildirishnomalar", "Buyurtma, xabar va hisobingizdagi yangiliklar.", unread ? '<button class="button-secondary" data-action="read-all-notifications">Hammasini o‘qilgan deb belgilash</button>' : "")}<div class="notification-list">${items.length ? items.map((n) => `<article class="notification-item ${n.read_at ? "" : "unread"}"><div><h3>${esc(localized(n.title))}</h3><p>${esc(localized(n.body))}</p><time>${parseServerDate(n.created_at).toLocaleString(localeTag())}</time></div><div class="queue-actions"><a class="button-secondary" href="#${esc(notificationRoute(n.href))}" data-action="open-notification" data-id="${esc(n.id)}">Ochish</a>${!n.read_at ? `<button class="button-secondary" data-action="mark-notification-read" data-id="${esc(n.id)}">O‘qildi</button>` : ""}</div></article>`).join("") : empty("Hozircha bildirishnoma yo‘q.")}</div></section>`;
-  refreshNotifications();
 }
 function desktopOrderGroup(order) {
   return order.status === "completed"
@@ -4948,17 +4932,6 @@ async function doAction(b) {
         }),
       });
       location.assign(result.authorization_url);
-    } else if (a === "read-all-notifications") {
-      await api("/notifications/read-all", { method: "POST", body: "{}" });
-      refreshNotifications();
-      await renderNotifications();
-    } else if (a === "mark-notification-read") {
-      await readNotification(id);
-      await renderNotifications();
-    } else if (a === "open-notification") {
-      await readNotification(id);
-      location.hash =
-        b.dataset.route || notificationRoute(b.getAttribute("href")?.slice(1));
     } else if (a === "seller-review") {
       const note = promptLocale(
         "Sotuvchini tekshirganingiz va qaroringiz sababini kiriting (kamida 5 belgi):",

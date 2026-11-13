@@ -44,3 +44,37 @@ test('community validation and media-service errors have translated equivalents'
  }
  for(const language of ['uz','ru'])assert.deepEqual([...keys].filter(key=>!w.CommunityCopy[language][key]),[],language+' missing server errors');
 });
+
+test('notification copy covers every supported language and translates stored system events', () => {
+ const data = JSON.parse(fs.readFileSync(path.join(root, 'static/regional-languages.json'), 'utf8'));
+ const context = vm.createContext({
+  window: { SENTRYLOOT_LANGUAGE_DATA: data, addEventListener() {} },
+  document: { createElement: () => ({ setAttribute() {}, addEventListener() {} }), body: { append() {} }, addEventListener() {} },
+ });
+ vm.runInContext(fs.readFileSync(path.join(root, 'static/notification-panel.js'), 'utf8'), context);
+ const panel = context.window.NotificationPanel;
+ const keys = Object.keys(data.notificationMessages.uz).sort();
+ for (const { code } of data.languages) {
+  if (code !== 'en') {
+   const dictionary = data.notificationMessages[code];
+   const regional = data.messages[code];
+   assert.deepEqual(Object.keys({ ...regional, ...dictionary }).filter(key => keys.includes(key)).sort(), keys, code);
+   for (const [key, value] of Object.entries(dictionary)) {
+    assert.ok(value.trim(), `${code}: ${key}`);
+    assert.deepEqual((value.match(/\{\w+\}/g) ?? []).sort(), (key.match(/\{\w+\}/g) ?? []).sort(), `${code}: ${key}`);
+   }
+  }
+  const order = panel.marketplaceCopy({ kind: 'order', title: 'Yangi buyurtma', body: 'BG-ABCDEF01 bo‘yicha to‘lov tasdiqlandi.' }, code);
+  assert.equal(order.title, panel.translate('New order', code));
+  assert.equal(order.body, panel.translate('Payment for {reference} was confirmed.', code, { reference: 'BG-ABCDEF01' }));
+  const message = panel.marketplaceCopy({ kind: 'message', title: 'Yangi xabar', body: 'Suhbatda yangi xabar bor.', href: '/messages' }, code);
+  assert.equal(message.body, 'Suhbatda yangi xabar bor.', 'messages written by people keep their original text');
+  assert.equal(panel.communityCopy({ kind: 'comment', display_name: 'Sam' }, code), panel.translate('{player} commented on your post.', code, { player: 'Sam' }));
+  assert.equal(panel.timestamp(new Date().toISOString(), code).time, panel.translate('Just now', code));
+ }
+ assert.equal(panel.copy('uz').title, 'Bildirishnomalar');
+ assert.equal(panel.timestamp(new Date(Date.now() - 150000).toISOString(), 'uz').time, '2 daqiqa oldin');
+ assert.equal(panel.copy('de').settings, 'Benachrichtigungseinstellungen');
+ assert.equal(panel.communityCopy({ kind: 'follow', display_name: 'Sam' }, 'zh'), 'Sam 开始关注你了。');
+ assert.equal(panel.marketplaceCopy({ kind: 'moderation', title: 'Moderatsiya natijasi', body: 'E’loningiz holati: published. Please update the title.' }, 'uz').body, 'E’loningiz chop etildi. Please update the title.');
+});

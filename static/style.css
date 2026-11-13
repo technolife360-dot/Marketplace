@@ -2748,40 +2748,6 @@ body.profile-menu-open {
     transform: rotate(360deg);
   }
 }
-.notification-item {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 10px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--paper);
-}
-.notification-item.unread {
-  border-color: rgba(170, 187, 218, 30%);
-  background: linear-gradient(
-    110deg,
-    rgba(170, 187, 218, 8%),
-    var(--paper) 65%
-  );
-}
-.notification-item h3 {
-  margin: 0 0 4px;
-  font-size: 14px;
-}
-.notification-item p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-}
-.notification-item time {
-  display: block;
-  margin-top: 7px;
-  color: var(--muted);
-  font-size: 10px;
-}
 .admin-queue + .admin-queue {
   margin-top: 16px;
 }
@@ -8668,12 +8634,6 @@ body:not(.home-page) .bubble {
 body:not(.home-page) .bubble.mine {
   background: #4b1d6d;
   color: #fff;
-}
-body:not(.home-page) .notification-item {
-  border-color: rgba(197, 145, 255, 15%);
-}
-body:not(.home-page) .notification-item.unread {
-  border-color: rgba(194, 91, 255, 35%);
 }
 body:not(.home-page) .sort-menu {
   border-color: rgba(197, 145, 255, 20%);
