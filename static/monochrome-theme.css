@@ -50,14 +50,14 @@
     color: #f1f1f1;
   }
   /* Remove old tinted paints; explicit surface rules below restore visual hierarchy. */
-  body :where(:not(svg):not(svg *):not(.crisp-client):not(.crisp-client *)) {
+  body :where(:not(svg, svg *, .crisp-client, .crisp-client *, .notification-panel, .notification-panel *)) {
     background-color: transparent !important;
     border-color: var(--line) !important;
     color: #f1f1f1 !important;
     box-shadow: none !important;
   }
-  body :where(:not(.crisp-client):not(.crisp-client *))::before,
-  body :where(:not(.crisp-client):not(.crisp-client *))::after {
+  body :where(:not(.crisp-client, .crisp-client *, .notification-panel *))::before,
+  body :where(:not(.crisp-client, .crisp-client *, .notification-panel *))::after {
     background-color: transparent !important;
     background-image: none !important;
     box-shadow: none !important;
@@ -101,7 +101,7 @@
   body
     :where(:not(.crisp-client):not(.crisp-client *)):is(
       dialog,
-      [role="dialog"],
+      [role="dialog"]:not(.notification-panel),
       [role="menu"],
       [role="listbox"],
       .modal,
@@ -208,7 +208,7 @@
     background: #151515 !important;
   }
   body
-    :where(:not(.crisp-client):not(.crisp-client *)):is(
+    :where(:not(.crisp-client, .crisp-client *, .notification-panel *)):is(
       button,
       .button-primary,
       .button-secondary,
@@ -234,7 +234,7 @@
     font-weight: 700;
   }
   body
-    :where(:not(.crisp-client):not(.crisp-client *)):is(
+    :where(:not(.crisp-client, .crisp-client *, .notification-panel *)):is(
       button,
       .button-primary,
       .button-secondary,
@@ -304,7 +304,7 @@
       .footer p,
       .footer small,
       small,
-      time,
+      time:not(.notification-panel time),
       dt,
       .tu-subtitle,
       .tu-specs small,

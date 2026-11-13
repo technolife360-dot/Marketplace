@@ -220,6 +220,7 @@ window.CommunityCopy = {
     "The latest connections and conversations in your gaming world.":
       "O‘yin olamingizdagi yangi tanishuvlar va suhbatlar.",
     "Mark all as read": "Barchasini o‘qilgan qilish",
+    "Invalid ID.": "ID noto‘g‘ri.",
     "started following you.": "sizni kuzata boshladi.",
     "reacted to your post.": "postingizga munosabat bildirdi.",
     "commented on your post.": "postingizga izoh yozdi.",
@@ -840,6 +841,7 @@ window.CommunityCopy = {
     "The latest connections and conversations in your gaming world.":
       "Новые знакомства и разговоры в вашем игровом мире.",
     "Mark all as read": "Отметить всё прочитанным",
+    "Invalid ID.": "Неверный ID.",
     "started following you.": "подписался на вас.",
     "reacted to your post.": "отреагировал на вашу публикацию.",
     "commented on your post.": "прокомментировал вашу публикацию.",

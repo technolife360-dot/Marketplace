@@ -623,5 +623,12 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
             out.append(dict(r))
         return {'notifications':out}
     if part=='/notifications/read' and method=='POST':
-        db.execute('UPDATE community_events SET seen=1 WHERE user_id=?',(uid,));return {'ok':True}
+        event_id=data.get('id')
+        if event_id is None:
+            db.execute('UPDATE community_events SET seen=1 WHERE user_id=? AND seen=0',(uid,))
+        else:
+            if not isinstance(event_id,str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}',event_id):
+                fail(core,400,'Invalid ID.')
+            db.execute('UPDATE community_events SET seen=1 WHERE user_id=? AND id=? AND seen=0',(uid,event_id))
+        return {'ok':True}
     fail(core,404,'Not found.')

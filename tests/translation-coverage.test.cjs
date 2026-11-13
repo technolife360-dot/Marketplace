@@ -89,6 +89,45 @@ test('footer and sign-in copy are covered and View all does not duplicate the UI
   }
 });
 
+test('the footer paragraph translates when the language changes repeatedly', () => {
+  const html = fs.readFileSync(path.join(root, 'static/index.html'), 'utf8');
+  const source = html.match(/class="footer-brand">[\s\S]*?<p>([\s\S]*?)<\/p>/)[1];
+  const app = fs.readFileSync(path.join(root, 'static/app.js'), 'utf8');
+  const paragraph = { data: source };
+  const context = vm.createContext({
+    window: { RegionPreferences: { translate: (text, language) => data.messages[language]?.[text] } },
+    document: {
+      body: {},
+      documentElement: {},
+      createTreeWalker() {
+        const nodes = [paragraph].values();
+        return { nextNode: () => nodes.next().value };
+      },
+    },
+    NodeFilter: { SHOW_TEXT: 4 },
+    $$: () => [],
+    $: () => null,
+    syncLanguageMenu() {},
+  });
+  vm.runInContext(fs.readFileSync(path.join(root, 'static/locales.js'), 'utf8'), context);
+  vm.runInContext(app.slice(app.indexOf('const localeKey'), app.indexOf('function adminText')), context);
+  vm.runInContext(app.slice(app.indexOf('function localizeDOM'), app.indexOf('let localizeQueued')), context);
+
+  const entry = context.window.BOZOR_COPY[source.trim().replace(/\s+/g, ' ')];
+  const [russian, english] = entry;
+  for (const [language, expected] of [
+    ['en', english],
+    ['ru', russian],
+    ...regionalLanguages.map(language => [language, data.messages[language][english]]),
+    ['uz', source.trim()],
+    ['en', english],
+  ]) {
+    context.locale = language;
+    context.localizeDOM();
+    assert.equal(paragraph.data.trim(), expected, language);
+  }
+});
+
 test('purchase validation retains the actual quantity and ID limits', () => {
   const validations = new Map([
     ['Enter a whole number from 1 to 99.', ['1', '99']],

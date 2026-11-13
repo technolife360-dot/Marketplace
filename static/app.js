@@ -140,9 +140,14 @@ function localized(value, language = locale) {
   const trimmed = source.trim(),
     start = source.indexOf(trimmed),
     lead = start < 0 ? "" : source.slice(0, start),
-    tail = start < 0 ? "" : source.slice(start + trimmed.length),
-    exact =
-      translateSource(source, language) ?? translateSource(trimmed, language);
+    tail = start < 0 ? "" : source.slice(start + trimmed.length);
+  let exact = translateSource(source, language);
+  if (exact === undefined && trimmed !== source)
+    exact = translateSource(trimmed, language);
+  if (exact === undefined) {
+    const collapsed = trimmed.replace(/\s+/g, " ");
+    if (collapsed !== trimmed) exact = translateSource(collapsed, language);
+  }
   if (exact !== undefined)
     return source === trimmed ? exact : lead + exact + tail;
   const english = language !== "ru";
@@ -2224,15 +2229,22 @@ async function refreshNotifications() {
     badge.textContent = "0";
     return;
   }
+  const user = me.id;
   try {
     const items = await api("/notifications");
+    if (me?.id !== user) return;
     window.ExperienceUX?.browserAlerts(items).catch(() => {});
-    const count = items.filter((x) => !x.read_at).length;
-    badge.textContent = count > 9 ? "9+" : String(count);
-    badge.hidden = count === 0;
+    updateNotificationBadge(items);
   } catch {
-    badge.hidden = true;
+    if (me?.id === user) badge.hidden = true;
   }
+}
+function updateNotificationBadge(items) {
+  const badge = $("#notification-count");
+  if (!badge) return;
+  const count = items.filter((item) => !item.read_at).length;
+  badge.textContent = count > 9 ? "9+" : String(count);
+  badge.hidden = count === 0;
 }
 // A visible, signed-in tab refreshes presence; the server expires it after three minutes.
 setInterval(() => {
@@ -2426,6 +2438,7 @@ function openBrowse(filters = {}) {
   location.assign("/browse" + (params.size ? "?" + params : ""));
 }
 async function navigate() {
+  window.NotificationPanel?.close();
   if (me && (await window.OrderFlow?.guardNavigation())) return;
   window.AdminConsole?.stop();
   window.PremiumMotion?.stop();
@@ -3706,6 +3719,7 @@ async function openProfileMenu() {
     return;
   }
   await loadAsiaMarkets();
+  window.NotificationPanel?.close();
   const root = $("#profile-menu-root");
   if (!root) return;
   root.innerHTML = profileMenuMarkup();
@@ -3778,6 +3792,66 @@ function notificationRoute(href) {
   )
     return value;
   return "account";
+}
+async function readNotification(id) {
+  await api("/notifications/" + encodeURIComponent(id) + "/read", {
+    method: "POST",
+    body: "{}",
+  });
+  refreshNotifications();
+}
+function marketplaceNotificationPanel() {
+  const user = me?.id;
+  const regionCopy = adminText;
+  return {
+    copy: {
+      title: regionCopy("Bildirishnomalar", "Уведомления", "Notifications"),
+      settings: regionCopy("Bildirishnoma sozlamalari", "Настройки уведомлений", "Notification settings"),
+      markAll: regionCopy("Hammasini o‘qilgan deb belgilash", "Отметить всё как прочитанное", "Mark all as read"),
+      empty: regionCopy("Hozircha bildirishnoma yo‘q.", "Пока нет уведомлений.", "No notifications yet."),
+      error: regionCopy("Sahifa yuklanmadi. Yangilab qayta urinib ko‘ring.", "Страница не загрузилась. Обновите её и повторите.", "This page could not be loaded. Refresh and try again."),
+      retry: regionCopy("Qayta urinish", "Повторить", "Try again"),
+      loading: regionCopy("Yuklanmoqda…", "Загрузка…", "Loading…"),
+      viewAll: regionCopy("Barchasini ko‘rish", "Посмотреть все", "View all"),
+      unread: regionCopy("O‘qilmagan", "Непрочитанное", "Unread"),
+    },
+    allHref: "/#notifications",
+    settingsHref: "/#notification-settings",
+    guest: !user && {
+      href: "/#login",
+      message: regionCopy("Davom etish uchun tizimga kiring.", "Войдите, чтобы продолжить.", "Sign in to continue."),
+      label: regionCopy("Kirish", "Войти", "Sign in"),
+    },
+    list: async (signal) => {
+      const items = await api("/notifications", { signal });
+      if (signal.aborted || me?.id !== user) return [];
+      updateNotificationBadge(items);
+      return items.map((item) => {
+        const glyph = window.MobileSite?.notificationGlyph(item);
+        return {
+          id: item.id,
+          title: localized(item.title),
+          body: localized(item.body),
+          href: "/#" + notificationRoute(item.href),
+          unread: !item.read_at,
+          icon: { truck: "cart", chat: "message" }[glyph] || glyph,
+          ...window.NotificationPanel.timestamp(item.created_at, localeTag()),
+        };
+      });
+    },
+    markAll: () => api("/notifications/read-all", { method: "POST", body: "{}" }),
+    openItem: async (item) => {
+      const current = location.href;
+      try {
+        await readNotification(item.id);
+      } catch (error) {
+        toast(error.message, "error");
+        return;
+      }
+      if (location.href === current && me?.id === user) location.assign(item.href);
+    },
+    onError: (error) => toast(error.message, "error"),
+  };
 }
 async function renderNotifications() {
   if (!me) {
@@ -4879,18 +4953,10 @@ async function doAction(b) {
       refreshNotifications();
       await renderNotifications();
     } else if (a === "mark-notification-read") {
-      await api("/notifications/" + encodeURIComponent(id) + "/read", {
-        method: "POST",
-        body: "{}",
-      });
-      refreshNotifications();
+      await readNotification(id);
       await renderNotifications();
     } else if (a === "open-notification") {
-      await api("/notifications/" + encodeURIComponent(id) + "/read", {
-        method: "POST",
-        body: "{}",
-      });
-      refreshNotifications();
+      await readNotification(id);
       location.hash =
         b.dataset.route || notificationRoute(b.getAttribute("href")?.slice(1));
     } else if (a === "seller-review") {
@@ -5747,6 +5813,7 @@ async function openRegionPreferences() {
   window.RegionPreferences?.open();
 }
 $("#language-toggle").onclick = openRegionPreferences;
+window.NotificationPanel?.bind($("#notifications-button"), marketplaceNotificationPanel);
 document.addEventListener("click", (e) => {
   if (!e.target.closest(".language-control")) closeLanguageMenu();
 });

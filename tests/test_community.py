@@ -55,6 +55,11 @@ class CommunityWorkflows(unittest.TestCase):
         self.assertEqual(self.req(self.admin,'GET','/folders')[1]['folders'],['Clutches'])
         self.assertEqual(len(self.req(self.admin,'GET','/posts?mode=saved')[1]['posts']),1)
         events=self.req(self.seller,'GET','/notifications')[1]['notifications'];self.assertEqual(len(events),3)
+        event_id=events[0]['id']
+        self.assertEqual(self.req(self.admin,'POST','/notifications/read',{'id':event_id})[0],200)
+        self.assertFalse(any(n['seen'] for n in self.req(self.seller,'GET','/notifications')[1]['notifications']))
+        self.assertEqual(self.req(self.seller,'POST','/notifications/read',{'id':event_id})[0],200)
+        self.assertEqual([n['id'] for n in self.req(self.seller,'GET','/notifications')[1]['notifications'] if n['seen']],[event_id])
         self.req(self.seller,'POST','/notifications/read',{})
         self.assertTrue(all(n['seen'] for n in self.req(self.seller,'GET','/notifications')[1]['notifications']))
         self.assertNotIn('email',after['author'])

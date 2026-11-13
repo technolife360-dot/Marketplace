@@ -154,7 +154,7 @@
   function frame(active) {
     const search =
       new URLSearchParams(location.hash.split("?")[1] || "").get("q") || "";
-    shell.innerHTML = `<header class="community-header"><a class="brand" href="/#home" aria-label="SentryLoot — GameStoreHub marketplace" title="SentryLoot · gamestorehub.com"><span class="brand-mark"><img src="https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-256.webp?v=1" alt=""></span><span class="brand-wordmark">Sentry<span class="brand-dot">Loot</span></span></a><nav class="global-nav" aria-label="${t("Main navigation")}">${link("#discover", "Discover", "selected", "globe")}${link("/#home", "Marketplace", "", "cart")}${link("/top-up", "Top Up", "", "wallet")}</nav><form id="search"><label class="sr-only" for="community-search">${t("Search players, moments, collections…")}</label>${icon("search")}<input id="community-search" type="search" name="q" maxlength="80" value="${esc(search)}" placeholder="${t("Search players, moments, collections…")}"></form><div class="header-actions"><button class="icon-btn" data-action="create" aria-label="${t("Add to showcase")}">${icon("upload")}</button><a href="#notifications" class="icon-btn notification-bell ${active === "notifications" ? "gold" : ""}" aria-label="${t("Notifications")}">${icon("bell")}${state.unread ? '<span class="notification-dot"></span>' : ""}</a>${state.user ? `<button id="account-button" type="button" class="account-button is-profile-trigger" data-action="account-menu" aria-label="${t("Open profile menu")}" aria-haspopup="dialog" aria-controls="profile-dropdown" aria-expanded="false">${window.SentryLootAccount.avatar(state.user.display_name || state.user.email, state.user.avatar_url, "account-avatar", state.user.id)}</button>` : link("/#login", "Sign in", "btn small")}</div>${active === "discover" ? gamePills() : ""}</header>
+    shell.innerHTML = `<header class="community-header"><a class="brand" href="/#home" aria-label="SentryLoot — GameStoreHub marketplace" title="SentryLoot · gamestorehub.com"><span class="brand-mark"><img src="https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-256.webp?v=1" alt=""></span><span class="brand-wordmark">Sentry<span class="brand-dot">Loot</span></span></a><nav class="global-nav" aria-label="${t("Main navigation")}">${link("#discover", "Discover", "selected", "globe")}${link("/#home", "Marketplace", "", "cart")}${link("/top-up", "Top Up", "", "wallet")}</nav><form id="search"><label class="sr-only" for="community-search">${t("Search players, moments, collections…")}</label>${icon("search")}<input id="community-search" type="search" name="q" maxlength="80" value="${esc(search)}" placeholder="${t("Search players, moments, collections…")}"></form><div class="header-actions"><button class="icon-btn" data-action="create" aria-label="${t("Add to showcase")}">${icon("upload")}</button><button type="button" class="icon-btn notification-bell ${active === "notifications" ? "gold" : ""}" aria-label="${t("Notifications")}">${icon("bell")}<span class="notification-dot" aria-hidden="true" ${state.unread ? "" : "hidden"}></span></button>${state.user ? `<button id="account-button" type="button" class="account-button is-profile-trigger" data-action="account-menu" aria-label="${t("Open profile menu")}" aria-haspopup="dialog" aria-controls="profile-dropdown" aria-expanded="false">${window.SentryLootAccount.avatar(state.user.display_name || state.user.email, state.user.avatar_url, "account-avatar", state.user.id)}</button>` : link("/#login", "Sign in", "btn small")}</div>${active === "discover" ? gamePills() : ""}</header>
  <aside class="sidebar"><nav aria-label="${t("Community navigation")}">${nav(active)}<div class="nav-rule"></div>${link("#settings", "Settings", `nav-link ${active === "settings" ? "active" : ""}`, "settings")}</nav><div class="my-games"><p>${t("My games")}</p>${(state.profile?.preferences?.games || []).map((g) => `<a href="#discover?game=${esc(g)}">${icon("gamepad")}${esc(gameName(g))}</a>`).join("")}${link("#settings", "Add a game", "", "plus")}</div><div class="sidebar-note"><span>SENTRYLOOT</span><h3>${t("Play. Collect. Connect.")}</h3><p>${t("A place for your gaming story.")}</p>${link("/about", "About us")}${link("/privacy-policy", "Privacy Policy")}${link("/support", "Help")}${link("#safety", "Safety & rights")}${state.user ? link("#submissions", "My submissions & requests") : ""}</div></aside>
  <main id="main" tabindex="-1"><div id="view" class="page ${active === "discover" ? "has-game-pills" : ""}"><div class="skeleton"><i></i><i></i><i></i></div></div></main><nav class="mobile-nav" aria-label="${t("Community navigation")}">${[
    ["discover", "Discover", "home", "#discover"],
@@ -167,6 +167,7 @@
      link(href, label, id === active ? "active" : "", ico),
    )
    .join("")}</nav>`;
+    window.NotificationPanel?.bind($(".notification-bell"), communityNotificationPanel);
     $("#search").onsubmit = (e) => {
       e.preventDefault();
       location.hash =
@@ -751,6 +752,69 @@
     );
     return `${heading("The players around you.", "Your circle is built one connection at a time.")}<nav class="tabs">${[["following", "Following"], ["followers", "Followers"], ...(id === state.user?.id ? [["squad", "My squad"]] : [])].map(([m, l]) => link("#circle/" + id + "?mode=" + m, l, `tab ${mode === m ? "selected" : ""}`)).join("")}</nav><div class="players-grid">${result.players.map((p) => `<div>${playerCard(p)}${id === state.user?.id && p.id !== id ? `<button class="btn full" data-action="squad" data-id="${p.id}" data-enabled="${mode !== "squad"}">${t(mode === "squad" ? "Remove from squad" : "Add to squad")}</button>` : ""}</div>`).join("")}</div>${!result.players.length ? empty("Your circle starts here.", "Discover players who share your interests.", "find-players", "Find players", "users") : ""}`;
   }
+  function communityNotificationText(item) {
+    return t({
+      follow: "started following you.",
+      reaction: "reacted to your post.",
+      comment: "commented on your post.",
+    }[item.kind] || "interacted with you.");
+  }
+  function communityNotificationHref(item) {
+    return item.post_id
+      ? "#moment/" + encodeURIComponent(item.post_id)
+      : "#u/" + encodeURIComponent(item.actor_id);
+  }
+  function communityNotificationPanel() {
+    const user = state.user;
+    return {
+      copy: {
+        title: t("Notifications"),
+        settings: t("Notification preferences"),
+        markAll: t("Mark all as read"),
+        empty: accountText("Hozircha bildirishnoma yo‘q.", "Пока нет уведомлений.", "No notifications yet."),
+        error: accountText("Sahifa yuklanmadi. Yangilab qayta urinib ko‘ring.", "Страница не загрузилась. Обновите её и повторите.", "This page could not be loaded. Refresh and try again."),
+        retry: t("Try again"),
+        loading: accountText("Yuklanmoqda…", "Загрузка…", "Loading…"),
+        viewAll: t("View all"),
+        unread: accountText("O‘qilmagan", "Непрочитанное", "Unread"),
+      },
+      allHref: "#notifications",
+      settingsHref: "#settings",
+      guest: !user?.email_verified && {
+        href: user ? "/#account" : "/#login",
+        message: t(user ? "Verify your email before posting, following or saving." : "Sign in to share your moments and build your showcase."),
+        label: t(user ? "My account" : "Sign in"),
+      },
+      list: async (signal) => {
+        const { notifications } = await api("community/notifications", { signal });
+        if (signal.aborted || state.user?.id !== user?.id) return [];
+        state.unread = notifications.some((item) => !item.seen);
+        $(".notification-bell .notification-dot").hidden = !state.unread;
+        return notifications.map((item) => ({
+          id: item.id,
+          title: `${item.display_name} ${communityNotificationText(item)}`,
+          href: communityNotificationHref(item),
+          unread: !item.seen,
+          avatar: avatar({ ...item, id: item.actor_id }),
+          ...window.NotificationPanel.timestamp(item.created_at, lang),
+        }));
+      },
+      markAll: () => api("community/notifications/read", { method: "POST", body: {} }),
+      canOpenItem: () => !dirty && !uploading,
+      openItem: async (item) => {
+        const current = location.href;
+        try {
+          await api("community/notifications/read", { method: "POST", body: { id: item.id } });
+          await refresh();
+        } catch (error) {
+          toast(error.message);
+        }
+        if (location.href === current && state.user?.id === user?.id && !dirty && !uploading)
+          location.hash = item.href;
+      },
+      onError: (error) => toast(error.message),
+    };
+  }
   async function notificationsPage() {
     if (!requireAuth())
       return empty(
@@ -760,7 +824,7 @@
         "",
       );
     const result = await api("community/notifications");
-    return `${heading("You’re in the loop.", "The latest connections and conversations in your gaming world.", button("Mark all as read", "read-all", "outline"))}<div class="notification-layout"><section class="panel notification-list">${result.notifications.map((n) => `<a class="notification ${n.seen ? "" : "unread"}" href="${n.post_id ? "#moment/" + n.post_id : "#u/" + n.actor_id}">${avatar(n, "large")}<div><strong>${esc(n.display_name)}</strong> ${t({ follow: "started following you.", reaction: "reacted to your post.", comment: "commented on your post." }[n.kind] || "interacted with you.")}<small>${date(n.created_at)}</small></div>${icon("arrow-right")}</a>`).join("") || empty("All caught up.", "New followers, reactions and conversations will appear here.", "", "", "bell")}</section><aside class="panel"><h2>${t("Make notifications yours.")}</h2><p>${t("Choose which updates you want to receive.")}</p>${link("#settings", "Notification preferences", "btn outline full", "settings")}</aside></div>`;
+    return `${heading("You’re in the loop.", "The latest connections and conversations in your gaming world.", button("Mark all as read", "read-all", "outline"))}<div class="notification-layout"><section class="panel notification-list">${result.notifications.map((n) => `<a class="notification ${n.seen ? "" : "unread"}" href="${esc(communityNotificationHref(n))}">${avatar(n, "large")}<div><strong>${esc(n.display_name)}</strong> ${communityNotificationText(n)}<small>${date(n.created_at)}</small></div>${icon("arrow-right")}</a>`).join("") || empty("All caught up.", "New followers, reactions and conversations will appear here.", "", "", "bell")}</section><aside class="panel"><h2>${t("Make notifications yours.")}</h2><p>${t("Choose which updates you want to receive.")}</p>${link("#settings", "Notification preferences", "btn outline full", "settings")}</aside></div>`;
   }
   async function layoutPage() {
     if (!requireAuth())
@@ -861,6 +925,7 @@
   }
 
   async function render() {
+    window.NotificationPanel?.close();
     closeAccountMenu(false);
     const current = ++routeId;
     const [path, query = ""] = location.hash.slice(1).split("?");
@@ -1916,7 +1981,7 @@
       await refresh();
       if (!["en", "uz", "ru"].includes(lang)) {
         try {
-          const response = await fetch("/static/regional-languages.json", {
+          const response = await fetch("/static/regional-languages.json?v=notification-panel-1", {
             signal: AbortSignal.timeout(6000),
           });
           if (response.ok)
