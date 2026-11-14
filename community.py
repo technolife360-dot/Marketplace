@@ -513,9 +513,12 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         if q('view')=='discover':
             discover_previews(db,posts,uid)
         return {'posts':posts,'next':offset+24 if len(rows)>24 and offset+24<=2000 else None}
-    if part=='/posts' and method=='POST' or re.fullmatch('/posts/[A-Za-z0-9_-]+',part) and method=='PATCH':
+    discover_publish = part == '/discover/posts' and method == 'POST'
+    create_post = method == 'POST' and (part == '/posts' or discover_publish)
+    edit_post = method == 'PATCH' and re.fullmatch('/posts/[A-Za-z0-9_-]+',part)
+    if create_post or edit_post:
         uid=ensure_profile(db,ctx,core);old=None
-        if method=='PATCH':
+        if edit_post:
             old=get_post(db,part.split('/')[-1],uid,core)
             if old['user_id']!=uid:fail(core,403,'Only the author can edit this post.')
         previous=db.execute('SELECT listing_id FROM community_post_state WHERE post_id=?',(old['id'],)).fetchone() if old else None
@@ -523,6 +526,8 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         title=text(core,source.get('title',''),80,3);body=text(core,source.get('body',''),2000)
         kind=source.get('kind','moment');audience=source.get('audience','public');status=source.get('status','draft');game=source.get('game_slug','')
         if kind not in ('moment','item','achievement') or audience not in ('public','followers','private') or status not in ('published','draft'):fail(core,400,'Invalid post options.')
+        if discover_publish and (kind, audience, status) != ('moment', 'public', 'published'):
+            fail(core,400,'Invalid post options.')
         if old and old['kind']!=kind:fail(core,400,'The post type cannot be changed.')
         if not db.execute('SELECT 1 FROM games WHERE slug=?',(game,)).fetchone():fail(core,400,'Choose a game.')
         if status=='published' and data.get('permission') is not True:fail(core,400,'Confirm you have permission to share this content.')
@@ -555,6 +560,8 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         if type(comments) not in (bool,int) or comments not in (0,1) or type(pinned) not in (bool,int) or pinned not in (0,1):fail(core,400,'Invalid post settings.')
         source.update(game_slug=game,kind=kind)
         lid=safety.prepare(db,uid,source,core)
+        if discover_publish and lid:
+            fail(core,400,'Invalid post options.')
         if media:
             stream=db.execute('SELECT state FROM community_streams WHERE media_id=?',(media,)).fetchone()
             if stream and status=='published' and stream['state']!='ready':fail(core,409,'Wait until video processing has finished.')
@@ -563,15 +570,20 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         review_note=''
         if requested=='published':
             core['check_rate'](db,'community-safety-check',uid,20,3600)
-            try: result=automatic.assess(db,uid,media_ids+([thumb] if thumb else []),json.dumps({'title':title,'body':body},ensure_ascii=False),core)
-            except automatic.Unavailable as exc:
-                # Queue new submissions privately. A failed edit keeps the existing version.
-                incomplete_video = isinstance(exc, automatic.IncompleteVideoCheck)
-                if old or str(exc)!=automatic.UNAVAILABLE or (incomplete_video and data.get('queue_for_review') is not True):
-                    fail(core,503,str(exc))
-                result=automatic.Result('pending')
-                review_note=automatic.AWAITING_REVIEW
-        status='published' if result and result.status=='approved' else 'hidden' if result and result.status=='rejected' else 'draft'
+            if not discover_publish:
+                try: result=automatic.assess(db,uid,media_ids+([thumb] if thumb else []),json.dumps({'title':title,'body':body},ensure_ascii=False),core)
+                except automatic.Unavailable as exc:
+                    # Queue new submissions privately. A failed edit keeps the existing version.
+                    incomplete_video = isinstance(exc, automatic.IncompleteVideoCheck)
+                    if old or str(exc)!=automatic.UNAVAILABLE or (incomplete_video and data.get('queue_for_review') is not True):
+                        fail(core,503,str(exc))
+                    result=automatic.Result('pending')
+                    review_note=automatic.AWAITING_REVIEW
+        decision = result.status if result else None
+        if discover_publish:
+            # This flow publishes immediately. The audit distinguishes it from a classifier decision.
+            decision = 'approved'
+        status='published' if decision=='approved' else 'hidden' if decision=='rejected' else 'draft'
         pid=old['id'] if old else core['ident']()
         db.execute('BEGIN IMMEDIATE')
         try:
@@ -585,8 +597,10 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
             for position,mid in enumerate(media_ids):
                 db.execute('INSERT INTO community_post_media(post_id,media_id,position) VALUES(?,?,?)',(pid,mid,position))
             safety.record_submission(db,pid,lid,requested,data.get('permission') is True,
-                                     decision=result.status if result else None,note=review_note or (result.note if result else ''))
-            if result:
+                                     decision=decision,note=review_note or (result.note if result else ''))
+            if discover_publish:
+                core['audit'](db,uid,'community.discover_publish','post',pid,{})
+            elif result:
                 core['audit'](db,uid,'community.automatic_check','post',pid,
                               {'policy':automatic.POLICY_VERSION,'decision':result.status,'categories':list(result.categories)})
             db.execute('COMMIT')

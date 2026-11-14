@@ -129,6 +129,30 @@ class AutomaticPublication(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(self.req(self.guest, 'GET', '/posts')[1]['posts'][0]['id'], post_id)
 
+    def test_discover_publishes_public_moments_without_waiting_for_scanner(self):
+        payload = {
+            'kind': 'moment', 'title': 'A Discover post', 'body': 'PUBG gameplay',
+            'game_slug': 'pubg-mobile', 'audience': 'public',
+            'status': 'published', 'permission': True,
+        }
+        with patch.object(storage_r2, 'is_configured', return_value=False):
+            status, media, _ = self.req(self.seller, 'POST', '/media', raw=self.image(), content_type='image/png')
+            self.assertEqual(status, 201, media)
+            with patch.object(automatic, 'assess', side_effect=AssertionError('Discover must not wait for a scan')):
+                self.assertEqual(self.req(self.guest, 'POST', '/discover/posts', payload)[0], 401)
+                for changes in ({'permission': False}, {'kind': 'achievement'}, {'audience': 'private'}):
+                    self.assertEqual(self.req(self.seller, 'POST', '/discover/posts', {**payload, **changes})[0], 400)
+                status, post, _ = self.req(self.seller, 'POST', '/discover/posts', {
+                    **payload, 'media_ids': [media['id']],
+                })
+            self.assertEqual(status, 201, post)
+            self.assertEqual(post['status'], 'published')
+            feed = self.req(self.guest, 'GET', '/posts?view=discover')[1]['posts']
+            self.assertEqual(feed[0]['id'], post['id'])
+            self.assertEqual(self.req(self.guest, 'GET', '/media/' + media['id'])[0], 200)
+            queue = self.admin.request('GET', '/api/admin/community/queue')[1]['posts']
+            self.assertNotIn(post['id'], [item['id'] for item in queue])
+
 
 class ClassifierContract(unittest.TestCase):
     def response(self,value,**changes):

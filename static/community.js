@@ -388,9 +388,6 @@
           <button type="submit" class="discover-send" aria-label="${t("Send")}">${icon("send")}</button>
         </div>
         <div class="form-error" role="alert"></div>
-        <div class="discover-submission-status" role="status" hidden>
-          ${link("#submissions", queuedForReview)}
-        </div>
       </form>
     </section>`;
   }
@@ -1084,7 +1081,7 @@
     }
   }
   async function safetyPage() {
-    return `${heading("Community safety", "Share your game. Respect the people behind it.")}<div class="trust-grid"><section class="panel prose"><h2>${t("Content moderation")}</h2><p>${t("Posts and edits are checked automatically for violence, nudity, dangerous real-world acts and recreational drug content. Ordinary non-graphic gameplay is allowed. Flagged or inconclusive posts stay private. You can edit the post, report content, block players or appeal a decision.")}</p><h2>${t("What belongs here")}</h2><p>${t("Share gameplay, helpful tips and honest demonstrations of your own listings. No scams, stolen accounts, harassment, hate, sexual exploitation, personal data exposure or illegal content. Do not spam or impersonate another player.")}</p><h2>${t("Copyright")}</h2><p>${t("Upload only material you own or are authorized to use, including music. Recording gameplay does not automatically grant rights to every game asset or soundtrack. Check the publisher’s sharing rules. Rights holders can submit a request below without an account.")}</p>${link("/terms", "Terms of Service", "text-link")} · ${link("/prohibited-items", "Prohibited Items", "text-link")}</section><section class="panel prose"><h2>${t("Privacy")}</h2><p>${t("Choose Public, Followers only or Only me for each post. Drafts and saved posts are private. Public posts may be viewed without signing in. Signed media links expire within five minutes; already downloaded copies cannot be recalled.")}</p><p>${t("Captions and resized image or video frames are sent to OpenAI for safety analysis when publishing or changing a profile cover. Video frames are sampled about once per second; audio is not analysed. Automated checks can make mistakes. Report a missed violation or appeal a decision. Contact details in reports remain private. Unused media is removed after seven days.")}</p>${link("#settings", "Privacy & preferences", "btn outline")} ${link("/privacy-policy", "Privacy Policy", "text-link")}<p>${t("Download your account data or request account deletion from Account settings. Data export requires identity confirmation.")}</p>${link("/#account", "My account", "text-link")}<h2>${t("Request a review")}</h2><p>${t("Tell us which post is involved and what should be reviewed. Never include passwords, payment card details or identity documents.")}</p>${link("#request", "Copyright or privacy request", "btn primary full")}${state.user ? link("#submissions", "My submissions & requests", "btn outline full") : ""}</section></div>`;
+    return `${heading("Community safety", "Share your game. Respect the people behind it.")}<div class="trust-grid"><section class="panel prose"><h2>${t("Content moderation")}</h2><p>${t("Discover posts go live immediately and can be reported for review. Other submissions and edits are checked automatically for violence, nudity, dangerous real-world acts and recreational drug content. Ordinary non-graphic gameplay is allowed. You can report content, block players or appeal a decision.")}</p><h2>${t("What belongs here")}</h2><p>${t("Share gameplay, helpful tips and honest demonstrations of your own listings. No scams, stolen accounts, harassment, hate, sexual exploitation, personal data exposure or illegal content. Do not spam or impersonate another player.")}</p><h2>${t("Copyright")}</h2><p>${t("Upload only material you own or are authorized to use, including music. Recording gameplay does not automatically grant rights to every game asset or soundtrack. Check the publisher’s sharing rules. Rights holders can submit a request below without an account.")}</p>${link("/terms", "Terms of Service", "text-link")} · ${link("/prohibited-items", "Prohibited Items", "text-link")}</section><section class="panel prose"><h2>${t("Privacy")}</h2><p>${t("Choose Public, Followers only or Only me for each post. Drafts and saved posts are private. Public posts may be viewed without signing in. Signed media links expire within five minutes; already downloaded copies cannot be recalled.")}</p><p>${t("When using the full post editor or changing a profile cover, captions and resized image or video frames are sent to OpenAI for safety analysis. Video frames are sampled about once per second; audio is not analysed. Automated checks can make mistakes. Report a missed violation or appeal a decision. Contact details in reports remain private. Unused media is removed after seven days.")}</p>${link("#settings", "Privacy & preferences", "btn outline")} ${link("/privacy-policy", "Privacy Policy", "text-link")}<p>${t("Download your account data or request account deletion from Account settings. Data export requires identity confirmation.")}</p>${link("/#account", "My account", "text-link")}<h2>${t("Request a review")}</h2><p>${t("Tell us which post is involved and what should be reviewed. Never include passwords, payment card details or identity documents.")}</p>${link("#request", "Copyright or privacy request", "btn primary full")}${state.user ? link("#submissions", "My submissions & requests", "btn outline full") : ""}</section></div>`;
   }
   async function requestPage(params) {
     const kind = params.get("kind") || "copyright";
@@ -1454,22 +1451,9 @@
             ? "Video processing failed. Choose another file."
             : "Video is still processing. Try again shortly."));
       }
-      await checkPostVideos(data, null, { allowReviewQueue: true });
-      const post = await api("community/posts", { method: "POST", body: data });
+      await api("community/discover/posts", { method: "POST", body: data });
       if (!form.isConnected) return;
       dirty = false;
-      if (post.review_status === "pending" && post.review_note === queuedForReview) {
-        form.reset();
-        draft.media = [];
-        syncComposerMedia();
-        renderMediaPreviews();
-        $(".discover-submission-status", form).hidden = false;
-        return;
-      }
-      if (post.review_status === "pending" || post.review_status === "rejected") {
-        location.hash = "submissions";
-        return;
-      }
       await render();
     });
     draft.sending = false;
@@ -1482,7 +1466,6 @@
       composer = { media: [], body: "" };
       bindDiscoverEmoji(discover);
       discover.oninput = () => {
-        $(".discover-submission-status", discover).hidden = true;
         dirty = Boolean(discover.elements.body.value.trim() || (discover.dataset.reply && composer.body.trim()) || composerMedia().length);
       };
       discover.onsubmit = (e) => {
