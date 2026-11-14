@@ -39,6 +39,21 @@ class CommunityWorkflows(unittest.TestCase):
         status,body,headers=self.guest.request('GET','/community')
         self.assertEqual(status,200);self.assertIn(b'community.js',body);self.assertEqual(headers['X-Frame-Options'],'DENY')
 
+    def test_discover_text_post_and_reply_preview_respect_blocks(self):
+        post = self.post(self.seller, kind='moment', title='Anyone online?', body='Anyone online?')
+        pid = post['id']
+        status, reply, _ = self.req(self.admin, 'POST', f'/posts/{pid}/comments', {'body':'Ready to play.'})
+        self.assertEqual(status, 201)
+        self.assertIsNone(post['media_id'])
+        feed = self.req(self.guest, 'GET', '/posts?view=discover')[1]['posts']
+        self.assertEqual(feed[0]['reply_preview']['id'], reply['id'])
+        self.assertEqual(feed[0]['reply_preview']['body'], 'Ready to play.')
+        self.assertEqual(self.req(self.seller, 'POST', f'/profiles/{self.admin_id}/block', {'enabled':True})[0], 200)
+        own_feed = self.req(self.seller, 'GET', '/posts?view=discover')[1]['posts']
+        self.assertIsNone(own_feed[0]['reply_preview'])
+        plain_feed = self.req(self.seller, 'GET', '/posts')[1]['posts']
+        self.assertNotIn('reply_preview', plain_feed[0])
+
     def test_profile_post_save_comment_and_notifications_survive_reload(self):
         self.profile(self.seller,handle='gamer-one',bio='Collection and moments')
         self.profile(self.admin,handle='gamer-two')

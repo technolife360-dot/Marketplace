@@ -8,6 +8,7 @@ import community_video
 import community_moderation as automatic
 import community_uploads
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 UNHANDLED = object()
@@ -226,6 +227,30 @@ def post_views(db,rows,uid,core):
         p=post_view(db,value,uid,core,authors,m,attachments);p['media_id']=media;p['media_url']='/api/community/media/'+media if media else ''
         out.append(p)
     return out
+
+
+def discover_previews(db, posts, uid):
+    ids = [post['id'] for post in posts if post['comments']]
+    if not ids:
+        return
+    placeholders = ','.join('?' for _ in ids)
+    rows = db.execute(f"""
+        SELECT * FROM (
+            SELECT c.id,c.post_id,c.user_id,c.body,c.created_at,u.display_name,cp.handle,
+                COALESCE(av.value,'') avatar_url,
+                ROW_NUMBER() OVER (PARTITION BY c.post_id ORDER BY c.created_at DESC,c.id DESC) reply_rank
+            FROM community_comments c JOIN users u ON u.id=c.user_id
+            JOIN community_profiles cp ON cp.user_id=u.id
+            LEFT JOIN platform_config av ON av.key='public_avatar:'||u.id
+            WHERE c.post_id IN ({placeholders}) AND u.suspended=0
+                AND NOT EXISTS (SELECT 1 FROM community_blocks b
+                    WHERE (b.user_id=? AND b.target_id=c.user_id)
+                       OR (b.target_id=? AND b.user_id=c.user_id))
+        ) ranked WHERE reply_rank=1
+        """, (*ids, uid or '', uid or '')).fetchall()
+    by_post = {row['post_id']: dict(row) for row in rows}
+    for post in posts:
+        post['reply_preview'] = by_post.get(post['id'])
 
 
 def event(db,target,actor,kind,post_id=None):
@@ -484,7 +509,10 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         try:offset=min(2000,max(0,int(q('offset','0'))))
         except ValueError:fail(core,400,'Invalid page.')
         rows=db.execute('SELECT p.* FROM community_posts p WHERE '+' AND '.join(where)+' ORDER BY p.created_at DESC,p.id DESC LIMIT 25 OFFSET ?',(*args,offset)).fetchall()
-        return {'posts':post_views(db,rows[:24],uid,core),'next':offset+24 if len(rows)>24 and offset+24<=2000 else None}
+        posts=post_views(db,rows[:24],uid,core)
+        if q('view')=='discover':
+            discover_previews(db,posts,uid)
+        return {'posts':posts,'next':offset+24 if len(rows)>24 and offset+24<=2000 else None}
     if part=='/posts' and method=='POST' or re.fullmatch('/posts/[A-Za-z0-9_-]+',part) and method=='PATCH':
         uid=ensure_profile(db,ctx,core);old=None
         if method=='PATCH':
@@ -516,7 +544,8 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         if len(media_ids)>1 and any(m.startswith('video/') for m in media_types):
             fail(core,400,'Choose multiple images or a single video, not both.')
         if thumb and db.execute('SELECT content_type FROM community_media WHERE id=?',(thumb,)).fetchone()['content_type']!='image/webp':fail(core,400,'Choose an image thumbnail.')
-        if status=='published' and kind in ('moment','item') and not media:fail(core,400,'Upload an image or a gameplay clip before publishing.')
+        if status=='published' and not media and (kind=='item' or (kind=='moment' and not body)):
+            fail(core,400,'Upload an image or a gameplay clip before publishing.')
         linked=source.get('linked_items',[])
         if isinstance(linked,str):linked=unpack(linked,[])
         if not isinstance(linked,list) or len(linked)>8:fail(core,400,'Tag up to 8 collection items.')
@@ -539,11 +568,12 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         pid=old['id'] if old else core['ident']()
         db.execute('BEGIN IMMEDIATE')
         try:
-            db.execute('''INSERT INTO community_posts(id,user_id,kind,title,body,game_slug,media_id,thumbnail_id,linked_items,audience,status,comments_enabled,pinned)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,body=excluded.body,game_slug=excluded.game_slug,
+            db.execute('''INSERT INTO community_posts(id,user_id,kind,title,body,game_slug,media_id,thumbnail_id,linked_items,audience,status,comments_enabled,pinned,created_at)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,body=excluded.body,game_slug=excluded.game_slug,
                 media_id=excluded.media_id,thumbnail_id=excluded.thumbnail_id,linked_items=excluded.linked_items,audience=excluded.audience,status=excluded.status,
                 comments_enabled=excluded.comments_enabled,pinned=excluded.pinned,updated_at=CURRENT_TIMESTAMP''',
-                (pid,uid,kind,title,body,game,media,thumb,json.dumps(linked),audience,status,int(comments),int(pinned)))
+                (pid,uid,kind,title,body,game,media,thumb,json.dumps(linked),audience,status,int(comments),int(pinned),
+                 datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f')))
             db.execute('DELETE FROM community_post_media WHERE post_id=?',(pid,))
             for position,mid in enumerate(media_ids):
                 db.execute('INSERT INTO community_post_media(post_id,media_id,position) VALUES(?,?,?)',(pid,mid,position))

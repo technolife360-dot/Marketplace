@@ -1739,6 +1739,8 @@ class Handler(BaseHTTPRequestHandler):
                 if (ROOT/'static'/candidate).is_file(): f=candidate
             if not f and re.fullmatch(r'/static/assets/payment-brands/(visa|mastercard|apple-pay|google-pay|fpx|grabpay|link)\.svg', parsed.path):
                 f=parsed.path.removeprefix('/static/')
+            if parsed.path == '/static/discover-emojis-17.json':
+                f = 'discover-emojis-17.json'
             if not f or not (ROOT/'static'/f).is_file(): self.send_error(404); return
             data=(ROOT/'static'/f).read_bytes()
             ctype='text/html; charset=utf-8' if f.endswith('.html') else ('application/json; charset=utf-8' if f.endswith('.json') else ('application/javascript; charset=utf-8' if f.endswith('.js') else ('image/svg+xml' if f.endswith('.svg') else ('image/webp' if f.endswith('.webp') else 'image/jpeg' if f.endswith(('.jpg','.jpeg')) else ('image/png' if f.endswith('.png') else 'text/css; charset=utf-8')))))

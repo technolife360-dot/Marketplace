@@ -139,11 +139,6 @@
   function nav(active) {
     const list = [
       ["discover", "Discover", "home", "#discover"],
-      ["following", "Following", "users", "#following"],
-      ["u", "My showcase", "user", meRoute()],
-      ["collection", "Collection", "layers", meRoute("collection")],
-      ["moments", "Moments", "file-text", meRoute("moments")],
-      ["saved", "Saved", "heart", "#saved"],
     ];
     return list
       .map(([id, label, ico, href]) =>
@@ -155,13 +150,10 @@
     const search =
       new URLSearchParams(location.hash.split("?")[1] || "").get("q") || "";
     shell.innerHTML = `<header class="community-header"><a class="brand" href="/#home" aria-label="SentryLoot — GameStoreHub marketplace" title="SentryLoot · gamestorehub.com"><span class="brand-mark"><img src="https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-256.webp?v=1" alt=""></span><span class="brand-wordmark">Sentry<span class="brand-dot">Loot</span></span></a><nav class="global-nav" aria-label="${t("Main navigation")}">${link("#discover", "Discover", "selected", "globe")}${link("/#home", "Marketplace", "", "cart")}${link("/top-up", "Top Up", "", "wallet")}</nav><form id="search"><label class="sr-only" for="community-search">${t("Search players, moments, collections…")}</label>${icon("search")}<input id="community-search" type="search" name="q" maxlength="80" value="${esc(search)}" placeholder="${t("Search players, moments, collections…")}"></form><div class="header-actions"><button class="icon-btn" data-action="create" aria-label="${t("Add to showcase")}">${icon("upload")}</button><button type="button" class="icon-btn notification-bell" aria-label="${t("Notifications")}">${icon("bell")}<span class="notification-dot" aria-hidden="true" ${state.unread ? "" : "hidden"}></span></button>${state.user ? `<button id="account-button" type="button" class="account-button is-profile-trigger" data-action="account-menu" aria-label="${t("Open profile menu")}" aria-haspopup="dialog" aria-controls="profile-dropdown" aria-expanded="false">${window.SentryLootAccount.avatar(state.user.display_name || state.user.email, state.user.avatar_url, "account-avatar", state.user.id)}</button>` : link("/#login", "Sign in", "btn small")}</div>${active === "discover" ? gamePills() : ""}</header>
- <aside class="sidebar"><nav aria-label="${t("Community navigation")}">${nav(active)}<div class="nav-rule"></div>${link("#settings", "Settings", `nav-link ${active === "settings" ? "active" : ""}`, "settings")}</nav><div class="my-games"><p>${t("My games")}</p>${(state.profile?.preferences?.games || []).map((g) => `<a href="#discover?game=${esc(g)}">${icon("gamepad")}${esc(gameName(g))}</a>`).join("")}${link("#settings", "Add a game", "", "plus")}</div><div class="sidebar-note"><span>SENTRYLOOT</span><h3>${t("Play. Collect. Connect.")}</h3><p>${t("A place for your gaming story.")}</p>${link("/about", "About us")}${link("/privacy-policy", "Privacy Policy")}${link("/support", "Help")}${link("#safety", "Safety & rights")}${state.user ? link("#submissions", "My submissions & requests") : ""}</div></aside>
+ <aside class="sidebar"><nav aria-label="${t("Community navigation")}">${nav(active)}<div class="nav-rule"></div>${link("#settings", "Settings", `nav-link ${active === "settings" ? "active" : ""}`, "settings")}</nav><div class="my-games"><p>${t("My games")}</p>${(state.profile?.preferences?.games || []).map((g) => `<a href="#discover?game=${esc(g)}">${icon("gamepad")}${esc(gameName(g))}</a>`).join("")}${link("#settings", "Add a game", "", "plus")}</div></aside>
  <main id="main" tabindex="-1"><div id="view" class="page ${active === "discover" ? "has-game-pills" : ""}"><div class="skeleton"><i></i><i></i><i></i></div></div></main><nav class="mobile-nav" aria-label="${t("Community navigation")}">${[
    ["discover", "Discover", "home", "#discover"],
-   ["following", "Following", "users", "#following"],
    ["create", "Create", "plus", "#create"],
-   ["saved", "Saved", "heart", "#saved"],
-   ["u", "Showcase", "user", meRoute()],
  ]
    .map(([id, label, ico, href]) =>
      link(href, label, id === active ? "active" : "", ico),
@@ -317,6 +309,201 @@
             : "file-text";
     return `<article class="post-card ${esc(p.kind)} ${mode}" data-post="${esc(p.id)}"><a class="card-art ${!image ? "no-art" : ""}" href="#moment/${esc(p.id)}" aria-label="${esc(p.title)}">${image && (!video || p.thumbnail_url) ? `<img src="${safeURL(image)}" alt="" loading="lazy" decoding="async">` : p.media_type === "video/stream" ? icon("gamepad") : video ? `<video src="${safeURL(p.media_url)}#t=0.1" preload="metadata" muted playsinline></video>` : icon(type)}<span class="type-tag">${icon(type)}${t(p.promotion ? "For sale" : p.kind === "item" ? "Collection" : p.kind === "achievement" ? "Achievement" : "Moment")}</span>${p.media?.length > 1 ? `<span class="album-count">${icon("layers")}${p.media.length}</span>` : ""}${video ? `<span class="play">${icon("arrow-right")}</span>` : ""}<div class="art-title"><span>${esc(gameName(p.game_slug))}</span><h2>${esc(p.title)}</h2></div></a><div class="card-body">${listingPanel(p)}<p class="card-story" data-user-content>${esc(p.body)}</p><div class="byline"><a href="#u/${esc(p.author.id)}">${avatar(p.author)}<span><strong>${esc(p.author.display_name)}</strong><small>@${esc(p.author.handle)} · ${date(p.created_at)}</small></span></a><button class="icon-btn" data-action="post-menu" data-id="${esc(p.id)}" aria-label="${t("Post options")}">···</button></div><div class="card-actions"><button data-action="like" data-id="${esc(p.id)}" aria-label="${t("Like")}" aria-pressed="${!!p.liked}">${icon("heart")}<span>${p.reactions}</span></button><a href="#moment/${esc(p.id)}" aria-label="${t("Comments")}">${icon("message")}${p.comments}</a><button data-action="save" data-id="${esc(p.id)}" aria-pressed="${!!p.saved}" aria-label="${t("Save")}">${icon("layers")}</button><button data-action="share" data-id="${esc(p.id)}" aria-label="${t("Share")}">${icon("share")}</button>${p.status === "draft" ? `<span class="tag">${t(p.review_status === "pending" ? "Awaiting review" : "Draft")}</span>` : ""}</div></div></article>`;
   }
+  function discoverTime(value) {
+    const stamp = window.NotificationPanel?.timestamp(value, lang);
+    return stamp?.datetime
+      ? `<time datetime="${esc(stamp.datetime)}" title="${esc(stamp.fullTime)}">${esc(stamp.time)}</time>`
+      : esc(date(value));
+  }
+  function discoverReply(p) {
+    const reply = p.reply_preview;
+    if (!reply) return "";
+    return `<div class="discover-reply"><a href="#u/${esc(reply.user_id)}">${avatar({ ...reply, id: reply.user_id })}</a>
+      <div><div class="discover-byline"><a href="#u/${esc(reply.user_id)}"><strong>${esc(reply.display_name)}</strong></a><small>${t("Reply to")} ${esc(p.author.display_name)}</small></div>
+      <p class="discover-message" data-user-content>${esc(reply.body)}</p></div></div>`;
+  }
+  function discoverPost(p) {
+    const id = esc(p.id);
+    const url = safeURL(p.media_url);
+    const poster = safeURL(p.thumbnail_url);
+    const photos = (p.media || []).filter((m) => m.content_type?.startsWith("image/"));
+    if (!photos.length && p.media_type?.startsWith("image/")) photos.push({ url: p.media_url });
+    let media = "";
+    if (p.media_type === "video/stream" && url) {
+      media = `<div class="discover-video"><button type="button" class="discover-play" data-action="discover-play" data-src="${url}" aria-label="${t("Play video")}">${poster ? `<img src="${poster}" alt="" loading="lazy">` : ""}<span>${icon("play")}</span></button></div>`;
+    } else if (p.media_type?.startsWith("video/") && url) {
+      media = `<div class="discover-video"><video playsinline preload="metadata" src="${url}" ${poster ? `poster="${poster}"` : ""} aria-label="${esc(p.title)}"></video><button type="button" class="discover-play discover-play-overlay" data-action="discover-play" aria-label="${t("Play video")}"><span>${icon("play")}</span><time class="discover-duration" hidden></time></button></div>`;
+    } else if (photos.length) {
+      media = `<div class="discover-photos ${photos.length > 1 ? "is-album" : ""}">${photos.slice(0, 2).map((photo, i) =>
+        `<a href="#moment/${id}"><img src="${safeURL(photo.url)}" alt="${esc(p.title)}" loading="lazy" decoding="async">${i === 1 && photos.length > 2 ? `<span class="album-count">+${photos.length - 2}</span>` : ""}</a>`
+      ).join("")}</div>`;
+    }
+    return `<article class="discover-post" data-post="${id}">
+      <a class="discover-avatar" href="#u/${esc(p.author.id)}" aria-label="${esc(p.author.display_name)}">${avatar(p.author)}</a>
+      <div class="discover-post-content">
+        <div class="discover-byline"><a href="#u/${esc(p.author.id)}"><strong>${esc(p.author.display_name)}</strong></a><small>${discoverTime(p.created_at)}</small>
+          <button type="button" class="discover-menu" data-action="post-menu" data-id="${id}" aria-label="${t("Post options")}">···</button></div>
+        ${p.body && p.title !== discoverTitle(p.body) ? `<p class="discover-message" data-user-content>${esc(p.title)}</p>` : ""}
+        ${p.body || p.title !== "Moment" ? `<p class="discover-message" data-user-content>${esc(p.body || p.title)}</p>` : ""}
+        ${media}${listingPanel(p)}
+        <div class="discover-actions">
+          <button type="button" data-action="like" data-id="${id}" aria-label="${t("Like")}" aria-pressed="${!!p.liked}">${icon("heart")}<span>${esc(p.reactions)}</span></button>
+          <a class="discover-comments-link" href="#moment/${id}" aria-label="${t("Comments")}">${icon("message")}<span>${esc(p.comments)}</span></a>
+          ${p.comments_enabled ? `<button type="button" class="discover-reply-button" data-action="discover-reply" data-id="${id}">${icon("reply")}${t("Reply")}</button>` : ""}
+          <button type="button" class="discover-save" data-action="save" data-id="${id}" aria-label="${t("Save")}" aria-pressed="${!!p.saved}">${icon("bookmark")}</button>
+        </div>
+      </div>
+      ${discoverReply(p)}
+    </article>`;
+  }
+  function discoverTitle(body) {
+    const title = [...body.trim()].slice(0, 80).join("").trim();
+    return [...title].length >= 3 ? title : "Moment";
+  }
+  function discoverFeed(result, query) {
+    return `<section class="post-grid discover-grid discover-conversation" aria-label="${t("Discover")}">
+      ${result.next !== null ? `<button class="btn load-more" data-action="more" data-offset="${result.next}" data-query="${esc(query)}">${t("Load older posts")}</button>` : ""}
+      <div id="posts" class="discover-posts">${result.posts.slice().reverse().map(discoverPost).join("")}</div>
+      ${result.posts.length ? "" : `<p class="discover-empty">${t("Start the conversation.")}</p>`}
+      <form id="discover-composer" class="discover-composer">
+        <div class="discover-reply-context" hidden><span></span><button type="button" data-action="discover-cancel-reply" aria-label="${t("Cancel reply")}">${icon("close")}</button></div>
+        <div class="upload-previews"></div>
+        <div class="discover-composer-bar">
+          <button type="button" class="discover-add discover-attachment" data-action="discover-attach" data-type="all" aria-label="${t("Add images or one video")}">${icon("plus")}</button>
+          <textarea name="body" rows="1" maxlength="2000" aria-label="${t("Join the conversation…")}" placeholder="${t("Join the conversation…")}"></textarea>
+          <input id="post-media" type="file" hidden multiple data-upload="post-media">
+          <button type="button" class="discover-attachment" data-action="discover-attach" data-type="image" aria-label="${t("Image")}">${icon("image")}</button>
+          <button type="button" class="discover-attachment" data-action="discover-attach" data-type="video" aria-label="${t("Video")}">${icon("video")}</button>
+          <details class="discover-emoji">
+            <summary aria-label="${t("Emoji")}">${icon("smile")}</summary>
+            <div class="discover-emoji-panel">
+              <input type="search" class="discover-emoji-search" aria-label="${t("Search emojis")}" placeholder="${t("Search emojis")}" autocomplete="off">
+              <div class="discover-emoji-categories" role="group" aria-label="${t("Emoji categories")}"></div>
+              <div class="discover-emoji-results"><div class="discover-emoji-grid"></div><button type="button" class="discover-emoji-more" hidden>${t("Show more")}</button></div>
+              <p class="discover-emoji-status" role="status" hidden></p>
+            </div>
+          </details>
+          <button type="submit" class="discover-send" aria-label="${t("Send")}">${icon("send")}</button>
+        </div>
+        <div class="form-error" role="alert"></div>
+      </form>
+    </section>`;
+  }
+  const emojiCategories = [
+    ["Smileys & Emotion", "😄"], ["People & Body", "👋"],
+    ["Animals & Nature", "🐱"], ["Food & Drink", "🍕"],
+    ["Travel & Places", "🚗"], ["Activities", "⚽"], ["Objects", "💡"],
+    ["Symbols", "❤️"], ["Flags", "🏁"], ["Component", "🦰"],
+  ];
+  const emojiPageSize = 96;
+  let emojiCatalog;
+
+  function bindDiscoverEmoji(form) {
+    const picker = $(".discover-emoji", form);
+    const panel = $(".discover-emoji-panel", picker);
+    const search = $(".discover-emoji-search", picker);
+    const categories = $(".discover-emoji-categories", picker);
+    const results = $(".discover-emoji-results", picker);
+    const grid = $(".discover-emoji-grid", picker);
+    const more = $(".discover-emoji-more", picker);
+    const status = $(".discover-emoji-status", picker);
+    let groups, matches, shown = 0;
+    let group = emojiCategories[0][0];
+
+    function showStatus(message = "") {
+      status.textContent = message;
+      status.hidden = !message;
+    }
+
+    function showMore() {
+      const page = matches.slice(shown, shown + emojiPageSize);
+      grid.insertAdjacentHTML("beforeend", page.map(([emoji, name]) =>
+        `<button type="button" data-action="discover-emoji" title="${esc(name)}" aria-label="${esc(name)}">${esc(emoji)}</button>`,
+      ).join(""));
+      shown += page.length;
+      more.hidden = shown === matches.length;
+    }
+
+    function updateResults() {
+      const query = search.value.trim().toLowerCase();
+      const words = query.split(/\s+/);
+      matches = query ? Object.values(groups).flat().filter(([emoji, name]) =>
+        emoji.includes(query) || words.every((word) => name.toLowerCase().includes(word)),
+      ) : groups[group];
+      for (const button of categories.children) {
+        button.setAttribute("aria-pressed", String(!query && button.dataset.group === group));
+      }
+      grid.replaceChildren();
+      results.scrollTop = 0;
+      shown = 0;
+      showMore();
+      showStatus(matches.length ? "" : t("No emojis found."));
+    }
+
+    picker.ontoggle = async () => {
+      if (!picker.open) return;
+      const bar = picker.parentElement.getBoundingClientRect();
+      const header = $(".community-header");
+      const headerBottom = ($(".game-pills-nav", header) || header).getBoundingClientRect().bottom;
+      const mobileNav = $(".mobile-nav");
+      const viewportBottom = mobileNav.offsetHeight ? mobileNav.getBoundingClientRect().top : window.innerHeight;
+      const above = bar.top - headerBottom;
+      const below = viewportBottom - bar.bottom;
+      const openBelow = above < 340 && below > above;
+      picker.classList.toggle("opens-below", openBelow);
+      panel.style.setProperty("--emoji-results-height", `${Math.max(44, (openBelow ? below : above) - 128)}px`);
+      if (groups) return;
+      showStatus(t("Loading emojis…"));
+      try {
+        emojiCatalog ||= fetch("/static/discover-emojis-17.json")
+          .then((response) => {
+            if (!response.ok) throw Error("Emoji catalog request failed");
+            return response.json();
+          })
+          .then((catalog) => catalog.groups)
+          .catch((error) => {
+            emojiCatalog = undefined;
+            throw error;
+          });
+        const catalog = await emojiCatalog;
+        if (!picker.isConnected || !picker.open) return;
+        groups = catalog;
+        categories.innerHTML = emojiCategories.map(([key, emoji]) => {
+          const label = esc(t(key === "Component" ? "Emoji components" : key));
+          return `<button type="button" data-group="${esc(key)}" title="${label}" aria-label="${label}">${emoji}</button>`;
+        }).join("");
+        updateResults();
+      } catch {
+        showStatus(t("Couldn’t load emojis. Reopen to try again."));
+      }
+    };
+    search.oninput = (event) => {
+      event.stopPropagation();
+      if (groups) updateResults();
+    };
+    search.onkeydown = (event) => {
+      if (event.key === "Enter") event.preventDefault();
+    };
+    categories.onclick = (event) => {
+      const button = event.target.closest("[data-group]");
+      if (!button) return;
+      group = button.dataset.group;
+      search.value = "";
+      updateResults();
+    };
+    more.onclick = () => {
+      const firstNew = shown;
+      showMore();
+      grid.children[firstNew]?.focus();
+    };
+    picker.onkeydown = (event) => {
+      if (event.key !== "Escape" || !picker.open) return;
+      event.preventDefault();
+      event.stopPropagation();
+      picker.open = false;
+      $("summary", picker).focus();
+    };
+  }
   function playerCard(p) {
     return `<article class="player-card"><a class="player-main" href="#u/${esc(p.id)}">${avatar(p, "large")}<strong>${esc(p.display_name)}</strong><small>@${esc(p.handle)}</small></a><p data-user-content>${esc(p.bio || t("A new story on SentryLoot."))}</p><div class="row"><small>${p.followers} ${t("followers")}</small>${p.id !== state.user?.id ? `<button class="btn small ${p.following ? "" : "outline"}" data-action="follow" data-id="${esc(p.id)}" data-enabled="${!p.following}">${t(p.following ? "Following" : "Follow")}</button>` : ""}</div></article>`;
   }
@@ -349,9 +536,11 @@
           game: filters.game,
           q: query,
           folder: filters.folder,
+          view: page === "discover" ? "discover" : "",
         }),
     );
     activePosts = result.posts;
+    if (page === "discover") return discoverFeed(result, query);
     const titles = {
       discover: [
         "Your gaming world, today.",
@@ -563,7 +752,7 @@
     `<label class="field"><span>${t(label)}</span>${type === "textarea" ? `<textarea name="${name}" maxlength="${max}" ${name === "body" ? "" : 'rows="4"'}>${esc(value)}</textarea>` : `<input type="${type}" name="${name}" value="${esc(value)}" maxlength="${max}" ${["title", "display_name", "handle"].includes(name) ? "required" : ""}>`}</label>`;
   const select = (label, name, items, value) => {
     const id = "community-field-" + name + "-" + ++controlSeq;
-    return `<div class="field"><label for="${id}">${t(label)}</label><select id="${id}" name="${name}">${items.map(([v, l]) => `<option value="${esc(v)}" ${value === v ? "selected" : ""}>${t(l)}</option>`).join("")}</select></div>`;
+    return `<div class="field"><label for="${id}">${t(label)}</label><select id="${id}" name="${name}">${items.map(([v, l]) => `<option value="${esc(v)}" ${value === v ? "selected" : ""}>${esc(t(l))}</option>`).join("")}</select></div>`;
   };
   function composerMedia() {
     return composer?.media || [];
@@ -575,15 +764,32 @@
     composer.media_url = media[0]?.url || "";
     composer.media_type = media[0]?.content_type || "";
   }
-  function mediaPreviews() {
-    return composerMedia()
-      .map(
-        (m) =>
-          `<div class="upload-preview-item">${m.content_type === "video/stream" ? `<span>${t("Video uploaded. Check processing before submitting.")}</span>` : m.content_type.startsWith("video/") ? `<video src="${safeURL(m.url)}" controls playsinline preload="metadata"></video>` : `<img src="${safeURL(m.url)}" alt="" decoding="async">`}<button type="button" class="remove-upload" data-action="remove-upload" data-id="${esc(m.id)}" aria-label="${t("Remove media")}">×</button></div>`,
-      )
-      .join("");
+  function mediaPreviews(compact = false) {
+    return composerMedia().map((m) => {
+      const video = m.content_type.startsWith("video/");
+      const stream = m.content_type === "video/stream";
+      const url = safeURL(m.url);
+      let preview;
+      if (stream) {
+        preview = compact
+          ? `<div class="discover-attachment-placeholder" role="img" aria-label="${t("Video")}">${icon("video")}</div>`
+          : `<span>${t("Video uploaded. Check processing before submitting.")}</span>`;
+      } else if (video) {
+        preview = compact
+          ? `<video src="${url}#t=0.1" muted playsinline preload="metadata" aria-label="${t("Video")}"></video><div class="discover-attachment-play">${icon("play")}</div>`
+          : `<video src="${url}" controls playsinline preload="metadata"></video>`;
+      } else {
+        preview = `<img src="${url}" alt="${compact ? t("Image") : ""}" decoding="async">`;
+      }
+      return `<div class="upload-preview-item">${preview}<button type="button" class="remove-upload" data-action="remove-upload" data-id="${esc(m.id)}" aria-label="${t("Remove media")}">${compact ? icon("close") : "×"}</button></div>`;
+    }).join("");
   }
   function renderMediaPreviews() {
+    const discover = $("#discover-composer");
+    if (discover) {
+      $(".upload-previews", discover).innerHTML = mediaPreviews(true);
+      return;
+    }
     const zone = $(".post-upload");
     if (!zone) return;
     $(".upload-previews", zone).innerHTML = mediaPreviews();
@@ -857,13 +1063,17 @@
           throw Error("Invalid video URL");
         if (!el.isConnected) continue;
         const frame = document.createElement("iframe");
-        frame.src = r.iframe;
+        frame.src = r.iframe + (el.dataset.autoplay ? "?autoplay=true" : "");
         frame.title = t("Gameplay video");
-        frame.allow = "fullscreen; picture-in-picture";
+        frame.allow = (el.dataset.autoplay ? "autoplay; " : "") + "fullscreen; picture-in-picture";
         frame.allowFullscreen = true;
         frame.referrerPolicy = "no-referrer";
         el.replaceChildren(frame);
       } catch (e) {
+        if (el.dataset.autoplay) {
+          el.removeAttribute("data-loading");
+          throw e;
+        }
         el.textContent = t(e.message);
       }
     }
@@ -939,6 +1149,9 @@
       streamPlayers();
       window.SelectMenus?.refresh();
       $("#main").focus({ preventScroll: true });
+      if ($(".discover-post")) {
+        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" });
+      }
       if (openNotifications)
         window.NotificationPanel?.open($(".notification-bell"), communityNotificationPanel);
     } catch (e) {
@@ -1073,8 +1286,8 @@
     uploading++;
     const form = input.closest("form"),
       zone = input.closest(".field"),
-      status = zone?.querySelector(".upload-status"),
-      buttons = $$("button[type=submit],.remove-upload", form);
+      status = zone?.querySelector(".upload-status") || $(".upload-status", form),
+      buttons = $$("button[type=submit],.remove-upload,.discover-attachment", form);
     buttons.forEach((b) => (b.disabled = true));
     input.disabled = true;
     try {
@@ -1142,7 +1355,7 @@
     } finally {
       uploading--;
       input.disabled = false;
-      $$("button[type=submit],.remove-upload", form).forEach(
+      $$("button[type=submit],.remove-upload,.discover-attachment", form).forEach(
         (b) => (b.disabled = false),
       );
       input.value = "";
@@ -1159,7 +1372,105 @@
     $(".album-counter", root).textContent = `${index + 1} / ${images.length}`;
   }
 
+  function setDiscoverReply(form, post) {
+    const body = form.elements.body;
+    if (post && !form.dataset.reply) {
+      composer.body = body.value;
+      body.value = "";
+    } else if (!post) {
+      body.value = composer.body;
+    }
+    form.dataset.reply = post?.id || "";
+    const context = $(".discover-reply-context", form);
+    context.hidden = !post;
+    $("span", context).textContent = post ? `${t("Reply to")} ${post.author.display_name}` : "";
+    $$(".discover-attachment", form).forEach((button) => (button.hidden = Boolean(post)));
+    body.maxLength = post ? 1000 : 2000;
+    form.oninput();
+    body.focus();
+  }
+
+  async function submitDiscover(form) {
+    if (!requireAuth() || uploading || composer.sending) return;
+    const draft = composer;
+    const body = form.elements.body.value.trim();
+    const replyId = form.dataset.reply;
+    if (!body && (replyId || !draft.media.length)) return;
+    draft.sending = true;
+    $(".discover-emoji", form).open = false;
+    const controls = $$("textarea, .discover-attachment, .remove-upload, [data-action='discover-cancel-reply']", form);
+    controls.forEach((el) => (el.disabled = true));
+    await submit(form, async () => {
+      if (replyId) {
+        const post = activePosts.find((p) => p.id === replyId);
+        const result = await api("community/posts/" + replyId + "/comments", {
+          method: "POST",
+          body: { body },
+        });
+        if (!form.isConnected) return;
+        form.elements.body.disabled = false;
+        setDiscoverReply(form, null);
+        if (post) {
+          post.comments++;
+          post.reply_preview = {
+            id: result.id,
+            user_id: state.user.id,
+            display_name: state.user.display_name,
+            avatar_url: state.profile?.avatar_url || state.user.avatar_url,
+            body,
+          };
+          const article = $(`[data-post="${CSS.escape(replyId)}"]`);
+          if (article) {
+            $(".discover-comments-link span", article).textContent = post.comments;
+            $(".discover-reply", article)?.remove();
+            article.insertAdjacentHTML("beforeend", discoverReply(post));
+          }
+        }
+        return;
+      }
+      const game = [filters.game, ...(state.profile?.preferences?.games || [])]
+        .find((slug) => state.games.some((item) => item.slug === slug)) || state.games[0]?.slug;
+      if (!game) throw Error(t("Choose a game."));
+      const data = {
+        title: discoverTitle(body), body, game_slug: game,
+        kind: "moment", audience: "public", status: "published",
+        permission: true,
+        media: draft.media, media_ids: draft.media.map((media) => media.id),
+      };
+      if (draft.media_type === "video/stream") {
+        const check = await api("community/video-upload/" + draft.media_id);
+        if (check.state !== "ready")
+          throw Error(t(check.state === "error"
+            ? "Video processing failed. Choose another file."
+            : "Video is still processing. Try again shortly."));
+      }
+      await checkPostVideos(data);
+      const post = await api("community/posts", { method: "POST", body: data });
+      if (!form.isConnected) return;
+      dirty = false;
+      if (post.review_status === "pending" || post.review_status === "rejected") {
+        location.hash = "submissions";
+        return;
+      }
+      await render();
+    });
+    draft.sending = false;
+    controls.forEach((el) => (el.disabled = false));
+  }
+
   function bindForms() {
+    const discover = $("#discover-composer");
+    if (discover) {
+      composer = { media: [], body: "" };
+      bindDiscoverEmoji(discover);
+      discover.oninput = () => {
+        dirty = Boolean(discover.elements.body.value.trim() || (discover.dataset.reply && composer.body.trim()) || composerMedia().length);
+      };
+      discover.onsubmit = (e) => {
+        e.preventDefault();
+        return submitDiscover(discover);
+      };
+    }
     $$("[data-gallery]").forEach(
       (root) =>
         (root.onkeydown = (e) => {
@@ -1474,6 +1785,10 @@
     }
 
     if (a === "game-pill") {
+      if ($(".discover-conversation") && (dirty || uploading)) {
+        toast(t("Save your changes before leaving."));
+        return;
+      }
       const game = el.dataset.game;
       const selected = game && filters.game !== game ? game : "";
       location.hash =
@@ -1556,6 +1871,66 @@
         syncComposerMedia();
         dirty = true;
         renderMediaPreviews();
+        const discover = $("#discover-composer");
+        if (discover) discover.oninput();
+      }
+      return;
+    }
+    if (a === "discover-attach") {
+      if (!requireAuth() || uploading || composer.sending) return;
+      const input = $("#post-media");
+      const images = "image/jpeg,image/png,image/webp";
+      input.accept = { all: images + ",video/mp4", image: images, video: "video/mp4" }[el.dataset.type];
+      input.multiple = el.dataset.type !== "video";
+      input.click();
+      return;
+    }
+    if (a === "discover-reply" || a === "discover-cancel-reply") {
+      const form = $("#discover-composer");
+      if (!requireAuth() || uploading || composer.sending) return;
+      setDiscoverReply(form, a === "discover-reply" ? activePosts.find((p) => p.id === id) : null);
+      if (a === "discover-reply") form.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    if (a === "discover-emoji") {
+      const form = $("#discover-composer");
+      if (composer.sending) return;
+      const input = form.elements.body;
+      const emoji = el.textContent;
+      if (input.value.length - (input.selectionEnd - input.selectionStart) + emoji.length <= input.maxLength) {
+        input.setRangeText(emoji, input.selectionStart, input.selectionEnd, "end");
+        form.oninput();
+      }
+      return;
+    }
+    if (a === "discover-play") {
+      const wrapper = el.parentElement;
+      const video = $("video", wrapper);
+      if (video) {
+        el.hidden = true;
+        video.controls = true;
+        try {
+          await video.play();
+          video.focus({ preventScroll: true });
+        } catch (e) {
+          video.controls = false;
+          el.hidden = false;
+          throw e;
+        }
+        return;
+      }
+      const player = document.createElement("div");
+      player.className = "stream-player";
+      player.dataset.stream = el.dataset.src;
+      player.dataset.autoplay = "1";
+      el.replaceWith(player);
+      try {
+        await streamPlayers(wrapper);
+        $("iframe", player)?.focus({ preventScroll: true });
+      } catch (e) {
+        player.replaceWith(el);
+        el.focus({ preventScroll: true });
+        throw e;
       }
       return;
     }
@@ -1685,6 +2060,8 @@
     }
     if (a === "more") {
       el.disabled = true;
+      const grid = $("#posts") || $(".post-grid");
+      const discover = grid.classList.contains("discover-posts");
       const r = await api(
         "community/posts?" +
           queryString({
@@ -1695,18 +2072,25 @@
             q: el.dataset.query || "",
             offset: el.dataset.offset,
             folder: filters.folder,
+            view: discover ? "discover" : "",
           }),
       );
+      if (!grid.isConnected) return;
+      const anchor = discover ? grid.firstElementChild : null;
+      const anchorTop = anchor?.getBoundingClientRect().top;
       activePosts.push(...r.posts);
-      const grid = $("#posts") || $(".post-grid");
+      const posts = discover ? r.posts.slice().reverse() : r.posts;
       grid.insertAdjacentHTML(
-        "beforeend",
-        r.posts.map((p) => card(p)).join(""),
+        discover ? "afterbegin" : "beforeend",
+        posts.map(discover ? discoverPost : (p) => card(p)).join(""),
       );
       if (r.next === null) el.remove();
       else {
         el.dataset.offset = r.next;
         el.disabled = false;
+      }
+      if (anchor) {
+        window.scrollBy({ top: anchor.getBoundingClientRect().top - anchorTop, behavior: "instant" });
       }
       return;
     }
@@ -1734,7 +2118,8 @@
               });
               p.saved = true;
               dialog.close();
-              await render();
+              if (el.closest(".discover-post")) el.setAttribute("aria-pressed", "true");
+              else await render();
               toast(t("Saved to your collection."));
             });
           };
@@ -1801,6 +2186,8 @@
     }
   }
   document.addEventListener("click", async (e) => {
+    const emojiPicker = $(".discover-emoji[open]");
+    if (emojiPicker && !emojiPicker.contains(e.target)) emojiPicker.open = false;
     if (e.target.closest("[data-profile-close]")) {
       e.preventDefault();
       closeAccountMenu();
@@ -1869,6 +2256,14 @@
     },
     true,
   );
+  document.addEventListener("loadedmetadata", (e) => {
+    const video = e.target;
+    if (!video.matches(".discover-video video") || !Number.isFinite(video.duration)) return;
+    const duration = $(".discover-duration", video.parentElement);
+    const seconds = Math.floor(video.duration);
+    duration.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+    duration.hidden = false;
+  }, true);
   document.addEventListener("keydown", (e) => {
     const root = $("#profile-menu-root");
     if (root.hidden) return;
