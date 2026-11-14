@@ -93,8 +93,11 @@ def migrate(db, postgres=False):
 
 
 def unpack(value, fallback):
-    try: return json.loads(value)
-    except (TypeError, ValueError): return fallback
+    try:
+        decoded = json.loads(value)
+    except (TypeError, ValueError):
+        return fallback
+    return decoded if isinstance(decoded, type(fallback)) else fallback
 
 
 def fail(core, status, message): raise core['HttpError'](status,message)

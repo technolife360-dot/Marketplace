@@ -2281,8 +2281,7 @@
       return;
     }
     if (a === "retry") {
-      await refresh();
-      await render();
+      await start();
       return;
     }
     if (a === "find-players") {

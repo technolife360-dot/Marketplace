@@ -208,7 +208,7 @@ small {
 #search input {
   height: 44px;
   width: 100%;
-  background: #181c1f;
+  background: #000;
   border: 1px solid #45494d;
   color: var(--text);
   border-radius: 24px;
@@ -3211,6 +3211,7 @@ strong,
   display: flex;
   align-items: center;
   gap: 10px;
+  background: #000;
   overflow-x: auto;
   scrollbar-width: none;
   overscroll-behavior-x: contain;
@@ -4863,7 +4864,6 @@ strong,
 }
 .community-servers-shell #search input {
   border-color: #333;
-  background: #000;
 }
 .community-servers-shell :is(input, textarea)::placeholder {
   color: #999;

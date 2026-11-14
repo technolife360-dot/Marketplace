@@ -39,6 +39,20 @@ class CommunityWorkflows(unittest.TestCase):
         status,body,headers=self.guest.request('GET','/community')
         self.assertEqual(status,200);self.assertIn(b'community.js',body);self.assertEqual(headers['X-Frame-Options'],'DENY')
 
+    def test_settings_recover_from_legacy_profile_json_of_the_wrong_type(self):
+        self.profile(self.seller)
+        self.db.execute(
+            'UPDATE community_profiles SET preferences=?,layout=? WHERE user_id=?',
+            ('null', '{}', self.seller_id),
+        )
+        status, meta, _ = self.req(self.seller, 'GET', '/meta')
+        self.assertEqual(status, 200, meta)
+        self.assertEqual(meta['profile']['preferences']['comments'], 'everyone')
+        self.assertEqual(meta['profile']['layout'], [])
+        self.assertEqual(self.req(self.seller, 'GET', '/blocks')[1], {'players': []})
+        saved = self.profile(self.seller, preferences={'comments': 'following'})
+        self.assertEqual(saved['preferences']['comments'], 'following')
+
     def test_discover_text_post_and_reply_preview_respect_blocks(self):
         post = self.post(self.seller, kind='moment', title='Anyone online?', body='Anyone online?')
         pid = post['id']
