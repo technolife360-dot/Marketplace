@@ -573,7 +573,7 @@ class StripeTestFlows(unittest.TestCase):
         return data
 
     def test_topup_purchase_delivery_confirmation_and_refund_are_test_only(self):
-        self.topup_order()
+        checkout = self.topup_order()
         params = self.provider.client.v1.checkout.sessions.create.call_args.args[0]
         self.assertEqual(params['adaptive_pricing'], {'enabled':False})
         self.assertNotIn('excluded_payment_method_types', params)
@@ -582,7 +582,15 @@ class StripeTestFlows(unittest.TestCase):
         price = params['line_items'][0]['price_data']
         self.assertEqual(price['unit_amount'], 2000000)
         package = self.db.execute('SELECT stock_on_hand,stock_reserved FROM topup_packages WHERE id=(SELECT package_id FROM topup_orders WHERE id=?)', (self.oid,)).fetchone()
+        path = '/api/top-up/player-ids'
+        self.assertEqual(self.route(self.buyer, 'GET', path)['ids'], [])
         self.pay()
+        saved_id = {'game_slug': 'pubg-mobile', 'player_id': checkout['player_id'], 'server_id': ''}
+        self.assertEqual(self.route(self.buyer, 'GET', path)['ids'], [saved_id])
+        self.assertEqual(self.route(self.other, 'GET', path)['ids'], [])
+        self.route(self.buyer, 'POST', path+'/remove', saved_id)
+        self.pay()
+        self.assertEqual(self.route(self.buyer, 'GET', path)['ids'], [])
         order = self.route(self.buyer, 'GET', '/api/top-up/test-orders/'+self.oid)
         self.assertEqual(order['status'], 'paid_test'); self.assertFalse(order['real_delivery'])
         self.assertEqual(order['inventory_quantity'], 0); self.assertEqual(order['supplier_quantity'], 0)

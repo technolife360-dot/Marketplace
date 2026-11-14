@@ -323,69 +323,76 @@ window.LaunchUX = (() => {
     });
   }
 
-  async function mountSavedPlayerIds(host, slug, getFields) {
+  function mountSavedPlayerIds(host, slug, getFields) {
     if (!me || !host) return;
-    const result = await api(playerIdsURL).catch(() => null);
-    if (!result || !host.isConnected) return;
-    const ids = result.ids.filter((item) => item.game_slug === slug);
-    if (!ids.length) return;
-    const field = document.createElement("div");
-    field.className = "field saved-player-id-picker";
-    field.innerHTML = `<label for="topup-saved-player-picker">${t("Saqlangan o‘yin ID’lari", "Сохранённые ID игроков", "Saved Player IDs")}</label>
-      <select id="topup-saved-player-picker"><option value="">${t("Saqlangan ID’ni tanlang", "Выберите сохранённый ID", "Choose a saved ID")}</option>
-      ${ids.map((item, index) => `<option value="${index}">${playerIdValue(item)}</option>`).join("")}</select>`;
-    const select = field.querySelector("select");
-    select.addEventListener("change", () => {
-      if (select.value === "") return;
-      const entry = ids[Number(select.value)];
-      const { player, server } = getFields();
-      if (player) {
-        player.value = entry.player_id;
-        if (server) server.value = entry.server_id;
-        player.dispatchEvent(new Event("input", { bubbles: true }));
-      }
-      select.value = "";
-      window.SelectMenus?.enhance(select);
-    });
-    host.replaceChildren(field);
-  }
-
-  async function offerSavePlayerId(host, order) {
-    if (!host || !order.game_slug || !order.payment_reference ||
-        !["paid", "paid_test", "delivered", "delivered_test", "completed"].includes(order.status)) return;
-    const dismissal = "sentryloot-player-id-dismissed:" + order.id;
-    try {
-      if (sessionStorage.getItem(dismissal)) return;
-    } catch {}
-    const result = await api(playerIdsURL).catch(() => null);
-    if (!result || !host.isConnected || result.ids.some((item) =>
-      item.game_slug === order.game_slug && item.player_id === order.player_id && item.server_id === (order.server_id || "")
-    )) return;
-    host.innerHTML = `<form class="saved-player-id-offer">
-      <h2>${t("O‘yin ID’sini saqlaysizmi?", "Сохранить ID игрока?", "Save this player ID?")}</h2>
-      <p>${esc(order.game_name)} · <bdi dir="ltr">${playerIdValue(order)}</bdi></p>
-      <div class="actions">
-        <button type="submit" class="button-primary">${t("Roziman, saqlash", "Согласен, сохранить", "Agree and save")}</button>
-        <button type="button" class="button-secondary" data-player-id-dismiss>${t("Hozir emas", "Не сейчас", "Not now")}</button>
-      </div>
-      <p class="launch-error" role="alert"></p>
-    </form>`;
-    const form = host.querySelector("form");
-    const close = form.querySelector("[data-player-id-dismiss]");
-    close.onclick = () => {
-      try { sessionStorage.setItem(dismissal, "1"); } catch {}
-      host.replaceChildren();
+    const suggestions = document.createElement("div");
+    suggestions.className = "saved-player-id-suggestions";
+    suggestions.hidden = true;
+    const list = document.createElement("div");
+    list.className = "saved-player-id-options";
+    list.setAttribute("role", "group");
+    list.setAttribute("aria-label", t("Saqlangan o‘yin ID’lari", "Сохранённые ID игроков", "Saved Player IDs"));
+    suggestions.append(list);
+    let ids = [], pending, request = 0;
+    const close = () => {
+      request++;
+      suggestions.hidden = true;
     };
-    bind(form, async () => {
-      close.disabled = true;
-      try {
-        await updatePlayerIds({ order_id: order.id, consent: true });
-        if (host.isConnected) {
-          host.replaceChildren();
-          toast(t("Saqlandi", "Сохранено", "Saved"));
-        }
-      } finally {
-        close.disabled = false;
+    function show(player, filter = "") {
+      const field = player.closest(".field");
+      if (!field) return;
+      field.after(suggestions);
+      const { server } = getFields();
+      const matches = ids.filter((entry) => entry.player_id.startsWith(filter) && (!entry.server_id || server));
+      list.replaceChildren(...matches.map((entry) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dir = "ltr";
+        button.textContent = entry.player_id + (entry.server_id ? " / " + entry.server_id : "");
+        button.onclick = () => {
+          player.value = entry.player_id;
+          if (server) server.value = entry.server_id;
+          player.dispatchEvent(new Event("input", { bubbles: true }));
+          player.focus();
+          close();
+        };
+        return button;
+      }));
+      suggestions.hidden = !matches.length;
+    }
+    let loaded = false;
+    async function open(player) {
+      if (player !== getFields().player) return;
+      if (loaded) show(player);
+      const attempt = ++request;
+      pending ||= api(playerIdsURL + "?game=" + e(slug)).catch(() => null);
+      const data = await pending;
+      pending = null;
+      if (data) {
+        ids = [...data.ids].reverse();
+        loaded = true;
+      }
+      if (loaded && attempt === request && player.isConnected && player === document.activeElement)
+        show(player);
+    }
+    host.addEventListener("focusin", (event) => open(event.target));
+    host.addEventListener("click", (event) => open(event.target));
+    host.addEventListener("input", (event) => {
+      if (event.target === getFields().player && loaded) show(event.target, event.target.value.trim());
+    });
+    host.addEventListener("focusout", (event) => {
+      if (!suggestions.contains(event.relatedTarget) && event.relatedTarget !== getFields().player) close();
+    });
+    host.addEventListener("keydown", (event) => {
+      if (suggestions.hidden) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        getFields().player?.focus();
+        close();
+      }
+      if (event.key === "ArrowDown" && event.target === getFields().player) {
+        event.preventDefault();
+        list.firstElementChild?.focus();
       }
     });
   }
@@ -1168,7 +1175,6 @@ window.LaunchUX = (() => {
     saved,
     playerIds,
     mountSavedPlayerIds,
-    offerSavePlayerId,
     mountAccountExport,
     enhance,
     topupState,

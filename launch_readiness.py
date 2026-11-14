@@ -14,7 +14,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 UNHANDLED = object()
 CONFIG_KEY = 'launch_public_profile'
 PLAYER_IDS_KEY = 'topup_player_ids'
-CONFIRMED_TOPUP_STATES = ('paid', 'paid_test', 'delivered', 'delivered_test', 'completed')
 TEST_SQL = "NOT EXISTS(SELECT 1 FROM platform_config audience WHERE audience.key='listing_audience:'||l.id AND audience.value='test') AND NOT (l.title='ads sdasde ded' AND l.seller_id IN (SELECT user_id FROM seller_profiles WHERE shop_name='SentryLoot Test Seller'))"
 PACKAGE_ART = {str(n)+'-uc':'/static/assets/topup-uc-'+str(n)+'.png' for n in (60,325,660,1800,3850,8100)}
 PACKAGE_ART.update({'elite-pass-lv1-100':'/static/assets/topup-elite-pass.png','elite-pass-plus-lv1-100':'/static/assets/topup-elite-pass.png','weekly-mythic-emblem-value-pack':'/static/assets/topup-weekly-mythic.png','weekly-deal-pack-2':'/static/assets/topup-weekly-deal-2.png','weekly-deal-pack-1':'/static/assets/topup-weekly-deal-1.png'})
@@ -90,16 +89,20 @@ def package_metadata(row,db=None):
     if db:base.update(config(db,'topup_presentation:'+row['id'],{}))
     return base
 
-def save_preferences(db,uid,transform,core):
+def update_preferences_in_transaction(db, uid, transform):
     # Lock a base-schema user row before reading: concurrent tabs cannot lose
     # notification preferences or another package saved at the same time.
+    db.execute('UPDATE users SET display_name=display_name WHERE id=?', (uid,))
+    row = db.execute('SELECT settings_json FROM experience_preferences WHERE user_id=?', (uid,)).fetchone()
+    value = json.loads(row['settings_json']) if row else {}
+    transform(value)
+    db.execute('INSERT INTO experience_preferences(user_id,settings_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET settings_json=excluded.settings_json', (uid, json.dumps(value)))
+    return value
+
+def save_preferences(db,uid,transform,core):
     db.execute('BEGIN IMMEDIATE')
     try:
-        db.execute('UPDATE users SET display_name=display_name WHERE id=?',(uid,))
-        row=db.execute('SELECT settings_json FROM experience_preferences WHERE user_id=?',(uid,)).fetchone()
-        value=json.loads(row['settings_json']) if row else {}
-        transform(value)
-        db.execute('INSERT INTO experience_preferences(user_id,settings_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET settings_json=excluded.settings_json',(uid,json.dumps(value)))
+        value = update_preferences_in_transaction(db, uid, transform)
         db.execute('COMMIT')
         return value
     except Exception:
@@ -108,6 +111,17 @@ def save_preferences(db,uid,transform,core):
 def saved_player_ids(db, uid):
     row = db.execute('SELECT settings_json FROM experience_preferences WHERE user_id=?', (uid,)).fetchone()
     return json.loads(row['settings_json']).get(PLAYER_IDS_KEY, []) if row else []
+
+def remember_paid_topup_player(db, order):
+    # Called within the transaction that first records a confirmed payment.
+    package = db.execute('SELECT game_slug FROM topup_packages WHERE id=?', (order['package_id'],)).fetchone()
+    entry = {'game_slug': package['game_slug'], 'player_id': order['player_id'], 'server_id': order['server_id']}
+
+    def remember(prefs):
+        ids = prefs.get(PLAYER_IDS_KEY, [])
+        prefs[PLAYER_IDS_KEY] = [item for item in ids if item != entry] + [entry]
+
+    update_preferences_in_transaction(db, order['buyer_id'], remember)
 
 def player_id_games(db):
     games = {row['game_slug']: row['game_name'] for row in db.execute(
@@ -131,22 +145,6 @@ def player_ids_route(db, uid, method, data, core, *, remove=False):
     error = core['HttpError']
     if method == 'GET':
         return {'ids': saved_player_ids(db, uid), 'games': player_id_games(db)}
-    if not remove and 'order_id' in data:
-        if set(data) != {'order_id', 'consent'} or data.get('consent') is not True:
-            raise error(400, 'Confirm that you want to save this player ID.')
-        oid = data['order_id']
-        if not isinstance(oid, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', oid):
-            raise error(400, 'Invalid Top Up order.')
-        order = db.execute(
-            '''SELECT p.game_slug,o.player_id,o.server_id,o.status,o.payment_reference
-               FROM topup_orders o JOIN topup_packages p ON p.id=o.package_id
-               WHERE o.id=? AND o.buyer_id=?''', (oid, uid)
-        ).fetchone()
-        if not order:
-            raise error(404, 'Top Up order not found.')
-        if order['status'] not in CONFIRMED_TOPUP_STATES or not order['payment_reference']:
-            raise error(409, 'Wait for your Top Up payment to be confirmed.')
-        data = {key: order[key] for key in ('game_slug', 'player_id', 'server_id')}
     if set(data) - {'game_slug', 'player_id', 'server_id'}:
         raise error(400, 'Check the game and player ID.')
     slug, player, server = (data.get('game_slug'), data.get('player_id'), data.get('server_id', ''))
@@ -288,7 +286,11 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         if data['status'] in ('degraded','maintenance') and len(message)<10:raise error(400,'Explain the service interruption.')
         value={'status':data['status'],'message':message,'updated_at':core['now_iso']()};put_config(db,'public_incident',value);core['audit'](db,uid,'status_updated','platform','status',value);return value
     if path == '/api/top-up/player-ids' and method in ('GET', 'POST'):
-        return player_ids_route(db, core['require_user'](ctx), method, data, core)
+        buyer = core['require_user'](ctx)
+        if method == 'GET' and qs.get('game'):
+            slug = qs['game'][0]
+            return {'ids': [item for item in saved_player_ids(db, buyer) if item['game_slug'] == slug]}
+        return player_ids_route(db, buyer, method, data, core)
     if path == '/api/top-up/player-ids/remove' and method == 'POST':
         return player_ids_route(db, core['require_user'](ctx), method, data, core, remove=True)
     if path=='/api/top-up/preferences' and method in ('GET','POST'):

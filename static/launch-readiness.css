@@ -128,20 +128,36 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.saved-player-id-picker {
-  margin-block: 10px 16px;
+.saved-player-id-suggestions {
+  position: relative;
+  z-index: 2;
 }
-.saved-player-id-offer {
-  display: grid;
-  gap: 10px;
-  margin-block: 12px;
-  padding: 14px;
-  border: 1px solid var(--line, #333);
-  border-radius: 10px;
+.saved-player-id-suggestions[hidden] {
+  display: none !important;
 }
-.saved-player-id-offer .actions {
-  flex-wrap: wrap;
-  margin: 0;
+.saved-player-id-options {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid #4a4b52;
+  border-radius: 8px;
+  background: #16171b;
+  box-shadow: 0 6px 18px #0008;
+}
+#app .saved-player-id-options > button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding-inline: 12px;
+  text-align: start;
+  border: 0;
+  border-radius: 0;
+  background: #16171b;
+}
+#app .saved-player-id-options > button:is(:hover, :focus-visible) {
+  background: #303139;
 }
 .launch-checklist li {
   margin-block: 8px;

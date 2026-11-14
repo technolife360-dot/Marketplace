@@ -112,13 +112,26 @@ window.RewardsUI = (() => {
       blocked = () => false,
       showTotals = true,
       auto = false,
+      promoOnly = false,
     },
   ) {
     let quote = null,
       sequence = 0,
       pending = false,
       touched = auto;
-    root.innerHTML = `<div class="rw-checkout"><div class="rw-section-heading"><h3>${tr("Rewards & platform coupon", "Bonus va platforma kuponi", "Бонусы и купон платформы")}</h3><a href="/#rewards" aria-label="${tr("Open rewards wallet", "Bonus hamyonini ochish", "Открыть бонусы")}">${icon("ticket")}</a></div><p>${tr("Apply before continuing to payment.", "To‘lovdan oldin qo‘llang.", "Примените перед оплатой.")}</p><label class="rw-field"><span>${tr("Platform coupon code", "Platforma kupon kodi", "Код купона платформы")}</span><input name="platform_coupon" maxlength="80" autocomplete="off"></label><label class="rw-toggle"><input type="checkbox" name="use_bonus"><span>${tr("Use available promotional credit", "Mavjud bonus kreditini ishlatish", "Использовать доступные бонусы")}</span></label><button class="button-secondary" type="button" data-rw-apply>${tr("Update benefits", "Imtiyozni yangilash", "Обновить привилегии")}</button><button class="button-secondary rw-reset" type="button" data-rw-clear>${tr("Continue without platform benefits", "Platforma imtiyozisiz davom etish", "Продолжить без бонусов платформы")}</button><p class="rw-quote-state" data-rw-state role="status"></p>${alert()}<div data-rw-result></div></div>`;
+    if (promoOnly) {
+      const label = tr("Platform coupon code", "Promo kod", "Промокод");
+      root.innerHTML = `<div class="rw-checkout rw-checkout-promo">
+        <div class="rw-promo-row">
+          <input name="platform_coupon" maxlength="80" autocomplete="off" aria-label="${h(label)}" placeholder="${h(label)}">
+          <button class="button-secondary" type="button" data-rw-apply>${tr("Apply", "Qo‘llash", "Применить")}</button>
+        </div>
+        <p class="rw-quote-state" data-rw-state role="status"></p>
+        ${alert()}
+      </div>`;
+    } else {
+      root.innerHTML = `<div class="rw-checkout"><div class="rw-section-heading"><h3>${tr("Rewards & platform coupon", "Bonus va platforma kuponi", "Бонусы и купон платформы")}</h3><a href="/#rewards" aria-label="${tr("Open rewards wallet", "Bonus hamyonini ochish", "Открыть бонусы")}">${icon("ticket")}</a></div><p>${tr("Apply before continuing to payment.", "To‘lovdan oldin qo‘llang.", "Примените перед оплатой.")}</p><label class="rw-field"><span>${tr("Platform coupon code", "Platforma kupon kodi", "Код купона платформы")}</span><input name="platform_coupon" maxlength="80" autocomplete="off"></label><label class="rw-toggle"><input type="checkbox" name="use_bonus"><span>${tr("Use available promotional credit", "Mavjud bonus kreditini ishlatish", "Использовать доступные бонусы")}</span></label><button class="button-secondary" type="button" data-rw-apply>${tr("Update benefits", "Imtiyozni yangilash", "Обновить привилегии")}</button><button class="button-secondary rw-reset" type="button" data-rw-clear>${tr("Continue without platform benefits", "Platforma imtiyozisiz davom etish", "Продолжить без бонусов платформы")}</button><p class="rw-quote-state" data-rw-state role="status"></p>${alert()}<div data-rw-result></div></div>`;
+    }
     const code = root.querySelector("[name=platform_coupon]"),
       bonus = root.querySelector("[name=use_bonus]"),
       apply = root.querySelector("[data-rw-apply]"),
@@ -129,8 +142,8 @@ window.RewardsUI = (() => {
       quote = null;
       pending = false;
       apply.disabled = false;
-      result.innerHTML = "";
-      state.textContent = touched
+      if (result) result.innerHTML = "";
+      state.textContent = touched && !promoOnly
         ? tr(
             "Benefits changed. Update the quote before payment.",
             "Imtiyoz o‘zgardi. To‘lovdan oldin hisobni yangilang.",
@@ -156,6 +169,7 @@ window.RewardsUI = (() => {
       return quote;
     }
     async function update() {
+      if (promoOnly && !code.value.trim()) return;
       touched = true;
       invalidate();
       error(root, "");
@@ -188,7 +202,7 @@ window.RewardsUI = (() => {
         const data = await post("/rewards/quote", {
           ...ctx,
           coupon_code: code.value.trim(),
-          use_bonus: bonus.checked,
+          use_bonus: Boolean(bonus?.checked),
         });
         if (
           id !== sequence ||
@@ -203,6 +217,12 @@ window.RewardsUI = (() => {
         )
           throw new Error(tr("The server returned an invalid quote."));
         quote = { ...data, _context: snapshot };
+        if (promoOnly) {
+          state.textContent = tr("Platform coupon", "Promo kod", "Промокод") + " · −" +
+            money(data.discount_minor, data.currency);
+          onChange(quote);
+          return;
+        }
         result.innerHTML =
           mode(data) +
           (showTotals ? quoteTotals(data) : "") +
@@ -236,15 +256,21 @@ window.RewardsUI = (() => {
       }
     }
     code.addEventListener("input", () => {
-      touched = true;
+      touched = !promoOnly || Boolean(code.value.trim());
+      if (promoOnly) error(root, "");
       invalidate();
     });
-    bonus.addEventListener("change", () => {
+    if (promoOnly) code.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      if (!pending) update();
+    });
+    bonus?.addEventListener("change", () => {
       touched = true;
       invalidate();
     });
     apply.addEventListener("click", update);
-    root.querySelector("[data-rw-clear]").addEventListener("click", () => {
+    root.querySelector("[data-rw-clear]")?.addEventListener("click", () => {
       touched = false;
       code.value = "";
       bonus.checked = false;

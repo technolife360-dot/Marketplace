@@ -345,6 +345,30 @@
   color: #aaa;
   margin: 12px 0;
 }
+.rw-checkout.rw-checkout-promo {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.rw-promo-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.rw-promo-row > input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+}
+.rw-promo-row > button {
+  width: auto;
+}
+.rw-checkout-promo .rw-quote-state {
+  margin: 6px 0 0;
+}
+.rw-checkout-promo .rw-quote-state:empty {
+  display: none;
+}
 .rw-quote-totals {
   margin: 18px 0 0;
   font-size: 12px;

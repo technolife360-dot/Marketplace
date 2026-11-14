@@ -72,27 +72,15 @@ class LaunchFlows(unittest.TestCase):
         self.assertEqual(self.route(self.buyer,'GET','/api/top-up/preferences')['saved'],[])
         self.assertEqual(self.route(self.buyer,'GET','/api/top-up/preferences')['launch_alert'],[package])
 
-    def test_player_ids_require_account_ownership_and_explicit_post_purchase_consent(self):
+    def test_player_ids_are_account_scoped_and_manually_manageable(self):
         path = '/api/top-up/player-ids'
-        oid = 'player-id-order'
         entry = {'game_slug': 'pubg-mobile', 'player_id': '001234567890', 'server_id': ''}
-        self.db.execute(
-            '''INSERT INTO topup_orders(id,reference,buyer_id,package_id,player_id,quantity,unit_price_minor)
-               VALUES(?,?,?,?,?,1,100)''',
-            (oid, oid, self.buyer, 'pubg-mobile-60-uc', entry['player_id'])
-        )
         with self.assertRaises(app.HttpError):
             self.route(None, 'GET', path)
         with self.assertRaises(app.HttpError):
-            self.route(self.buyer, 'POST', path, {'order_id': oid, 'consent': True})
-        self.db.execute("UPDATE topup_orders SET status='paid_test',payment_reference='stripe_test_fixture' WHERE id=?", (oid,))
-        with self.assertRaises(app.HttpError):
-            self.route(self.other, 'POST', path, {'order_id': oid, 'consent': True})
-        with self.assertRaises(app.HttpError):
-            self.route(self.buyer, 'POST', path, {'order_id': oid, 'consent': False})
-        self.assertEqual(self.route(self.buyer, 'GET', path)['ids'], [])
+            self.route(self.buyer, 'POST', path, {'order_id': 'invalid-order', 'consent': True})
         for _ in range(2):
-            self.assertEqual(self.route(self.buyer, 'POST', path, {'order_id': oid, 'consent': True})['ids'], [entry])
+            self.assertEqual(self.route(self.buyer, 'POST', path, entry)['ids'], [entry])
 
         mobile = {'game_slug': 'mobile-legends', 'player_id': '000456', 'server_id': '007'}
         with self.assertRaises(app.HttpError):

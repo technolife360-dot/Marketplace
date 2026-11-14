@@ -18314,22 +18314,13 @@ body:not(.home-page) .listing-detail-page .listing-buy-button:hover {
   }
 }
 body #app .topup-supplier-page .tus-checkout-note {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  align-items: start;
-  gap: 8px;
-  text-align: left;
-}
-body #app .topup-supplier-page .tus-checkout-note > .icon {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  align-self: start;
-}
-body #app .topup-supplier-page .tus-checkout-note > span {
   display: block;
-  min-width: 0;
-  line-height: 16px;
+  margin-block: 7px 0;
+  color: #aaa;
+  line-height: 1.4;
+}
+body #app .topup-supplier-page .tus-checkout-note:empty {
+  display: none;
 }
 
 .topup-supplier-page .tus-customer-fields {
@@ -18371,4 +18362,23 @@ body #app .topup-supplier-page .tus-checkout-note > span {
     object-fit: contain;
     object-position: center;
   }
+}
+
+/* Space the controls inside the compact Top Up selection panel. */
+.topup-supplier-page .tus-checkout-form {
+  margin-block: 16px 0;
+}
+.tus-checkout-form > [data-supplier-rewards]:not([hidden]) {
+  margin-block-start: 14px;
+}
+.tus-checkout-form > .tus-buy {
+  margin-block-start: 12px;
+}
+.topup-supplier-page .tus-summary-product [data-fpp-total] {
+  display: block;
+  margin-block-start: 4px;
+}
+
+.topup-supplier-page .tus-customer-fields[hidden] {
+  display: none !important;
 }

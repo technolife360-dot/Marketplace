@@ -165,6 +165,8 @@ def receive(db, provider, event, core):
             db.execute('UPDATE topup_orders SET status=?,payment_reference=?,updated_at=CURRENT_TIMESTAMP WHERE id=?', (status, 'stripe_test_'+intent['id'], oid))
             if status == 'refund_pending':
                 pay.enqueue(db, oid, 'topup_refund')
+            else:
+                core['launch_readiness'].remember_paid_topup_player(db, order)
             core['notify'](db, order['buyer_id'], 'order', 'Test top-up payment received', 'No UC has been delivered. This is a Stripe test order.', '/topup-order/'+oid)
         else:
             db.execute("UPDATE topup_orders SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='awaiting_payment'", (oid,))
