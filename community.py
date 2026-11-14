@@ -560,10 +560,17 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
             if stream and status=='published' and stream['state']!='ready':fail(core,409,'Wait until video processing has finished.')
         requested=status
         result=None
+        review_note=''
         if requested=='published':
             core['check_rate'](db,'community-safety-check',uid,20,3600)
             try: result=automatic.assess(db,uid,media_ids+([thumb] if thumb else []),json.dumps({'title':title,'body':body},ensure_ascii=False),core)
-            except automatic.Unavailable as exc:fail(core,503,str(exc))
+            except automatic.Unavailable as exc:
+                # Queue new submissions privately. A failed edit keeps the existing version.
+                incomplete_video = isinstance(exc, automatic.IncompleteVideoCheck)
+                if old or str(exc)!=automatic.UNAVAILABLE or (incomplete_video and data.get('queue_for_review') is not True):
+                    fail(core,503,str(exc))
+                result=automatic.Result('pending')
+                review_note=automatic.AWAITING_REVIEW
         status='published' if result and result.status=='approved' else 'hidden' if result and result.status=='rejected' else 'draft'
         pid=old['id'] if old else core['ident']()
         db.execute('BEGIN IMMEDIATE')
@@ -578,7 +585,7 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
             for position,mid in enumerate(media_ids):
                 db.execute('INSERT INTO community_post_media(post_id,media_id,position) VALUES(?,?,?)',(pid,mid,position))
             safety.record_submission(db,pid,lid,requested,data.get('permission') is True,
-                                     decision=result.status if result else None,note=result.note if result else '')
+                                     decision=result.status if result else None,note=review_note or (result.note if result else ''))
             if result:
                 core['audit'](db,uid,'community.automatic_check','post',pid,
                               {'policy':automatic.POLICY_VERSION,'decision':result.status,'categories':list(result.categories)})

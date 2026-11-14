@@ -1295,6 +1295,7 @@ Object.assign(window.CommunityCopy.uz, {
   "Needs changes": "O‘zgartirish kerak",
   Blocked: "Bloklangan",
   "Checking content safety…": "Kontent xavfsizligi tekshirilyapti…",
+  "Your post was saved and is awaiting review.": "Postingiz saqlandi. Ko‘rib chiqilishi kutilmoqda.",
   "Automatic safety checks are temporarily unavailable. Your content was not published.":
     "Avtomatik xavfsizlik tekshiruvi vaqtincha ishlamayapti. Kontentingiz ommaga chiqarilmadi.",
   "Automatic checks were inconclusive. Edit the content and try again.":
@@ -1321,6 +1322,7 @@ Object.assign(window.CommunityCopy.ru, {
   "Needs changes": "Нужны изменения",
   Blocked: "Заблокировано",
   "Checking content safety…": "Проверяем безопасность контента…",
+  "Your post was saved and is awaiting review.": "Публикация сохранена и ожидает проверки.",
   "Automatic safety checks are temporarily unavailable. Your content was not published.":
     "Автоматическая проверка временно недоступна. Контент не опубликован.",
   "Automatic checks were inconclusive. Edit the content and try again.":

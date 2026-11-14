@@ -32,6 +32,7 @@
     dialog = $("#dialog");
   lang = window.CommunityI18n.language();
   const t = (s) => window.CommunityI18n.translate(s, lang);
+  const queuedForReview = "Your post was saved and is awaiting review.";
   function syncLanguage() {
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
@@ -97,6 +98,7 @@
     if (!response.ok) {
       const error = new Error(t(result.error || "Please try again."));
       error.status = response.status;
+      error.code = result.fields?.code;
       throw error;
     }
     return result;
@@ -386,6 +388,9 @@
           <button type="submit" class="discover-send" aria-label="${t("Send")}">${icon("send")}</button>
         </div>
         <div class="form-error" role="alert"></div>
+        <div class="discover-submission-status" role="status" hidden>
+          ${link("#submissions", queuedForReview)}
+        </div>
       </form>
     </section>`;
   }
@@ -1102,7 +1107,7 @@
   async function submissionsPage() {
     if (!requireAuth()) return "";
     const r = await api("community/submissions");
-    return `${heading("My submissions & requests", "Track reviews and read the reasons for decisions.")}<section class="panel">${r.posts.map((p) => `<article class="report"><span class="tag">${t(p.review_status === "pending" ? "Needs changes" : "Blocked")}</span><h2>${esc(p.title)}</h2><p>${esc(t(p.review_note || "Automatic checks were inconclusive. Edit the content and try again."))}</p>${link("#create/" + p.id, "Edit post", "btn outline")}${p.review_status === "rejected" ? link("#request?kind=appeal&post=" + p.id, "Appeal", "btn outline") : ""}</article>`).join("") || `<p>${t("No pending submissions.")}</p>`}</section><section class="panel"><h2>${t("Your requests")}</h2>${r.cases.map((c) => `<article class="report"><strong>${esc(c.id)}</strong><p>${t(c.kind)} · ${t(c.status)}</p><p>${esc(c.decision)}</p></article>`).join("") || `<p>${t("No requests yet.")}</p>`}</section>`;
+    return `${heading("My submissions & requests", "Track reviews and read the reasons for decisions.")}<section class="panel">${r.posts.map((p) => `<article class="report"><span class="tag">${t(p.review_note === queuedForReview ? "Awaiting review" : p.review_status === "pending" ? "Needs changes" : "Blocked")}</span><h2>${esc(p.title)}</h2><p>${esc(t(p.review_note || "Automatic checks were inconclusive. Edit the content and try again."))}</p>${link("#create/" + p.id, "Edit post", "btn outline")}${p.review_status === "rejected" ? link("#request?kind=appeal&post=" + p.id, "Appeal", "btn outline") : ""}</article>`).join("") || `<p>${t("No pending submissions.")}</p>`}</section><section class="panel"><h2>${t("Your requests")}</h2>${r.cases.map((c) => `<article class="report"><strong>${esc(c.id)}</strong><p>${t(c.kind)} · ${t(c.status)}</p><p>${esc(c.decision)}</p></article>`).join("") || `<p>${t("No requests yet.")}</p>`}</section>`;
   }
   async function reviewQueue() {
     const r = await api("admin/community/queue");
@@ -1243,19 +1248,24 @@
       body: {},
     });
   }
-  async function checkPostVideos(data, feedback) {
+  async function checkPostVideos(data, feedback, { allowReviewQueue = false } = {}) {
     for (const media of data.media || []) {
       if (media.content_type !== "video/mp4") continue;
       let done = false;
       while (!done) {
-        const result = await api("community/media/" + media.id + "/check", {
-          method: "POST",
-          body: {
-            title: data.title,
-            body: data.body,
-            permission: data.permission,
-          },
-        });
+        let result;
+        try {
+          result = await api("community/media/" + media.id + "/check", {
+            method: "POST",
+            body: { title: data.title, body: data.body, permission: data.permission },
+          });
+        } catch (error) {
+          if (allowReviewQueue && error.code === "community_safety_unavailable") {
+            data.queue_for_review = true;
+            return;
+          }
+          throw error;
+        }
         done = result.done;
         if (feedback)
           feedback.textContent =
@@ -1444,10 +1454,18 @@
             ? "Video processing failed. Choose another file."
             : "Video is still processing. Try again shortly."));
       }
-      await checkPostVideos(data);
+      await checkPostVideos(data, null, { allowReviewQueue: true });
       const post = await api("community/posts", { method: "POST", body: data });
       if (!form.isConnected) return;
       dirty = false;
+      if (post.review_status === "pending" && post.review_note === queuedForReview) {
+        form.reset();
+        draft.media = [];
+        syncComposerMedia();
+        renderMediaPreviews();
+        $(".discover-submission-status", form).hidden = false;
+        return;
+      }
       if (post.review_status === "pending" || post.review_status === "rejected") {
         location.hash = "submissions";
         return;
@@ -1464,6 +1482,7 @@
       composer = { media: [], body: "" };
       bindDiscoverEmoji(discover);
       discover.oninput = () => {
+        $(".discover-submission-status", discover).hidden = true;
         dirty = Boolean(discover.elements.body.value.trim() || (discover.dataset.reply && composer.body.trim()) || composerMedia().length);
       };
       discover.onsubmit = (e) => {
@@ -1561,7 +1580,7 @@
           const feedback = $("[data-safety-status]", cf);
           if (feedback && data.status === "published") {
             feedback.textContent = t("Checking content safety…");
-            await checkPostVideos(data, feedback);
+            await checkPostVideos(data, feedback, { allowReviewQueue: !composer.id });
           }
           const p = await api(
             "community/posts" + (composer.id ? "/" + composer.id : ""),
@@ -1579,7 +1598,7 @@
               p.review_status === "rejected"
                 ? p.review_note
                 : p.review_status === "pending"
-                  ? "Automatic checks were inconclusive. Edit the content and try again."
+                  ? p.review_note || "Automatic checks were inconclusive. Edit the content and try again."
                   : p.status === "draft"
                     ? "Draft saved."
                     : "Your story is published.",

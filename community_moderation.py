@@ -22,6 +22,7 @@ NOTES = {
     'drugs': 'This content was blocked for recreational drug content.',
 }
 UNAVAILABLE = 'Automatic safety checks are temporarily unavailable. Your content was not published.'
+AWAITING_REVIEW = 'Your post was saved and is awaiting review.'
 INCONCLUSIVE = 'Automatic checks were inconclusive. Edit the content and try again.'
 MAX_BYTES = 4 * 1024 * 1024
 MAX_FRAMES = 64
@@ -46,6 +47,10 @@ video. Do not claim to have listened to audio. No face identity or demographic i
 
 
 class Unavailable(RuntimeError):
+    pass
+
+
+class IncompleteVideoCheck(Unavailable):
     pass
 
 
@@ -174,7 +179,7 @@ def assess(db, uid, media_ids, caption, core):
             check=db.execute('SELECT * FROM community_media_checks WHERE media_id=?',(mid,)).fetchone()
             if check:
                 if check['caption_hash']!=hashlib.sha256(caption.encode()).hexdigest() or check['policy']!=POLICY_VERSION or check['state'] not in ('approved','rejected','pending'):
-                    raise Unavailable(UNAVAILABLE)
+                    raise IncompleteVideoCheck(UNAVAILABLE)
                 cached.append(Result(check['state'],tuple(json.loads(check['categories']))))
                 continue
         try:

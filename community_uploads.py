@@ -212,7 +212,8 @@ def check_video(db,ctx,mid,data,core):
     if not row:c.fail(core,404,'Media is private or unavailable.')
     check=db.execute('SELECT * FROM community_media_checks WHERE media_id=?',(mid,)).fetchone()
     if not check:return {'done':True,'state':'legacy'}
-    if not automatic.configured():c.fail(core,503,automatic.UNAVAILABLE)
+    if not automatic.configured():
+        raise core['HttpError'](503,automatic.UNAVAILABLE,{'code':'community_safety_unavailable'})
     now=int(time.time());claim=secrets.token_hex(16)
     if check['caption_hash']!=digest or check['policy']!=automatic.POLICY_VERSION:
         core['check_rate'](db,'community-safety-start',uid,20,3600)
@@ -234,7 +235,7 @@ def check_video(db,ctx,mid,data,core):
     except Exception as exc:
         db.execute("UPDATE community_media_checks SET claim='',claim_until=0 WHERE media_id=? AND claim=?",(mid,claim))
         if isinstance(exc,core['HttpError']):raise
-        c.fail(core,503,automatic.UNAVAILABLE)
+        raise core['HttpError'](503,automatic.UNAVAILABLE,{'code':'community_safety_unavailable'}) from None
 
 
 def cleanup(db,core,uid=None):

@@ -4664,6 +4664,14 @@ strong,
 .discover-composer .form-error:empty {
   display: none;
 }
+.discover-submission-status {
+  padding: 4px 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.discover-submission-status a:hover {
+  text-decoration: underline;
+}
 .discover-emoji summary {
   list-style: none;
 }

@@ -107,13 +107,27 @@ class AutomaticPublication(unittest.TestCase):
         self.assertEqual(status,503)
         self.assertEqual(self.req(self.guest,'GET','/posts')[1]['posts'],[])
 
-    def test_publish_without_scanner_cannot_enter_the_public_feed(self):
-        with patch.dict(os.environ, {'OPENAI_API_KEY': ''}):
-            status, body, _ = self.req(self.seller, 'POST', '/posts', {
-                'kind': 'achievement', 'title': 'A real milestone',
-                'game_slug': 'pubg-mobile', 'status': 'published', 'permission': True})
-        self.assertEqual(status, 503, body)
+    def test_publish_without_scanner_goes_to_private_review_queue(self):
+        with patch.dict(os.environ, {'OPENAI_API_KEY': ''}), patch.object(storage_r2, 'is_configured', return_value=False):
+            status, media, _ = self.req(self.seller, 'POST', '/media', raw=self.image(), content_type='image/png')
+            self.assertEqual(status, 201, media)
+            status, post, _ = self.publish(kind='moment', media_ids=[media['id']])
+        self.assertEqual(status, 201, post)
+        self.assertEqual((post['status'], post['review_status']), ('draft', 'pending'))
+        self.assertEqual(post['review_note'], automatic.AWAITING_REVIEW)
+        post_id = post['id']
         self.assertEqual(self.req(self.guest, 'GET', '/posts')[1]['posts'], [])
+        self.assertEqual(self.req(self.guest, 'GET', '/media/' + media['id'])[0], 404)
+        queue = self.admin.request('GET', '/api/admin/community/queue')[1]['posts']
+        self.assertIn(post_id, [item['id'] for item in queue])
+        review_url = '/api/admin/community/review/' + post_id
+        review = self.admin.request('GET', review_url)[1]
+        status, _, _ = self.admin.request('POST', review_url, {
+            'decision': 'approved', 'note': 'Reviewed the post and its image.',
+            'review_token': review['review_token'],
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(self.req(self.guest, 'GET', '/posts')[1]['posts'][0]['id'], post_id)
 
 
 class ClassifierContract(unittest.TestCase):

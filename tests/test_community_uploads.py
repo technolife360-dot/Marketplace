@@ -97,6 +97,19 @@ class CommunityUploads(unittest.TestCase):
                 # An edited caption must invalidate the cached decision.
                 self.assertEqual(self.req(self.seller,'POST','/posts',{'kind':'moment','title':'Changed context','game_slug':'pubg-mobile','media_ids':[media['id']],'status':'published','permission':True})[0],503)
 
+                # If the scanner fails during a new check, the UI can queue the video privately.
+                with patch.object(automatic,'classify',side_effect=automatic.Unavailable(automatic.UNAVAILABLE)):
+                    status, failure, _ = self.req(self.seller,'POST','/media/'+media['id']+'/check',{**payload,'title':'Changed context'})
+                self.assertEqual(status,503)
+                self.assertEqual(failure['fields']['code'],'community_safety_unavailable')
+                status, queued, _ = self.req(self.seller,'POST','/posts',{
+                    **payload,'kind':'moment','title':'Changed context','game_slug':'pubg-mobile',
+                    'media_ids':[media['id']],'status':'published','queue_for_review':True,
+                })
+                self.assertEqual(status,201,queued)
+                self.assertEqual((queued['status'],queued['review_status']),('draft','pending'))
+                self.assertEqual(self.req(self.guest,'GET','/media/'+media['id'])[0],404)
+
     def test_r2_processing_refuses_disk_exhaustion_without_exposing_or_losing_staged_media(self):
         from types import SimpleNamespace
         with patch.object(app.storage_r2,'is_configured',return_value=True),patch.object(app.storage_r2,'evidence_upload_url',return_value='https://private.example/upload'),patch.object(app.storage_r2,'download_evidence') as download:
