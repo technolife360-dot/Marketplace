@@ -1925,12 +1925,14 @@
       player.className = "stream-player";
       player.dataset.stream = el.dataset.src;
       player.dataset.autoplay = "1";
-      el.replaceWith(player);
+      el.before(player);
+      el.classList.add("is-playing");
       try {
         await streamPlayers(wrapper);
         $("iframe", player)?.focus({ preventScroll: true });
       } catch (e) {
-        player.replaceWith(el);
+        player.remove();
+        el.classList.remove("is-playing");
         el.focus({ preventScroll: true });
         throw e;
       }
