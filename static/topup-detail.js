@@ -168,15 +168,7 @@ function renderTopUpDetail(game, initialPackage) {
       "Copy the numeric ID from your in-game profile. No password needed.",
     ) +
     "</small></div>" +
-    (game.slug === "mobile-legends"
-      ? '<div class="field"><label for="topup-server-id">Server / Zone ID</label><input id="topup-server-id" name="server_id" inputmode="numeric" pattern="[0-9]{1,10}" maxlength="10" required autocomplete="off"><small>' +
-        t(
-          "Profilingizdagi qavs ichidagi raqam.",
-          "Номер в скобках в профиле.",
-          "The number in brackets in your profile.",
-        ) +
-        "</small></div>"
-      : "");
+    topupServerField(initialPackage?.checkout_fields, t);
   app.innerHTML = `<section class="page topup-page topup-product-page">
     <nav class="tu-breadcrumb" aria-label="Breadcrumb"><span aria-hidden="true">›</span><a href="/top-up/${encodeURIComponent(game.slug)}">${esc(game.name)}</a><span aria-hidden="true">›</span><span>${esc(game.currency)} Top Up</span></nav>
     <div class="tu-layout"><div class="tu-left">
@@ -474,7 +466,8 @@ function renderTopUpDetail(game, initialPackage) {
   q(".tu-purchase-actions").before(testTerms);
   function updateTestCheckout() {
     const ready =
-      selected.payment_ready && selected.payment_mode === "stripe_test";
+      selected.payment_ready && selected.payment_mode === "stripe_test" &&
+      initialPackage?.checkout_fields?.supported !== false;
     root.dataset.checkoutReady = String(Boolean(ready));
     testBuy.disabled = !ready || topupQuantity(quantity.value) === null;
     testTerms.hidden = !ready;
@@ -572,11 +565,11 @@ async function renderStripeTopupOrder(id) {
       { method: "POST", body: "{}" },
     );
     if (order.status === "awaiting_payment") {
-      location.replace("/top-up/pubg-mobile");
+      location.replace("/top-up/" + encodeURIComponent(order.game_slug));
       return;
     }
   }
-  app.innerHTML = `<section class="page topup-page">${pageTitle(esc(order.reference), "Stripe test · " + esc(order.game_name), status(order.status))}<div class="notice warn">${adminText("buyurtmasi. Haqiqiy pul olinmaydi va UC yetkazilmaydi.", "заказ. Реальные деньги не списываются, UC не доставляется.", "Stripe test order. No real money is charged and no real UC is delivered.")}</div><section class="panel"><h2>${esc(order.game_name)} · ${order.amount} × ${order.quantity}</h2><p>Player ID: ${esc(order.player_id)}${order.server_id ? " · Server: " + esc(order.server_id) : ""}</p><p>${order.currency === "USD" ? esc(topupSupplierPrice({ selling_currency: "USD", selling_price_cents: order.total_minor })) : fmt(order.total_minor, order.currency)}</p><div class="actions">${order.status === "awaiting_payment" ? '<button class="button-primary" data-test-topup-action="checkout">' + adminText("Stripe to‘lovi", "Stripe test оплата", "Stripe checkout") + "</button>" : ""}${order.status === "delivered_test" ? '<button class="button-primary" data-test-topup-action="confirm">' + adminText("yetkazishni tasdiqlash", "Подтвердить доставку", "Accept simulated delivery") + "</button>" : ""}${["awaiting_payment", "paid_test", "delivered_test", "completed"].includes(order.status) ? '<button class="button-secondary" data-test-topup-action="cancel">' + adminText("Bekor qilish / qaytarim", "Отмена / возврат", "Cancel / refund") + "</button>" : ""}<button class="button-secondary" data-test-topup-action="refresh">${adminText("Yangilash", "Обновить", "Refresh")}</button></div></section></section>`;
+  app.innerHTML = `<section class="page topup-page">${pageTitle(esc(order.reference), "Stripe test · " + esc(order.game_name), status(order.status))}<div class="notice warn">${adminText("buyurtmasi. Haqiqiy pul olinmaydi va UC yetkazilmaydi.", "заказ. Реальные деньги не списываются, UC не доставляется.", "Stripe test order. No real money is charged and no real UC is delivered.")}</div><section class="panel"><h2>${esc(order.game_name)} · ${esc(order.product_name || order.amount)} × ${order.quantity}</h2><p>Player ID: ${esc(order.player_id)}${order.server_id ? " · Server: " + esc(order.server_id) : ""}</p><p>${order.currency === "USD" ? esc(topupSupplierPrice({ selling_currency: "USD", selling_price_cents: order.total_minor })) : fmt(order.total_minor, order.currency)}</p><div class="actions">${order.status === "awaiting_payment" ? '<button class="button-primary" data-test-topup-action="checkout">' + adminText("Stripe to‘lovi", "Stripe test оплата", "Stripe checkout") + "</button>" : ""}${order.status === "delivered_test" ? '<button class="button-primary" data-test-topup-action="confirm">' + adminText("yetkazishni tasdiqlash", "Подтвердить доставку", "Accept simulated delivery") + "</button>" : ""}${["awaiting_payment", "paid_test", "delivered_test", "completed"].includes(order.status) ? '<button class="button-secondary" data-test-topup-action="cancel">' + adminText("Bekor qilish / qaytarim", "Отмена / возврат", "Cancel / refund") + "</button>" : ""}<button class="button-secondary" data-test-topup-action="refresh">${adminText("Yangilash", "Обновить", "Refresh")}</button></div></section></section>`;
   app.querySelectorAll("[data-test-topup-action]").forEach(
     (button) =>
       (button.onclick = async () => {

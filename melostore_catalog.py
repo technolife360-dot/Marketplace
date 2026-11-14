@@ -123,6 +123,13 @@ def build_snapshot(brands, pricelist, dashboard, captured_at):
 def snapshot():
     return json.loads(SNAPSHOT.read_text(encoding='utf-8'))
 
+@lru_cache(maxsize=1)
+def sku_brand_index():
+    return {pack['sku']: item['slug'] for item in snapshot()['items'] for pack in item['packages']}
+
+def brand_slug_for_sku(sku):
+    return sku_brand_index().get(sku)
+
 
 def home_topups():
     """Small public discovery payload; reuse existing supplier routes, without SKUs/costs."""

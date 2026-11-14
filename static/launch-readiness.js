@@ -233,7 +233,6 @@ window.LaunchUX = (() => {
   }
   const playerIdsURL = "/top-up/player-ids";
   const playerIdLabel = () => t("O‘yinchi ID raqami", "ID игрока", "Player ID");
-  const serverIdLabel = () => t("Server ID raqami", "ID сервера", "Server ID");
   const playerIdValue = (item) => esc(item.player_id + (item.server_id ? " / " + item.server_id : ""));
   const updatePlayerIds = (data, path = playerIdsURL) =>
     api(path, { method: "POST", body: JSON.stringify(data) });
@@ -264,10 +263,7 @@ window.LaunchUX = (() => {
           <label for="saved-player-id">${playerIdLabel()}</label>
           <input id="saved-player-id" name="player_id" inputmode="numeric" pattern="[0-9]{3,40}" maxlength="40" autocomplete="off" required>
         </div>
-        <div class="field" data-player-server hidden>
-          <label for="saved-player-server">${serverIdLabel()}</label>
-          <input id="saved-player-server" name="server_id" inputmode="numeric" pattern="[0-9]{1,10}" maxlength="10" autocomplete="off" disabled>
-        </div>
+        <div data-player-server hidden></div>
         ${submit(t("Saqlash", "Сохранить", "Save"))}
       </form>
       <a class="text-link" href="/#topup-saved">${t("Saqlangan Top Up paketlari", "Сохранённые пакеты Top Up", "Saved Top Up packages")}</a>
@@ -276,17 +272,13 @@ window.LaunchUX = (() => {
     const form = target.querySelector(".saved-player-id-form");
     const saveButton = form.querySelector("[type=submit]");
     const gameSelect = form.elements.game_slug;
-    const server = form.elements.server_id;
+    const server = form.querySelector("[data-player-server]");
     const syncServer = () => {
       const game = games.find((item) => item.slug === gameSelect.value);
-      server.closest("[data-player-server]").hidden = !game?.server_available;
-      server.disabled = !game?.server_available;
-      server.required = Boolean(game?.server_required);
+      server.hidden = !game?.server_available;
+      server.innerHTML = topupServerField(game?.checkout_fields, t, "saved-player-server");
     };
-    gameSelect.addEventListener("change", () => {
-      server.value = "";
-      syncServer();
-    });
+    gameSelect.addEventListener("change", syncServer);
     function renderList(values) {
       list.innerHTML = values.length ? values.map((item, index) => `<div class="saved-player-id-row">
         <div><b>${esc(gameNames.get(item.game_slug) || item.game_slug)}</b><span dir="ltr">${playerIdValue(item)}</span></div>
@@ -343,7 +335,9 @@ window.LaunchUX = (() => {
       if (!field) return;
       field.after(suggestions);
       const { server } = getFields();
-      const matches = ids.filter((entry) => entry.player_id.startsWith(filter) && (!entry.server_id || server));
+      const matches = ids.filter((entry) => entry.player_id.startsWith(filter) &&
+        (!entry.server_id || (server && (server.tagName !== "SELECT" ||
+          Array.from(server.options).some((option) => option.value === entry.server_id)))));
       list.replaceChildren(...matches.map((entry) => {
         const button = document.createElement("button");
         button.type = "button";

@@ -2505,7 +2505,7 @@ async function navigate() {
         "review-moderation",
         "staff",
       ].includes(route) ||
-        Boolean(me?.is_admin && /^(support-ticket|order-case)\//.test(route)),
+        Boolean(me?.is_admin && /^(support-ticket|order-case|top-up-admin)\//.test(route)),
     )
   )
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -2527,7 +2527,8 @@ async function navigate() {
       scrollToPageAnchor(pageAnchor);
       return;
     }
-    if (route === "top-up-admin") return await renderTopUpAdmin();
+    const topupAdmin = route.match(/^top-up-admin(?:\/(games|local)(?:\/([a-z0-9-]+)(?:\/([a-z0-9-]+))?)?)?$/);
+    if (topupAdmin) return await renderTopUpAdmin(topupAdmin[1], topupAdmin[2], topupAdmin[3]);
     if (route === "home") return await renderHome({}, { showSpin: !openNotifications });
     if (route === "search")
       return window.MobileSite?.isMobile()

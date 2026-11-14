@@ -123,6 +123,183 @@ def remember_paid_topup_player(db, order):
 
     update_preferences_in_transaction(db, order['buyer_id'], remember)
 
+PLAYER_FIELDS = {'player id', 'user id', 'target id', 'role id', 'uid', 'id pengguna', 'character id', 'account id'}
+SERVER_FIELDS = {'server', 'server id', 'zone id', 'server / zone id', 'region', 'server region'}
+SERVER_VALUE = r'[A-Za-z0-9][A-Za-z0-9 ._()/-]{0,39}'
+NUMERIC_SERVER_ID = r'[0-9]{1,10}'
+
+def topup_product_key(slug, sku):
+    return 'topup_product:' + slug + ':' + sku
+
+def topup_game_settings(db, slug):
+    return config(db, 'topup_game:' + slug, {'mode': 'auto', 'servers': []})
+
+def topup_requirements(slug, fields, settings):
+    player = next((field for field in fields if field.get('name', '').strip().casefold() in PLAYER_FIELDS
+                   and field.get('type') in ('text', 'numeric', 'number')), None)
+    server = next((field for field in fields if field.get('name', '').strip().casefold() in SERVER_FIELDS
+                   and field.get('type') in ('select', 'text', 'numeric', 'number')), None)
+    options = list(settings['servers'])
+    if not options and server:
+        options = [{'value': str(option['value']), 'label': str(option.get('label') or option['value'])}
+                   for option in server.get('options', [])
+                   if re.fullmatch(SERVER_VALUE, str(option.get('value', '')))]
+    mode = settings['mode']
+    if mode == 'auto':
+        mode = 'player_server' if server or slug == 'mobile-legends' else 'player' if player or slug == 'pubg-mobile' else 'none'
+    unsupported = any(field.get('required', True) and field is not player and field is not server for field in fields)
+    return {'mode': mode, 'servers': options if mode == 'player_server' else [],
+            'server_numeric': bool(not options and (
+                slug == 'mobile-legends' or (server and server.get('name', '').strip().casefold()
+                    in ('server id', 'zone id', 'server / zone id'))
+            )),
+            'server_required': mode == 'player_server' and (
+                settings['mode'] != 'auto' or not server or server.get('required', True)
+            ), 'supported': mode != 'none' and not unsupported and (
+                player is not None or slug == 'pubg-mobile' or settings['mode'] != 'auto'
+            )}
+
+def local_topup_requirements(db, slug):
+    return topup_requirements(slug, [{'name': 'Player ID', 'type': 'numeric'}],
+                              topup_game_settings(db, slug))
+
+def supplier_topup_brand(db, slug, *, admin=False):
+    brand = melostore_catalog.brand_detail(slug)
+    if not brand:
+        return None
+    catalog = melostore_catalog.snapshot()
+    source = next(item for item in catalog['items'] if item['slug'] == slug)
+    original = {pack['sku']: pack for pack in source['packages']}
+    visible = {pack['sku']: pack for pack in brand['packages']}
+    settings = topup_game_settings(db, slug)
+    prefix = 'topup_product:' + slug + ':'
+    overrides = {row['key'][len(prefix):]: json.loads(row['value']) for row in db.execute(
+        'SELECT key,value FROM platform_config WHERE key LIKE ?', (prefix + '%',)
+    )}
+    products = []
+    for sku, raw in original.items():
+        override = overrides.get(sku)
+        if not admin and ((not override and sku not in visible) or (override and not override['enabled'])):
+            continue
+        mapped_sku = override['supplier_sku'] if override else sku
+        mapped = original.get(mapped_sku)
+        fields = catalog['customer_fields'].get(mapped_sku, [])
+        form = topup_requirements(slug, fields, settings)
+        preset = melostore_catalog.PUBG_TEST_OFFERS.get(sku) if slug == 'pubg-mobile' else None
+        cents = override['price_cents'] if override else preset[1] if preset else 0
+        active = bool(mapped and mapped['status'] == 'active')
+        test_enabled = override['test_enabled'] if override else bool(preset)
+        product = {**visible.get(sku, raw), 'sku': sku, 'status': 'active' if active else 'inactive',
+                   'checkout_fields': form, 'selling_price_cents': cents, 'selling_currency': 'USD',
+                   'test_checkout': brand['category'] == 'game' and active and cents > 0 and test_enabled and form['supported']}
+        if override and override['name']:
+            product['name'] = override['name']
+        product.pop('inquiry_fields', None)
+        if admin:
+            product.update(source_name=raw['name'], supplier_sku=mapped_sku,
+                           source_status=raw['status'], source_server=raw.get('server_name', ''),
+                           supplier_status=mapped['status'] if mapped else 'missing',
+                           server_name=mapped.get('server_name', '') if mapped else '',
+                           enabled=override['enabled'] if override else sku in visible,
+                           test_enabled=test_enabled, configured=bool(override))
+        else:
+            product.update(configured=bool(override))
+            product.pop('server_name', None)
+        products.append(product)
+    return {**brand, 'packages': products, **({'settings': settings} if admin else {})}
+
+def supplier_test_offer(db, sku):
+    if not isinstance(sku, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,120}', sku):
+        return None
+    slug = melostore_catalog.brand_slug_for_sku(sku)
+    if not slug:
+        return None
+    brand = supplier_topup_brand(db, slug, admin=True)
+    pack = next((pack for pack in brand['packages'] if pack['sku'] == sku), None)
+    if not pack or not pack['enabled'] or not pack['test_checkout']:
+        return None
+    preset = melostore_catalog.PUBG_TEST_OFFERS.get(sku) if slug == 'pubg-mobile' else None
+    return {'id': 'h2h-test-' + sku, 'sku': sku, 'supplier_sku': pack['supplier_sku'],
+            'product_name': pack['name'],
+            'game_slug': slug, 'game_name': brand['name'], 'amount': preset[0] if preset else 1,
+            'unit': 'UC' if preset else 'Pack', 'price_minor': pack['selling_price_cents'],
+            'checkout_fields': pack['checkout_fields']}
+
+def validate_topup_server(server, fields, core):
+    error = core['HttpError']
+    if not server and fields['server_required']:
+        raise error(400, 'Enter the server ID for this game.')
+    if server and (fields['mode'] != 'player_server' or (
+        fields['servers'] and not any(option['value'] == server for option in fields['servers'])
+    ) or (fields['server_numeric'] and not re.fullmatch(NUMERIC_SERVER_ID, server))):
+        raise error(400, 'Choose a valid server for this game.')
+
+def admin_topup_games(db):
+    catalog = melostore_catalog.snapshot()
+    counts = {row['game_slug']: dict(row) for row in db.execute(
+        "SELECT game_slug,MIN(game_name) AS name,COUNT(*) AS count FROM topup_packages "
+        "WHERE id NOT LIKE 'h2h-test-%' GROUP BY game_slug"
+    )}
+    for group in counts.values():
+        group.update(category='game', supplier_count=0,
+                     mode='player_server' if group['game_slug'] == 'mobile-legends' else 'player')
+    for item in catalog['items']:
+        group = counts.setdefault(item['slug'], {'game_slug': item['slug'], 'count': 0})
+        fields = [field for sku in catalog['selected_skus'].get(item['slug'], ())
+                  for field in catalog['customer_fields'].get(sku, ())]
+        mode = topup_requirements(item['slug'], fields, {'mode': 'auto', 'servers': []})['mode']
+        group.update(name=item['name'], category=item['category'], supplier_count=len(item['packages']), mode=mode)
+    for row in db.execute("SELECT key,value FROM platform_config WHERE key LIKE 'topup_game:%'"):
+        slug = row['key'].split(':', 1)[1]
+        if slug in counts:
+            mode = json.loads(row['value'])['mode']
+            if mode != 'auto':
+                counts[slug]['mode'] = mode
+    return sorted(counts.values(), key=lambda group: (group['category'] != 'game', group['name'].casefold()))
+
+def admin_topup_game_route(db, admin_id, slug, sku, method, data, core):
+    error = core['HttpError']
+    brand = supplier_topup_brand(db, slug, admin=True)
+    if not brand and not db.execute('SELECT 1 FROM topup_packages WHERE game_slug=?', (slug,)).fetchone():
+        raise error(404, 'Top Up game not found.')
+    if method == 'GET':
+        local = [dict(row) for row in db.execute(
+            "SELECT game_name,url_slug,amount,currency,enabled,price_minor FROM topup_packages "
+            "WHERE game_slug=? AND id NOT LIKE 'h2h-test-%' ORDER BY amount", (slug,)
+        )]
+        result = brand or {'name': local[0]['game_name'] if local else slug,
+                           'settings': topup_game_settings(db, slug), 'packages': []}
+        return {**result, 'local_packages': local}
+    if not sku:
+        mode = data.get('mode')
+        servers = data.get('servers')
+        if mode not in ('auto', 'player', 'player_server', 'none') or not isinstance(servers, list) or len(servers) > 100:
+            raise error(400, 'Check the Top Up ID and server settings.')
+        if any(not isinstance(value, str) or not re.fullmatch(SERVER_VALUE, value) for value in servers):
+            raise error(400, 'Enter one valid server name or ID per line.')
+        settings = {'mode': mode, 'servers': [{'value': value, 'label': value} for value in dict.fromkeys(servers)]}
+        put_config(db, 'topup_game:' + slug, settings)
+        core['audit'](db, admin_id, 'topup_game_update', 'topup_game', slug, settings)
+        return settings
+    products = {pack['sku']: pack for pack in brand['packages']} if brand else {}
+    mapped = data.get('supplier_sku')
+    if sku not in products or not isinstance(mapped, str) or mapped not in products:
+        raise error(400, 'Choose an existing supplier SKU for this game.')
+    name, cents = data.get('name'), data.get('price_cents')
+    enabled, test_enabled = data.get('enabled'), data.get('test_enabled')
+    if (not isinstance(name, str) or len(name.strip()) > 160 or type(cents) is not int
+        or not 0 <= cents <= 100000000 or type(enabled) is not bool or type(test_enabled) is not bool):
+        raise error(400, 'Check the product name, price, and availability.')
+    field_config = topup_requirements(slug, melostore_catalog.snapshot()['customer_fields'].get(mapped, []), brand['settings'])
+    if test_enabled and (brand['category'] != 'game' or not enabled or not cents
+                         or products[mapped]['source_status'] != 'active' or not field_config['supported']):
+        raise error(400, 'Test checkout requires a visible product, a price, an active SKU and supported ID fields.')
+    product = {'supplier_sku': mapped, 'name': name.strip(), 'price_cents': cents,
+               'enabled': enabled, 'test_enabled': test_enabled}
+    put_config(db, topup_product_key(slug, sku), product)
+    core['audit'](db, admin_id, 'topup_product_update', 'topup_game', slug, {'sku': sku, **product})
+    return product
+
 def player_id_games(db):
     games = {row['game_slug']: row['game_name'] for row in db.execute(
         'SELECT DISTINCT game_slug,game_name FROM topup_packages WHERE enabled=1 ORDER BY game_name'
@@ -134,11 +311,13 @@ def player_id_games(db):
     for slug, name in sorted(games.items(), key=lambda game: game[1].casefold()):
         fields = [field for sku in catalog['selected_skus'].get(slug, ())
                   for field in catalog['customer_fields'].get(sku, ())]
-        server_fields = [field for field in fields if field.get('type') in ('text', 'number', 'numeric')
-                         and field.get('name', '').casefold() in ('server / zone id', 'server id', 'zone id')]
-        required = slug == 'mobile-legends' or any(field.get('required') is True for field in server_fields)
-        result.append({'slug': slug, 'name': name, 'server_required': required,
-                       'server_available': required or bool(server_fields)})
+        settings = topup_game_settings(db, slug)
+        requirements = topup_requirements(slug, fields, settings)
+        if not fields and slug in ('pubg-mobile', 'mobile-legends'):
+            requirements = local_topup_requirements(db, slug)
+        result.append({'slug': slug, 'name': name, 'server_required': requirements['server_required'],
+                       'server_available': requirements['mode'] == 'player_server',
+                       'checkout_fields': requirements})
     return result
 
 def player_ids_route(db, uid, method, data, core, *, remove=False):
@@ -150,14 +329,13 @@ def player_ids_route(db, uid, method, data, core, *, remove=False):
     slug, player, server = (data.get('game_slug'), data.get('player_id'), data.get('server_id', ''))
     if (not isinstance(slug, str) or not re.fullmatch(r'[a-z0-9-]{1,100}', slug)
         or not isinstance(player, str) or not re.fullmatch(r'[0-9]{3,40}', player)
-        or not isinstance(server, str) or not re.fullmatch(r'[0-9]{0,10}', server)):
+        or not isinstance(server, str) or (server and not re.fullmatch(SERVER_VALUE, server))):
         raise error(400, 'Check the game and player ID.')
     if not remove:
         game = next((game for game in player_id_games(db) if game['slug'] == slug), None)
         if not game:
             raise error(404, 'Top Up game not found.')
-        if game['server_required'] and not server:
-            raise error(400, 'Enter the server ID for this game.')
+        validate_topup_server(server, game['checkout_fields'], core)
     entry = {'game_slug': slug, 'player_id': player, 'server_id': server}
 
     def transform(prefs):

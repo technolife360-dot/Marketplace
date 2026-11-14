@@ -2321,8 +2321,20 @@ class Handler(BaseHTTPRequestHandler):
             return melostore_catalog.public_catalog(games)
         supplier_catalog_match=re.fullmatch(r'/api/top-up/catalog/([a-z0-9-]+)',path)
         if supplier_catalog_match and method=='GET':
-            brand=melostore_catalog.brand_detail(supplier_catalog_match.group(1))
-            if not brand: raise HttpError(404,'Top Up mahsuloti topilmadi.')
+            slug=supplier_catalog_match.group(1)
+            brand=launch_readiness.supplier_topup_brand(db,slug)
+            if not brand:
+                rows=db.execute('SELECT * FROM topup_packages WHERE game_slug=? AND enabled=1 ORDER BY amount,url_slug',(slug,)).fetchall()
+                if not rows: raise HttpError(404,'Top Up mahsuloti topilmadi.')
+                fields=launch_readiness.local_topup_requirements(db,slug)
+                packages=[]
+                for row in rows:
+                    package=topup_public_package(row,db)
+                    packages.append({**package, 'sku':package['url_slug'], 'name':package['product_name'],
+                                     'type_name':package['currency'], 'status':'active',
+                                     'checkout_fields':fields, 'local_package':True,
+                                     'test_checkout':package['payment_ready'] and fields['supported']})
+                brand={'slug':slug,'name':rows[0]['game_name'],'category':'game','packages':packages}
             brand['payment_mode']='stripe_test' if stripe_test_topups.enabled(globals()) else 'disabled'
             return brand
         topup_match=re.fullmatch(r'/api/top-up/packages/([a-z0-9-]+)/([a-z0-9-]+)',path)
@@ -2330,7 +2342,7 @@ class Handler(BaseHTTPRequestHandler):
             seed_topup_catalog(db)
             row=db.execute('SELECT * FROM topup_packages WHERE game_slug=? AND url_slug=? AND enabled=1',(topup_match.group(1),topup_match.group(2))).fetchone()
             if not row: raise HttpError(404,'Top Up mahsuloti topilmadi.')
-            return topup_public_package(row,db)
+            return {**topup_public_package(row,db), 'checkout_fields':launch_readiness.local_topup_requirements(db,row['game_slug'])}
         if path=='/api/listings' and method=='GET':
             promote_internal_test_listings(db)
             where,args=catalogue_predicates(db,qs,uid)
@@ -2539,7 +2551,8 @@ class Handler(BaseHTTPRequestHandler):
             require_admin(ctx)
             seed_topup_catalog(db)
             packages=[]
-            for row in db.execute('SELECT p.*,COALESCE((SELECT SUM(o.quantity) FROM topup_orders o WHERE o.package_id=p.id),0) order_count FROM topup_packages p ORDER BY p.game_name,p.amount'):
+            game=qs.get('game',[''])[0]
+            for row in db.execute("SELECT p.*,COALESCE((SELECT SUM(o.quantity) FROM topup_orders o WHERE o.package_id=p.id),0) order_count FROM topup_packages p WHERE p.id NOT LIKE 'h2h-test-%' AND (?='' OR p.game_slug=?) ORDER BY p.game_name,p.amount",(game,game)):
                 package=topup_admin_row(row)
                 # PostgreSQL can return NUMERIC for SUM(bigint), which psycopg
                 # represents as Decimal; the standard JSON encoder rejects it.
@@ -2556,6 +2569,15 @@ class Handler(BaseHTTPRequestHandler):
                                 'environment':supplier_config['environment'],
                                 'message':'SEAGM API kalitlari sozlangan.' if supplier_config['configured'] else 'SEAGM API kalitlari serverda kiritilmagan.'},
                     'payments':{'configured':payment_provider not in ('disabled','unconfigured'),'provider':payment_provider}}
+        if path=='/api/admin/top-up/games' and method=='GET':
+            require_admin(ctx)
+            seed_topup_catalog(db)
+            return launch_readiness.admin_topup_games(db)
+        game_settings_match=re.fullmatch(r'/api/admin/top-up/games/([a-z0-9-]+)(?:/products/([A-Za-z0-9_-]+))?',path)
+        if game_settings_match and (method=='PATCH' or (method=='GET' and not game_settings_match.group(2))):
+            aid=require_admin(ctx)
+            slug,sku=game_settings_match.groups()
+            return launch_readiness.admin_topup_game_route(db,aid,slug,sku,method,data,globals())
         if path in ('/api/admin/top-up/supplier/vipayment/check','/api/admin/top-up/supplier/vipayment/catalog') and method=='POST':
             require_admin(ctx)
             check_rate(db,'admin_vipayment_check',uid,6)

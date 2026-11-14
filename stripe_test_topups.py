@@ -5,7 +5,7 @@ import time
 
 import stripe_test_payments as pay
 import rewards_engine
-import melostore_catalog
+from urllib.parse import urlencode
 
 
 def enabled(core):
@@ -19,11 +19,14 @@ def enabled(core):
 
 def view(db, oid, uid, core):
     row = db.execute('SELECT o.*,p.game_slug,p.game_name,p.amount,p.currency package_currency FROM topup_orders o JOIN topup_packages p ON p.id=o.package_id WHERE o.id=? AND o.buyer_id=?', (oid, uid)).fetchone()
-    if not row or not pay.read(db, 'topup:'+oid):
+    record = pay.read(db, 'topup:'+oid)
+    if not row or not record:
         raise core['HttpError'](404, 'Test top-up order not found.')
     order = core['topup_admin_row'](row)
     promotion = rewards_engine.purchase(db, 'topup', oid)
-    order.update(supplier_sku=pay.read(db, 'topup:'+oid).get('supplier_sku'), mode='stripe_test', total_minor=promotion['total_minor'] if promotion else order['unit_price_minor']*order['quantity'], real_delivery=False, promotions=pay.promotion_view(promotion))
+    order.update(supplier_sku=record.get('supplier_sku'), mode='stripe_test', total_minor=promotion['total_minor'] if promotion else order['unit_price_minor']*order['quantity'], real_delivery=False, promotions=pay.promotion_view(promotion))
+    if record.get('product_name'):
+        order['product_name'] = record['product_name']
     return order
 
 
@@ -39,25 +42,30 @@ def checkout(db, uid, data, core):
     request_key = data.get('request_key', '')
     if type(quantity) is not int or not 1 <= quantity <= 99 or not isinstance(player, str) or not re.fullmatch(r'[0-9]{3,40}', player):
         raise core['HttpError'](400, 'Enter a numeric player ID and a quantity from 1 to 99.')
-    if not isinstance(server, str) or not re.fullmatch(r'[0-9]{0,10}', server) or not isinstance(request_key, str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,100}', request_key):
+    if not isinstance(server, str) or (server and not re.fullmatch(core['launch_readiness'].SERVER_VALUE, server)) or not isinstance(request_key, str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,100}', request_key):
         raise core['HttpError'](400, 'Invalid server ID or checkout request key.')
     supplier = None
     if 'sku' in data:
-        supplier = melostore_catalog.test_checkout_offer(data['sku'])
-        if not supplier or quantity != 1 or server:
+        supplier = core['launch_readiness'].supplier_test_offer(db, data['sku'])
+        if not supplier or quantity != 1:
             raise core['HttpError'](409, 'This supplier test package is unavailable or has invalid checkout details.')
+        core['launch_readiness'].validate_topup_server(server, supplier['checkout_fields'], core)
         package_id = supplier['id']
         # These references are intentionally unpriced and disabled in the legacy
         # checkout. Supplier test orders use the server-approved USD price below.
         db.execute('INSERT INTO topup_packages(id,game_slug,game_name,url_slug,currency,amount,price_minor,enabled,manual_enabled,supplier_enabled) VALUES(?,?,?,?,?,?,0,0,0,0) ON CONFLICT(id) DO NOTHING',
-            (package_id, supplier['game_slug'], supplier['game_name'], supplier['sku'], 'UC', supplier['amount']))
+            (package_id, supplier['game_slug'], supplier['game_name'], supplier['sku'], supplier['unit'], supplier['amount']))
     elif isinstance(package_id, str) and package_id.startswith('h2h-test-'):
         raise core['HttpError'](409, 'Choose a supplier SKU for this package.')
     package = supplier or db.execute('SELECT * FROM topup_packages WHERE id=? AND enabled=1', (package_id,)).fetchone()
     if not package or package['price_minor'] <= 0:
         raise core['HttpError'](409, 'This package has no configured test price.')
-    if package['game_slug'] in ('mobile-legends',) and not server:
-        raise core['HttpError'](400, 'Enter the server ID for this game.')
+    if not supplier:
+        launch = core['launch_readiness']
+        requirements = launch.local_topup_requirements(db, package['game_slug'])
+        if not requirements['supported']:
+            raise core['HttpError'](409, 'This package does not support test checkout.')
+        launch.validate_topup_server(server, requirements, core)
     quote_id = data.get('rewards_quote_id')
     if quote_id is not None and (not isinstance(quote_id, str) or not quote_id or len(quote_id)>200):
         raise core['HttpError'](400, 'Invalid promotion quote.')
@@ -73,16 +81,21 @@ def checkout(db, uid, data, core):
             if (old['package_id'], old['quantity'], old['player_id'], old['server_id'], prior.get('rewards_quote_id')) != (package_id, quantity, player, server, quote_id):
                 raise core['HttpError'](409, 'This request key belongs to different top-up details.')
         else:
-            package = melostore_catalog.test_checkout_offer(supplier['sku']) if supplier else db.execute('SELECT * FROM topup_packages WHERE id=? AND enabled=1', (package_id,)).fetchone()
+            package = core['launch_readiness'].supplier_test_offer(db, supplier['sku']) if supplier else db.execute('SELECT * FROM topup_packages WHERE id=? AND enabled=1', (package_id,)).fetchone()
             if not package or package['price_minor'] <= 0:
                 raise core['HttpError'](409, 'This package has no configured test price.')
+            if supplier:
+                core['launch_readiness'].validate_topup_server(server, package['checkout_fields'], core)
             oid = core['ident']()
             if quote_id:
                 rewards_engine.reserve(db, uid, quote_id, 'topup', oid, [{'package_id': package_id, 'quantity': quantity, 'price_minor': package['price_minor']}], 'USD' if supplier else 'UZS', package['price_minor']*quantity, 0, core)
             db.execute('INSERT INTO topup_orders(id,reference,buyer_id,package_id,player_id,server_id,quantity,unit_price_minor,currency,fulfillment_note) VALUES(?,?,?,?,?,?,?,?,?,?)',
                 (oid, 'TEST-TU-'+core['secrets'].token_hex(4).upper(), uid, package_id, player, server, quantity, package['price_minor'], 'USD' if supplier else 'UZS', 'Stripe TEST only. No UC or supplier delivery.'))
             pay.write(db, request_record, {'id': oid, 'rewards_quote_id': quote_id})
-            pay.write(db, 'topup:'+oid, {'idempotency_key': core['create_token'](), 'supplier_sku':supplier['sku'] if supplier else None, 'checkout_policy':1})
+            pay.write(db, 'topup:'+oid, {'idempotency_key': core['create_token'](),
+                       'supplier_sku': package['supplier_sku'] if supplier else None,
+                       'storefront_sku': package['sku'] if supplier else None,
+                       'product_name': package['product_name'] if supplier else None, 'checkout_policy':1})
             rewards_engine.sync_topup(db, oid, core)
         db.execute('COMMIT')
     except Exception:
@@ -119,10 +132,12 @@ def start(db, oid, uid, core):
             db.execute('UPDATE platform_config SET value=?,updated_at=CURRENT_TIMESTAMP WHERE key=? AND value=?',
                        (json.dumps(record, separators=(',', ':')), key, stored))
             record = pay.read(db, 'topup:'+oid)
-        sku = record.get('supplier_sku') or ''
+        sku = record.get('storefront_sku') or record.get('supplier_sku') or ''
         membership = sku.startswith('pubgmmuc') or sku in ('pubgmucwmevp-s101','pubgm1ucwdp-s101','pubgm2ucwdp-s101')
-        cancel_path = '/top-up/pubg-mobile' + ('?package='+sku if membership else '') if sku else None
-        success_path = '/top-up/pubg-mobile?topup_return='+oid + ('&package='+sku if membership else '') if sku else None
+        package_link = {'package': sku} if membership or order['game_slug'] != 'pubg-mobile' else {}
+        game_path = '/top-up/' + order['game_slug']
+        cancel_path = game_path + ('?' + urlencode(package_link) if package_link else '') if sku else None
+        success_path = game_path + '?' + urlencode({'topup_return': oid, **package_link}) if sku else None
         result = provider.session(oid, order['total_minor'], order['currency'], record['idempotency_key'], kind='topup', expires_at=record['expires_at'], cancel_path=cancel_path, success_path=success_path, checkout_policy=record.get('checkout_policy',0))
     except Exception as exc:
         raise core['HttpError'](503, 'Stripe test checkout is unavailable. Retry from this order.') from exc

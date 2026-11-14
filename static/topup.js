@@ -248,6 +248,7 @@ function topupSupplierGroups(packages, slug = "") {
         ? "Shop"
         : originalType;
     const identity = JSON.stringify([
+      pack.configured ? pack.sku : "",
       originalType,
       String(pack.name || "")
         .normalize("NFKC")
@@ -838,6 +839,8 @@ function topupSupplierPresentationPackages(slug, packages) {
 }
 
 function topupSupplierBasePrice(pack) {
+  if (pack.local_package)
+    return pack.price_minor > 0 ? fmt(pack.price_minor, "UZS", true) : "";
   return pack.selling_currency === "USD" &&
     Number.isSafeInteger(pack.selling_price_cents) &&
     pack.selling_price_cents > 0
@@ -847,16 +850,19 @@ function topupSupplierBasePrice(pack) {
 
 function topupSupplierPrice(pack) {
   const original = topupSupplierBasePrice(pack);
+  const amount = pack.local_package ? pack.price_minor : pack.selling_price_cents;
+  const currency = pack.local_package ? "UZS" : "USD";
   return original
-    ? globalThis.RegionPreferences?.estimate(pack.selling_price_cents, "USD") ||
-        original
+    ? globalThis.RegionPreferences?.estimate(amount, currency) || original
     : "";
 }
 
 function topupSupplierPriceAttributes(pack) {
   const original = topupSupplierBasePrice(pack);
+  const amount = pack.local_package ? pack.price_minor : pack.selling_price_cents;
+  const currency = pack.local_package ? "UZS" : "USD";
   return original
-    ? `data-region-money data-region-amount="${pack.selling_price_cents}" data-region-currency="USD" data-region-original="${esc(original)}"`
+    ? `data-region-money data-region-amount="${amount}" data-region-currency="${currency}" data-region-original="${esc(original)}"`
     : "";
 }
 
@@ -877,13 +883,34 @@ function topupSupplierPackageLabel(pack) {
   return `${esc(parts[1])}<span class="tus-pack-bonus">+${esc(parts[2])}${tag}</span><span class="tus-pack-unit" data-currency-unit="${esc(parts[3].toUpperCase())}">${esc(parts[3])}</span>`;
 }
 
+function topupServerField(fields, t, id = "topup-checkout-server") {
+  if (fields?.mode !== "player_server") return "";
+  const label = t("Server ID", "ID сервера", "Server ID");
+  const required = fields.server_required ? "required" : "";
+  const options = fields.servers || [];
+  return `<div class="field"><label for="${id}">${label}</label>${
+    options.length ? `<select id="${id}" name="server_id" ${required}>
+      <option value="">${t("Serverni tanlang", "Выберите сервер", "Choose a server")}</option>
+      ${options.map((option) => `<option value="${esc(option.value)}">${esc(option.label)}</option>`).join("")}
+    </select>` : `<input id="${id}" name="server_id" autocomplete="off" ${fields.server_numeric ? 'inputmode="numeric" pattern="[0-9]{1,10}" maxlength="10"' : 'maxlength="40"'} ${required}>`
+  }</div>`;
+}
+
 async function renderTopUpSupplierBrand(game) {
   const brand = await api("/top-up/catalog/" + encodeURIComponent(game.slug));
   const returnOrder = new URLSearchParams(location.search).get("topup_return");
   const requestedSku = new URLSearchParams(location.search).get("package");
   brand.image_url =
     brand.image_url || TOPUP_CATALOG_IMAGE_FALLBACKS[game.slug] || "";
-  brand.packages = topupSupplierPresentationPackages(game.slug, brand.packages);
+  const catalogPacks = brand.packages;
+  const sourceBySku = new Map(catalogPacks.map((pack) => [pack.sku, pack]));
+  brand.packages = topupSupplierPresentationPackages(game.slug, catalogPacks).map((pack) => {
+    const source = sourceBySku.get(pack.sku);
+    return source.configured ? { ...pack, name: source.name, display_name: source.name,
+      selling_price_cents: source.selling_price_cents } : pack;
+  });
+  const listed = new Set(brand.packages.map((pack) => pack.sku));
+  brand.packages.push(...catalogPacks.filter((pack) => pack.configured && !listed.has(pack.sku)));
   const t = adminText,
     groups = topupSupplierGroups(brand.packages, game.slug);
   const categoryLabels = TOPUP_CATEGORIES.find(
@@ -948,10 +975,10 @@ async function renderTopUpSupplierBrand(game) {
     <div class="tus-summary-selected" data-supplier-summary-selected aria-live="polite">
       <p>${t("Paketni tanlang", "Выберите пакет", "Select a package")}</p>
     </div>
-    ${game.slug === "pubg-mobile" ? `<form id="tus-checkout-form" class="tus-checkout-form"><label class="field"><span>${t("O‘yinchi ID raqami", "ID игрока", "Player ID")}</span><input name="player_id" inputmode="numeric" autocomplete="off" pattern="[0-9]{3,40}" minlength="3" maxlength="40" placeholder="${t("Player ID kiriting", "Введите Player ID", "Enter Player ID")}" required aria-describedby="tus-player-help"></label><small id="tus-player-help">${t("PUBG Mobile profilidagi ID raqamingiz.", "ID из вашего профиля PUBG Mobile.", "Your numeric ID from your PUBG Mobile profile.")}</small><label class="field tus-quantity-field" data-supplier-quantity-field hidden><span>${t("Miqdor", "Количество", "Quantity")}</span><div class="tus-quantity-stepper"><button type="button" data-supplier-quantity-step="-1" aria-label="${t("Kamaytirish", "Уменьшить", "Decrease quantity")}">−</button><input type="number" name="quantity" inputmode="numeric" min="1" max="99" step="1" value="1" required disabled><button type="button" data-supplier-quantity-step="1" aria-label="${t("Ko‘paytirish", "Увеличить", "Increase quantity")}">+</button></div></label><label class="tus-test-consent"><input type="checkbox" name="accept_terms" required><span>${t("Player ID ni tekshirdim. Stripe test to‘loviga roziman; haqiqiy UC yetkazilmaydi.", "Я проверил Player ID и согласен на тестовую оплату Stripe. Реальные UC не доставляются.", "I checked my Player ID and agree to a Stripe test payment. No real UC will be delivered.")}</span></label><p class="tus-checkout-error" role="alert" hidden></p><div data-supplier-rewards hidden></div>
+    ${brand.category === "game" ? `<form id="tus-checkout-form" class="tus-checkout-form"><label class="field"><span>${t("O‘yinchi ID raqami", "ID игрока", "Player ID")}</span><input name="player_id" inputmode="numeric" autocomplete="off" pattern="[0-9]{3,40}" minlength="3" maxlength="40" placeholder="${t("Player ID kiriting", "Введите Player ID", "Enter Player ID")}" required aria-describedby="tus-player-help"></label><div data-topup-server-field></div><small id="tus-player-help">${t("O‘yin profilingizdagi raqamli ID.", "Числовой ID из профиля игры.", "Your numeric ID from your game profile.")}</small><label class="field tus-quantity-field" data-supplier-quantity-field hidden><span>${t("Miqdor", "Количество", "Quantity")}</span><div class="tus-quantity-stepper"><button type="button" data-supplier-quantity-step="-1" aria-label="${t("Kamaytirish", "Уменьшить", "Decrease quantity")}">−</button><input type="number" name="quantity" inputmode="numeric" min="1" max="99" step="1" value="1" required disabled><button type="button" data-supplier-quantity-step="1" aria-label="${t("Ko‘paytirish", "Увеличить", "Increase quantity")}">+</button></div></label><label class="tus-test-consent" hidden><input type="checkbox" name="accept_terms" required><span>${t("Player ID ni tekshirdim. Stripe test to‘loviga roziman; haqiqiy UC yetkazilmaydi.", "Я проверил Player ID и согласен на тестовую оплату Stripe. Реальные UC не доставляются.", "I checked my Player ID and agree to a Stripe test payment. No real UC will be delivered.")}</span></label><p class="tus-checkout-error" role="alert" hidden></p><div data-supplier-rewards hidden></div>
       <button type="submit" class="tus-buy" disabled>${t("Xarid qilish", "Купить сейчас", "Buy now")}</button>
       <small class="tus-checkout-note" data-supplier-payment-note></small>
-    </form>` : brand.category === "game" ? '<div class="tus-checkout-form tus-customer-fields" data-supplier-customer-fields hidden></div>' : ""}
+    </form>` : ""}
     </aside></div></section>`;
   const page = app.querySelector(".topup-supplier-page");
   const typeButtons = [...page.querySelectorAll("[data-supplier-type]")];
@@ -963,22 +990,19 @@ async function renderTopUpSupplierBrand(game) {
   let activeType = 0,
     limit = 48,
     selectedPackage = null,
+    submitting = false,
     requestKey = crypto.randomUUID();
   const checkoutForm = page.querySelector("#tus-checkout-form");
-  const customerFields = page.querySelector("[data-supplier-customer-fields]");
   const buy = checkoutForm?.querySelector(".tus-buy");
   const paymentNote = checkoutForm?.querySelector("[data-supplier-payment-note]");
-  // Only fill fields that explicitly ask for a game ID, never emails or credentials.
-  const getPlayerFields = () => {
-    if (checkoutForm) return { player: checkoutForm.elements.player_id };
-    const inputs = [...page.querySelectorAll("[data-supplier-customer-fields] input")];
-    const label = (input) => input.closest("label")?.querySelector("span")?.textContent.trim();
-    return {
-      player: inputs.find((input) => input.type === "text" && /^(?:player id|user id|target id|role id|uid|id pengguna|character id|account id)$/i.test(label(input))),
-      server: inputs.find((input) => input.type === "text" && /^(?:server \/ zone id|server id|zone id)$/i.test(label(input))),
-    };
-  };
-  LaunchUX.mountSavedPlayerIds(checkoutForm || customerFields, game.slug, getPlayerFields);
+  const player = checkoutForm?.elements.player_id;
+  const serverField = checkoutForm?.querySelector("[data-topup-server-field]");
+  const checkoutAvailable = () =>
+    Boolean(selectedPackage?.test_checkout && brand.payment_mode === "stripe_test");
+  LaunchUX.mountSavedPlayerIds(checkoutForm, game.slug, () => ({
+    player,
+    server: checkoutForm?.elements.server_id,
+  }));
   const rewardsHost = checkoutForm?.querySelector("[data-supplier-rewards]");
   const supplierRewards =
     checkoutForm &&
@@ -987,12 +1011,10 @@ async function renderTopUpSupplierBrand(game) {
     window.RewardsUI
       ? window.RewardsUI.mountQuote(rewardsHost, {
           promoOnly: true,
-          context: () =>
-            selectedPackage &&
-            (!selectedPackage.detail_banner ||
-              Number(checkoutForm.elements.quantity.value) === 1)
-              ? { kind: "topup", sku: selectedPackage.sku, quantity: 1 }
-              : null,
+          context: () => checkoutAvailable() ? {
+            kind: "topup", quantity: 1,
+            ...(selectedPackage.local_package ? { package_id: selectedPackage.id } : { sku: selectedPackage.sku }),
+          } : null,
           onChange: (quote) => {
             requestKey = crypto.randomUUID();
             if (!quote) {
@@ -1008,7 +1030,7 @@ async function renderTopUpSupplierBrand(game) {
           },
         })
       : null;
-  if (supplierRewards) rewardsHost.hidden = false;
+
   function renderTotal(amount, currency, original) {
     const display = original
       ? globalThis.RegionPreferences?.estimate(amount, currency) || original
@@ -1057,7 +1079,9 @@ async function renderTopUpSupplierBrand(game) {
       selling_price_cents: selectedPackage.selling_price_cents * quantity,
     };
     const original = valid ? topupSupplierBasePrice(priced) : "";
-    renderTotal(priced.selling_price_cents, priced.selling_currency, original);
+    const amount = priced.local_package ? priced.price_minor : priced.selling_price_cents;
+    const currency = priced.local_package ? "UZS" : priced.selling_currency;
+    renderTotal(amount, currency, original);
     checkoutForm
       ?.querySelectorAll("[data-supplier-quantity-step]")
       .forEach((button) => {
@@ -1067,9 +1091,9 @@ async function renderTopUpSupplierBrand(game) {
             ? quantity <= 1
             : quantity >= (selectedPackage.max_quantity || 1));
       });
-    if (buy) buy.disabled = !valid || !original || brand.payment_mode !== "stripe_test";
-    if (paymentNote && original && brand.payment_mode === "stripe_test")
-      renderPaymentNote(priced.selling_price_cents, priced.selling_currency);
+    if (buy) buy.disabled = submitting || !valid || !original || !checkoutAvailable();
+    if (paymentNote && original && checkoutAvailable())
+      renderPaymentNote(amount, currency);
   }
   function selectPackage(index) {
     const pack = brand.packages[index];
@@ -1082,24 +1106,28 @@ async function renderTopUpSupplierBrand(game) {
       else card.setAttribute("aria-pressed", String(cardIndex === index));
     });
     selectedPackage = pack;
-    if (customerFields) {
-      const previous = new Map(
-        [...customerFields.querySelectorAll("input")].map((input) => [
-          input.name,
-          input.value,
-        ]),
-      );
-      customerFields.innerHTML = (pack.inquiry_fields || [])
-        .filter((field) => ["text", "number", "numeric", "email"].includes(field.type))
-        .map(
-          (field, index) =>
-            `<label class="field"><span>${esc(field.name || (index === 0 ? "Player ID" : "Zone ID"))}</span><input type="${field.type === "email" ? "email" : "text"}" name="${esc(field.key)}" autocomplete="off" ${["number", "numeric"].includes(field.type) ? 'inputmode="numeric"' : ""} ${field.required === false ? "" : "required"}></label>`,
-        )
-        .join("");
-      customerFields.querySelectorAll("input").forEach((input) => {
-        input.value = previous.get(input.name) || "";
-      });
-      customerFields.hidden = !customerFields.childElementCount;
+    if (checkoutForm) {
+      const fields = pack.checkout_fields;
+      const previousServer = checkoutForm.elements.server_id?.value || "";
+      const playerVisible = fields?.mode !== "none";
+      player.closest(".field").hidden = !playerVisible;
+      player.disabled = !playerVisible;
+      page.querySelector("#tus-player-help").hidden = !playerVisible;
+      serverField.innerHTML = topupServerField(fields, t);
+      const server = checkoutForm.elements.server_id;
+      if (server && (server.tagName !== "SELECT" || [...server.options].some((item) => item.value === previousServer)))
+        server.value = previousServer;
+      const ready = checkoutAvailable();
+      if (!ready && !rewardsHost.hidden) {
+        const code = rewardsHost.querySelector("[name=platform_coupon]");
+        if (code?.value) {
+          code.value = "";
+          code.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      }
+      checkoutForm.querySelector(".tus-test-consent").hidden = !ready;
+      checkoutForm.elements.accept_terms.disabled = !ready;
+      rewardsHost.hidden = !ready || !supplierRewards;
     }
     const listing = Boolean(
       (pack.membership || pack.open_detail) && pack.sku !== requestedSku,
@@ -1121,7 +1149,7 @@ async function renderTopUpSupplierBrand(game) {
     requestKey = crypto.randomUUID();
     const price = topupSupplierPrice(pack);
     if (buy && paymentNote) {
-      const ready = Boolean(price && brand.payment_mode === "stripe_test");
+      const ready = checkoutAvailable();
       buy.textContent = ready
         ? t("Stripe test to‘lovi", "Тестовая оплата Stripe", "Stripe test checkout")
         : t("Xarid qilish", "Купить сейчас", "Buy now");
@@ -1242,6 +1270,13 @@ async function renderTopUpSupplierBrand(game) {
         return;
       }
       const button = buy, error = checkoutForm.querySelector(".tus-checkout-error");
+      const orderDetails = {
+        ...(selectedPackage.local_package ? { package_id: selectedPackage.id } : { sku: selectedPackage.sku }),
+        player_id: player.value.trim(),
+        server_id: checkoutForm.elements.server_id?.value.trim() || "",
+        quantity: selectedPackage.detail_banner ? Number(checkoutForm.elements.quantity.value) : 1,
+      };
+      submitting = true;
       button.disabled = true;
       error.hidden = true;
       try {
@@ -1250,12 +1285,7 @@ async function renderTopUpSupplierBrand(game) {
           method: "POST",
           body: JSON.stringify({
             ...(promotion ? { rewards_quote_id: promotion.id } : {}),
-            sku: selectedPackage.sku,
-            player_id: checkoutForm.elements.player_id.value.trim(),
-            quantity: selectedPackage.detail_banner
-              ? Number(checkoutForm.elements.quantity.value)
-              : 1,
-            server_id: "",
+            ...orderDetails,
             request_key: requestKey,
             accept_terms: checkoutForm.elements.accept_terms.checked,
           }),
@@ -1269,8 +1299,9 @@ async function renderTopUpSupplierBrand(game) {
             "sentryloot-supplier-checkout",
             JSON.stringify({
               slug: game.slug,
-              sku: selectedPackage.sku,
-              player_id: checkoutForm.elements.player_id.value.trim(),
+              sku: orderDetails.sku,
+              player_id: orderDetails.player_id,
+              server_id: orderDetails.server_id,
             }),
           );
         } catch {}
@@ -1280,13 +1311,14 @@ async function renderTopUpSupplierBrand(game) {
         error.hidden = false;
         toast(failure.message, "error");
       } finally {
-        button.disabled = false;
+        submitting = false;
+        refreshQuantity();
       }
     });
   }
   const requestedIndex = brand.packages.findIndex(
     (pack) =>
-      (pack.membership || pack.open_detail) && pack.sku === requestedSku,
+      pack.sku === requestedSku,
   );
   const requestedType = new URLSearchParams(location.search).get("type");
   if (
@@ -1317,7 +1349,7 @@ async function renderTopUpSupplierBrand(game) {
         const index = brand.packages.findIndex(
           (pack) => pack.sku === draft.sku,
         );
-        if (cardsByIndex.has(index)) {
+        if (!requestedSku && cardsByIndex.has(index)) {
           const groupIndex = groups.findIndex((group) =>
             group.items.some((item) => item.index === index),
           );
@@ -1332,6 +1364,8 @@ async function renderTopUpSupplierBrand(game) {
         }
         if (/^[0-9]{3,40}$/.test(draft.player_id || ""))
           checkoutForm.elements.player_id.value = draft.player_id;
+        if (checkoutForm.elements.server_id)
+          checkoutForm.elements.server_id.value = draft.server_id || "";
         sessionStorage.removeItem("sentryloot-supplier-checkout");
       }
     } catch {}
@@ -1560,11 +1594,12 @@ async function renderTopUpCatalog(selectedGame, selectedProduct) {
 
   let body = "";
   if (game) {
-    if (game.source === "melostore" && !selectedProduct) {
+    if (!selectedProduct) {
       await renderTopUpSupplierBrand(game);
       return;
     }
-    renderTopUpDetail(game, currentPackage);
+    const detail = await api("/top-up/packages/" + encodeURIComponent(game.slug) + "/" + encodeURIComponent(currentPackage.url_slug));
+    renderTopUpDetail(game, detail);
     return;
   } else {
     body =
@@ -1714,7 +1749,186 @@ function topupAdminMatchesStatus(p, filter = "") {
   );
 }
 
-async function renderTopUpAdmin() {
+function topupAdminMode(mode, t) {
+  return {
+    auto: t("Katalog bo‘yicha", "По каталогу", "From catalog"),
+    player: t("Faqat Player ID", "Только ID игрока", "Player ID only"),
+    player_server: t("Player ID va Server ID", "ID игрока и сервера", "Player ID and Server ID"),
+    none: t("ID so‘ralmaydi", "ID не требуется", "No ID required"),
+  }[mode || "auto"];
+}
+
+async function renderTopUpAdminGames(root, t) {
+  const games = await api("/admin/top-up/games");
+  if (!root.isConnected) return;
+  root.innerHTML = `<div class="topup-admin-toolbar topup-admin-game-toolbar">
+    <label class="topup-admin-search">${icon("search")}<input type="search" data-game-search aria-label="${t("O‘yin qidirish", "Поиск игр", "Search games")}" placeholder="${t("O‘yin nomi yoki slug", "Название или slug", "Game name or slug")}"></label>
+    <label class="topup-admin-filter"><span>${t("ID turi", "Тип ID", "ID type")}</span><select data-game-mode>
+      <option value="">${t("Barchasi", "Все", "All")}</option>
+      ${["player", "player_server", "none"].map((mode) => `<option value="${mode}">${topupAdminMode(mode, t)}</option>`).join("")}
+    </select></label>
+    <a class="button-secondary" href="/#top-up-admin/local">${t("Qo‘lda boshqarish", "Ручное управление", "Manual catalog")}</a>
+  </div><div class="topup-admin-game-list"></div>
+  <button type="button" class="button-secondary" data-game-more>${t("Ko‘proq ko‘rsatish", "Показать ещё", "Show more")}</button>`;
+  const search = root.querySelector("[data-game-search]");
+  const list = root.querySelector(".topup-admin-game-list");
+  const filter = root.querySelector("[data-game-mode]");
+  const more = root.querySelector("[data-game-more]");
+  let limit = 48;
+  function render() {
+    const query = search.value.trim().toLocaleLowerCase();
+    const matching = games.filter((game) =>
+      (!filter.value || game.mode === filter.value) &&
+      (game.name + " " + game.game_slug).toLocaleLowerCase().includes(query));
+    list.innerHTML = matching.slice(0, limit).map((game) => `<a class="topup-admin-game-row" href="/#top-up-admin/games/${encodeURIComponent(game.game_slug)}">
+      <span>${icon("gamepad")}<b>${esc(game.name)}</b></span>
+      <small>${topupAdminMode(game.mode, t)}</small>
+      <small>${((game.count || 0) + game.supplier_count).toLocaleString(localeTag())} ${t("mahsulot", "товаров", "products")}</small>
+      ${icon("chevron")}
+    </a>`).join("") || `<p class="topup-admin-empty">${t("O‘yin topilmadi.", "Игра не найдена.", "No matching games.")}</p>`;
+    more.hidden = matching.length <= limit;
+  }
+  search.oninput = filter.onchange = () => { limit = 48; render(); };
+  more.onclick = () => { limit += 48; render(); };
+  render();
+}
+
+async function renderTopUpAdminGame(root, slug, t) {
+  const endpoint = "/admin/top-up/games/" + encodeURIComponent(slug);
+  const brand = await api(endpoint);
+  if (!root.isConnected) return;
+  const packages = brand.packages || [];
+  const gamesLink = t("Barcha o‘yinlar", "Все игры", "All games");
+  root.innerHTML = `<div class="topup-admin-game-header">
+    <a class="text-link" href="/#top-up-admin">← ${gamesLink}</a>
+    <h2>${esc(brand.name || slug)}</h2>
+    <a class="button-secondary" href="/top-up/${encodeURIComponent(slug)}" target="_blank" rel="noopener">${t("Saytda ko‘rish", "На сайте", "View on site")}</a>
+    <a class="button-secondary" href="/#top-up-admin/local/${encodeURIComponent(slug)}">${t("Qo‘lda boshqariladigan paketlar", "Ручные пакеты", "Manual packages")}</a>
+  </div>
+  <form class="topup-admin-game-settings" data-game-settings>
+    <h3>${t("ID va server sozlamalari", "Настройки ID и сервера", "ID and server settings")}</h3>
+    <label>${t("Xaridor kiritadigan ma’lumot", "Данные от покупателя", "Customer fields")}
+      <select name="mode">${["auto", "player", "player_server", "none"].map((mode) => `<option value="${mode}" ${brand.settings.mode === mode ? "selected" : ""}>${topupAdminMode(mode, t)}</option>`).join("")}</select>
+    </label>
+    <label>${t("Server nomlari yoki ID’lari", "Названия или ID серверов", "Server names or IDs")}
+      <textarea name="servers" rows="3">${esc(brand.settings.servers.map((server) => server.value).join("\n"))}</textarea>
+      <small>${t("Har bir serverni alohida qatorga yozing. Bo‘sh bo‘lsa, katalogdagi serverlar ishlatiladi.", "Укажите каждый сервер с новой строки. Если поле пустое, используются серверы каталога.", "Enter one server per line. When empty, the catalog provides the servers.")}</small>
+    </label>
+    <button class="button-accent" type="submit">${t("Saqlash", "Сохранить", "Save")}</button>
+    <p data-game-result role="status" hidden></p>
+  </form>
+  ${brand.local_packages?.length ? `<details class="topup-admin-local-group">
+    <summary>${t("Qo‘lda boshqariladigan paketlar", "Ручные пакеты", "Manual packages")} · ${brand.local_packages.length}</summary>
+    <div class="topup-admin-game-list">${brand.local_packages.map((pack) => `<a class="topup-admin-game-row" href="/#top-up-admin/local/${encodeURIComponent(slug)}/${encodeURIComponent(pack.url_slug)}">
+      <span><b>${esc(pack.amount + " " + pack.currency)}</b></span>
+      <small>${pack.price_minor ? fmt(pack.price_minor, "UZS", true) : "—"}</small>
+      <small>${pack.enabled ? t("Ko‘rinadi", "Виден", "Visible") : t("Yashirilgan", "Скрыт", "Hidden")}</small>${icon("chevron")}
+    </a>`).join("")}</div>
+  </details>` : ""}
+  <section class="topup-admin-sku-section">
+    <h3>${t("Ta’minotchi mahsulotlari", "Товары поставщика", "Supplier products")}</h3>
+    <div class="topup-admin-toolbar topup-admin-game-toolbar">
+      <label class="topup-admin-search">${icon("search")}<input type="search" data-sku-search aria-label="${t("Mahsulot yoki SKU qidirish", "Поиск товара или SKU", "Search product or SKU")}" placeholder="${t("Nomi, SKU yoki server", "Название, SKU или сервер", "Name, SKU or server")}"></label>
+      <label class="topup-admin-filter"><span>${t("Holat", "Статус", "Status")}</span><select data-sku-filter>
+        <option value="">${t("Barchasi", "Все", "All")}</option>
+        <option value="visible">${t("Saytda ko‘rinadi", "На сайте", "Visible")}</option>
+        <option value="hidden">${t("Yashirilgan", "Скрытые", "Hidden")}</option>
+        <option value="test">${t("Sinov xaridi faol", "Тестовая покупка активна", "Test checkout enabled")}</option>
+      </select></label>
+    </div>
+    <div class="topup-admin-sku-list"></div>
+    <button type="button" class="button-secondary" data-sku-more>${t("Ko‘proq ko‘rsatish", "Показать ещё", "Show more")}</button>
+  </section>`;
+  const list = root.querySelector(".topup-admin-sku-list");
+  const search = root.querySelector("[data-sku-search]");
+  const filter = root.querySelector("[data-sku-filter]");
+  const more = root.querySelector("[data-sku-more]");
+  const bySku = new Map(packages.map((pack) => [pack.sku, pack]));
+  let limit = 32;
+  function render() {
+    const query = search.value.trim().toLocaleLowerCase();
+    const matching = packages.filter((pack) =>
+      (!filter.value || (filter.value === "visible" ? pack.enabled : filter.value === "hidden" ? !pack.enabled : pack.test_checkout)) &&
+      [pack.name, pack.sku, pack.supplier_sku, pack.server_name].join(" ").toLocaleLowerCase().includes(query));
+    list.innerHTML = matching.slice(0, limit).map((pack) => `<details data-product-sku="${esc(pack.sku)}">
+      <summary><span><b>${esc(pack.name)}</b><small>${esc(pack.supplier_sku)}${pack.server_name ? " · " + esc(pack.server_name) : ""}</small></span>
+      <span class="topup-admin-sku-state">${pack.selling_price_cents ? fmt(pack.selling_price_cents, "USD", true) : "—"} · ${pack.enabled ? t("Ko‘rinadi", "Виден", "Visible") : t("Yashirilgan", "Скрыт", "Hidden")}</span>${icon("chevron")}</summary>
+    </details>`).join("") || `<p class="topup-admin-empty">${t("Mahsulot topilmadi.", "Товары не найдены.", "No matching products.")}</p>`;
+    more.hidden = matching.length <= limit;
+  }
+  list.addEventListener("toggle", (event) => {
+    const row = event.target;
+    if (!row.open || !row.matches("[data-product-sku]") || row.querySelector("form")) return;
+    const pack = bySku.get(row.dataset.productSku);
+    row.insertAdjacentHTML("beforeend", `<form class="topup-admin-game-settings" data-product-settings>
+      <label>${t("Mahsulot nomi", "Название товара", "Product name")}<input name="name" maxlength="160" value="${esc(pack.name)}"></label>
+      <label>${t("Ta’minotchi SKU kodi", "SKU поставщика", "Supplier SKU")}<select name="supplier_sku" required>
+        ${packages.map((item) => `<option value="${esc(item.sku)}" ${item.sku === pack.supplier_sku ? "selected" : ""}>${esc(item.sku)} · ${esc(item.source_name)}${item.source_server ? " · " + esc(item.source_server) : ""}</option>`).join("")}
+      </select></label>
+      <label>${t("Sotuv narxi (USD)", "Цена продажи (USD)", "Selling price (USD)")}<input name="price" type="number" min="0" max="1000000" step="0.01" value="${(pack.selling_price_cents / 100).toFixed(2)}" required></label>
+      <div class="topup-admin-game-checks">
+        <label class="topup-admin-check"><input name="enabled" type="checkbox" ${pack.enabled ? "checked" : ""}>${t("Saytda ko‘rsatish", "Показывать на сайте", "Show on site")}</label>
+        <label class="topup-admin-check"><input name="test_enabled" type="checkbox" ${pack.test_enabled ? "checked" : ""} ${pack.enabled ? "" : "disabled"}>${t("Stripe sinov xaridi", "Тестовая покупка Stripe", "Stripe test checkout")}</label>
+      </div>
+      <button class="button-accent" type="submit">${t("Saqlash", "Сохранить", "Save")}</button>
+      <p data-game-result role="status" hidden></p>
+    </form>`);
+    const form = row.querySelector("form");
+    form.elements.enabled.onchange = () => {
+      const checkbox = form.elements.test_enabled;
+      checkbox.disabled = !form.elements.enabled.checked;
+      if (checkbox.disabled) checkbox.checked = false;
+    };
+  }, true);
+  root.addEventListener("submit", async (event) => {
+    const form = event.target;
+    if (!form.matches("[data-game-settings], [data-product-settings]")) return;
+    event.preventDefault();
+    const values = new FormData(form);
+    const row = form.closest("[data-product-sku]");
+    const path = row ? endpoint + "/products/" + encodeURIComponent(row.dataset.productSku) : endpoint;
+    const body = row ? {
+      name: values.get("name"), supplier_sku: values.get("supplier_sku"),
+      price_cents: Math.round(Number(values.get("price")) * 100),
+      enabled: values.has("enabled"), test_enabled: values.has("test_enabled"),
+    } : { mode: values.get("mode"), servers: values.get("servers").split(/\r?\n/).map((value) => value.trim()).filter(Boolean) };
+    const button = form.querySelector("button");
+    const feedback = form.querySelector("[data-game-result]");
+    button.disabled = true;
+    feedback.hidden = true;
+    try {
+      await api(path, { method: "PATCH", body: JSON.stringify(body) });
+      if (row) {
+        const product = bySku.get(row.dataset.productSku);
+        const mapping = bySku.get(body.supplier_sku);
+        Object.assign(product, body, {
+          name: body.name.trim() || product.source_name,
+          selling_price_cents: body.price_cents,
+          server_name: mapping.source_server,
+          test_checkout: body.test_enabled,
+        });
+        row.querySelector("summary b").textContent = product.name;
+        row.querySelector("summary small").textContent = product.supplier_sku + (product.server_name ? " · " + product.server_name : "");
+        row.querySelector(".topup-admin-sku-state").textContent =
+          (body.price_cents ? fmt(body.price_cents, "USD", true) : "—") + " · " +
+          (body.enabled ? t("Ko‘rinadi", "Виден", "Visible") : t("Yashirilgan", "Скрыт", "Hidden"));
+      }
+      feedback.className = "notice topup-admin-success";
+      feedback.textContent = t("Saqlandi.", "Сохранено.", "Saved.");
+    } catch (error) {
+      feedback.className = "notice error";
+      feedback.textContent = error.message;
+    } finally {
+      button.disabled = false;
+      feedback.hidden = false;
+    }
+  });
+  search.oninput = filter.onchange = () => { limit = 32; render(); };
+  more.onclick = () => { limit += 32; render(); };
+  render();
+}
+
+async function renderTopUpAdmin(section = "", slug = "", product = "") {
   if (!me) {
     location.hash = "login";
     return;
@@ -1754,7 +1968,9 @@ async function renderTopUpAdmin() {
   const root = $(".topup-admin-mount"),
     notice = $(".topup-admin-notice");
   try {
-    const data = await api("/admin/top-up"),
+    if (!section) return await renderTopUpAdminGames(root, text);
+    if (section === "games") return await renderTopUpAdminGame(root, slug, text);
+    const data = await api("/admin/top-up" + (slug ? "?game=" + encodeURIComponent(slug) : "")),
       packages = data.packages || [],
       orders = data.orders || [],
       supplier = data.supplier || {};
@@ -1825,6 +2041,14 @@ async function renderTopUpAdmin() {
       .join(
         "",
       )}</select></label><label class="topup-admin-filter"><span>${text("Holati", "Статус", "Status")}</span><select data-topup-status-filter><option value="">${text("Faol paketlar", "Активные пакеты", "Active packages")}</option><option value="hidden">${text("O‘chirilgan / yashirilgan", "Удалённые / скрытые", "Deleted / hidden")}</option><option value="priced">${text("Narxi bor", "С ценой", "Priced")}</option><option value="needs-price">${text("Narxi yo‘q", "Без цены", "Needs price")}</option><option value="stock">${text("Zaxirasi bor", "Есть остаток", "In stock")}</option><option value="empty">${text("Zaxirasi yo‘q", "Нет остатка", "Out of stock")}</option></select></label></div><div class="topup-admin-package-list">${packageCards || `<div class="topup-admin-empty"><b>${text("Katalogda paket topilmadi", "Пакеты не найдены", "No packages found")}</b></div>`}</div><div class="topup-admin-no-results" hidden>${text("Bu qidiruvga mos paket topilmadi. Filtrlarni o‘zgartirib ko‘ring.", "Пакеты не найдены. Попробуйте изменить фильтры.", "No packages match. Try changing your filters.")}</div><details class="topup-admin-orders"><summary><span><b>${text("So‘nggi buyurtmalar", "Последние заказы", "Recent orders")}</b><small>${orders.length} / ${text("oxirgi 100 ta", "последние 100", "latest 100")}</small></span><span>${icon("chevron")}</span></summary><div class="topup-admin-order-list">${orderRows}</div></details><aside class="topup-admin-footnote">${text("Ombor qo‘lda boshqariladi. Avtomatik yetkazish uchun alohida ta’minotchi API va ruxsat kerak.", "Остатки управляются вручную. Для автоматической выдачи нужен API поставщика и разрешение.", "Stock is managed manually. Automatic fulfillment requires a supplier API and approval.")}</aside>`;
+    root.insertAdjacentHTML("afterbegin", `<p><a class="text-link" href="/#top-up-admin${slug ? "/games/" + encodeURIComponent(slug) : ""}">← ${text("Katalogga qaytish", "Назад в каталог", "Back to catalog")}</a></p>`);
+    if (slug) {
+      const form = root.querySelector(".topup-admin-create");
+      form.elements.game_slug.value = slug;
+      form.elements.game_slug.readOnly = true;
+      form.elements.game_name.value = packages[0]?.game_name || slug;
+      form.elements.currency.value = packages[0]?.currency || "";
+    }
     const supplierCard = document.createElement("section");
     let activeSupplierMapping = null;
     supplierCard.className = "topup-admin-supplier-card";
@@ -2117,6 +2341,15 @@ async function renderTopUpAdmin() {
       )
         applyFilters();
     });
+    if (product) {
+      const chosen = packages.find((item) => item.url_slug === product);
+      if (chosen) {
+        if (!chosen.enabled) root.querySelector("[data-topup-status-filter]").value = "hidden";
+        const card = [...root.querySelectorAll(".topup-admin-package")].find((item) =>
+          item.querySelector(".topup-admin-save")?.dataset.package === chosen.id);
+        if (card) card.open = true;
+      }
+    }
     applyFilters();
     root.addEventListener("click", async (event) => {
       const button = event.target.closest(
@@ -2150,7 +2383,7 @@ async function renderTopUpAdmin() {
           method: "PATCH",
           body: JSON.stringify({ enabled: restore }),
         });
-        await renderTopUpAdmin();
+        await renderTopUpAdmin(section, slug, product);
         toast(
           restore
             ? text(
@@ -2237,7 +2470,7 @@ async function renderTopUpAdmin() {
               reason: values.get("reason"),
             }),
           });
-        await renderTopUpAdmin();
+        await renderTopUpAdmin(section, slug, product);
         const refreshedNotice = $(".topup-admin-notice");
         if (refreshedNotice)
           refreshedNotice.innerHTML =
@@ -2275,7 +2508,7 @@ async function renderTopUpAdmin() {
     root.addEventListener(
       "click",
       (event) => {
-        if (event.target.closest("[data-topup-retry]")) renderTopUpAdmin();
+        if (event.target.closest("[data-topup-retry]")) renderTopUpAdmin(section, slug, product);
       },
       { once: true },
     );

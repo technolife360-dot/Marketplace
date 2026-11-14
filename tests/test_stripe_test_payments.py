@@ -524,10 +524,40 @@ class StripeTestFlows(unittest.TestCase):
                           {'sku':'pubgmgl325eu-s2'}, {'accept_terms':False}, {'server_id':'7'}):
             with self.subTest(overrides=overrides), self.assertRaises(app.HttpError):
                 self.route(self.buyer,'POST','/api/top-up/test-checkout',{**data,**overrides})
-        with patch.object(app.melostore_catalog,'test_checkout_offer',return_value=None):
+        with patch.object(app.launch_readiness,'supplier_test_offer',return_value=None):
             with self.assertRaises(app.HttpError):
                 self.route(self.buyer,'POST','/api/top-up/test-checkout',data)
         self.provider.client.v1.checkout.sessions.create.assert_not_called()
+
+    def test_admin_mapped_game_uses_the_same_sku_price_and_server_for_quote_and_checkout(self):
+        self.configure()
+        game = '/api/admin/top-up/games/mobile-legends'
+        sku = 'mlgl11d-s7'
+        settings = {'mode': 'player_server', 'servers': ['0123', 'Global']}
+        with self.assertRaises(app.HttpError):
+            self.route(self.buyer, 'PATCH', game, settings)
+        self.route(self.admin, 'PATCH', game, settings)
+        product = {'supplier_sku': sku, 'name': '11 Diamonds', 'price_cents': 299,
+                   'enabled': True, 'test_enabled': True}
+        self.route(self.admin, 'PATCH', game+'/products/'+sku, product)
+        pack = next(pack for pack in self.route(self.buyer, 'GET', '/api/top-up/catalog/mobile-legends')['packages']
+                    if pack['sku'] == sku)
+        self.assertTrue(pack['test_checkout'])
+        self.assertEqual([option['value'] for option in pack['checkout_fields']['servers']], ['0123', 'Global'])
+        self.assertEqual(pack['selling_price_cents'], 299)
+        self.assertNotIn('supplier_sku', pack)
+        body = {'sku': sku, 'player_id': '00234567', 'request_key': 'mapped_topup_checkout_fixture',
+                'quantity': 1, 'accept_terms': True}
+        for server in ('', 'Wrong server'):
+            with self.assertRaises(app.HttpError):
+                self.route(self.buyer, 'POST', '/api/top-up/test-checkout', {**body, 'server_id': server})
+        checkout = self.route(self.buyer, 'POST', '/api/top-up/test-checkout', {**body, 'server_id': '0123'})
+        order = self.route(self.buyer, 'GET', '/api/top-up/test-orders/'+checkout['id'])
+        self.assertEqual((order['supplier_sku'], order['server_id'], order['total_minor']), (sku, '0123', 299))
+        lines, currency, total, _ = app.rewards_engine.context(self.db, self.buyer, {'kind':'topup', 'sku':sku}, vars(app))
+        self.assertEqual((lines[0]['package_id'], currency, total), ('h2h-test-'+sku, 'USD', 299))
+        self.route(self.admin, 'PATCH', game+'/products/'+sku, {**product, 'enabled': False, 'test_enabled': False})
+        self.assertFalse(any(pack['sku'] == sku for pack in self.route(self.buyer, 'GET', '/api/top-up/catalog/mobile-legends')['packages']))
 
     def test_supplier_usd_signed_webhook_records_test_payment_without_delivery(self):
         self.configure()

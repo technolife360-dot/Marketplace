@@ -18382,3 +18382,105 @@ body #app .topup-supplier-page .tus-checkout-note:empty {
 .topup-supplier-page .tus-customer-fields[hidden] {
   display: none !important;
 }
+
+.topup-admin-game-toolbar {
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 210px) auto;
+}
+.topup-admin-game-list,
+.topup-admin-sku-list {
+  display: grid;
+  gap: 8px;
+  margin-block: 12px;
+}
+.topup-admin-game-row,
+.topup-admin-sku-list > details > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(100px, 180px) minmax(76px, 110px) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  min-height: 54px;
+  border: 1px solid #2c2d33;
+  border-radius: 9px;
+  text-decoration: none;
+}
+.topup-admin-game-row:hover,
+.topup-admin-sku-list > details > summary:hover {
+  background: #24252a;
+}
+.topup-admin-game-row > span,
+.topup-admin-game-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.topup-admin-game-header h2 {
+  flex-basis: 100%;
+  margin: 0;
+}
+.topup-admin-sku-list > details > summary {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  cursor: pointer;
+}
+.topup-admin-sku-list > details > summary small {
+  display: block;
+  margin-block-start: 4px;
+  overflow-wrap: anywhere;
+}
+.topup-admin-game-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 18px;
+  padding: 16px;
+  margin-block: 14px;
+  border: 1px solid #2c2d33;
+  border-radius: 9px;
+}
+.topup-admin-game-settings h3,
+.topup-admin-game-settings [data-game-result] {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.topup-admin-game-settings > label,
+.topup-admin-game-checks {
+  display: grid;
+  gap: 8px;
+}
+.topup-admin-game-settings button[type="submit"] {
+  justify-self: start;
+}
+.topup-admin-local-group {
+  margin-block: 14px;
+}
+.topup-admin-local-group > summary {
+  padding-block: 10px;
+  cursor: pointer;
+}
+.tus-checkout-form [data-topup-server-field]:not(:empty) {
+  margin-block-start: 18px;
+}
+.tus-checkout-form :is(.field, .tus-test-consent, #tus-player-help)[hidden] {
+  display: none !important;
+}
+.tus-checkout-form [name="server_id"] {
+  min-height: 44px;
+}
+@media (max-width: 620px) {
+  .topup-admin-game-toolbar,
+  .topup-admin-game-settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .topup-admin-game-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  .topup-admin-sku-list > details > summary {
+    gap: 8px;
+  }
+  .topup-admin-sku-state {
+    max-width: 88px;
+    text-align: end;
+  }
+}
