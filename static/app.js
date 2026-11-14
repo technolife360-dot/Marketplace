@@ -2550,9 +2550,12 @@ async function navigate() {
     if (route === "staff") return await LaunchUX.staff();
     if (route === "launch-settings") return await LaunchUX.admin();
     if (route === "service-status") return await LaunchUX.status();
-    if (route === "topup-saved") return await LaunchUX.saved();
-    if (route === "notification-settings")
-      return await ExperienceUX.settingsPage();
+    if (route === "topup-saved" || route === "notification-settings") {
+      if (!window.MobileSite?.isMobile()) return await renderAccount(route);
+      return route === "topup-saved"
+        ? await LaunchUX.saved()
+        : await ExperienceUX.settingsPage();
+    }
     if (route.startsWith("games/")) {
       const parts = route.split("/");
       return await ExperienceUX.gamePage(parts[1], parts[2] || "");
@@ -2599,11 +2602,11 @@ async function navigate() {
     if (route === "account")
       return window.MobileSite?.isMobile()
         ? await window.MobileSite.account()
-        : await renderAccount();
+        : await renderAccount(route);
     if (route.startsWith("account/"))
       return window.MobileSite?.isMobile()
         ? await window.MobileSite.settings(route)
-        : await renderAccount();
+        : await renderAccount(route);
     if (route === "cart") return await renderCart();
     if (route === "orders") return await renderOrders();
     if (route === "seller" || route === "seller/dashboard")
@@ -3751,10 +3754,9 @@ function closeProfileMenu() {
   document.body.classList.remove("profile-menu-open");
   $("#account-button")?.setAttribute("aria-expanded", "false");
 }
-async function renderAccount() {
+async function renderAccount(route) {
   closeProfileMenu();
-  await OperationsUX.account();
-  window.RewardsUI?.enhance();
+  await OperationsUX.desktopSettings(route);
 }
 async function renderCart() {
   if (!window.OrderFlow)

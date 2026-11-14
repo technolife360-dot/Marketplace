@@ -215,11 +215,12 @@ window.LaunchUX = (() => {
       toast(t("Saqlandi", "Сохранено", "Saved"));
     });
   }
-  async function saved() {
+  async function saved(target = app) {
     if (!me) {
       location.hash = "login";
       return;
     }
+    const locationAtStart = location.href;
     const [prefs, games] = await Promise.all([
       api("/top-up/preferences"),
       api("/top-up/catalog"),
@@ -227,7 +228,8 @@ window.LaunchUX = (() => {
     const packs = games
       .flatMap((g) => g.packages)
       .filter((p) => prefs.saved.includes(p.id));
-    app.innerHTML = `<section class="page launch-page">${pageTitle(t("Saqlangan Top Up paketlari", "Сохранённые пакеты Top Up", "Saved Top Up packages"), "")}<div class="launch-saved">${packs.length ? packs.map((p) => `<a class="panel" href="/top-up/${e(p.game_slug)}/${e(p.url_slug)}"><b>${esc(p.game_name)}</b><span>${esc(p.product_name)}</span></a>`).join("") : `<p>${t("Hali paket saqlanmagan.", "Пакеты ещё не сохранены.", "No packages saved yet.")}</p>`}</div>${link("/top-up", t("Paketlarni ko‘rish", "Посмотреть пакеты", "Browse packages"))}</section>`;
+    if (location.href !== locationAtStart || !target.isConnected) return;
+    target.innerHTML = `<section class="page launch-page">${pageTitle(t("Saqlangan Top Up paketlari", "Сохранённые пакеты Top Up", "Saved Top Up packages"), "")}<div class="launch-saved">${packs.length ? packs.map((p) => `<a class="panel" href="/top-up/${e(p.game_slug)}/${e(p.url_slug)}"><b>${esc(p.game_name)}</b><span>${esc(p.product_name)}</span></a>`).join("") : `<p>${t("Hali paket saqlanmagan.", "Пакеты ещё не сохранены.", "No packages saved yet.")}</p>`}</div>${link("/top-up", t("Paketlarni ko‘rish", "Посмотреть пакеты", "Browse packages"))}</section>`;
   }
   async function topupState() {
     if (!me) return { saved: [], launch_alert: [] };
@@ -591,6 +593,30 @@ window.LaunchUX = (() => {
       app.querySelector(".seller-readiness-content").innerHTML =
         `<section class="panel launch-checklist">${sellerChecklistMarkup({ profile_created: false, identity_verified: false, selling_enabled: false, listings: [] })}</section>`;
   }
+  function mountAccountExport(target) {
+    const section = document.createElement("section");
+    section.className = "panel";
+    section.dataset.launchAccount = "";
+    section.innerHTML = `<h2>${t("Ma’lumotlarim nusxasi", "Копия моих данных", "Copy of my data")}</h2><p class="help">${t("Eksportda faqat o‘zingizga tegishli ma’lumotlar bo‘ladi. Yuklangan faylni xavfsiz saqlang.", "Экспорт содержит ваши данные. Храните файл безопасно.", "The export contains your own data. Keep the downloaded file safe.")}</p><form>${field("password", t("Amaldagi parol", "Текущий пароль", "Current password"), "", "password")}${field("otp", t("2FA / tiklash kodi, yoqilgan bo‘lsa", "2FA / код восстановления, если включено", "2FA / recovery code, if enabled"))}${submit(t("JSON yuklab olish", "Скачать JSON", "Download JSON"))}</form>`;
+    target.append(section);
+    bind(section.querySelector("form"), async (d, f) => {
+      const result = await api("/account/export", {
+        method: "POST",
+        body: JSON.stringify(d),
+      });
+      const url = URL.createObjectURL(
+          new Blob([JSON.stringify(result, null, 2)], {
+            type: "application/json",
+          }),
+        ),
+        a = document.createElement("a");
+      a.href = url;
+      a.download = "sentryloot-my-data.json";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      f.reset();
+    });
+  }
   function enhance() {
     const rights = document.querySelector("[data-footer-rights]"),
       text = t(
@@ -673,45 +699,22 @@ window.LaunchUX = (() => {
         `<a class="button-secondary" data-staff-workspace href="/#staff">${t("Xodim ish joyi", "Рабочее место сотрудника", "Staff workspace")}</a>`,
       );
     if (account && !account.querySelector("[data-launch-account]")) {
-      const section = document.createElement("section");
-      section.className = "panel";
-      section.dataset.launchAccount = "";
       if (!account.querySelector('a[href="/#topup-saved"]'))
-        (
-          account.querySelector(".ops-account-shortcuts") || account
-        ).insertAdjacentHTML(
+        (account.querySelector(".ops-account-shortcuts") || account).insertAdjacentHTML(
           "beforeend",
-          link(
-            "/#topup-saved",
-            t("Saqlangan Top Up", "Сохранённые Top Up", "Saved Top Up"),
-          ),
+          link("/#topup-saved", t("Saqlangan Top Up", "Сохранённые Top Up", "Saved Top Up")),
         );
-      section.innerHTML = `<h2>${t("Ma’lumotlarim nusxasi", "Копия моих данных", "Copy of my data")}</h2><p class="help">${t("Eksportda faqat o‘zingizga tegishli ma’lumotlar bo‘ladi. Yuklangan faylni xavfsiz saqlang.", "Экспорт содержит ваши данные. Храните файл безопасно.", "The export contains your own data. Keep the downloaded file safe.")}</p><form>${field("password", t("Amaldagi parol", "Текущий пароль", "Current password"), "", "password")}${field("otp", t("2FA / tiklash kodi, yoqilgan bo‘lsa", "2FA / код восстановления, если включено", "2FA / recovery code, if enabled"))}${submit(t("JSON yuklab olish", "Скачать JSON", "Download JSON"))}</form>`;
-      account.append(section);
-      bind(section.querySelector("form"), async (d, f) => {
-        const result = await api("/account/export", {
-          method: "POST",
-          body: JSON.stringify(d),
-        });
-        const url = URL.createObjectURL(
-            new Blob([JSON.stringify(result, null, 2)], {
-              type: "application/json",
-            }),
-          ),
-          a = document.createElement("a");
-        a.href = url;
-        a.download = "sentryloot-my-data.json";
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        f.reset();
-      });
+      mountAccountExport(account);
     }
     if (
       me &&
       (account || location.hash === "#notification-settings") &&
       !app.querySelector("[data-background-push]")
     ) {
-      const root = account || app.querySelector(".page");
+      const settingsSlot = app.querySelector(".desktop-settings-slot");
+      const root = account || (settingsSlot
+        ? settingsSlot.querySelector(".ex-settings")
+        : app.querySelector(".page"));
       if (root) {
         const box = document.createElement("section");
         box.dataset.backgroundPush = "";
@@ -1005,6 +1008,7 @@ window.LaunchUX = (() => {
     status,
     profileMarkup,
     saved,
+    mountAccountExport,
     enhance,
     topupState,
     topupChange,

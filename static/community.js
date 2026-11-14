@@ -1956,7 +1956,7 @@
     try {
       await refresh();
       try {
-        const response = await fetch("/static/regional-languages.json?v=notification-copy-3", {
+        const response = await fetch("/static/regional-languages.json?v=desktop-settings-5", {
           signal: AbortSignal.timeout(6000),
         });
         if (response.ok)

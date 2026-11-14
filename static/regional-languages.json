@@ -73,6 +73,12 @@
   ],
   "messages": {
     "de": {
+      "Display name": "Anzeigename",
+      "Email address": "E-Mail-Adresse",
+      "Change photo": "Foto ändern",
+      "Linked accounts": "Verknüpfte Konten",
+      "Privacy & data": "Datenschutz & Daten",
+      "Support": "Hilfe",
       "Prize wheel": "Glücksrad",
       "Prize reference": "Gewinnreferenz",
       "Keep your prize reference. After reviewing the win, the SentryLoot team will email your verified address to arrange delivery.": "Bewahre deine Gewinnreferenz auf. Nach Prüfung des Gewinns schreibt dir das SentryLoot-Team an deine bestätigte E-Mail-Adresse, um die Lieferung zu vereinbaren.",
@@ -762,6 +768,12 @@
       " (optional)": " (optional angegeben)"
     },
     "fr": {
+      "Display name": "Nom affiché",
+      "Email address": "Adresse e-mail",
+      "Change photo": "Modifier la photo",
+      "Linked accounts": "Comptes associés",
+      "Privacy & data": "Confidentialité et données",
+      "Support": "Assistance",
       "Prize wheel": "Roue des prix",
       "Prize reference": "Référence du lot",
       "Keep your prize reference. After reviewing the win, the SentryLoot team will email your verified address to arrange delivery.": "Gardez la référence du lot. Après vérification du gain, l’équipe SentryLoot vous écrira à votre adresse e-mail vérifiée pour organiser la livraison.",
@@ -1451,6 +1463,12 @@
       " (optional)": " (facultatif)"
     },
     "es": {
+      "Display name": "Nombre visible",
+      "Email address": "Correo electrónico",
+      "Change photo": "Cambiar foto",
+      "Linked accounts": "Cuentas vinculadas",
+      "Privacy & data": "Privacidad y datos",
+      "Support": "Ayuda",
       "Prize wheel": "Ruleta de premios",
       "Prize reference": "Referencia del premio",
       "Keep your prize reference. After reviewing the win, the SentryLoot team will email your verified address to arrange delivery.": "Guarda la referencia del premio. Tras verificar el premio, el equipo de SentryLoot te escribirá a tu correo verificado para coordinar la entrega.",
@@ -2140,6 +2158,12 @@
       " (optional)": " (opcional)"
     },
     "it": {
+      "Display name": "Nome visualizzato",
+      "Email address": "Indirizzo e-mail",
+      "Change photo": "Cambia foto",
+      "Linked accounts": "Account collegati",
+      "Privacy & data": "Privacy e dati",
+      "Support": "Assistenza",
       "Prize wheel": "Ruota dei premi",
       "Prize reference": "Riferimento del premio",
       "Keep your prize reference. After reviewing the win, the SentryLoot team will email your verified address to arrange delivery.": "Conserva il riferimento del premio. Dopo aver verificato la vincita, il team di SentryLoot ti scriverà all’indirizzo e-mail verificato per organizzare la consegna.",
@@ -2829,6 +2853,12 @@
       " (optional)": " (facoltativo)"
     },
     "pt": {
+      "Display name": "Nome de exibição",
+      "Email address": "Endereço de e-mail",
+      "Change photo": "Alterar foto",
+      "Linked accounts": "Contas vinculadas",
+      "Privacy & data": "Privacidade e dados",
+      "Support": "Suporte",
       "Prize wheel": "Roda de prémios",
       "Prize reference": "Referência do prémio",
       "Keep your prize reference. After reviewing the win, the SentryLoot team will email your verified address to arrange delivery.": "Guarde a referência do prémio. Após verificar o ganho, a equipa da SentryLoot escreverá para o seu e-mail verificado para combinar a entrega.",
@@ -3518,6 +3548,12 @@
       " (optional)": " (opcional)"
     },
     "nl": {
+      "Display name": "Weergavenaam",
+      "Email address": "E-mailadres",
+      "Change photo": "Foto wijzigen",
+      "Linked accounts": "Gekoppelde accounts",
+      "Privacy & data": "Privacy en gegevens",
+      "Support": "Ondersteuning",
       "Prize wheel": "Prijzenrad",
       "Prize reference": "Prijsreferentie",
       "Keep your prize reference. After reviewing the win, the SentryLoot team will email your verified address to arrange delivery.": "Bewaar je prijsreferentie. Na controle van de winst mailt het SentryLoot-team je op je geverifieerde adres om de levering af te spreken.",
@@ -4207,6 +4243,12 @@
       " (optional)": " (optioneel)"
     },
     "pl": {
+      "Display name": "Nazwa wyświetlana",
+      "Email address": "Adres e-mail",
+      "Change photo": "Zmień zdjęcie",
+      "Linked accounts": "Połączone konta",
+      "Privacy & data": "Prywatność i dane",
+      "Support": "Pomoc",
       "Prize wheel": "Koło nagród",
       "Prize reference": "Numer nagrody",
       "Keep your prize reference. After reviewing the win, the SentryLoot team will email your verified address to arrange delivery.": "Zachowaj numer nagrody. Po zweryfikowaniu wygranej zespół SentryLoot napisze na Twój zweryfikowany adres e-mail, aby ustalić dostawę.",
@@ -4896,6 +4938,12 @@
       " (optional)": " (opcjonalnie)"
     },
     "tr": {
+      "Display name": "Görünen ad",
+      "Email address": "E-posta adresi",
+      "Change photo": "Fotoğrafı değiştir",
+      "Linked accounts": "Bağlı hesaplar",
+      "Privacy & data": "Gizlilik ve veriler",
+      "Support": "Destek",
       "Prize wheel": "Ödül çarkı",
       "Prize reference": "Ödül referansı",
       "Keep your prize reference. After reviewing the win, the SentryLoot team will email your verified address to arrange delivery.": "Ödül referansınızı saklayın. Kazancınız incelendikten sonra SentryLoot ekibi teslimatı planlamak için doğrulanmış e-posta adresinize yazacak.",
@@ -5585,6 +5633,12 @@
       " (optional)": " (isteğe bağlı)"
     },
     "ar": {
+      "Display name": "اسم العرض",
+      "Email address": "عنوان البريد الإلكتروني",
+      "Change photo": "تغيير الصورة",
+      "Linked accounts": "الحسابات المرتبطة",
+      "Privacy & data": "الخصوصية والبيانات",
+      "Support": "الدعم",
       "Prize wheel": "عجلة الجوائز",
       "Prize reference": "الرقم المرجعي للجائزة",
       "Keep your prize reference. After reviewing the win, the SentryLoot team will email your verified address to arrange delivery.": "احتفظ بالرقم المرجعي للجائزة. بعد مراجعة الفوز، سيراسلك فريق SentryLoot على بريدك الإلكتروني الموثّق لترتيب التسليم.",
@@ -6274,6 +6328,12 @@
       " (optional)": " (اختياري)"
     },
     "ms": {
+      "Display name": "Nama paparan",
+      "Email address": "Alamat e-mel",
+      "Change photo": "Tukar foto",
+      "Linked accounts": "Akaun terpaut",
+      "Privacy & data": "Privasi dan data",
+      "Support": "Sokongan",
       "Prize wheel": "Roda hadiah",
       "Prize reference": "Nombor rujukan hadiah",
       "Keep your prize reference. After reviewing the win, the SentryLoot team will email your verified address to arrange delivery.": "Simpan nombor rujukan hadiah anda. Selepas kemenangan disemak, pasukan SentryLoot akan menghantar e-mel ke alamat yang disahkan untuk mengatur penghantaran.",
@@ -6963,6 +7023,12 @@
       " (optional)": " (pilihan)"
     },
     "zh": {
+      "Display name": "显示名称",
+      "Email address": "电子邮箱地址",
+      "Change photo": "更换照片",
+      "Linked accounts": "关联账户",
+      "Privacy & data": "隐私与数据",
+      "Support": "支持",
       "Prize wheel": "抽奖转盘",
       "Prize reference": "奖品编号",
       "Keep your prize reference. After reviewing the win, the SentryLoot team will email your verified address to arrange delivery.": "请保留奖品编号。审核中奖结果后，SentryLoot 团队会通过您已验证的邮箱联系您安排配送。",

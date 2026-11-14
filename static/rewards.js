@@ -417,6 +417,7 @@ window.RewardsUI = (() => {
     if (
       !me ||
       !["account", "benefits"].includes(route) ||
+      app.querySelector(".desktop-account-settings") ||
       app.querySelector("[data-rw-entry]")
     )
       return;

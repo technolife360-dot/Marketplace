@@ -91,20 +91,154 @@ window.OperationsUX = (() => {
               : "";
     return [browser, os].filter(Boolean).join(" · ");
   }
-  async function account() {
+  function settingsSections() {
+    return [
+      ["profile", "user", t("Profil", "Профиль", "Profile"), "/#account/profile"],
+      ["security", "lock", t("Parol va xavfsizlik", "Пароль и безопасность", "Password & security"), "/#account/security"],
+      ["notifications", "bell", t("Bildirishnomalar", "Уведомления", "Notifications"), "/#notification-settings"],
+      ["preferences", "globe", t("Til va hudud", "Язык и регион", "Language & region"), "/#account/preferences"],
+      ["linked", "link", t("Bog‘langan hisoblar", "Связанные аккаунты", "Linked accounts"), "/#account/linked"],
+      ["topup", "gamepad", t("Saqlangan Top Up", "Сохранённые пакеты Top Up", "Saved Top Up"), "/#topup-saved"],
+      ["privacy", "shield", t("Maxfiylik va ma’lumotlar", "Конфиденциальность и данные", "Privacy & data"), "/#account/privacy"],
+      ["support", "info", t("Yordam", "Поддержка", "Support"), "/#account/support"],
+    ];
+  }
+
+  function settingsShell(section) {
+    const title = t("Hisob sozlamalari", "Настройки аккаунта", "Account settings");
+    const sections = settingsSections();
+    const active = sections.find(([key]) => key === section);
+    document.title = title + " | SentryLoot";
+    app.innerHTML = `<section class="page desktop-account-settings" data-settings-section="${s(section)}">
+      <header class="desktop-settings-title"><h1>${s(title)}</h1></header>
+      <div class="desktop-settings-layout">
+        <nav class="desktop-settings-nav" aria-label="${s(title)}">
+          ${sections.map(([key, glyph, label, href]) => `<a href="${href}"${key === section ? ' aria-current="page"' : ""}>${icon(glyph)}<span>${s(label)}</span></a>`).join("")}
+          <button type="button" data-action="logout">${icon("logout")}<span>${s(t("Chiqish", "Выйти", "Sign out"))}</span></button>
+        </nav>
+        <section class="desktop-settings-card">
+          <h2>${s(active[2])}</h2>
+          <div class="desktop-settings-slot"></div>
+        </section>
+      </div>
+    </section>`;
+    return app.querySelector(".desktop-settings-slot");
+  }
+
+  function arrangeDesktopAccount(source, slot, mode) {
+    const find = (selector) => source.querySelector(selector);
+    if (mode === "profile" || mode === "preferences") {
+      const form = find("#ops-profile-form");
+      const fields = form.querySelector(".ops-profile-fields");
+      for (const group of [...fields.children]) {
+        const control = group.querySelector("input, select");
+        const keep = mode === "profile"
+          ? control.name === "display_name" || control.type === "tel"
+          : control.tagName === "SELECT";
+        if (!keep) group.remove();
+      }
+      const save = form.querySelector("button");
+      save.type = "submit";
+      const footer = document.createElement("div");
+      footer.className = "desktop-settings-form-footer";
+      footer.append(save);
+      form.append(footer);
+      if (mode === "profile") {
+        fields.querySelector("label").textContent = t("Ko‘rinadigan ism", "Отображаемое имя", "Display name");
+        const avatar = find(".ops-avatar-settings");
+        const photo = avatar.querySelector("#ops-avatar-change");
+        photo.innerHTML = icon("camera") + s(t("Rasmni almashtirish", "Изменить фото", "Change photo"));
+        const hint = avatar.querySelector(".field-hint");
+        hint.classList.add("sr-only");
+        hint.id = "desktop-settings-photo-help";
+        photo.setAttribute("aria-describedby", hint.id);
+        const email = t("Email manzili", "Адрес электронной почты", "Email address");
+        const verified = me.email_verified ? t("Tasdiqlangan", "Подтверждён", "Verified") : t("Tasdiqlanmagan", "Не подтверждён", "Not verified");
+        fields.querySelector(".field").insertAdjacentHTML("afterend", `<div class="desktop-settings-email-field">
+          <div class="desktop-settings-field-label" id="desktop-settings-email-label">${s(email)}</div>
+          <div class="desktop-settings-email" role="group" aria-labelledby="desktop-settings-email-label">
+            <span class="desktop-settings-email-address" data-user-content>${s(me.email)}</span>
+            <span class="desktop-settings-email-state${me.email_verified ? " is-verified" : ""}">${me.email_verified ? icon("check") : ""}${s(verified)}</span>
+            <a href="/#account/email">${s(t("Emailni almashtirish", "Изменить email", "Change email"))}</a>
+          </div>
+        </div>`);
+        slot.append(avatar);
+      }
+      slot.append(form);
+      return;
+    }
+    if (mode === "security") {
+      const security = find(".ops-security-card");
+      security.querySelector(".ux-eyebrow").remove();
+      const methods = security.querySelector("h3");
+      while (methods.nextElementSibling) methods.nextElementSibling.remove();
+      methods.remove();
+      slot.append(security, find(".ops-password"), find(".ops-sessions"));
+      return;
+    }
+    if (["password", "sessions", "email", "blocks"].includes(mode)) {
+      const detail = find(".ops-" + mode);
+      detail.open = true;
+      slot.append(detail);
+      return;
+    }
+    if (mode === "linked") {
+      const methods = find(".ops-security-card h3");
+      while (methods.nextElementSibling) slot.append(methods.nextElementSibling);
+      if (!me.facebook_linked && me.email_verified)
+        slot.insertAdjacentHTML("beforeend", `<button type="button" class="button-secondary" data-action="link-facebook">${s(t("Facebook’ni ulash", "Подключить Facebook", "Link Facebook"))}</button>`);
+      return;
+    }
+    slot.append(find(".ops-blocks"));
+    LaunchUX.mountAccountExport(slot);
+    slot.insertAdjacentHTML("beforeend", `<div class="desktop-settings-links"><a href="/privacy-policy">${s(t("Maxfiylik siyosati", "Политика конфиденциальности", "Privacy policy"))}</a><a href="/data-deletion">${s(t("Ma’lumotlarni o‘chirish", "Удаление данных", "Data deletion"))}</a></div>`);
+  }
+
+  async function desktopSettings(route) {
     if (!me) {
       location.hash = "login";
       return;
     }
+    if (route === "notification-settings") {
+      const slot = settingsShell("notifications");
+      await ExperienceUX.settingsPage(slot);
+      if (slot.isConnected) LaunchUX.enhance();
+      return;
+    }
+    if (route === "topup-saved") return LaunchUX.saved(settingsShell("topup"));
+    const requested = route.split("/")[1];
+    if (requested === "support") {
+      const slot = settingsShell("support");
+      await tickets(false, slot);
+      if (slot.isConnected && me?.staff_capabilities?.length)
+        slot.insertAdjacentHTML("beforeend", `<div class="desktop-settings-links"><a href="/#staff">${s(t("Xodim ish joyi", "Рабочее место сотрудника", "Staff workspace"))}</a></div>`);
+      return;
+    }
+    const aliases = { export: "privacy" };
+    const mode = aliases[requested] || requested;
+    return account(["security", "preferences", "linked", "privacy", "password", "sessions", "email", "blocks"].includes(mode) ? mode : "profile");
+  }
+
+  async function account(mode = "") {
+    if (!me) {
+      location.hash = "login";
+      return;
+    }
+    const locationAtStart = location.href;
+    const section = { password: "security", sessions: "security", email: "profile", blocks: "privacy" }[mode] || mode;
+    const slot = mode ? settingsShell(section) : null;
     const [security, blocks] = await Promise.all([
       api("/security"),
       api("/blocks"),
     ]);
-    app.innerHTML = `<section class="page ops-account">${pageTitle(t("Hisobim", "Мой аккаунт", "My account"), t("Profil va hisob sozlamalari.", "Профиль и настройки аккаунта.", "Profile and account settings."))}<nav class="ops-account-nav"><a href="/#orders">${icon("box")}${t("Buyurtmalar", "Заказы", "Orders")}</a><a href="/#messages">${icon("message")}${t("Xabarlar", "Сообщения", "Messages")}</a><a href="/#favorites">${icon("heart")}${t("Saqlanganlar", "Избранное", "Saved")}</a><a href="/#support-tickets">${icon("shield")}${t("Yordam murojaatlari", "Обращения в поддержку", "Support requests")}</a>${me.seller ? `<a href="/#seller">${t("Sotuvchi paneli", "Панель продавца", "Seller dashboard")}</a>` : '<a href="/#seller">' + t("Sotishni boshlash", "Начать продавать", "Start selling") + "</a>"}</nav><div class="ops-account-grid"><section class="panel ops-profile-card"><span class="ux-eyebrow">${t("SHAXSIY MA’LUMOTLAR", "ЛИЧНЫЕ ДАННЫЕ", "PROFILE DETAILS")}</span><h2>${s(me.display_name)}</h2><p class="help">${s(me.email)} · ${me.email_verified ? t("Email tasdiqlangan", "Email подтверждён", "Email verified") : t("Email tasdiqlanmagan", "Email не подтверждён", "Email unverified")}</p><div class="ops-avatar-settings">${marketAvatarMarkup(me.display_name, me.avatar_url, "ops-profile-avatar", me.id)}<div><button type="button" class="button-secondary" id="ops-avatar-change">${t("Profil rasmini tanlash", "Выбрать фото профиля", "Change profile photo")}</button><input type="file" id="ops-avatar-file" accept="image/jpeg,image/png,image/webp" hidden><p class="field-hint">${t("Profil rasmi hammaga ko‘rinadi. JPG, PNG yoki WebP.", "Фото профиля видно всем. JPG, PNG или WebP.", "Your profile photo is public. JPG, PNG or WebP.")}</p><p class="ops-avatar-error" role="alert" hidden></p></div></div><form id="ops-profile-form"><div class="ops-profile-fields">${field("display_name", t("Ism", "Имя", "Name"), `value="${s(me.display_name)}" minlength="2" maxlength="80" required`)}${me.phone_verification_enabled ? `<div class="field"><label>${t("Telefon raqami", "Номер телефона", "Phone number")}</label><input type="tel" value="${s(me.phone || "")}" readonly aria-label="${t("Telefon raqami", "Номер телефона", "Phone number")}"><a class="text-link" href="#contact-details">${me.phone_verified ? t("Raqamni almashtirish", "Изменить номер", "Change number") : t("Telefonni tasdiqlash", "Подтвердить телефон", "Verify phone number")} →</a></div>` : ""}<div class="field"><label>${t("Mamlakat", "Страна", "Country")}</label><select name="country">${countryOptions(me.country)}</select></div><div class="field"><label>${t("Til", "Язык", "Language")}</label><select name="language">${languageOptions(me.language || locale)}</select></div><div class="field"><label>${t("Ko‘rsatish valyutasi", "Валюта отображения", "Display currency")}</label><select name="currency">${currencyOptions(me.currency)}</select></div></div><button class="button-primary">${t("Saqlash", "Сохранить", "Save changes")}</button></form></section><section class="panel ops-security-card"><span class="ux-eyebrow">${t("HISOB HIMOYASI", "ЗАЩИТА АККАУНТА", "ACCOUNT PROTECTION")}</span><h2>${t("Ikki bosqichli kirish", "Двухэтапная проверка", "Two-step verification")}</h2><p class="help">${t("Authenticator ilovasidagi kod yoki bir martalik tiklash kodi bilan kirishni himoyalang.", "Защитите вход кодом Authenticator или одноразовым кодом восстановления.", "Protect sign-in with an Authenticator code or a single-use recovery code.")}</p><div class="ops-status ${security.mfa_enabled ? "is-on" : ""}">${security.mfa_enabled ? t("2FA yoqilgan", "2FA включена", "2FA enabled") : t("2FA hali yoqilmagan", "2FA пока выключена", "2FA not enabled")}</div>${security.mfa_enabled ? `<p class="help">${t("Qolgan tiklash kodlari", "Осталось кодов восстановления", "Recovery codes remaining")}: ${security.recovery_codes_remaining}</p>` : ""}<button class="button-secondary" id="ops-mfa">${security.mfa_enabled ? t("2FA ni o‘chirish", "Отключить 2FA", "Turn off 2FA") : t("Authenticator ulash", "Подключить Authenticator", "Set up Authenticator")}</button><h3>${t("Bog‘langan kirish usullari", "Способы входа", "Linked sign-in methods")}</h3><p class="help">${security.linked_providers.length ? security.linked_providers.map(s).join(" · ") : t("Email va sayt paroli", "Email и пароль сайта", "Email and site password")}</p><p class="help">${t("Google/Facebook ishlatsangiz va sayt parolingiz bo‘lmasa, “Parolni tiklash” orqali yarating.", "Если входите через Google/Facebook и нет пароля сайта, создайте его через восстановление пароля.", "If you use Google/Facebook without a site password, set one through password reset.")}</p><a class="text-link" href="/#password-reset">${t("Parolni tiklash", "Восстановить пароль", "Reset site password")} →</a></section></div><div class="ops-account-settings"><details class="panel ops-disclosure ops-password"><summary><span>${t("Parolni almashtirish", "Изменить пароль", "Change password")}</span><span class="ops-disclosure-mark" aria-hidden="true">+</span></summary><div class="ops-disclosure-body"><form id="ops-password-form">${passwordFields()}${field("new_password", t("Yangi parol", "Новый пароль", "New password"), 'type="password" autocomplete="new-password" minlength="10" maxlength="256" required')}<p class="help">${t("Parol yangilangach barcha qurilmalardan chiqiladi.", "После смены пароля все сеансы будут завершены.", "Changing your password signs out all devices.")}</p><button class="button-secondary">${t("Parolni yangilash", "Обновить пароль", "Update password")}</button></form></div></details><details class="panel ops-disclosure ops-email"><summary><span>${t("Emailni almashtirish", "Изменить email", "Change email")}</span><span class="ops-disclosure-mark" aria-hidden="true">+</span></summary><div class="ops-disclosure-body"><form id="ops-email-form">${field("email", t("Yangi email", "Новый email", "New email address"), 'type="email" autocomplete="email" maxlength="254" required')}${passwordFields()}<p class="help">${t("Yangi manzil tasdiqlanmaguncha eski email o‘zgarmaydi.", "Текущий email не изменится до подтверждения нового.", "Your current email stays in place until you confirm the new address.")}</p><button class="button-secondary">${t("Tasdiqlash xatini yuborish", "Отправить подтверждение", "Send confirmation")}</button></form></div></details><details class="panel ops-disclosure ops-sessions"><summary><span>${t("Faol qurilmalar", "Активные устройства", "Active devices")} <small>${security.sessions.length}</small></span><span class="ops-disclosure-mark" aria-hidden="true">+</span></summary><div class="ops-disclosure-body"><div class="ops-device-actions"><p class="help">${t("Hisobingiz ochiq turgan brauzerlar. Tanimagan qurilmangiz bo‘lsa, shu yerdan chiqaring.", "Браузеры с открытым сеансом. Завершите сеанс, если не узнаёте устройство.", "Browsers signed into your account. Sign out any device you do not recognize.")}</p><button class="button-secondary" data-revoke="others">${t("Boshqa qurilmalardan chiqish", "Выйти на других устройствах", "Sign out other devices")}</button></div>${security.sessions.map((v) => `<div class="ops-session"><div><b>${s(deviceLabel(v.user_agent))}</b><small>${v.current ? t("Joriy qurilma", "Это устройство", "This device") + " · " : ""}${s(v.network_label || "")} · ${t("Oxirgi faollik", "Активность", "Last active")}: ${v.last_seen_at ? parseServerDate(v.last_seen_at).toLocaleString(localeTag()) : "—"}</small></div><button class="ux-text-button" data-revoke="${s(v.id)}">${t("Chiqish", "Завершить", "Sign out")}</button></div>`).join("")}</div></details><details class="panel ops-disclosure ops-blocks"><summary><span>${t("Bloklangan foydalanuvchilar", "Заблокированные пользователи", "Blocked users")}</span><span class="ops-disclosure-mark" aria-hidden="true">+</span></summary><div class="ops-disclosure-body">${blocks.map((b) => `<div class="ops-session"><b>${s(b.name)}</b><button class="ux-text-button" data-unblock="${s(b.id)}">${t("Blokdan chiqarish", "Разблокировать", "Unblock")}</button></div>`).join("") || `<p class="help">${t("Bloklangan foydalanuvchilar yo‘q.", "Нет заблокированных пользователей.", "No blocked users.")}</p>`}</div></details></div><nav class="ops-account-shortcuts" aria-label="${t("Qo‘shimcha imkoniyatlar", "Другие возможности", "More account tools")}"><a id="trade-saved-link" class="text-link" href="/#saved-searches">${t("Saqlangan qidiruvlar", "Сохранённые поиски", "Saved searches")} →</a><a id="ex-preferences-link" class="text-link" href="/#notification-settings">${t("Bildirishnoma sozlamalari", "Настройки уведомлений", "Notification settings")} →</a><a class="text-link" href="/#topup-saved">${t("Saqlangan Top Up", "Сохранённые Top Up", "Saved Top Up")} →</a><a class="text-link" href="/#benefits" data-membership-link>${t("Takliflar va a’zolik", "Приглашения и участие", "Invitations and membership")} →</a></nav></section>`;
+    if (location.href !== locationAtStart || (slot && !slot.isConnected)) return;
+    const target = slot ? document.createElement("div") : app;
+    target.innerHTML = `<section class="page ops-account">${pageTitle(t("Hisobim", "Мой аккаунт", "My account"), t("Profil va hisob sozlamalari.", "Профиль и настройки аккаунта.", "Profile and account settings."))}<nav class="ops-account-nav"><a href="/#orders">${icon("box")}${t("Buyurtmalar", "Заказы", "Orders")}</a><a href="/#messages">${icon("message")}${t("Xabarlar", "Сообщения", "Messages")}</a><a href="/#favorites">${icon("heart")}${t("Saqlanganlar", "Избранное", "Saved")}</a><a href="/#support-tickets">${icon("shield")}${t("Yordam murojaatlari", "Обращения в поддержку", "Support requests")}</a>${me.seller ? `<a href="/#seller">${t("Sotuvchi paneli", "Панель продавца", "Seller dashboard")}</a>` : '<a href="/#seller">' + t("Sotishni boshlash", "Начать продавать", "Start selling") + "</a>"}</nav><div class="ops-account-grid"><section class="panel ops-profile-card"><span class="ux-eyebrow">${t("SHAXSIY MA’LUMOTLAR", "ЛИЧНЫЕ ДАННЫЕ", "PROFILE DETAILS")}</span><h2>${s(me.display_name)}</h2><p class="help">${s(me.email)} · ${me.email_verified ? t("Email tasdiqlangan", "Email подтверждён", "Email verified") : t("Email tasdiqlanmagan", "Email не подтверждён", "Email unverified")}</p><div class="ops-avatar-settings">${marketAvatarMarkup(me.display_name, me.avatar_url, "ops-profile-avatar", me.id)}<div><button type="button" class="button-secondary" id="ops-avatar-change">${t("Profil rasmini tanlash", "Выбрать фото профиля", "Change profile photo")}</button><input type="file" id="ops-avatar-file" accept="image/jpeg,image/png,image/webp" hidden><p class="field-hint">${t("Profil rasmi hammaga ko‘rinadi. JPG, PNG yoki WebP.", "Фото профиля видно всем. JPG, PNG или WebP.", "Your profile photo is public. JPG, PNG or WebP.")}</p><p class="ops-avatar-error" role="alert" hidden></p></div></div><form id="ops-profile-form"><div class="ops-profile-fields">${field("display_name", t("Ism", "Имя", "Name"), `value="${s(me.display_name)}" minlength="2" maxlength="80" required`)}${me.phone_verification_enabled ? `<div class="field"><label>${t("Telefon raqami", "Номер телефона", "Phone number")}</label><input type="tel" value="${s(me.phone || "")}" readonly aria-label="${t("Telefon raqami", "Номер телефона", "Phone number")}"><a class="text-link" href="#contact-details">${me.phone_verified ? t("Raqamni almashtirish", "Изменить номер", "Change number") : t("Telefonni tasdiqlash", "Подтвердить телефон", "Verify phone number")} →</a></div>` : ""}<div class="field"><label>${t("Mamlakat", "Страна", "Country")}</label><select name="country">${countryOptions(me.country)}</select></div><div class="field"><label>${t("Til", "Язык", "Language")}</label><select name="language">${languageOptions(me.language || locale)}</select></div><div class="field"><label>${t("Ko‘rsatish valyutasi", "Валюта отображения", "Display currency")}</label><select name="currency">${currencyOptions(me.currency)}</select></div></div><button class="button-primary">${t("Saqlash", "Сохранить", "Save changes")}</button></form></section><section class="panel ops-security-card"><span class="ux-eyebrow">${t("HISOB HIMOYASI", "ЗАЩИТА АККАУНТА", "ACCOUNT PROTECTION")}</span><h2>${t("Ikki bosqichli kirish", "Двухэтапная проверка", "Two-step verification")}</h2><p class="help">${t("Authenticator ilovasidagi kod yoki bir martalik tiklash kodi bilan kirishni himoyalang.", "Защитите вход кодом Authenticator или одноразовым кодом восстановления.", "Protect sign-in with an Authenticator code or a single-use recovery code.")}</p><div class="ops-status ${security.mfa_enabled ? "is-on" : ""}">${security.mfa_enabled ? t("2FA yoqilgan", "2FA включена", "2FA enabled") : t("2FA hali yoqilmagan", "2FA пока выключена", "2FA not enabled")}</div>${security.mfa_enabled ? `<p class="help">${t("Qolgan tiklash kodlari", "Осталось кодов восстановления", "Recovery codes remaining")}: ${security.recovery_codes_remaining}</p>` : ""}<button class="button-secondary" id="ops-mfa">${security.mfa_enabled ? t("2FA ni o‘chirish", "Отключить 2FA", "Turn off 2FA") : t("Authenticator ulash", "Подключить Authenticator", "Set up Authenticator")}</button><h3>${t("Bog‘langan kirish usullari", "Способы входа", "Linked sign-in methods")}</h3><p class="help">${security.linked_providers.length ? security.linked_providers.map(s).join(" · ") : t("Email va sayt paroli", "Email и пароль сайта", "Email and site password")}</p><p class="help">${t("Google/Facebook ishlatsangiz va sayt parolingiz bo‘lmasa, “Parolni tiklash” orqali yarating.", "Если входите через Google/Facebook и нет пароля сайта, создайте его через восстановление пароля.", "If you use Google/Facebook without a site password, set one through password reset.")}</p><a class="text-link" href="/#password-reset">${t("Parolni tiklash", "Восстановить пароль", "Reset site password")} →</a></section></div><div class="ops-account-settings"><details class="panel ops-disclosure ops-password"><summary><span>${t("Parolni almashtirish", "Изменить пароль", "Change password")}</span><span class="ops-disclosure-mark" aria-hidden="true">+</span></summary><div class="ops-disclosure-body"><form id="ops-password-form">${passwordFields()}${field("new_password", t("Yangi parol", "Новый пароль", "New password"), 'type="password" autocomplete="new-password" minlength="10" maxlength="256" required')}<p class="help">${t("Parol yangilangach barcha qurilmalardan chiqiladi.", "После смены пароля все сеансы будут завершены.", "Changing your password signs out all devices.")}</p><button class="button-secondary">${t("Parolni yangilash", "Обновить пароль", "Update password")}</button></form></div></details><details class="panel ops-disclosure ops-email"><summary><span>${t("Emailni almashtirish", "Изменить email", "Change email")}</span><span class="ops-disclosure-mark" aria-hidden="true">+</span></summary><div class="ops-disclosure-body"><form id="ops-email-form">${field("email", t("Yangi email", "Новый email", "New email address"), 'type="email" autocomplete="email" maxlength="254" required')}${passwordFields()}<p class="help">${t("Yangi manzil tasdiqlanmaguncha eski email o‘zgarmaydi.", "Текущий email не изменится до подтверждения нового.", "Your current email stays in place until you confirm the new address.")}</p><button class="button-secondary">${t("Tasdiqlash xatini yuborish", "Отправить подтверждение", "Send confirmation")}</button></form></div></details><details class="panel ops-disclosure ops-sessions"><summary><span>${t("Faol qurilmalar", "Активные устройства", "Active devices")} <small>${security.sessions.length}</small></span><span class="ops-disclosure-mark" aria-hidden="true">+</span></summary><div class="ops-disclosure-body"><div class="ops-device-actions"><p class="help">${t("Hisobingiz ochiq turgan brauzerlar. Tanimagan qurilmangiz bo‘lsa, shu yerdan chiqaring.", "Браузеры с открытым сеансом. Завершите сеанс, если не узнаёте устройство.", "Browsers signed into your account. Sign out any device you do not recognize.")}</p><button class="button-secondary" data-revoke="others">${t("Boshqa qurilmalardan chiqish", "Выйти на других устройствах", "Sign out other devices")}</button></div>${security.sessions.map((v) => `<div class="ops-session"><div><b>${s(deviceLabel(v.user_agent))}</b><small>${v.current ? t("Joriy qurilma", "Это устройство", "This device") + " · " : ""}${s(v.network_label || "")} · ${t("Oxirgi faollik", "Активность", "Last active")}: ${v.last_seen_at ? parseServerDate(v.last_seen_at).toLocaleString(localeTag()) : "—"}</small></div><button class="ux-text-button" data-revoke="${s(v.id)}">${t("Chiqish", "Завершить", "Sign out")}</button></div>`).join("")}</div></details><details class="panel ops-disclosure ops-blocks"><summary><span>${t("Bloklangan foydalanuvchilar", "Заблокированные пользователи", "Blocked users")}</span><span class="ops-disclosure-mark" aria-hidden="true">+</span></summary><div class="ops-disclosure-body">${blocks.map((b) => `<div class="ops-session"><b>${s(b.name)}</b><button class="ux-text-button" data-unblock="${s(b.id)}">${t("Blokdan chiqarish", "Разблокировать", "Unblock")}</button></div>`).join("") || `<p class="help">${t("Bloklangan foydalanuvchilar yo‘q.", "Нет заблокированных пользователей.", "No blocked users.")}</p>`}</div></details></div><nav class="ops-account-shortcuts" aria-label="${t("Qo‘shimcha imkoniyatlar", "Другие возможности", "More account tools")}"><a id="trade-saved-link" class="text-link" href="/#saved-searches">${t("Saqlangan qidiruvlar", "Сохранённые поиски", "Saved searches")} →</a><a id="ex-preferences-link" class="text-link" href="/#notification-settings">${t("Bildirishnoma sozlamalari", "Настройки уведомлений", "Notification settings")} →</a><a class="text-link" href="/#topup-saved">${t("Saqlangan Top Up", "Сохранённые Top Up", "Saved Top Up")} →</a><a class="text-link" href="/#benefits" data-membership-link>${t("Takliflar va a’zolik", "Приглашения и участие", "Invitations and membership")} →</a></nav></section>`;
+    if (slot) arrangeDesktopAccount(target, slot, mode);
     const avatarInput = $("#ops-avatar-file"),
       avatarButton = $("#ops-avatar-change");
-    avatarButton.onclick = () => avatarInput.click();
-    avatarInput.onchange = async () => {
+    if (avatarButton) avatarButton.onclick = () => avatarInput.click();
+    if (avatarInput) avatarInput.onchange = async () => {
       const file = avatarInput.files?.[0];
       if (!file) return;
       const errorBox = app.querySelector(".ops-avatar-error");
@@ -131,7 +265,7 @@ window.OperationsUX = (() => {
             "Profile photo saved",
           ),
         );
-        await account();
+        if (location.href === locationAtStart) await account(mode);
       } catch (error) {
         errorBox.textContent = error.message;
         errorBox.hidden = false;
@@ -143,6 +277,11 @@ window.OperationsUX = (() => {
       }
     };
     bind($("#ops-profile-form"), async (d) => {
+      if (mode === "preferences" && window.RegionPreferences) {
+        await RegionPreferences.save(d);
+        toast(t("Sozlamalar saqlandi", "Настройки сохранены", "Preferences saved"));
+        return;
+      }
       const r = await api("/profile", {
         method: "POST",
         body: JSON.stringify(d),
@@ -154,7 +293,7 @@ window.OperationsUX = (() => {
       syncProfileTrigger();
       syncLanguageMenu();
       toast(t("Profil saqlandi", "Профиль сохранён", "Profile saved"));
-      await account();
+      if (location.href === locationAtStart) await account(mode);
     });
     bind($("#ops-password-form"), async (d) => {
       await api("/security/password", {
@@ -194,7 +333,8 @@ window.OperationsUX = (() => {
         f.append(a);
       }
     });
-    $("#ops-mfa").onclick = () => {
+    const mfa = $("#ops-mfa");
+    if (mfa) mfa.onclick = () => {
       const enabled = security.mfa_enabled;
       const dialog = modal(
         enabled
@@ -213,7 +353,7 @@ window.OperationsUX = (() => {
             body: JSON.stringify(d),
           });
           dialog.close();
-          await account();
+          if (location.href === locationAtStart) await account(mode);
           return;
         }
         const setup = await api("/security/mfa/setup", {
@@ -242,7 +382,7 @@ window.OperationsUX = (() => {
             `<div class="ops-recovery"><p>${t("Bu kodlar faqat bir marta ko‘rsatiladi. Har biri bir marta ishlaydi. Ishonchli joyga saqlang.", "Эти коды показываются один раз. Каждый действует однократно. Сохраните их в безопасном месте.", "These codes are shown only once. Each works once. Store them somewhere safe.")}</p><pre>${result.recovery_codes.map(s).join("\n")}</pre><p class="help">${t("Ilovadagi joriy kod qayta ishlamaydi; keyingi yangi kodni kuting.", "Текущий код приложения повторно не сработает; дождитесь следующего.", "The current app code cannot be reused; wait for the next code.")}</p><button type="button" class="button-primary" id="ops-done">${t("Saqladim", "Сохранил", "I saved my codes")}</button></div>`;
           dialog.querySelector("#ops-done").onclick = () => {
             dialog.close();
-            account();
+            if (location.href === locationAtStart) account(mode);
           };
         });
       });
@@ -259,7 +399,7 @@ window.OperationsUX = (() => {
               me = null;
               csrf = "";
               location.hash = "login";
-            } else await account();
+            } else if (location.href === locationAtStart) await account(mode);
           } catch (error) {
             toast(error.message, "error");
             b.disabled = false;
@@ -271,7 +411,7 @@ window.OperationsUX = (() => {
         (b.onclick = async () => {
           try {
             await api("/blocks/" + e(b.dataset.unblock), { method: "DELETE" });
-            await account();
+            if (location.href === locationAtStart) await account(mode);
           } catch (error) {
             toast(error.message, "error");
           }
@@ -307,13 +447,15 @@ window.OperationsUX = (() => {
       location.hash = "account";
     });
   }
-  async function tickets(queue = false) {
+  async function tickets(queue = false, target = app) {
     if (!me) {
       location.hash = "login";
       return;
     }
+    const locationAtStart = location.href;
     const rows = await api("/support/tickets" + (queue ? "?queue=1" : ""));
-    app.innerHTML = `<section class="page ops-support">${pageTitle(queue ? t("Yordam navbati", "Очередь поддержки", "Support queue") : t("Yordam murojaatlarim", "Мои обращения", "My support requests"), t("Murojaat raqami va javoblar shu yerda saqlanadi.", "Номер обращения и ответы сохраняются здесь.", "Track your request and every reply in one place."))}${me.is_admin ? `<div class="actions"><a href="/#admin-support">${t("Barcha murojaatlar", "Все обращения", "All requests")}</a><a href="/#catalog-readiness">${t("Katalog sifati", "Качество каталога", "Catalogue readiness")}</a></div>` : ""}<div class="ops-support-layout"><div class="panel">${rows.map((r) => `<a class="ops-ticket-row" href="/#support-ticket/${e(r.id)}"><div><b>${s(r.subject)}</b><small>#${s(r.id)} · ${parseServerDate(r.updated_at).toLocaleString(localeTag())}</small></div><span class="ux-chip">${stateLabel(r.status)}</span></a>`).join("") || empty(t("Murojaatlar hali yo‘q", "Обращений пока нет", "No support requests yet"))}</div><div class="panel"><h2>${t("Yangi murojaat", "Новое обращение", "New request")}</h2><form id="ops-ticket-create">${field("subject", t("Mavzu", "Тема", "Subject"), 'minlength="5" maxlength="120" required')}<div class="field"><label>${t("Bo‘lim", "Раздел", "Category")}</label><select name="category">${[
+    if (location.href !== locationAtStart || !target.isConnected) return;
+    target.innerHTML = `<section class="page ops-support">${pageTitle(queue ? t("Yordam navbati", "Очередь поддержки", "Support queue") : t("Yordam murojaatlarim", "Мои обращения", "My support requests"), t("Murojaat raqami va javoblar shu yerda saqlanadi.", "Номер обращения и ответы сохраняются здесь.", "Track your request and every reply in one place."))}${me.is_admin ? `<div class="actions"><a href="/#admin-support">${t("Barcha murojaatlar", "Все обращения", "All requests")}</a><a href="/#catalog-readiness">${t("Katalog sifati", "Качество каталога", "Catalogue readiness")}</a></div>` : ""}<div class="ops-support-layout"><div class="panel">${rows.map((r) => `<a class="ops-ticket-row" href="/#support-ticket/${e(r.id)}"><div><b>${s(r.subject)}</b><small>#${s(r.id)} · ${parseServerDate(r.updated_at).toLocaleString(localeTag())}</small></div><span class="ux-chip">${stateLabel(r.status)}</span></a>`).join("") || empty(t("Murojaatlar hali yo‘q", "Обращений пока нет", "No support requests yet"))}</div><div class="panel"><h2>${t("Yangi murojaat", "Новое обращение", "New request")}</h2><form id="ops-ticket-create">${field("subject", t("Mavzu", "Тема", "Subject"), 'minlength="5" maxlength="120" required')}<div class="field"><label>${t("Bo‘lim", "Раздел", "Category")}</label><select name="category">${[
       ["general", t("Umumiy savol", "Общий вопрос", "General question")],
       ["delivery", t("Yetkazish", "Доставка", "Delivery")],
       ["account", t("Hisob", "Аккаунт", "Account")],
@@ -751,6 +893,7 @@ window.OperationsUX = (() => {
   }
   return {
     account,
+    desktopSettings,
     unlock,
     confirmEmail,
     tickets,

@@ -1975,7 +1975,7 @@ window.MobileSite = (() => {
       }
       if (
         sessionResolved &&
-        /^(?:account(?:\/.*)?|browse|search|orders|listing\/.*)$/.test(
+        /^(?:account(?:\/.*)?|notification-settings|topup-saved|browse|search|orders|listing\/.*)$/.test(
           routeFromLocation().split("?")[0],
         )
       )

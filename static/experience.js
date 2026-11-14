@@ -547,13 +547,16 @@ window.ExperienceUX = (() => {
       );
     return context;
   }
-  async function settingsPage() {
+  async function settingsPage(target = app) {
     if (!me) {
       location.hash = "login";
       return;
     }
-    preferences = await api("/experience/settings");
-    app.innerHTML = `<section class="page ex-settings">${pageTitle(t("Bildirishnoma sozlamalari", "Настройки уведомлений", "Notification settings"), t("Qaysi xabarlardan xabardor bo‘lishni tanlang. Xavfsizlik xabarlari saqlanadi.", "Выберите уведомления. Сообщения безопасности сохраняются.", "Choose the updates you want. Security notices remain available."))}<form class="panel" id="ex-settings">${[
+    const locationAtStart = location.href;
+    const result = await api("/experience/settings");
+    if (location.href !== locationAtStart || !target.isConnected) return;
+    preferences = result;
+    target.innerHTML = `<section class="page ex-settings">${pageTitle(t("Bildirishnoma sozlamalari", "Настройки уведомлений", "Notification settings"), t("Qaysi xabarlardan xabardor bo‘lishni tanlang. Xavfsizlik xabarlari saqlanadi.", "Выберите уведомления. Сообщения безопасности сохраняются.", "Choose the updates you want. Security notices remain available."))}<form class="panel" id="ex-settings">${[
       [
         "order",
         t("Buyurtmalar va nizolar", "Заказы и споры", "Orders and disputes"),

@@ -1111,3 +1111,311 @@
   font-size: 12px;
   line-height: 1.5;
 }
+
+.desktop-settings-back { display: none; }
+
+@media (min-width: 841px) {
+  body:has(.desktop-account-settings) .site-header .desktop-settings-back {
+    display: inline-flex;
+  }
+  body:has(.desktop-account-settings) .site-header .topbar {
+    justify-content: space-between;
+  }
+  body:has(.desktop-account-settings) .site-header .header-start {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+  }
+
+  body:has(.desktop-account-settings) .site-header {
+    border-block-end: 1px solid #292b30;
+  }
+  .desktop-settings-back {
+    align-items: center;
+    gap: 7px;
+    min-height: 32px;
+    padding-inline-start: 21px;
+    border-inline-start: 1px solid #34363b;
+    font-size: 14px;
+  }
+  .desktop-settings-back .icon {
+    transform: rotate(180deg);
+  }
+  [dir="rtl"] .desktop-settings-back .icon {
+    transform: none;
+  }
+
+  #app .desktop-account-settings {
+    --settings-panel: #16171b;
+    --settings-border: #2e3036;
+    --settings-muted: #bdc0cb;
+    --settings-accent: #ff9b42;
+    min-height: calc(100dvh - 74px);
+  }
+  .desktop-settings-title {
+    margin-block-end: 39px;
+  }
+  .desktop-settings-title h1 {
+    margin: 0;
+    line-height: 1.2;
+    font-weight: 740;
+    letter-spacing: -.035em;
+  }
+  .desktop-settings-layout {
+    display: grid;
+    grid-template-columns: minmax(190px, 23%) minmax(0, 1fr);
+    gap: 22px;
+    align-items: start;
+  }
+  .desktop-settings-nav {
+    display: grid;
+    align-content: start;
+    min-height: 590px;
+    padding: 6px 18px 20px 0;
+    padding-inline: 0 18px;
+    border-inline-end: 1px solid var(--settings-border);
+  }
+  #app .desktop-settings-nav :is(a, button) {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 54px;
+    padding: 8px 13px;
+    border-radius: 9px;
+    font-size: 15px;
+    line-height: 1.3;
+    font-weight: 500;
+    text-align: start;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+
+  #app .desktop-settings-nav button {
+    border-radius: 0;
+    margin-block-start: 18px;
+    padding-block-start: 16px;
+  }
+  #app .desktop-settings-card {
+    min-width: 0;
+    padding: 21px 23px 23px;
+    border-radius: 12px;
+  }
+  .desktop-settings-card > h2 {
+    line-height: 1.25;
+    letter-spacing: -.025em;
+  }
+  .desktop-settings-slot {
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+  }
+  #app .desktop-settings-slot > .page {
+    width: 100%;
+    min-height: 0;
+    margin: 0;
+  }
+  .desktop-settings-slot :is(.ex-settings, .launch-page, .ops-support) > .page-header .page-title {
+    display: none;
+  }
+  .desktop-settings-slot:has(.ex-settings [data-background-push]) [data-background-push] {
+    margin-block-start: 16px;
+  }
+  .desktop-settings-slot .ops-profile-fields {
+    grid-template-columns: minmax(0, 1fr);
+    margin: 0;
+    gap: 23px;
+  }
+  #app .desktop-settings-slot :is(.field > label, .desktop-settings-field-label) {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.35;
+  }
+  #app .desktop-settings-slot .ops-profile-fields input {
+    border-radius: 8px;
+  }
+  .desktop-settings-slot .ops-avatar-settings {
+    display: flex;
+    gap: 23px;
+    align-items: center;
+    border: 0;
+  }
+  #app .desktop-settings-slot .ops-profile-avatar {
+    border: 0;
+  }
+  #app .desktop-settings-slot #ops-avatar-change {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 44px;
+    padding: 0 13px;
+    border-radius: 8px;
+  }
+  .desktop-settings-email-field {
+    display: grid;
+    gap: 8px;
+  }
+  #app .desktop-settings-email {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 15px;
+    min-height: 44px;
+    padding: 7px 15px;
+    border-radius: 8px;
+  }
+  .desktop-settings-email-address {
+    flex: 1 1 190px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .desktop-settings-email-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+  }
+
+  #app .desktop-settings-email a {
+    padding-inline-start: 15px;
+    font-size: 14px;
+  }
+  .desktop-settings-form-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin: 26px -23px -23px;
+    padding: 19px 20px;
+    border-block-start: 1px solid var(--settings-border);
+  }
+  #app .desktop-settings-form-footer .button-primary {
+    min-height: 44px;
+    padding-inline: 22px;
+    border-radius: 8px;
+    font-size: 15px;
+  }
+  #app .desktop-settings-slot > .panel {
+    margin: 0;
+    min-width: 0;
+  }
+  .desktop-settings-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  #app .desktop-settings-links a {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .desktop-settings-nav :is(a, button):focus-visible,
+  .desktop-settings-back:focus-visible,
+  .desktop-settings-email a:focus-visible {
+    outline: 2px solid var(--settings-accent, #ff9b42);
+    outline-offset: 2px;
+  }
+}
+
+@layer sentryloot-desktop-settings {
+  @media (min-width: 841px) {
+    body:has(.desktop-account-settings) .site-header .topbar {
+      width: min(100%, 1440px) !important;
+      min-height: 74px !important;
+      padding: 8px clamp(20px, 2.1vw, 34px) !important;
+    }
+    body:has(.desktop-account-settings) .site-header :is(.header-search, #market-sidebar-toggle, #sell-item-button, #cart-button, #admin-nav-link, .language-control) {
+      display: none !important;
+    }
+    body:has(.desktop-account-settings) .site-header {
+      background: #111215 !important;
+    }
+    body:has(.desktop-account-settings) #app {
+      background: #0d0e11 !important;
+    }
+    #app .desktop-account-settings {
+      width: min(100%, 1440px) !important;
+      max-width: 1440px !important;
+      padding: 27px clamp(20px, 2vw, 34px) 56px !important;
+    }
+    .desktop-settings-title h1 {
+      font-size: clamp(28px, 2.9vw, 36px) !important;
+    }
+    #app .desktop-settings-nav :is(a, button) {
+      border: 0 !important;
+      background: transparent !important;
+    }
+    #app .desktop-settings-nav :is(a, button):hover {
+      background: #222328 !important;
+    }
+    #app .desktop-settings-nav a[aria-current="page"] {
+      background: #ff9b422a !important;
+    }
+    #app .desktop-settings-nav a[aria-current="page"] .icon {
+      color: var(--settings-accent) !important;
+    }
+    #app .desktop-settings-nav button {
+      border-block-start: 1px solid var(--settings-border) !important;
+    }
+    #app .desktop-settings-card {
+      border: 1px solid var(--settings-border) !important;
+      background: var(--settings-panel) !important;
+    }
+    .desktop-settings-card > h2 {
+      font-size: 28px !important;
+      margin: 0 0 28px !important;
+    }
+    #app .desktop-settings-slot > .page {
+      padding: 0 !important;
+      max-width: none !important;
+    }
+    #app .desktop-settings-slot :is(.field > label, .desktop-settings-field-label) {
+      color: var(--settings-muted) !important;
+      font-size: 16px !important;
+    }
+    #app .desktop-settings-slot .ops-profile-fields input {
+      height: 44px !important;
+      min-height: 44px !important;
+      font-size: 16px !important;
+    }
+    #app .desktop-settings-slot .field-control:has(> input[name="display_name"]) > .field-control-icon {
+      display: none !important;
+    }
+    #app .desktop-settings-slot .field-control > input[name="display_name"] {
+      padding-inline: 15px !important;
+      border-color: #575962 !important;
+      background: #16171b !important;
+    }
+    .desktop-settings-slot .ops-avatar-settings {
+      margin: 0 !important;
+      padding: 0 0 10px !important;
+    }
+    #app .desktop-settings-slot .ops-profile-avatar {
+      flex: 0 0 100px !important;
+      width: 100px !important;
+      height: 100px !important;
+      background: #37393e !important;
+      color: #f6f6f8 !important;
+      font-size: 37px !important;
+    }
+    #app .desktop-settings-slot #ops-avatar-change {
+      border-color: #74767e !important;
+      background: transparent !important;
+    }
+    #app .desktop-settings-email {
+      border: 1px solid #383a40 !important;
+      background: #212227 !important;
+    }
+    #app .desktop-settings-email-state.is-verified .icon {
+      color: #71d481 !important;
+    }
+    #app .desktop-settings-email a {
+      border-inline-start: 1px solid #45474e !important;
+      color: var(--settings-accent) !important;
+    }
+    #app .desktop-settings-form-footer .button-primary {
+      background: var(--settings-accent) !important;
+      border-color: var(--settings-accent) !important;
+      color: #17100a !important;
+    }
+    #app .desktop-settings-links a {
+      color: var(--settings-accent) !important;
+    }
+  }
+}
