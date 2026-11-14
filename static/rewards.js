@@ -120,14 +120,14 @@ window.RewardsUI = (() => {
       pending = false,
       touched = auto;
     if (promoOnly) {
-      const label = tr("Platform coupon code", "Promo kod", "Промокод");
       root.innerHTML = `<div class="rw-checkout rw-checkout-promo">
+        <label for="rw-promo-code">${tr("Platform coupon code", "Promo kod", "Промокод")}</label>
         <div class="rw-promo-row">
-          <input name="platform_coupon" maxlength="80" autocomplete="off" aria-label="${h(label)}" placeholder="${h(label)}">
+          <input id="rw-promo-code" name="platform_coupon" maxlength="80" autocomplete="off">
           <button class="button-secondary" type="button" data-rw-apply>${tr("Apply", "Qo‘llash", "Применить")}</button>
         </div>
+        <p id="rw-promo-error" class="rw-error rw-promo-error" data-rw-error role="alert" hidden></p>
         <p class="rw-quote-state" data-rw-state role="status"></p>
-        ${alert()}
       </div>`;
     } else {
       root.innerHTML = `<div class="rw-checkout"><div class="rw-section-heading"><h3>${tr("Rewards & platform coupon", "Bonus va platforma kuponi", "Бонусы и купон платформы")}</h3><a href="/#rewards" aria-label="${tr("Open rewards wallet", "Bonus hamyonini ochish", "Открыть бонусы")}">${icon("ticket")}</a></div><p>${tr("Apply before continuing to payment.", "To‘lovdan oldin qo‘llang.", "Примените перед оплатой.")}</p><label class="rw-field"><span>${tr("Platform coupon code", "Platforma kupon kodi", "Код купона платформы")}</span><input name="platform_coupon" maxlength="80" autocomplete="off"></label><label class="rw-toggle"><input type="checkbox" name="use_bonus"><span>${tr("Use available promotional credit", "Mavjud bonus kreditini ishlatish", "Использовать доступные бонусы")}</span></label><button class="button-secondary" type="button" data-rw-apply>${tr("Update benefits", "Imtiyozni yangilash", "Обновить привилегии")}</button><button class="button-secondary rw-reset" type="button" data-rw-clear>${tr("Continue without platform benefits", "Platforma imtiyozisiz davom etish", "Продолжить без бонусов платформы")}</button><p class="rw-quote-state" data-rw-state role="status"></p>${alert()}<div data-rw-result></div></div>`;
@@ -152,6 +152,13 @@ window.RewardsUI = (() => {
         : "";
       onChange(null);
     }
+    function clearQuoteError() {
+      if (promoOnly) {
+        code.removeAttribute("aria-invalid");
+        code.removeAttribute("aria-describedby");
+      }
+      error(root, "");
+    }
     const valid = () =>
       !!quote &&
       new Date(timestamp(quote.expires_at)).getTime() > Date.now() &&
@@ -172,7 +179,7 @@ window.RewardsUI = (() => {
       if (promoOnly && !code.value.trim()) return;
       touched = true;
       invalidate();
-      error(root, "");
+      clearQuoteError();
       if (blocked()) {
         error(
           root,
@@ -246,7 +253,14 @@ window.RewardsUI = (() => {
       } catch (e) {
         if (id === sequence) {
           state.textContent = "";
-          error(root, e.message);
+          const unavailable = "This promotional code is unavailable or expired.";
+          if (promoOnly && e.message === unavailable) {
+            code.setAttribute("aria-invalid", "true");
+            code.setAttribute("aria-describedby", "rw-promo-error");
+            error(root, tr(unavailable, "Bu promo kod yaroqsiz yoki muddati tugagan.", "Этот промокод недоступен или срок его действия истёк."));
+          } else {
+            error(root, e.message);
+          }
         }
       } finally {
         if (id === sequence) {
@@ -257,7 +271,7 @@ window.RewardsUI = (() => {
     }
     code.addEventListener("input", () => {
       touched = !promoOnly || Boolean(code.value.trim());
-      if (promoOnly) error(root, "");
+      if (promoOnly) clearQuoteError();
       invalidate();
     });
     if (promoOnly) code.addEventListener("keydown", (event) => {
