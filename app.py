@@ -1737,6 +1737,9 @@ class Handler(BaseHTTPRequestHandler):
             if not f and re.fullmatch(r'/static/assets/game-art/(pubg-mobile|mobile-legends|valorant|free-fire|cs2|honor-of-kings|roblox|genshin-impact|fortnite|minecraft|gta-5|league-of-legends|dota-2|call-of-duty-mobile|ea-sports-fc)-(640|1280|3840)\.webp',parsed.path):
                 candidate=parsed.path.removeprefix('/static/')
                 if (ROOT/'static'/candidate).is_file(): f=candidate
+            server_art=re.fullmatch(r'/static/community-server-art/([a-z0-9-]+-640\.webp)',parsed.path)
+            if server_art:
+                f='assets/game-art/'+server_art.group(1)
             if not f and re.fullmatch(r'/static/assets/payment-brands/(visa|mastercard|apple-pay|google-pay|fpx|grabpay|link)\.svg', parsed.path):
                 f=parsed.path.removeprefix('/static/')
             if parsed.path == '/static/discover-emojis-17.json':

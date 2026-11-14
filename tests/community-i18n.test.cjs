@@ -38,7 +38,7 @@ test('all literal community UI translations are covered in Uzbek and Russian',()
 });
 test('community validation and media-service errors have translated equivalents',()=>{
  const w=runtime(),keys=new Set();
- for(const filename of ['community.py','community_safety.py','community_video.py','video_evidence.py']){
+ for(const filename of ['community.py','community_safety.py','community_servers.py','community_video.py','video_evidence.py']){
   const source=fs.readFileSync(path.join(root,filename),'utf8');
   for(const m of source.matchAll(/(?:fail\(core,\s*\d+\s*,\s*|raise (?:Unavailable|InvalidVideo|VideoUnavailable)\()'([^']+)'/g))keys.add(m[1]);
  }

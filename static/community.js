@@ -141,6 +141,7 @@
   function nav(active) {
     const list = [
       ["discover", "Discover", "home", "#discover"],
+      ["servers", "Servers", "users", "#servers"],
     ];
     return list
       .map(([id, label, ico, href]) =>
@@ -149,12 +150,18 @@
       .join("");
   }
   function frame(active) {
+    shell.classList.toggle("community-servers-shell", active === "servers");
+    shell.classList.toggle("community-settings-shell", active === "settings");
     const search =
       new URLSearchParams(location.hash.split("?")[1] || "").get("q") || "";
-    shell.innerHTML = `<header class="community-header"><a class="brand" href="/#home" aria-label="SentryLoot — GameStoreHub marketplace" title="SentryLoot · gamestorehub.com"><span class="brand-mark"><img src="https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-256.webp?v=1" alt=""></span><span class="brand-wordmark">Sentry<span class="brand-dot">Loot</span></span></a><nav class="global-nav" aria-label="${t("Main navigation")}">${link("#discover", "Discover", "selected", "globe")}${link("/#home", "Marketplace", "", "cart")}${link("/top-up", "Top Up", "", "wallet")}</nav><form id="search"><label class="sr-only" for="community-search">${t("Search players, moments, collections…")}</label>${icon("search")}<input id="community-search" type="search" name="q" maxlength="80" value="${esc(search)}" placeholder="${t("Search players, moments, collections…")}"></form><div class="header-actions"><button type="button" class="icon-btn notification-bell" aria-label="${t("Notifications")}">${icon("bell")}<span class="notification-dot" aria-hidden="true" ${state.unread ? "" : "hidden"}></span></button>${state.user ? `<button id="account-button" type="button" class="account-button is-profile-trigger" data-action="account-menu" aria-label="${t("Open profile menu")}" aria-haspopup="dialog" aria-controls="profile-dropdown" aria-expanded="false">${window.SentryLootAccount.avatar(state.user.display_name || state.user.email, state.user.avatar_url, "account-avatar", state.user.id)}</button>` : link("/#login", "Sign in", "btn small")}</div>${active === "discover" ? gamePills() : ""}</header>
+    const accountTrigger = state.user
+      ? `<button id="account-button" type="button" class="account-button is-profile-trigger" data-action="account-menu" aria-label="${t("Open profile menu")}" aria-haspopup="dialog" aria-controls="profile-dropdown" aria-expanded="false">${window.SentryLootAccount.avatar(state.user.display_name || state.user.email, state.user.avatar_url, "account-avatar", state.user.id)}</button>`
+      : link("/#login", "Sign in", "account-button community-sign-in");
+    shell.innerHTML = `<header class="community-header"><a class="brand" href="/#home" aria-label="SentryLoot — GameStoreHub marketplace" title="SentryLoot · gamestorehub.com"><span class="brand-mark"><img src="https://images.gamestorehub.com/site-assets/sl-d318d339cc8c7e13/sentryloot-mark-256.webp?v=1" alt=""></span><span class="brand-wordmark">Sentry<span class="brand-dot">Loot</span></span></a><nav class="global-nav" aria-label="${t("Main navigation")}">${link("#discover", "Discover", "selected", "globe")}${link("/#home", "Marketplace", "", "cart")}${link("/top-up", "Top Up", "", "wallet")}</nav><form id="search"><label class="sr-only" for="community-search">${t("Search players, moments, collections…")}</label>${icon("search")}<input id="community-search" type="search" name="q" maxlength="80" value="${esc(search)}" placeholder="${t("Search players, moments, collections…")}"></form><div class="header-actions"><button type="button" class="icon-btn notification-bell" aria-label="${t("Notifications")}">${icon("bell")}<span class="notification-dot" aria-hidden="true" ${state.unread ? "" : "hidden"}></span></button>${accountTrigger}</div>${active === "discover" ? gamePills() : ""}</header>
  <aside class="sidebar"><nav aria-label="${t("Community navigation")}">${nav(active)}<div class="nav-rule"></div>${link("#settings", "Settings", `nav-link ${active === "settings" ? "active" : ""}`, "settings")}</nav><div class="my-games"><p>${t("My games")}</p>${(state.profile?.preferences?.games || []).map((g) => `<a href="#discover?game=${esc(g)}">${icon("gamepad")}${esc(gameName(g))}</a>`).join("")}${link("#settings", "Add a game", "", "plus")}</div></aside>
  <main id="main" tabindex="-1"><div id="view" class="page ${active === "discover" ? "has-game-pills" : ""}"><div class="skeleton"><i></i><i></i><i></i></div></div></main><nav class="mobile-nav" aria-label="${t("Community navigation")}">${[
    ["discover", "Discover", "home", "#discover"],
+   ["servers", "Servers", "users", "#servers"],
    ["create", "Create", "plus", "#create"],
  ]
    .map(([id, label, ico, href]) =>
@@ -1111,7 +1118,322 @@
     return `<section class="panel"><h2>${t("Awaiting review")}</h2>${r.posts.map((p) => `<article class="report"><h3>${esc(p.title)}</h3><p>${esc(p.body)}</p><button class="btn outline" data-action="review-post" data-id="${esc(p.id)}">${t("Review submission")}</button></article>`).join("") || `<p>${t("No pending submissions.")}</p>`}</section><section class="panel"><h2>${t("Copyright, privacy & appeals")}</h2>${r.cases.map((c) => `<article class="report"><span class="tag">${esc(t(c.kind))}</span><h3>${esc(c.id)}</h3><p>${esc(c.name)} · ${esc(c.email)}</p><p>${esc(c.reference)}</p><p>${esc(c.body)}</p><p>${t("Post ID")}: ${esc(c.post_id)}</p><button class="btn outline" data-action="review-post" data-id="${esc(c.post_id)}">${t("View post")}</button><form class="case-decision" data-id="${esc(c.id)}">${select("Action", "action", [["resolve", "Resolve request"], ["hide", "Hide post"], ...(c.kind === "comment" ? [["remove_comment", "Remove comment"]] : []), ...(c.kind === "appeal" ? [["reconsider", "Return to review"]] : [])], "resolve")}${field("Decision and reason", "decision", "", "textarea", 1000)}<p class="form-error" role="alert"></p><button type="submit" class="btn primary">${t("Save decision")}</button></form></article>`).join("") || `<p>${t("No requests yet.")}</p>`}</section>`;
   }
 
+  let serverChatTimer;
+  let serverMotionPromise;
+
+  async function revealServers(root) {
+    const preference = matchMedia("(prefers-reduced-motion: reduce)");
+    if (preference.matches) return;
+    serverMotionPromise ??= new Promise((resolve) => {
+      const script = document.createElement("script");
+      script.src = "/static/vendor/motion-14.7.1.min.js";
+      script.onload = () => resolve(window.Motion);
+      script.onerror = () => resolve(null);
+      document.head.append(script);
+    });
+    const motion = await serverMotionPromise;
+    if (!motion || !root.isConnected || preference.matches) return;
+    const cards = $$(".server-card", root).slice(0, 8);
+    const targets = cards.length ? cards : $$(".server-identity, .server-chat-heading", root);
+    if (targets.length) {
+      motion.animate(
+        targets,
+        { opacity: [0.7, 1], transform: ["translateY(8px)", "translateY(0)"] },
+        { duration: 0.32, delay: motion.stagger(0.035), ease: [0.22, 1, 0.36, 1] },
+      );
+    }
+  }
+
+  const serverPath = (server, channel) =>
+    `community/servers/${encodeURIComponent(server)}${channel ? `/channels/${encodeURIComponent(channel)}/messages` : ""}`;
+
+  const serverArtwork = {
+    "pubg mobile": "pubg-mobile",
+    valorant: "valorant",
+    "counter-strike 2": "cs2",
+    cs2: "cs2",
+    "mobile legends": "mobile-legends",
+    "mobile legends: bang bang": "mobile-legends",
+    "free fire": "free-fire",
+    fortnite: "fortnite",
+    roblox: "roblox",
+    minecraft: "minecraft",
+    "genshin impact": "genshin-impact",
+    "honor of kings": "honor-of-kings",
+    "call of duty mobile": "call-of-duty-mobile",
+    "league of legends": "league-of-legends",
+    "dota 2": "dota-2",
+    "gta 5": "gta-5",
+  };
+
+  function serverArt(name) {
+    const art = Object.hasOwn(serverArtwork, name.toLowerCase()) && serverArtwork[name.toLowerCase()];
+    return `<div class="server-art" aria-hidden="true">${art
+      ? `<img src="/static/community-server-art/${art}-640.webp" alt="" decoding="async">`
+      : icon("gamepad")}</div>`;
+  }
+
+  function serverControlForm(endpoint, name, maxLength, label, description = false) {
+    return `<form class="server-manage-form" data-server-endpoint="${esc(endpoint)}">
+      ${field(name, "name", "", "text", maxLength)}
+      ${description ? field("Description", "description", "", "text", 180) : ""}
+      <button type="submit" class="btn primary">${t(label)}</button>
+      <p class="form-error" role="alert"></p>
+    </form>`;
+  }
+
+  async function serverPage(id, channelId) {
+    if (!id) {
+      const { servers, can_manage } = await api("community/servers");
+      return `<div class="servers-directory">
+        ${heading("Servers", "Find a community for the games you play.")}
+        <div class="server-cards">${servers.map((server) => `<a class="server-card" href="#servers/${esc(server.id)}">
+          ${serverArt(server.name)}
+          <div class="server-card-info">
+            <div><h2>${esc(server.name)}</h2>
+              ${server.description ? `<p>${esc(server.description)}</p>` : ""}
+              <span class="server-card-link">${t(server.joined ? "Open server" : "View server")}</span>
+            </div>
+            <span class="server-card-arrow">${icon("arrow-up-right")}</span>
+          </div>
+        </a>`).join("") || `<div class="server-empty">${icon("users")}<p>${t("No servers yet.")}</p></div>`}</div>
+        ${can_manage ? `<details class="server-settings"><summary>${icon("plus")}${t("Create server")}</summary>${serverControlForm("community/servers", "Server name", 48, "Create server", true)}</details>` : ""}
+      </div>`;
+    }
+
+    const server = await api(serverPath(id));
+    const channel = channelId ? server.channels.find((item) => item.id === channelId) : server.channels[0];
+    if (!channel) {
+      const error = Error(t("Channel unavailable."));
+      error.status = 404;
+      throw error;
+    }
+    const endpoint = serverPath(id, channel.id);
+    return `<div class="server-room" data-server-room data-server="${esc(id)}" data-endpoint="${esc(endpoint)}" data-read-chat="${server.joined || server.can_manage ? "1" : "0"}" data-moderator="${server.can_manage ? "1" : "0"}">
+      <aside class="server-channel-list">
+        ${link("#servers", "All servers", "server-back", "arrow-right")}
+        <div class="server-identity">
+          ${serverArt(server.name)}
+          <div><h1>${esc(server.name)}</h1>${server.description ? `<p>${esc(server.description)}</p>` : ""}</div>
+        </div>
+        <h2 class="server-channel-label">${t("Channels")}</h2>
+        <nav aria-label="${t("Channels")}">${server.channels.map((item) => `<a href="#servers/${esc(id)}/${esc(item.id)}" ${item.id === channel.id ? 'aria-current="page"' : ""}><span aria-hidden="true">#</span> ${esc(item.name)}</a>`).join("")}</nav>
+        ${server.can_manage ? `<details class="server-settings"><summary>${icon("plus")}${t("Add channel")}</summary>${serverControlForm(serverPath(id) + "/channels", "Channel name", 32, "Add channel")}</details>` : ""}
+      </aside>
+      <section class="server-chat" aria-label="#${esc(channel.name)}">
+        <header class="server-chat-heading"><h2><span>#</span> ${esc(channel.name)}</h2>
+          ${button(server.joined ? "Leave server" : "Join server", server.joined ? "server-leave" : "server-join", server.joined ? "outline small" : "primary small")}
+        </header>
+        ${server.joined || server.can_manage ? `<div class="server-chat-scroll" tabindex="0" aria-label="${t("Channel messages")}">
+          <button type="button" class="btn outline small server-older" hidden>${t("Load older messages")}</button>
+          <div class="server-message-list"></div>
+          <div class="server-chat-state" hidden>${icon("message")}<p class="server-chat-status" role="status"></p></div>
+        </div>` : `<div class="server-chat-state">${icon("users")}<p>${t("Join this server to read or send messages.")}</p></div>`}
+        ${server.joined ? `<form class="server-composer">
+          <div class="server-reply-context" hidden><span></span><button type="button" class="icon-btn" data-action="server-cancel-reply" aria-label="${t("Cancel reply")}">${icon("close")}</button></div>
+          <div class="server-compose-row">
+            <textarea name="body" rows="1" maxlength="1000" aria-label="${t("Write a message")}" placeholder="${t("Write a message")}"></textarea>
+            <button type="submit" class="btn primary" aria-label="${t("Send")}">${icon("send")}</button>
+          </div>
+          <details class="server-share-field"><summary>${icon("share")}${t("Share a Discover post")}</summary>
+            <input name="post_link" type="text" maxlength="250" aria-label="${t("Discover post link")}" placeholder="${t("Discover post link")}">
+          </details>
+          <p class="form-error" role="alert"></p>
+        </form>` : ""}
+      </section>
+    </div>`;
+  }
+
+  function channelMessage(message, moderator) {
+    const id = esc(message.id);
+    const own = state.user?.id === message.user_id;
+    return `<article class="server-message" data-server-message="${id}">
+      <a href="#u/${esc(message.user_id)}" aria-label="${esc(message.display_name)}">${avatar({ ...message, id: message.user_id })}</a>
+      <div class="server-message-content">
+        <div class="server-message-byline"><strong>${esc(message.display_name)}</strong>${discoverTime(message.created_at)}</div>
+        ${message.reply ? `<blockquote><strong>${esc(message.reply.name)}</strong> ${esc(message.reply.body)}</blockquote>` : ""}
+        ${message.body ? `<p data-user-content>${esc(message.body)}</p>` : ""}
+        ${message.post ? `<a class="server-shared-post" href="#moment/${esc(message.post.id)}">${icon("layers")}${esc(message.post.title)}</a>` : ""}
+        <div class="server-message-actions">
+          <button type="button" data-action="server-reply">${icon("reply")}${t("Reply")}</button>
+          ${own || moderator ? button("Delete message", "server-delete-message") : ""}
+          ${moderator && !own ? `<details><summary>${t("Moderate message")}</summary>
+            ${button("Mute for one hour", "server-mute")}
+            ${button("Unmute member", "server-unmute")}
+          </details>` : ""}
+        </div>
+      </div>
+    </article>`;
+  }
+
+  function sharedDiscoverId(value) {
+    const input = value.trim();
+    if (!input) return "";
+    try {
+      const url = new URL(input, location.origin + "/community");
+      const match = url.hash.match(/^#moment\/([A-Za-z0-9_-]{1,100})$/);
+      if (url.origin === location.origin && url.pathname === "/community" && match)
+        return match[1];
+    } catch {}
+    throw Error(t("Paste a Discover post link from this site."));
+  }
+
+  function bindServerPage() {
+    const visual = $(".servers-directory, .server-room");
+    if (visual) void revealServers(visual);
+    for (const form of $$("[data-server-endpoint]")) {
+      form.onsubmit = (event) => {
+        event.preventDefault();
+        const fields = Object.fromEntries(new FormData(form));
+        return submit(form, async () => {
+          const endpoint = form.dataset.serverEndpoint;
+          const result = await api(endpoint, { method: "POST", body: fields });
+          location.hash = endpoint === "community/servers"
+            ? "servers/" + result.id
+            : "servers/" + form.closest("[data-server-room]").dataset.server + "/" + result.id;
+        });
+      };
+    }
+    const room = $("[data-server-room]");
+    if (!room || room.dataset.readChat !== "1") return;
+    const scroll = $(".server-chat-scroll", room);
+    const list = $(".server-message-list", room);
+    const status = $(".server-chat-status", room);
+    const chatState = status.parentElement;
+    const olderButton = $(".server-older", room);
+    const form = $(".server-composer", room);
+    const channel = room.dataset.endpoint;
+    const moderator = room.dataset.moderator === "1";
+    const historyLimit = 250;
+    let limit = 50, initialized = false, pendingLoad, lastMarkup;
+    let sending = false;
+
+    function loadLatest(forceBottom = false, expandHistory = false) {
+      if (pendingLoad || !room.isConnected) return pendingLoad;
+      const requested = expandHistory ? Math.min(limit + 50, historyLimit) : limit;
+      olderButton.disabled = true;
+      pendingLoad = (async () => {
+        try {
+          const result = await api(channel + "?" + new URLSearchParams({ limit: requested }));
+          if (!room.isConnected) return;
+          const oldTop = scroll.scrollTop;
+          const oldHeight = scroll.scrollHeight;
+          const nearBottom = oldHeight - oldTop - scroll.clientHeight < 90;
+          const markup = result.messages.map((message) => channelMessage(message, moderator)).join("");
+          if (lastMarkup !== markup) {
+            list.innerHTML = markup;
+            lastMarkup = markup;
+          }
+          limit = requested;
+          olderButton.hidden = !result.has_older || limit >= historyLimit;
+          chatState.hidden = result.messages.length > 0;
+          status.textContent = chatState.hidden ? "" : t("No messages yet.");
+          if (expandHistory) scroll.scrollTop = oldTop + scroll.scrollHeight - oldHeight;
+          else if (forceBottom || nearBottom || !initialized) scroll.scrollTop = scroll.scrollHeight;
+          initialized = true;
+        } catch (error) {
+          if (error.status === 401 || error.status === 403) {
+            list.replaceChildren();
+            lastMarkup = undefined;
+            olderButton.hidden = true;
+            if (form) form.hidden = true;
+          }
+          chatState.hidden = false;
+          status.textContent = error.message;
+        } finally {
+          olderButton.disabled = false;
+        }
+      })().finally(() => { pendingLoad = undefined; });
+      return pendingLoad;
+    }
+
+    async function poll() {
+      if (!room.isConnected) return;
+      if (document.visibilityState === "visible" && !sending && !list.contains(document.activeElement))
+        await loadLatest();
+      if (room.isConnected) serverChatTimer = setTimeout(poll, 5000);
+    }
+
+    olderButton.onclick = () => loadLatest(false, true);
+    if (form) form.onsubmit = (event) => {
+      event.preventDefault();
+      if (sending) return;
+      sending = true;
+      const bodyInput = form.elements.body;
+      const postInput = form.elements.post_link;
+      const draft = { body: bodyInput.value, post_link: postInput.value, reply_id: form.dataset.reply || "" };
+      return submit(form, async () => {
+        await api(channel, {
+          method: "POST",
+          body: { body: draft.body, post_id: sharedDiscoverId(draft.post_link), reply_id: draft.reply_id },
+        });
+        if (!room.isConnected) return;
+        if (bodyInput.value === draft.body) bodyInput.value = "";
+        if (postInput.value === draft.post_link) postInput.value = "";
+        if ((form.dataset.reply || "") === draft.reply_id) setServerReply(form);
+        await pendingLoad;
+        await loadLatest(true);
+      }).finally(() => { sending = false; });
+    };
+    room.refreshMessages = async (removed) => {
+      if (removed) {
+        $(`[data-server-message="${CSS.escape(removed)}"]`, list)?.remove();
+        lastMarkup = undefined;
+      }
+      await pendingLoad;
+      await loadLatest();
+    };
+    void loadLatest(true);
+    serverChatTimer = setTimeout(poll, 5000);
+  }
+
+  function setServerReply(form, id = "", name = "") {
+    form.dataset.reply = id;
+    const context = $(".server-reply-context", form);
+    context.hidden = !id;
+    $("span", context).textContent = id ? t("Reply to") + " " + name : "";
+  }
+
+  async function serverAction(el) {
+    const room = el.closest("[data-server-room]");
+    const action = el.dataset.action;
+    const form = $(".server-composer", room);
+    if (action === "server-cancel-reply") {
+      setServerReply(form);
+      form.elements.body.focus();
+      return;
+    }
+    const row = el.closest("[data-server-message]");
+    if (action === "server-reply") {
+      if (form) {
+        setServerReply(form, row.dataset.serverMessage, $(".server-message-byline strong", row).textContent);
+        form.elements.body.focus();
+      }
+      return;
+    }
+    if (!requireAuth()) return;
+    el.disabled = true;
+    try {
+      if (action === "server-join" || action === "server-leave") {
+        await api(serverPath(room.dataset.server) + (action === "server-join" ? "/join" : "/leave"), { method: "POST", body: {} });
+        if (room.isConnected) await render();
+      } else if (action === "server-delete-message") {
+        await api(room.dataset.endpoint + "/" + row.dataset.serverMessage, { method: "DELETE" });
+        await room.refreshMessages(row.dataset.serverMessage);
+      } else if (action === "server-mute" || action === "server-unmute") {
+        const enable = action === "server-mute";
+        await api(room.dataset.endpoint + "/" + row.dataset.serverMessage + "/mute", {
+          method: "POST", body: { enabled: enable },
+        });
+        toast(enable ? "Member muted." : "Member unmuted.");
+      }
+    } finally {
+      el.disabled = false;
+    }
+  }
+
   async function render() {
+    clearTimeout(serverChatTimer);
     window.NotificationPanel?.close();
     closeAccountMenu(false);
     const current = ++routeId;
@@ -1120,17 +1442,18 @@
       history.replaceState(history.state, "", location.pathname + location.search);
     }
     const [path, query = ""] = location.hash.slice(1).split("?");
-    const [page = "discover", id] = path.split("/");
+    const [page = "discover", id, channelId] = path.split("/");
     const params = new URLSearchParams(query);
     composer = null;
     dirty = false;
     if (page === "discover" || !page) filters.game = params.get("game") || "";
     frame(page || "discover");
-    document.title = `${t({ u: "Showcase", create: "Create", edit: "Edit profile", settings: "Settings", collection: "Collection", moments: "Moments", moment: "Moment", saved: "Saved", following: "Following", search: "Search", safety: "Community safety", request: "Request a review", submissions: "My submissions & requests", moderation: "Community moderation", drafts: "Drafts", layout: "Showcase layout", circle: "Your circle", about: "About this player" }[page] || "Discover")} · SentryLoot`;
+    document.title = `${t({ u: "Showcase", create: "Create", edit: "Edit profile", settings: "Settings", collection: "Collection", moments: "Moments", moment: "Moment", saved: "Saved", servers: "Servers", following: "Following", search: "Search", safety: "Community safety", request: "Request a review", submissions: "My submissions & requests", moderation: "Community moderation", drafts: "Drafts", layout: "Showcase layout", circle: "Your circle", about: "About this player" }[page] || "Discover")} · SentryLoot`;
     window.scrollTo({ top: 0, behavior: "instant" });
     try {
       let html;
-      if (page === "collection") html = await collectionPage(id);
+      if (page === "servers") html = await serverPage(id, channelId);
+      else if (page === "collection") html = await collectionPage(id);
       else if (["u", "moments", "about"].includes(page))
         html = await profilePage(page, id, params);
       else if (page === "moment") html = await momentPage(id);
@@ -1147,6 +1470,7 @@
       if (current !== routeId) return;
       $("#view").innerHTML = html;
       bindForms();
+      bindServerPage();
       bindGamePills();
       streamPlayers();
       window.SelectMenus?.refresh();
@@ -1716,6 +2040,7 @@
     );
   }
   async function action(el) {
+    if (el.dataset.action.startsWith("server-")) return serverAction(el);
     if (el.dataset.action === "account-menu") {
       if (!$("#profile-menu-root").hidden) {
         closeAccountMenu();

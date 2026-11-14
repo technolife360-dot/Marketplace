@@ -7,6 +7,7 @@ import community_safety as safety
 import community_video
 import community_moderation as automatic
 import community_uploads
+import community_servers
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -77,8 +78,8 @@ SCHEMA = (
     'CREATE INDEX IF NOT EXISTS community_events_user ON community_events(user_id,created_at DESC)',
     'CREATE INDEX IF NOT EXISTS community_media_owner ON community_media(user_id,created_at)',
 )
-SCHEMA += safety.SCHEMA + community_uploads.SCHEMA
-TABLES += community_uploads.TABLES
+SCHEMA += safety.SCHEMA + community_uploads.SCHEMA + community_servers.SCHEMA
+TABLES += community_uploads.TABLES + community_servers.TABLES
 DEFAULTS = {'show_country':False,'comments':'everyone','notify_follow':True,'notify_reaction':True,'notify_comment':True,'games':[]}
 
 
@@ -277,6 +278,8 @@ def erase(db,uid,core):
     for row in db.execute('SELECT object_key FROM community_media WHERE user_id=?',(uid,)).fetchall():
         safety.remove_object(core,row)
     db.execute('DELETE FROM community_cases WHERE user_id=?',(uid,))
+    db.execute('DELETE FROM community_channel_messages WHERE user_id=?',(uid,))
+    db.execute('DELETE FROM community_server_members WHERE user_id=?',(uid,))
     for table in ('community_saves','community_reactions','community_comments','community_reports','community_events','community_squad','community_follows','community_blocks','community_folders'):
         db.execute(f'DELETE FROM {table} WHERE user_id=?',(uid,))
     for table in ('community_follows','community_blocks','community_squad'): db.execute(f'DELETE FROM {table} WHERE target_id=?',(uid,))
@@ -315,8 +318,10 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
     if ctx.get('user') and ctx['user']['suspended']: core['require_user'](ctx)
     if method in ('POST','PATCH','DELETE') and path!='/api/community/cases':
         core['require_verified'](ctx)
-        if not re.fullmatch(r'/api/community/(?:uploads/[A-Za-z0-9_-]+/chunk|media/[A-Za-z0-9_-]+/check)',path):
+        if not re.fullmatch(r'/api/community/(?:uploads/[A-Za-z0-9_-]+/chunk|media/[A-Za-z0-9_-]+/check|servers/[A-Za-z0-9_-]+/channels/[A-Za-z0-9_-]+/messages)',path):
             core['check_rate'](db,'community-write',uid,120,3600)
+    if part == '/servers' or part.startswith('/servers/'):
+        return community_servers.route(db,ctx,method,part,qs,data,core)
     upload_result=community_uploads.route(handler,db,ctx,method,path,qs,data,raw,core)
     if upload_result is not UNHANDLED:return upload_result
     try:
