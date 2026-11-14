@@ -944,7 +944,7 @@ async function renderTopUpSupplierBrand(game) {
     <div class="tus-layout"><div class="tus-main">
     ${groups.map((group, index) => `<section class="tus-type-section" id="tus-type-${index}" data-supplier-section="${index}" aria-label="${esc(typeName(group))}" ${index ? "hidden" : ""}><div class="tus-package-grid">${group.items.map(packageCard).join("")}</div>${productInfo(group)}</section>`).join("")}
     <p class="tus-empty" data-topup-package-empty hidden>${t("Mos paket topilmadi.", "Подходящих пакетов не найдено.", "No matching packages found.")}</p><div class="tus-more"><button type="button" data-supplier-more>${t("Ko‘proq ko‘rsatish", "Показать ещё", "Show more")}</button></div></div>
-    <aside class="tus-summary"><div class="tus-summary-title"><h2>${t("Tanlangan paket", "Выбранный пакет", "Your selection")}</h2></div><div class="tus-summary-brand">${brand.image_url ? `<img src="${esc(brand.image_url)}" alt="">` : ""}<span>${esc(brand.name)}</span></div><div class="tus-summary-empty" data-supplier-summary-empty>${icon("box")}<b>${t("Paketni tanlang", "Выберите пакет", "Select a package")}</b><p>${t("Paket tafsilotlari shu yerda ko‘rinadi.", "Здесь появятся детали пакета.", "Your package details will appear here.")}</p></div><div class="tus-summary-selected" data-supplier-summary-selected aria-live="polite" hidden></div>${game.slug !== "pubg-mobile" && brand.category === "game" ? '<div class="tus-customer-fields" data-supplier-customer-fields></div>' : ""}${game.slug === "pubg-mobile" ? `<form id="tus-checkout-form" class="tus-checkout-form"><label class="field"><span>${t("O‘yinchi ID raqami", "ID игрока", "Player ID")}</span><input name="player_id" inputmode="numeric" autocomplete="off" pattern="[0-9]{3,40}" minlength="3" maxlength="40" placeholder="${t("Player ID kiriting", "Введите Player ID", "Enter Player ID")}" required aria-describedby="tus-player-help"></label><small id="tus-player-help">${t("PUBG Mobile profilidagi ID raqamingiz.", "ID из вашего профиля PUBG Mobile.", "Your numeric ID from your PUBG Mobile profile.")}</small><label class="field tus-quantity-field" data-supplier-quantity-field hidden><span>${t("Miqdor", "Количество", "Quantity")}</span><div class="tus-quantity-stepper"><button type="button" data-supplier-quantity-step="-1" aria-label="${t("Kamaytirish", "Уменьшить", "Decrease quantity")}">−</button><input type="number" name="quantity" inputmode="numeric" min="1" max="99" step="1" value="1" required disabled><button type="button" data-supplier-quantity-step="1" aria-label="${t("Ko‘paytirish", "Увеличить", "Increase quantity")}">+</button></div></label><label class="tus-test-consent"><input type="checkbox" name="accept_terms" required><span>${t("Player ID ni tekshirdim. Stripe test to‘loviga roziman; haqiqiy UC yetkazilmaydi.", "Я проверил Player ID и согласен на тестовую оплату Stripe. Реальные UC не доставляются.", "I checked my Player ID and agree to a Stripe test payment. No real UC will be delivered.")}</span></label><p class="tus-checkout-error" role="alert" hidden></p></form>` : ""}<div data-supplier-rewards></div><div class="tus-summary-total"><span>${t("Jami", "Итого", "Total")}</span><b>—</b></div><button type="submit" form="tus-checkout-form" class="tus-buy" disabled>${t("Xarid qilish", "Купить сейчас", "Buy now")}</button><p class="tus-checkout-note">${icon("shield")}<span>${t("Sotuv narxlari va xarid qilish imkoniyati tayyorlanmoqda.", "Цены продажи и возможность покупки готовятся.", "Selling prices and checkout are being prepared.")}</span></p></aside></div></section>`;
+    <aside class="tus-summary"><div class="tus-summary-title"><h2>${t("Tanlangan paket", "Выбранный пакет", "Your selection")}</h2></div><div class="tus-summary-brand">${brand.image_url ? `<img src="${esc(brand.image_url)}" alt="">` : ""}<span>${esc(brand.name)}</span></div><div data-save-player-id-offer></div><div data-saved-player-picker></div><div class="tus-summary-empty" data-supplier-summary-empty>${icon("box")}<b>${t("Paketni tanlang", "Выберите пакет", "Select a package")}</b><p>${t("Paket tafsilotlari shu yerda ko‘rinadi.", "Здесь появятся детали пакета.", "Your package details will appear here.")}</p></div><div class="tus-summary-selected" data-supplier-summary-selected aria-live="polite" hidden></div>${game.slug !== "pubg-mobile" && brand.category === "game" ? '<div class="tus-customer-fields" data-supplier-customer-fields></div>' : ""}${game.slug === "pubg-mobile" ? `<form id="tus-checkout-form" class="tus-checkout-form"><label class="field"><span>${t("O‘yinchi ID raqami", "ID игрока", "Player ID")}</span><input name="player_id" inputmode="numeric" autocomplete="off" pattern="[0-9]{3,40}" minlength="3" maxlength="40" placeholder="${t("Player ID kiriting", "Введите Player ID", "Enter Player ID")}" required aria-describedby="tus-player-help"></label><small id="tus-player-help">${t("PUBG Mobile profilidagi ID raqamingiz.", "ID из вашего профиля PUBG Mobile.", "Your numeric ID from your PUBG Mobile profile.")}</small><label class="field tus-quantity-field" data-supplier-quantity-field hidden><span>${t("Miqdor", "Количество", "Quantity")}</span><div class="tus-quantity-stepper"><button type="button" data-supplier-quantity-step="-1" aria-label="${t("Kamaytirish", "Уменьшить", "Decrease quantity")}">−</button><input type="number" name="quantity" inputmode="numeric" min="1" max="99" step="1" value="1" required disabled><button type="button" data-supplier-quantity-step="1" aria-label="${t("Ko‘paytirish", "Увеличить", "Increase quantity")}">+</button></div></label><label class="tus-test-consent"><input type="checkbox" name="accept_terms" required><span>${t("Player ID ni tekshirdim. Stripe test to‘loviga roziman; haqiqiy UC yetkazilmaydi.", "Я проверил Player ID и согласен на тестовую оплату Stripe. Реальные UC не доставляются.", "I checked my Player ID and agree to a Stripe test payment. No real UC will be delivered.")}</span></label><p class="tus-checkout-error" role="alert" hidden></p></form>` : ""}<div data-supplier-rewards></div><div class="tus-summary-total"><span>${t("Jami", "Итого", "Total")}</span><b>—</b></div><button type="submit" form="tus-checkout-form" class="tus-buy" disabled>${t("Xarid qilish", "Купить сейчас", "Buy now")}</button><p class="tus-checkout-note">${icon("shield")}<span>${t("Sotuv narxlari va xarid qilish imkoniyati tayyorlanmoqda.", "Цены продажи и возможность покупки готовятся.", "Selling prices and checkout are being prepared.")}</span></p></aside></div></section>`;
   const page = app.querySelector(".topup-supplier-page");
   const typeButtons = [...page.querySelectorAll("[data-supplier-type]")];
   const sections = [...page.querySelectorAll("[data-supplier-section]")];
@@ -957,6 +957,22 @@ async function renderTopUpSupplierBrand(game) {
     selectedPackage = null,
     requestKey = crypto.randomUUID();
   const checkoutForm = page.querySelector("#tus-checkout-form");
+  const savedPlayerPicker = page.querySelector("[data-saved-player-picker]");
+  // Only fill fields that explicitly ask for a game ID, never emails or credentials.
+  const getPlayerFields = () => {
+    if (checkoutForm) return { player: checkoutForm.elements.player_id };
+    const inputs = [...page.querySelectorAll("[data-supplier-customer-fields] input")];
+    const label = (input) => input.closest("label")?.querySelector("span")?.textContent.trim();
+    return {
+      player: inputs.find((input) => input.type === "text" && /^(?:player id|user id|target id|role id|uid|id pengguna|character id|account id)$/i.test(label(input))),
+      server: inputs.find((input) => input.type === "text" && /^(?:server \/ zone id|server id|zone id)$/i.test(label(input))),
+    };
+  };
+  if (brand.category === "game") {
+    LaunchUX.mountSavedPlayerIds(savedPlayerPicker, game.slug, getPlayerFields).then(() => {
+      savedPlayerPicker.hidden = !getPlayerFields().player;
+    });
+  }
   const rewardsHost = page.querySelector("[data-supplier-rewards]");
   const supplierRewards =
     checkoutForm &&
@@ -1087,15 +1103,16 @@ async function renderTopUpSupplierBrand(game) {
         ]),
       );
       customerFields.innerHTML = (pack.inquiry_fields || [])
-        .filter((field) => ["text", "number", "email"].includes(field.type))
+        .filter((field) => ["text", "number", "numeric", "email"].includes(field.type))
         .map(
           (field, index) =>
-            `<label class="field"><span>${esc(field.name || (index === 0 ? "Player ID" : "Zone ID"))}</span><input type="${field.type === "email" ? "email" : "text"}" name="${esc(field.key)}" autocomplete="off" ${field.type === "number" ? 'inputmode="numeric"' : ""} ${field.required === false ? "" : "required"}></label>`,
+            `<label class="field"><span>${esc(field.name || (index === 0 ? "Player ID" : "Zone ID"))}</span><input type="${field.type === "email" ? "email" : "text"}" name="${esc(field.key)}" autocomplete="off" ${["number", "numeric"].includes(field.type) ? 'inputmode="numeric"' : ""} ${field.required === false ? "" : "required"}></label>`,
         )
         .join("");
       customerFields.querySelectorAll("input").forEach((input) => {
         input.value = previous.get(input.name) || "";
       });
+      savedPlayerPicker.hidden = !getPlayerFields().player;
     }
     const listing = Boolean(
       (pack.membership || pack.open_detail) && pack.sku !== requestedSku,
@@ -1365,15 +1382,7 @@ async function renderTopUpSupplierBrand(game) {
     } catch {}
   }
   if (returnOrder && /^[A-Za-z0-9_-]+$/.test(returnOrder)) {
-    const params = new URLSearchParams(location.search);
-    params.delete("topup_return");
-    history.replaceState(
-      history.state,
-      "",
-      location.pathname +
-        (params.size ? "?" + params.toString() : "") +
-        location.hash,
-    );
+    const returnLocation = location.href;
     try {
       sessionStorage.removeItem("sentryloot-supplier-checkout");
     } catch {}
@@ -1382,7 +1391,12 @@ async function renderTopUpSupplierBrand(game) {
         "/top-up/test-orders/" + encodeURIComponent(returnOrder) + "/refresh",
         { method: "POST", body: "{}" },
       );
+      if (location.href !== returnLocation || !page.isConnected) return;
       if (["paid_test", "delivered_test", "completed"].includes(order.status)) {
+        const url = new URL(location.href);
+        url.searchParams.delete("topup_return");
+        history.replaceState(history.state, "", url);
+        LaunchUX.offerSavePlayerId(page.querySelector("[data-save-player-id-offer]"), order);
         toast(
           t(
             "Stripe test to‘lovi muvaffaqiyatli. Test rejimida haqiqiy UC yuborilmaydi.",

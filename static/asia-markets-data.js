@@ -9,7 +9,7 @@ async function loadRegionData(url) {
 }
 window.SENTRYLOOT_MARKETS_READY = Promise.allSettled([
   loadRegionData("/static/asia-markets.json?v=global-20261029-2"),
-  loadRegionData("/static/regional-languages.json?v=desktop-settings-5"),
+  loadRegionData("/static/regional-languages.json?v=saved-player-ids-2"),
 ]).then(([countries, languages]) => {
   window.SENTRYLOOT_LANGUAGE_DATA =
     languages.status === "fulfilled" ? languages.value : null;

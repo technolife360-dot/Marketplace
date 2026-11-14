@@ -7,11 +7,14 @@ import json
 import os
 import re
 import account_contacts
+import melostore_catalog
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 UNHANDLED = object()
 CONFIG_KEY = 'launch_public_profile'
+PLAYER_IDS_KEY = 'topup_player_ids'
+CONFIRMED_TOPUP_STATES = ('paid', 'paid_test', 'delivered', 'delivered_test', 'completed')
 TEST_SQL = "NOT EXISTS(SELECT 1 FROM platform_config audience WHERE audience.key='listing_audience:'||l.id AND audience.value='test') AND NOT (l.title='ads sdasde ded' AND l.seller_id IN (SELECT user_id FROM seller_profiles WHERE shop_name='SentryLoot Test Seller'))"
 PACKAGE_ART = {str(n)+'-uc':'/static/assets/topup-uc-'+str(n)+'.png' for n in (60,325,660,1800,3850,8100)}
 PACKAGE_ART.update({'elite-pass-lv1-100':'/static/assets/topup-elite-pass.png','elite-pass-plus-lv1-100':'/static/assets/topup-elite-pass.png','weekly-mythic-emblem-value-pack':'/static/assets/topup-weekly-mythic.png','weekly-deal-pack-2':'/static/assets/topup-weekly-deal-2.png','weekly-deal-pack-1':'/static/assets/topup-weekly-deal-1.png'})
@@ -102,6 +105,76 @@ def save_preferences(db,uid,transform,core):
     except Exception:
         db.execute('ROLLBACK');raise
 
+def saved_player_ids(db, uid):
+    row = db.execute('SELECT settings_json FROM experience_preferences WHERE user_id=?', (uid,)).fetchone()
+    return json.loads(row['settings_json']).get(PLAYER_IDS_KEY, []) if row else []
+
+def player_id_games(db):
+    games = {row['game_slug']: row['game_name'] for row in db.execute(
+        'SELECT DISTINCT game_slug,game_name FROM topup_packages WHERE enabled=1 ORDER BY game_name'
+    )}
+    catalog = melostore_catalog.snapshot()
+    games.update((item['slug'], item['name']) for item in catalog['items']
+                 if item['category'] == 'game')
+    result = []
+    for slug, name in sorted(games.items(), key=lambda game: game[1].casefold()):
+        fields = [field for sku in catalog['selected_skus'].get(slug, ())
+                  for field in catalog['customer_fields'].get(sku, ())]
+        server_fields = [field for field in fields if field.get('type') in ('text', 'number', 'numeric')
+                         and field.get('name', '').casefold() in ('server / zone id', 'server id', 'zone id')]
+        required = slug == 'mobile-legends' or any(field.get('required') is True for field in server_fields)
+        result.append({'slug': slug, 'name': name, 'server_required': required,
+                       'server_available': required or bool(server_fields)})
+    return result
+
+def player_ids_route(db, uid, method, data, core, *, remove=False):
+    error = core['HttpError']
+    if method == 'GET':
+        return {'ids': saved_player_ids(db, uid), 'games': player_id_games(db)}
+    if not remove and 'order_id' in data:
+        if set(data) != {'order_id', 'consent'} or data.get('consent') is not True:
+            raise error(400, 'Confirm that you want to save this player ID.')
+        oid = data['order_id']
+        if not isinstance(oid, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', oid):
+            raise error(400, 'Invalid Top Up order.')
+        order = db.execute(
+            '''SELECT p.game_slug,o.player_id,o.server_id,o.status,o.payment_reference
+               FROM topup_orders o JOIN topup_packages p ON p.id=o.package_id
+               WHERE o.id=? AND o.buyer_id=?''', (oid, uid)
+        ).fetchone()
+        if not order:
+            raise error(404, 'Top Up order not found.')
+        if order['status'] not in CONFIRMED_TOPUP_STATES or not order['payment_reference']:
+            raise error(409, 'Wait for your Top Up payment to be confirmed.')
+        data = {key: order[key] for key in ('game_slug', 'player_id', 'server_id')}
+    if set(data) - {'game_slug', 'player_id', 'server_id'}:
+        raise error(400, 'Check the game and player ID.')
+    slug, player, server = (data.get('game_slug'), data.get('player_id'), data.get('server_id', ''))
+    if (not isinstance(slug, str) or not re.fullmatch(r'[a-z0-9-]{1,100}', slug)
+        or not isinstance(player, str) or not re.fullmatch(r'[0-9]{3,40}', player)
+        or not isinstance(server, str) or not re.fullmatch(r'[0-9]{0,10}', server)):
+        raise error(400, 'Check the game and player ID.')
+    if not remove:
+        game = next((game for game in player_id_games(db) if game['slug'] == slug), None)
+        if not game:
+            raise error(404, 'Top Up game not found.')
+        if game['server_required'] and not server:
+            raise error(400, 'Enter the server ID for this game.')
+    entry = {'game_slug': slug, 'player_id': player, 'server_id': server}
+
+    def transform(prefs):
+        ids = prefs.get(PLAYER_IDS_KEY, [])
+        if remove:
+            ids = [item for item in ids if item != entry]
+        elif entry not in ids:
+            if len(ids) >= 100:
+                raise error(400, 'Remove a saved player ID before adding another.')
+            ids = [*ids, entry]
+        prefs[PLAYER_IDS_KEY] = ids
+
+    prefs = save_preferences(db, uid, transform, core)
+    return {'ids': prefs[PLAYER_IDS_KEY]}
+
 def personal_export(db,uid):
     # Explicit field lists: never SELECT * from sessions, users or deliveries.
     profile=dict(db.execute('SELECT id,display_name,email,country,language,currency,created_at FROM users WHERE id=?',(uid,)).fetchone())
@@ -120,6 +193,7 @@ def personal_export(db,uid):
     }
     result={'format_version':1,'generated_at':datetime.now(timezone.utc).isoformat(),'profile':profile}
     for key,(sql,args) in queries.items():result[key]=[dict(r) for r in db.execute(sql,args)]
+    result['saved_player_ids'] = saved_player_ids(db, uid)
     result['community']={}
     for table,fields in {
         'community_profiles':'handle,bio,visibility,preferences,layout',
@@ -213,6 +287,10 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         message=core['clean_text'](data.get('message',''),'Message',0,2000)
         if data['status'] in ('degraded','maintenance') and len(message)<10:raise error(400,'Explain the service interruption.')
         value={'status':data['status'],'message':message,'updated_at':core['now_iso']()};put_config(db,'public_incident',value);core['audit'](db,uid,'status_updated','platform','status',value);return value
+    if path == '/api/top-up/player-ids' and method in ('GET', 'POST'):
+        return player_ids_route(db, core['require_user'](ctx), method, data, core)
+    if path == '/api/top-up/player-ids/remove' and method == 'POST':
+        return player_ids_route(db, core['require_user'](ctx), method, data, core, remove=True)
     if path=='/api/top-up/preferences' and method in ('GET','POST'):
         core['require_verified'](ctx)
         if method=='POST':

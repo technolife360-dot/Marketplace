@@ -1956,7 +1956,7 @@
     try {
       await refresh();
       try {
-        const response = await fetch("/static/regional-languages.json?v=desktop-settings-5", {
+        const response = await fetch("/static/regional-languages.json?v=saved-player-ids-2", {
           signal: AbortSignal.timeout(6000),
         });
         if (response.ok)

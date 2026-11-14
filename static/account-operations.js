@@ -98,7 +98,7 @@ window.OperationsUX = (() => {
       ["notifications", "bell", t("Bildirishnomalar", "Уведомления", "Notifications"), "/#notification-settings"],
       ["preferences", "globe", t("Til va hudud", "Язык и регион", "Language & region"), "/#account/preferences"],
       ["linked", "link", t("Bog‘langan hisoblar", "Связанные аккаунты", "Linked accounts"), "/#account/linked"],
-      ["topup", "gamepad", t("Saqlangan Top Up", "Сохранённые пакеты Top Up", "Saved Top Up"), "/#topup-saved"],
+      ["topup", "gamepad", t("Saqlangan o‘yin ID’lari", "Сохранённые ID игроков", "Saved Player IDs"), "/#account/player-ids"],
       ["privacy", "shield", t("Maxfiylik va ma’lumotlar", "Конфиденциальность и данные", "Privacy & data"), "/#account/privacy"],
       ["support", "info", t("Yordam", "Поддержка", "Support"), "/#account/support"],
     ];
@@ -205,7 +205,7 @@ window.OperationsUX = (() => {
       if (slot.isConnected) LaunchUX.enhance();
       return;
     }
-    if (route === "topup-saved") return LaunchUX.saved(settingsShell("topup"));
+    if (route === "account/player-ids") return LaunchUX.playerIds(settingsShell("topup"));
     const requested = route.split("/")[1];
     if (requested === "support") {
       const slot = settingsShell("support");

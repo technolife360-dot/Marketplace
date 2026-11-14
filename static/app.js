@@ -2550,11 +2550,10 @@ async function navigate() {
     if (route === "staff") return await LaunchUX.staff();
     if (route === "launch-settings") return await LaunchUX.admin();
     if (route === "service-status") return await LaunchUX.status();
-    if (route === "topup-saved" || route === "notification-settings") {
+    if (route === "topup-saved") return await LaunchUX.saved();
+    if (route === "notification-settings") {
       if (!window.MobileSite?.isMobile()) return await renderAccount(route);
-      return route === "topup-saved"
-        ? await LaunchUX.saved()
-        : await ExperienceUX.settingsPage();
+      return await ExperienceUX.settingsPage();
     }
     if (route.startsWith("games/")) {
       const parts = route.split("/");
@@ -2603,6 +2602,8 @@ async function navigate() {
       return window.MobileSite?.isMobile()
         ? await window.MobileSite.account()
         : await renderAccount(route);
+    if (route === "account/player-ids" && window.MobileSite?.isMobile())
+      return await LaunchUX.playerIds();
     if (route.startsWith("account/"))
       return window.MobileSite?.isMobile()
         ? await window.MobileSite.settings(route)

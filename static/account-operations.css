@@ -1146,7 +1146,7 @@
   }
 
   #app .desktop-account-settings {
-    --settings-panel: #16171b;
+    --settings-panel: #000;
     --settings-border: #2e3036;
     --settings-muted: #bdc0cb;
     --settings-accent: #ff9b42;
@@ -1173,7 +1173,6 @@
     min-height: 590px;
     padding: 6px 18px 20px 0;
     padding-inline: 0 18px;
-    border-inline-end: 1px solid var(--settings-border);
   }
   #app .desktop-settings-nav :is(a, button) {
     display: flex;
@@ -1327,7 +1326,7 @@
       background: #111215 !important;
     }
     body:has(.desktop-account-settings) #app {
-      background: #0d0e11 !important;
+      background: #000 !important;
     }
     #app .desktop-account-settings {
       width: min(100%, 1440px) !important;
@@ -1349,9 +1348,6 @@
     }
     #app .desktop-settings-nav a[aria-current="page"] .icon {
       color: var(--settings-accent) !important;
-    }
-    #app .desktop-settings-nav button {
-      border-block-start: 1px solid var(--settings-border) !important;
     }
     #app .desktop-settings-card {
       border: 1px solid var(--settings-border) !important;

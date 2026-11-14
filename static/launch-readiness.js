@@ -215,7 +215,7 @@ window.LaunchUX = (() => {
       toast(t("Saqlandi", "Сохранено", "Saved"));
     });
   }
-  async function saved(target = app) {
+  async function saved() {
     if (!me) {
       location.hash = "login";
       return;
@@ -228,8 +228,166 @@ window.LaunchUX = (() => {
     const packs = games
       .flatMap((g) => g.packages)
       .filter((p) => prefs.saved.includes(p.id));
+    if (location.href !== locationAtStart) return;
+    app.innerHTML = `<section class="page launch-page">${pageTitle(t("Saqlangan Top Up paketlari", "Сохранённые пакеты Top Up", "Saved Top Up packages"), "")}<div class="launch-saved">${packs.length ? packs.map((p) => `<a class="panel" href="/top-up/${e(p.game_slug)}/${e(p.url_slug)}"><b>${esc(p.game_name)}</b><span>${esc(p.product_name)}</span></a>`).join("") : `<p>${t("Hali paket saqlanmagan.", "Пакеты ещё не сохранены.", "No packages saved yet.")}</p>`}</div>${link("/top-up", t("Paketlarni ko‘rish", "Посмотреть пакеты", "Browse packages"))}</section>`;
+  }
+  const playerIdsURL = "/top-up/player-ids";
+  const playerIdLabel = () => t("O‘yinchi ID raqami", "ID игрока", "Player ID");
+  const serverIdLabel = () => t("Server ID raqami", "ID сервера", "Server ID");
+  const playerIdValue = (item) => esc(item.player_id + (item.server_id ? " / " + item.server_id : ""));
+  const updatePlayerIds = (data, path = playerIdsURL) =>
+    api(path, { method: "POST", body: JSON.stringify(data) });
+
+  async function playerIds(target = app) {
+    if (!me) {
+      location.hash = "login";
+      return;
+    }
+    const locationAtStart = location.href;
+    const { ids, games } = await api(playerIdsURL);
     if (location.href !== locationAtStart || !target.isConnected) return;
-    target.innerHTML = `<section class="page launch-page">${pageTitle(t("Saqlangan Top Up paketlari", "Сохранённые пакеты Top Up", "Saved Top Up packages"), "")}<div class="launch-saved">${packs.length ? packs.map((p) => `<a class="panel" href="/top-up/${e(p.game_slug)}/${e(p.url_slug)}"><b>${esc(p.game_name)}</b><span>${esc(p.product_name)}</span></a>`).join("") : `<p>${t("Hali paket saqlanmagan.", "Пакеты ещё не сохранены.", "No packages saved yet.")}</p>`}</div>${link("/top-up", t("Paketlarni ko‘rish", "Посмотреть пакеты", "Browse packages"))}</section>`;
+    const gameNames = new Map(games.map((game) => [game.slug, game.name]));
+    const title = t("Saqlangan o‘yin ID’lari", "Сохранённые ID игроков", "Saved Player IDs");
+    target.innerHTML = `<section class="page launch-page saved-player-ids">
+      ${target === app ? pageTitle(title, "") : ""}
+      <div class="saved-player-id-list"></div>
+      <form class="saved-player-id-form">
+        <h2>${t("O‘yin ID’sini qo‘shish", "Добавить ID игрока", "Add a player ID")}</h2>
+        <div class="field">
+          <label for="saved-player-game">${t("O‘yin", "Игра", "Game")}</label>
+          <select id="saved-player-game" name="game_slug" required>
+            <option value="">${t("O‘yinni tanlang", "Выберите игру", "Choose a game")}</option>
+            ${games.map((game) => `<option value="${esc(game.slug)}">${esc(game.name)}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label for="saved-player-id">${playerIdLabel()}</label>
+          <input id="saved-player-id" name="player_id" inputmode="numeric" pattern="[0-9]{3,40}" maxlength="40" autocomplete="off" required>
+        </div>
+        <div class="field" data-player-server hidden>
+          <label for="saved-player-server">${serverIdLabel()}</label>
+          <input id="saved-player-server" name="server_id" inputmode="numeric" pattern="[0-9]{1,10}" maxlength="10" autocomplete="off" disabled>
+        </div>
+        ${submit(t("Saqlash", "Сохранить", "Save"))}
+      </form>
+      <a class="text-link" href="/#topup-saved">${t("Saqlangan Top Up paketlari", "Сохранённые пакеты Top Up", "Saved Top Up packages")}</a>
+    </section>`;
+    const list = target.querySelector(".saved-player-id-list");
+    const form = target.querySelector(".saved-player-id-form");
+    const saveButton = form.querySelector("[type=submit]");
+    const gameSelect = form.elements.game_slug;
+    const server = form.elements.server_id;
+    const syncServer = () => {
+      const game = games.find((item) => item.slug === gameSelect.value);
+      server.closest("[data-player-server]").hidden = !game?.server_available;
+      server.disabled = !game?.server_available;
+      server.required = Boolean(game?.server_required);
+    };
+    gameSelect.addEventListener("change", () => {
+      server.value = "";
+      syncServer();
+    });
+    function renderList(values) {
+      list.innerHTML = values.length ? values.map((item, index) => `<div class="saved-player-id-row">
+        <div><b>${esc(gameNames.get(item.game_slug) || item.game_slug)}</b><span dir="ltr">${playerIdValue(item)}</span></div>
+        <button type="button" class="button-secondary" data-remove-player-id="${index}">${t("O‘chirish", "Удалить", "Remove")}</button>
+      </div>`).join("") : `<p class="help">${t("Hali o‘yin ID’lari saqlanmagan.", "Вы пока не сохранили ни одного ID игрока.", "No player IDs saved yet.")}</p>`;
+      list.querySelectorAll("[data-remove-player-id]").forEach((button) => {
+        button.onclick = async () => {
+          const controls = [saveButton, ...list.querySelectorAll("button")];
+          controls.forEach((control) => { control.disabled = true; });
+          try {
+            const result = await updatePlayerIds(values[Number(button.dataset.removePlayerId)], playerIdsURL + "/remove");
+            renderList(result.ids);
+          } catch (error) {
+            toast(error.message, "error");
+          } finally {
+            controls.forEach((control) => { control.disabled = false; });
+          }
+        };
+      });
+    }
+    renderList(ids);
+    bind(form, async (details) => {
+      list.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+      try {
+        const result = await updatePlayerIds(details);
+        renderList(result.ids);
+        form.reset();
+        syncServer();
+        window.SelectMenus?.enhance(gameSelect);
+        toast(t("Saqlandi", "Сохранено", "Saved"));
+      } finally {
+        list.querySelectorAll("button").forEach((button) => { button.disabled = false; });
+      }
+    });
+  }
+
+  async function mountSavedPlayerIds(host, slug, getFields) {
+    if (!me || !host) return;
+    const result = await api(playerIdsURL).catch(() => null);
+    if (!result || !host.isConnected) return;
+    const ids = result.ids.filter((item) => item.game_slug === slug);
+    if (!ids.length) return;
+    const field = document.createElement("div");
+    field.className = "field saved-player-id-picker";
+    field.innerHTML = `<label for="topup-saved-player-picker">${t("Saqlangan o‘yin ID’lari", "Сохранённые ID игроков", "Saved Player IDs")}</label>
+      <select id="topup-saved-player-picker"><option value="">${t("Saqlangan ID’ni tanlang", "Выберите сохранённый ID", "Choose a saved ID")}</option>
+      ${ids.map((item, index) => `<option value="${index}">${playerIdValue(item)}</option>`).join("")}</select>`;
+    const select = field.querySelector("select");
+    select.addEventListener("change", () => {
+      if (select.value === "") return;
+      const entry = ids[Number(select.value)];
+      const { player, server } = getFields();
+      if (player) {
+        player.value = entry.player_id;
+        if (server) server.value = entry.server_id;
+        player.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      select.value = "";
+      window.SelectMenus?.enhance(select);
+    });
+    host.replaceChildren(field);
+  }
+
+  async function offerSavePlayerId(host, order) {
+    if (!host || !order.game_slug || !order.payment_reference ||
+        !["paid", "paid_test", "delivered", "delivered_test", "completed"].includes(order.status)) return;
+    const dismissal = "sentryloot-player-id-dismissed:" + order.id;
+    try {
+      if (sessionStorage.getItem(dismissal)) return;
+    } catch {}
+    const result = await api(playerIdsURL).catch(() => null);
+    if (!result || !host.isConnected || result.ids.some((item) =>
+      item.game_slug === order.game_slug && item.player_id === order.player_id && item.server_id === (order.server_id || "")
+    )) return;
+    host.innerHTML = `<form class="saved-player-id-offer">
+      <h2>${t("O‘yin ID’sini saqlaysizmi?", "Сохранить ID игрока?", "Save this player ID?")}</h2>
+      <p>${esc(order.game_name)} · <bdi dir="ltr">${playerIdValue(order)}</bdi></p>
+      <div class="actions">
+        <button type="submit" class="button-primary">${t("Roziman, saqlash", "Согласен, сохранить", "Agree and save")}</button>
+        <button type="button" class="button-secondary" data-player-id-dismiss>${t("Hozir emas", "Не сейчас", "Not now")}</button>
+      </div>
+      <p class="launch-error" role="alert"></p>
+    </form>`;
+    const form = host.querySelector("form");
+    const close = form.querySelector("[data-player-id-dismiss]");
+    close.onclick = () => {
+      try { sessionStorage.setItem(dismissal, "1"); } catch {}
+      host.replaceChildren();
+    };
+    bind(form, async () => {
+      close.disabled = true;
+      try {
+        await updatePlayerIds({ order_id: order.id, consent: true });
+        if (host.isConnected) {
+          host.replaceChildren();
+          toast(t("Saqlandi", "Сохранено", "Saved"));
+        }
+      } finally {
+        close.disabled = false;
+      }
+    });
   }
   async function topupState() {
     if (!me) return { saved: [], launch_alert: [] };
@@ -1008,6 +1166,9 @@ window.LaunchUX = (() => {
     status,
     profileMarkup,
     saved,
+    playerIds,
+    mountSavedPlayerIds,
+    offerSavePlayerId,
     mountAccountExport,
     enhance,
     topupState,

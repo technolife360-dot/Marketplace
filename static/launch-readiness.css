@@ -92,6 +92,57 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+.saved-player-ids {
+  display: grid;
+  gap: 20px;
+}
+.saved-player-id-form {
+  display: grid;
+  gap: 18px;
+  max-width: 520px;
+}
+.saved-player-id-form :is(h2, .field, .launch-error),
+.saved-player-id-offer :is(h2, p) {
+  margin: 0;
+}
+.saved-player-id-form > button {
+  justify-self: start;
+}
+.saved-player-id-form > [hidden],
+.saved-player-id-form .launch-error:empty,
+.saved-player-id-offer .launch-error:empty {
+  display: none;
+}
+.saved-player-id-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-block: 12px;
+  border-block-end: 1px solid var(--line, #333);
+}
+.saved-player-id-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.saved-player-id-picker {
+  margin-block: 10px 16px;
+}
+.saved-player-id-offer {
+  display: grid;
+  gap: 10px;
+  margin-block: 12px;
+  padding: 14px;
+  border: 1px solid var(--line, #333);
+  border-radius: 10px;
+}
+.saved-player-id-offer .actions {
+  flex-wrap: wrap;
+  margin: 0;
+}
 .launch-checklist li {
   margin-block: 8px;
 }

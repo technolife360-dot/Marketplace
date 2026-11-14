@@ -300,12 +300,13 @@ def route(handler,db,ctx,method,path,qs,data,raw,core):
         return {'items':rows[:30],'matched_attributes':key[1:]}
     if path=='/api/experience/settings' and method in ('GET','POST'):
         require(ctx)
-        if method=='GET':return {k:v for k,v in settings(db,uid).items() if k!='push_devices'}
+        private_settings = ('push_devices', core['launch_readiness'].PLAYER_IDS_KEY)
+        if method=='GET':return {k:v for k,v in settings(db,uid).items() if k not in private_settings}
         allowed={'order','message','favorite','seller_listing','saved_search','email','browser'}
         if set(data)-allowed or any(type(v) is not bool for v in data.values()):raise error(400,'Bildirishnoma sozlamalarini tekshiring.')
         if data.get('email') and not ctx['user']['email_verified']:raise error(403,'Avval emailni tasdiqlang.')
         value=core['launch_readiness'].save_preferences(db,uid,lambda prefs:prefs.update(data),core)
-        return {k:v for k,v in settings(db,uid).items() if k!='push_devices'}
+        return {k:v for k,v in settings(db,uid).items() if k not in private_settings}
     match=re.fullmatch(r'/api/collections/(recent|compare)',path)
     if match and method in ('GET','POST'):
         require(ctx);kind=match.group(1);limit=20 if kind=='recent' else 3

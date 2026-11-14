@@ -18,7 +18,7 @@ def enabled(core):
 
 
 def view(db, oid, uid, core):
-    row = db.execute('SELECT o.*,p.game_name,p.amount,p.currency package_currency FROM topup_orders o JOIN topup_packages p ON p.id=o.package_id WHERE o.id=? AND o.buyer_id=?', (oid, uid)).fetchone()
+    row = db.execute('SELECT o.*,p.game_slug,p.game_name,p.amount,p.currency package_currency FROM topup_orders o JOIN topup_packages p ON p.id=o.package_id WHERE o.id=? AND o.buyer_id=?', (oid, uid)).fetchone()
     if not row or not pay.read(db, 'topup:'+oid):
         raise core['HttpError'](404, 'Test top-up order not found.')
     order = core['topup_admin_row'](row)

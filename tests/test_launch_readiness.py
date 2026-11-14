@@ -72,6 +72,37 @@ class LaunchFlows(unittest.TestCase):
         self.assertEqual(self.route(self.buyer,'GET','/api/top-up/preferences')['saved'],[])
         self.assertEqual(self.route(self.buyer,'GET','/api/top-up/preferences')['launch_alert'],[package])
 
+    def test_player_ids_require_account_ownership_and_explicit_post_purchase_consent(self):
+        path = '/api/top-up/player-ids'
+        oid = 'player-id-order'
+        entry = {'game_slug': 'pubg-mobile', 'player_id': '001234567890', 'server_id': ''}
+        self.db.execute(
+            '''INSERT INTO topup_orders(id,reference,buyer_id,package_id,player_id,quantity,unit_price_minor)
+               VALUES(?,?,?,?,?,1,100)''',
+            (oid, oid, self.buyer, 'pubg-mobile-60-uc', entry['player_id'])
+        )
+        with self.assertRaises(app.HttpError):
+            self.route(None, 'GET', path)
+        with self.assertRaises(app.HttpError):
+            self.route(self.buyer, 'POST', path, {'order_id': oid, 'consent': True})
+        self.db.execute("UPDATE topup_orders SET status='paid_test',payment_reference='stripe_test_fixture' WHERE id=?", (oid,))
+        with self.assertRaises(app.HttpError):
+            self.route(self.other, 'POST', path, {'order_id': oid, 'consent': True})
+        with self.assertRaises(app.HttpError):
+            self.route(self.buyer, 'POST', path, {'order_id': oid, 'consent': False})
+        self.assertEqual(self.route(self.buyer, 'GET', path)['ids'], [])
+        for _ in range(2):
+            self.assertEqual(self.route(self.buyer, 'POST', path, {'order_id': oid, 'consent': True})['ids'], [entry])
+
+        mobile = {'game_slug': 'mobile-legends', 'player_id': '000456', 'server_id': '007'}
+        with self.assertRaises(app.HttpError):
+            self.route(self.buyer, 'POST', path, {**mobile, 'server_id': ''})
+        self.assertEqual(self.route(self.buyer, 'POST', path, mobile)['ids'], [entry, mobile])
+        self.assertEqual(self.route(self.other, 'GET', path)['ids'], [])
+        self.assertNotIn(launch.PLAYER_IDS_KEY, self.route(self.buyer, 'GET', '/api/experience/settings'))
+        self.assertEqual(launch.personal_export(self.db, self.buyer)['saved_player_ids'], [entry, mobile])
+        self.assertEqual(self.route(self.buyer, 'POST', path+'/remove', entry)['ids'], [mobile])
+
     def test_package_editor_has_single_public_source_and_rejects_unsafe_assets(self):
         package='pubg-mobile-weekly-deal-pack-2'
         body={'product_name':'Weekly Deal Pack 2','image_url':'/static/assets/topup-weekly-deal-2.png','contents':[['Premium',2],['Classic',4],['Supply',6],['UC',60]]}

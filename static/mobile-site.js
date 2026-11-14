@@ -444,7 +444,7 @@ window.MobileSite = (() => {
       ${accountRow("globe", t("Til va hudud", "Язык и регион", "Language & region"), "/#account/preferences")}
       ${group(t("BOG‘LANISHLAR", "ПОДКЛЮЧЕНИЯ", "CONNECTIONS"))}
       <button type="button" class="mobile-account-row" data-action="link-facebook">${designIcon("facebook")}<span>${t("Facebook’ni ulash", "Подключить Facebook", "Link Facebook")}</span>${designIcon("right")}</button>
-      ${accountRow("phone", t("Saqlangan Player ID", "Сохранённые Player ID", "Saved Player IDs"), "/#topup-saved")}
+      ${accountRow("phone", t("Saqlangan Player ID", "Сохранённые Player ID", "Saved Player IDs"), "/#account/player-ids")}
       ${group(t("MA’LUMOTLARINGIZ", "ВАШИ ДАННЫЕ", "YOUR DATA"))}
       ${accountRow("document", t("Ma’lumotlaringizni yuklash", "Скачать свои данные", "Download your data"), "/#account/export")}
       ${accountRow("help", t("Yordam murojaatlari", "Обращения в поддержку", "Support tickets"), "/#support-tickets")}
@@ -1975,7 +1975,7 @@ window.MobileSite = (() => {
       }
       if (
         sessionResolved &&
-        /^(?:account(?:\/.*)?|notification-settings|topup-saved|browse|search|orders|listing\/.*)$/.test(
+        /^(?:account(?:\/.*)?|notification-settings|browse|search|orders|listing\/.*)$/.test(
           routeFromLocation().split("?")[0],
         )
       )
